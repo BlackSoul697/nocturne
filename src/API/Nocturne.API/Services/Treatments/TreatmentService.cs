@@ -127,6 +127,11 @@ public class TreatmentService : ITreatmentService
     }
 
     /// <inheritdoc />
+    public Task<Treatment?> GetLatestTreatmentOfTypeAsync(
+        string eventType, long fromMills, long toMills, CancellationToken cancellationToken = default) =>
+        _store.GetLatestOfTypeAsync(eventType, fromMills, toMills, cancellationToken);
+
+    /// <inheritdoc />
     public Task<bool> IsTreatmentDeletedByUserAsync(
         string id, CancellationToken cancellationToken = default)
         => _store.IsDeletedByUserAsync(id, cancellationToken);
