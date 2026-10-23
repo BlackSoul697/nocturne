@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Controllers.V4.Analytics;
+using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Models.Authorization;
@@ -2238,6 +2240,109 @@ public class StatisticsControllerTests
         measured.Should().NotBeNull();
         measured!.Count.Should().Be(readings.Length);
         measured.Max(r => r.Timestamp).Should().Be(end.AddMinutes(-1));
+    }
+
+    private void VerifyAidMetricsWindow(DateTime start, DateTime end) =>
+        _aidMetricsServiceMock.Verify(s => s.Calculate(
+            It.IsAny<IReadOnlyList<DeviceSegmentInput>>(),
+            It.IsAny<IReadOnlyList<ApsLoopCycle>>(),
+            It.IsAny<IReadOnlyList<TempBasal>>(),
+            It.IsAny<int>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<double?>(),
+            It.IsAny<double?>(),
+            It.IsAny<double?>(),
+            start,
+            end), Times.Once);
+
+    private StatisticsController CreateClampedController(CategoryReadContext reads)
+    {
+        var controller = CreateController(categoryReadContext: reads);
+        controller.HttpContext.RequestServices = new ServiceCollection()
+            .AddSingleton<ICategoryReadContext>(reads)
+            .BuildServiceProvider();
+        return controller;
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_ForAClampedMember_MeasuresTheLast24HoursWhateverWasAsked()
+    {
+        SetupAidMetricsEcho();
+        var reads = new CategoryReadContext();
+        reads.ClampMemberHistory();
+        var now = DefaultNow.UtcDateTime;
+
+        var result = await CreateClampedController(reads)
+            .GetAidSystemMetrics(now.AddDays(-30), now);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        VerifyAidMetricsWindow(now.AddHours(-HistoryClamp.WindowHours), now);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_ForAShareWithoutFullHistory_MeasuresTheLast24Hours()
+    {
+        SetupAidMetricsEcho();
+        var reads = new CategoryReadContext();
+        reads.MarkShare();
+        var now = DefaultNow.UtcDateTime;
+
+        await CreateClampedController(reads).GetAidSystemMetrics(now.AddDays(-30), now);
+
+        VerifyAidMetricsWindow(now.AddHours(-HistoryClamp.WindowHours), now);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_ForAClampedMember_IgnoresALongSpanItCannotRead()
+    {
+        SetupAidMetricsEcho();
+        var reads = new CategoryReadContext();
+        reads.ClampMemberHistory();
+        var now = DefaultNow.UtcDateTime;
+
+        var result = await CreateClampedController(reads).GetAidSystemMetrics(now.AddDays(-400), now);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        VerifyAidMetricsWindow(now.AddHours(-HistoryClamp.WindowHours), now);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_ForAnUnclampedCaller_MeasuresTheWindowAsked()
+    {
+        SetupAidMetricsEcho();
+        var now = DefaultNow.UtcDateTime;
+        var start = now.AddDays(-30);
+        var end = now.AddDays(-1);
+
+        await CreateController().GetAidSystemMetrics(start, end);
+
+        VerifyAidMetricsWindow(start, end);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_StopsAtNowWhenTheWindowEndsInTheFuture()
+    {
+        SetupAidMetricsEcho();
+        var now = DefaultNow.UtcDateTime;
+        var start = now.AddDays(-2);
+
+        await CreateController().GetAidSystemMetrics(start, now.AddDays(5));
+
+        VerifyAidMetricsWindow(start, now);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_RejectsASpanOverTheReadLimit()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var result = await CreateController().GetAidSystemMetrics(
+            start, start.AddDays(V4ReadLimits.MaxDateSpanDays + 1));
+
+        result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(400);
+        _patientDeviceRepoMock.Verify(r => r.GetByDateRangeAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
