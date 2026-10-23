@@ -65,22 +65,8 @@ internal static class RustEnvelopeMapper
         ConfirmationReadings = rule.ConfirmationReadings,
         HysteresisMinutes = rule.HysteresisMinutes,
         AutoResolveEnabled = rule.AutoResolveEnabled,
-        AutoResolveParams = rule.AutoResolveEnabled ? TryParseJson(rule.AutoResolveParams) : null,
+        AutoResolveParams = rule.AutoResolveEnabled ? RuleTrees.AutoResolve(rule.AutoResolveParams) : null,
     };
-
-    private static JsonElement? TryParseJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-        try
-        {
-            return ParseNode(json);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     /// <summary>
     /// Maps persisted tracker state into the envelope's tracker object. The stored GUID

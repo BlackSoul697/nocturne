@@ -816,6 +816,25 @@ public class AlertRulesController : ControllerBase
         (await ToResponsesAsync(db, [rule], ct))[0];
 
     /// <summary>
+    /// What a save of the stored rule would reject. A rule the engine cannot take at all is logged
+    /// and listed without issues, so one such rule does not fail the whole list.
+    /// </summary>
+    private IReadOnlyList<RustValidationIssue> StoredIssues(AlertRuleEntity rule)
+    {
+        try
+        {
+            return _conditionValidator.Validate(
+                rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,
+                rule.AutoResolveParams, rule.ClientConfiguration);
+        }
+        catch (RustAlertEngineException ex)
+        {
+            _logger.LogError(ex, "The alert engine could not check the conditions of alert rule {AlertRuleId}", rule.Id);
+            return [];
+        }
+    }
+
+    /// <summary>
     /// Maps rules to responses and, for a caller who may edit the rules, describes each in-app
     /// channel's recipient. Only the rule editor reads it, so other callers are spared the lookup.
     /// This is not a privacy boundary: member names are readable more widely (issue #2359).
@@ -823,10 +842,7 @@ public class AlertRulesController : ControllerBase
     private async Task<List<AlertRuleResponse>> ToResponsesAsync(
         NocturneDbContext db, IEnumerable<AlertRuleEntity> rules, CancellationToken ct)
     {
-        var responses = rules.Select(rule => MapToResponse(rule, _conditionValidator.Validate(
-                rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,
-                rule.AutoResolveParams, rule.ClientConfiguration)))
-            .ToList();
+        var responses = rules.Select(rule => MapToResponse(rule, StoredIssues(rule))).ToList();
         var inApp = responses
             .SelectMany(r => r.Channels)
             .Where(c => c.ChannelType == ChannelType.InApp)

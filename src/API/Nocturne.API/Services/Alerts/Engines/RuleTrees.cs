@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Nocturne.API.Services.Alerts.Evaluators;
 using Nocturne.Core.Alerts.Native;
@@ -37,32 +38,38 @@ internal readonly record struct ConditionLeaf(AlertConditionType? Kind, JsonElem
 /// tree is what evaluation reads.
 /// </summary>
 /// <remarks>
-/// A body that is not JSON goes to the engine as a JSON string, as evaluation sends it, and reads
-/// as one leaf of the rule's own kind with no operands. An auto-resolve tree that is not JSON, or
-/// that the engine cannot evaluate, has no leaves.
+/// A body that is not JSON goes to the engine as a JSON string, as replay sends it, and reads as
+/// one leaf of the rule's own kind with no operands; live evaluation fails such a rule outright.
+/// An auto-resolve tree that is not JSON, or that the engine cannot evaluate, has no leaves.
+/// <para>
+/// Every evaluation pass reads every rule's leaves, twice (<see cref="RuleReferenceResolver"/> and
+/// <see cref="RuleDataNeeds"/>), so a description is kept per condition, keyed by the columns it
+/// was read from. The cache is cleared whole when it outgrows <see cref="CacheLimit"/>.
+/// </para>
 /// </remarks>
 internal static class RuleTrees
 {
+    /// <summary>Descriptions kept before the cache is cleared.</summary>
+    internal const int CacheLimit = 4096;
+
+    private static readonly ConcurrentDictionary<DescriptionKey, Description> Descriptions = new();
+
     /// <summary>
     /// The leaves of the rule's body in pre-order, then those of its auto-resolve tree when
     /// <paramref name="includeAutoResolve"/> and auto-resolve is enabled.
     /// </summary>
     /// <exception cref="RustAlertEngineException">The engine rejected the request.</exception>
-    public static IReadOnlyList<ConditionLeaf> Leaves(AlertRuleSnapshot rule, bool includeAutoResolve) =>
-        Leaves(
-            rule.ConditionType,
-            Body(rule.ConditionType, rule.ConditionParams),
-            includeAutoResolve && rule.AutoResolveEnabled ? AutoResolve(rule.AutoResolveParams) : null);
+    public static IReadOnlyList<ConditionLeaf> Leaves(AlertRuleSnapshot rule, bool includeAutoResolve)
+    {
+        var description = Describe(
+            rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled ? rule.AutoResolveParams : null);
+        return includeAutoResolve ? description.All : description.Body;
+    }
 
     /// <summary>The leaves of a body stored as <paramref name="conditionParams"/>.</summary>
     /// <exception cref="RustAlertEngineException">The engine rejected the request.</exception>
     public static IReadOnlyList<ConditionLeaf> Leaves(AlertConditionType type, string conditionParams) =>
-        Leaves(type, Body(type, conditionParams), null);
-
-    /// <summary>The leaves of a body as a request carries it.</summary>
-    /// <exception cref="RustAlertEngineException">The engine rejected the request.</exception>
-    public static IReadOnlyList<ConditionLeaf> Leaves(AlertConditionType type, JsonElement conditionParams) =>
-        Leaves(type, conditionParams, null);
+        Describe(type, conditionParams, null).Body;
 
     /// <summary>The rule ids the <c>alert_state</c> leaves among <paramref name="leaves"/> name.</summary>
     public static IEnumerable<Guid> AlertStateTargets(IEnumerable<ConditionLeaf> leaves) =>
@@ -84,8 +91,8 @@ internal static class RuleTrees
         });
 
     /// <summary>
-    /// The body as evaluation sends it: timezone ids canonicalised, and a body that is not JSON
-    /// as a JSON string, which the engine cannot read as a payload.
+    /// The body as replay sends it: timezone ids canonicalised, and a body that is not JSON as a
+    /// JSON string, which the engine cannot read as a payload.
     /// </summary>
     public static JsonElement Body(AlertConditionType type, string conditionParams)
     {
@@ -114,20 +121,33 @@ internal static class RuleTrees
         }
     }
 
-    private static IReadOnlyList<ConditionLeaf> Leaves(
-        AlertConditionType type, JsonElement body, JsonElement? autoResolve)
+    /// <summary>Drops every kept description.</summary>
+    internal static void ClearCache() => Descriptions.Clear();
+
+    /// <param name="autoResolveParams">The auto-resolve tree to describe too, or null for none.</param>
+    private static Description Describe(AlertConditionType type, string conditionParams, string? autoResolveParams)
     {
+        var key = new DescriptionKey(type, conditionParams, autoResolveParams);
+        if (Descriptions.TryGetValue(key, out var kept))
+            return kept;
+
         var response = RustAlertEngine.Describe(new RustDescribeRequest
         {
             ConditionType = AlertConditionTypeNames.ToWireString(type),
-            ConditionParams = body,
-            AutoResolveParams = autoResolve,
+            ConditionParams = Body(type, conditionParams),
+            AutoResolveParams = AutoResolve(autoResolveParams),
         });
-        var leaves = new List<ConditionLeaf>();
-        Collect(response.Tree!.Value, leaves);
+        var body = new List<ConditionLeaf>();
+        Collect(response.Tree!.Value, body);
+        var all = new List<ConditionLeaf>(body);
         if (response.AutoResolveTree is { ValueKind: JsonValueKind.Object } autoResolveTree)
-            Collect(autoResolveTree, leaves);
-        return leaves;
+            Collect(autoResolveTree, all);
+
+        if (Descriptions.Count >= CacheLimit)
+            Descriptions.Clear();
+        var description = new Description(body, all);
+        Descriptions[key] = description;
+        return description;
     }
 
     private static void Collect(JsonElement node, List<ConditionLeaf> leaves)
@@ -153,4 +173,11 @@ internal static class RuleTrees
         if (node.TryGetProperty("child", out var only))
             Collect(only, leaves);
     }
+
+    private readonly record struct DescriptionKey(
+        AlertConditionType Type, string ConditionParams, string? AutoResolveParams);
+
+    /// <param name="Body">The body's leaves.</param>
+    /// <param name="All">The body's leaves, then the auto-resolve tree's.</param>
+    private sealed record Description(IReadOnlyList<ConditionLeaf> Body, IReadOnlyList<ConditionLeaf> All);
 }

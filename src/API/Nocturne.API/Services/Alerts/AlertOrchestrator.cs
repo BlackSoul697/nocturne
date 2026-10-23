@@ -59,6 +59,11 @@ internal sealed class AlertOrchestrator(
         var tenantId = tenantAccessor.TenantId;
         if (tenantId == Guid.Empty || rules.Count == 0) return;
 
+        // Before the filter below, which drops a rule whose alert_state names no enabled rule:
+        // a malformed alert_state names none, and its rule is reported here or nowhere.
+        foreach (var rule in rules)
+            ReportConditionIssues(rule, tenantId);
+
         // Drop chained rules whose alert_state references resolve to disabled/deleted parents.
         var evaluable = RuleReferenceResolver.FilterEvaluable(rules, logger, enabledRuleIds);
         if (evaluable.Count == 0) return;
@@ -69,7 +74,6 @@ internal sealed class AlertOrchestrator(
 
         foreach (var rule in evaluable)
         {
-            ReportConditionIssues(rule, tenantId);
             try
             {
                 await EvaluateRuleAsync(rule, enriched, tenantId, ct);

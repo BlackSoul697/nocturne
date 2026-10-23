@@ -94,6 +94,24 @@ public class AlertOrchestratorConditionIssueTests
         harness.Logger.Warnings.Should().HaveCount(2, "an edited condition is a new version");
     }
 
+    [NativeFact]
+    public async Task A_rule_the_reference_filter_drops_is_still_reported()
+    {
+        var harness = new Harness();
+        harness.Validator
+            .Setup(v => v.Validate(It.IsAny<AlertConditionType>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns([new RustValidationIssue("condition", "alert_state", "invalid_field", "alert_id")]);
+
+        await harness.EvaluateAsync(Rule("""{"alert_id": "garbage", "state": "active"}""", AlertConditionType.AlertState));
+
+        harness.Logger.Warnings.Should().ContainSingle().Which.Should().Contain("invalid_field (alert_id)");
+        harness.Engine.Verify(
+            e => e.EvaluateRuleAsync(It.IsAny<AlertRuleSnapshot>(), It.IsAny<SensorContext>(),
+                It.IsAny<AlertEngineOptions>(), It.IsAny<CancellationToken>()),
+            Times.Never, "a rule naming no enabled rule is not evaluated");
+    }
+
     [Fact]
     public async Task A_rule_with_no_issues_is_not_reported()
     {

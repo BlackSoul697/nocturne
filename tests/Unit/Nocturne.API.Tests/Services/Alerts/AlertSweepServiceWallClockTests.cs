@@ -179,6 +179,29 @@ public class AlertSweepServiceWallClockTests
     }
 
     /// <summary>
+    /// A reading-driven body is swept once an enabled auto-resolve tree holds a wall-clock kind
+    /// (docs/alerts/engine-semantics.md §5.1), and the sweep's kept verdict follows the edit.
+    /// </summary>
+    [NativeFact]
+    public async Task A_wall_clock_auto_resolve_tree_puts_the_rule_on_the_sweep_once_enabled()
+    {
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Threshold, """{"direction": "below", "value": 70}""")
+        {
+            LastReadingAt = T0,
+            LatestMgdl = 50,
+        };
+        const string stale = """{"type": "staleness", "staleness": {"operator": ">", "value": 20}}""";
+        fixture.Rules[0] = fixture.Rules[0] with { AutoResolveEnabled = false, AutoResolveParams = stale };
+
+        await fixture.SweepAt(T0.AddMinutes(1));
+        fixture.InstancesCreated.Should().Be(0, "a threshold rule is evaluated per reading only");
+
+        fixture.Rules[0] = fixture.Rules[0] with { AutoResolveEnabled = true };
+        await fixture.SweepAt(T0.AddMinutes(2));
+        fixture.InstancesCreated.Should().Be(1);
+    }
+
+    /// <summary>
     /// The engine reads a body it cannot evaluate as its root kind alone, so a wall-clock leaf
     /// inside it does not put the rule on the sweep; the per-reading pass reports the fault.
     /// </summary>
@@ -333,6 +356,9 @@ public class AlertSweepServiceWallClockTests
         public List<ExcursionTransition> Closed { get; } = [];
         public Dictionary<Guid, ActiveAlertSnapshot> ActiveAlerts { get; } = [];
 
+        /// <summary>The enabled rules each sweep reads; replace one to edit it between sweeps.</summary>
+        public List<AlertRuleSnapshot> Rules { get; }
+
         /// <summary>The canonical stream; when empty, one reading at <see cref="LastReadingAt"/>.</summary>
         public List<SensorGlucose> Readings { get; } = [];
 
@@ -368,6 +394,7 @@ public class AlertSweepServiceWallClockTests
                 .Prepend(snapshot)
                 .ToList();
 
+            Rules = snapshots;
             TrackerRepo = new InMemoryTrackerRepository([rule, .. otherRules]);
             var timerStore = new RecordingTimerStore();
 
@@ -391,7 +418,7 @@ public class AlertSweepServiceWallClockTests
             var repository = new Mock<IAlertRepository>();
             repository
                 .Setup(x => x.GetAllEnabledRulesAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(snapshots);
+                .ReturnsAsync(() => Rules.ToList());
             repository
                 .Setup(x => x.GetTenantAlertContextAsync(Tenant, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => new TenantAlertContext(Tenant, "subject", "slug", "Slug", true, LastReadingAt));

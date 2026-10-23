@@ -39,43 +39,17 @@ internal sealed class RustAlertReplayEngine(AlertEngineErrors errors) : IAlertRe
     }
 
     /// <summary>
-    /// A body whose JSON does not parse goes as a JSON string. The engine cannot read a string as a
-    /// payload, so it skips the rule on every tick, as the managed replay does.
+    /// A body whose JSON does not parse goes as a JSON string (<see cref="RuleTrees.Body"/>). The
+    /// engine cannot read a string as a payload, so it skips the rule on every tick.
     /// </summary>
     private static RustAlertRule BuildRule(AlertRuleSnapshot rule) => new()
     {
         Id = rule.Id,
         ConditionType = AlertConditionTypeNames.ToWireString(rule.ConditionType),
-        ConditionParams = ParseBody(rule),
+        ConditionParams = RuleTrees.Body(rule.ConditionType, rule.ConditionParams),
         AutoResolveEnabled = rule.AutoResolveEnabled,
-        AutoResolveParams = rule.AutoResolveEnabled ? ParseAutoResolve(rule.AutoResolveParams) : null,
+        AutoResolveParams = rule.AutoResolveEnabled ? RuleTrees.AutoResolve(rule.AutoResolveParams) : null,
     };
-
-    private static JsonElement ParseBody(AlertRuleSnapshot rule)
-    {
-        try
-        {
-            return RustEnvelopeMapper.ParseJson(ConditionTimeZones.CanonicaliseRule(rule.ConditionType, rule.ConditionParams));
-        }
-        catch (JsonException)
-        {
-            return JsonSerializer.SerializeToElement(rule.ConditionParams);
-        }
-    }
-
-    private static JsonElement? ParseAutoResolve(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-        try
-        {
-            return RustEnvelopeMapper.ParseNode(json);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     private static AlertReplayRun ToRun(RustReplayResponse response) => new(
         response.Order!,
