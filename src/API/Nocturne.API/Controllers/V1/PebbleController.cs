@@ -13,6 +13,7 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -105,7 +106,7 @@ public class PebbleController : ControllerBase
 
             // Fetch required data in parallel
             var entriesTask = _entryService.GetEntriesAsync(type: "sgv", count: count + 1, skip: 0, cancellationToken);
-            var deviceStatusTask = _projectionService.GetAsync(count: 1, skip: 0, find: null, ct: cancellationToken);
+            var deviceStatusTask = _projectionService.GetMatchingAsync(FindQuery.Empty, count: 1, skip: 0, ct: cancellationToken);
             var calsTask = _entryService.GetEntriesAsync(type: "cal", count: count, skip: 0, cancellationToken);
 
             await Task.WhenAll(entriesTask, deviceStatusTask, calsTask);
