@@ -93,7 +93,8 @@ public static class DemoLoopInterruptions
         if (DayScenarios.Roll(day, stream, 100) >= chancePercent)
             return;
 
-        var start = day.AddHours(6).AddMinutes(5 * DayScenarios.Roll(day, $"{stream}:start", 180));
+        // Out of the house, from mid-morning to the evening: the phone stays by the pump at home.
+        var start = day.AddHours(10.5).AddMinutes(5 * DayScenarios.Roll(day, $"{stream}:start", 126));
         var length = TimeSpan.FromMinutes(20 + 5 * DayScenarios.Roll(day, $"{stream}:length", 11));
         interruptions.Add(new(DemoLoopState.PhoneOutOfRange, start, start + length));
     }

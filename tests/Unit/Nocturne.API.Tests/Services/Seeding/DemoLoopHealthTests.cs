@@ -26,18 +26,19 @@ namespace Nocturne.API.Tests.Services.Seeding;
 /// </summary>
 public class DemoLoopHealthTests
 {
-    private const int Days = 7;
+    internal const int Days = 7;
 
-    private static readonly DateTime End = new(2026, 10, 20, 20, 0, 0);
+    internal static readonly DateTime End = new(2026, 10, 20, 20, 0, 0);
 
-    private sealed record Run(
+    internal sealed record Run(
         List<DemoTimeStep> Steps,
         List<Entry> Readings,
+        List<Aid.ApsSnapshot> Snapshots,
         List<Aid.ApsLoopCycle> Cycles,
         List<(Treatment Source, Aid.TempBasal Temp, Aid.TempBasalOrigin Default)> Temps,
         LoopHealthRange Health);
 
-    private static Run Simulate()
+    internal static Run Simulate()
     {
         var config = SampleDataSeeder.ConfigurationFor(Days);
         var steps = new DemoDataGenerator(
@@ -106,7 +107,7 @@ public class DemoLoopHealthTests
         var mask = LoopAnalysisMask.Build(
             new LoopAnalysisMasks { ExcludeIllness = false, ExcludeOpenLoop = true }, from, to, zone, sources);
 
-        return new Run(steps, readings, cycles, ordered, LoopHealthCalculator.Calculate(inputs, mask, from, to));
+        return new Run(steps, readings, snapshots, cycles, ordered, LoopHealthCalculator.Calculate(inputs, mask, from, to));
     }
 
     private static long Mills(DateTime local) => new DateTimeOffset(local).ToUnixTimeMilliseconds();
