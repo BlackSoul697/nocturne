@@ -10,6 +10,11 @@ export const LOOP_ANALYSIS_PAGES = [
 
 export type LoopAnalysisPage = (typeof LOOP_ANALYSIS_PAGES)[number];
 
+/** The Loop Analysis page at a path, or undefined for any other path. */
+export function loopAnalysisPageAt(pathname: string): LoopAnalysisPage | undefined {
+  return LOOP_ANALYSIS_PAGES.find((p) => pathname.endsWith(`/loop-analysis/${p}`));
+}
+
 /** One line under the header of each page, built per call so wuchale reads it in the current locale. */
 export function loopAnalysisPageIntros(): Record<LoopAnalysisPage, string> {
   return {

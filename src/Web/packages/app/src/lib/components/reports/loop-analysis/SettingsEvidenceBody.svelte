@@ -37,6 +37,7 @@
   import { atMinute } from "./daily-profile-view";
   import { blockAt, blockSpan, matchingBlock, valueDomain, type EpisodeColumn } from "./settings-evidence-view";
   import { confidenceLabel, hoursText, unavailableText, type SettingsEvidenceSection } from "./settings-evidence-labels.svelte";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   interface Props {
     response: SettingsEvidenceReport;
@@ -215,14 +216,16 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
-    <Alert.Root variant="info">
-      <Stethoscope />
-      <Alert.Title>Observations, not advice</Alert.Title>
-      <Alert.Description>
-        These figures come from your own data. Each figure shows its confidence. They are not medical
-        advice. Speak to your diabetes care team before you change a setting.
-      </Alert.Description>
-    </Alert.Root>
+    <div {@attach clamped || withheld || primary == null ? undefined : loopAnalysisMark("loop-analysis-settings-evidence.observations")}>
+      <Alert.Root variant="info">
+        <Stethoscope />
+        <Alert.Title>Observations, not advice</Alert.Title>
+        <Alert.Description>
+          These figures come from your own data. Each figure shows its confidence. They are not medical
+          advice. Speak to your diabetes care team before you change a setting.
+        </Alert.Description>
+      </Alert.Root>
+    </div>
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
@@ -246,7 +249,7 @@
         </p>
       </div>
     {:else}
-      {#each sections as section (section.key)}
+      {#each sections as section, i (section.key)}
         <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="settings-evidence-{section.key}">
           <div class="space-y-1 px-1">
             <h3 id="settings-evidence-{section.key}" class="font-medium">{section.title}</h3>
@@ -259,7 +262,7 @@
               </Button>
             {/if}
           </div>
-          <div class="space-y-1">
+          <div class="space-y-1" {@attach i === 0 ? loopAnalysisMark("loop-analysis-settings-evidence.chart") : undefined}>
             <TimeOfDayPanel
               id="settings-evidence-{section.key}-chart"
               title="{section.title} by time of day"
@@ -319,7 +322,12 @@
               Carb ratio needs meals logged with carbs. No meals were logged with carbs in this range.
             </p>
           {:else}
-          <div class="@container rounded-md border" role="list" aria-label="{section.title} by block">
+          <div
+            class="@container rounded-md border"
+            role="list"
+            aria-label="{section.title} by block"
+            {@attach i === 0 ? loopAnalysisMark("loop-analysis-settings-evidence.blocks") : undefined}
+          >
             {#if section.key === "basal"}
               {#each primary.basal ?? [] as block (`${block.startHour}`)}
                 <div role="listitem">

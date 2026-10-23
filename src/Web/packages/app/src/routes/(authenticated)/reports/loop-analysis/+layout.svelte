@@ -20,6 +20,8 @@
     type LoopAnalysisFilterState,
   } from "$lib/components/reports/loop-analysis/loop-analysis-filter";
   import { loopAnalysisPageIntros, loopAnalysisPath } from "$lib/components/reports/loop-analysis/loop-analysis-pages.svelte";
+  import TourReplayButton from "$lib/coach-marks/TourReplayButton.svelte";
+  import { loopAnalysisReplay } from "$lib/coach-marks/sequences";
 
   let { children } = $props();
 
@@ -77,7 +79,10 @@
 <div class="@container space-y-6" data-testid="loop-analysis-page">
   {#if analysis.current}
     <div class="space-y-1 print:hidden">
-      <p class="text-muted-foreground">{intros[analysis.current]}</p>
+      <div class="flex items-start justify-between gap-2">
+        <p class="text-muted-foreground">{intros[analysis.current]}</p>
+        <TourReplayButton tour={loopAnalysisReplay(analysis.current)} />
+      </div>
       {#if comparison && analysis.filter.compare !== LoopAnalysisComparison.None}
         <p class="text-sm text-muted-foreground" data-testid="loop-analysis-compared-range">
           Compared with {dayRange(comparison.startDate, comparison.endDate)}.

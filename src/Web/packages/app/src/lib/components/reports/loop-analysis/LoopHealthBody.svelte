@@ -34,6 +34,7 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { atMinute, axisEnd } from "./daily-profile-view";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
   import {
     beganIn,
     dayInReviewSearch,
@@ -475,9 +476,11 @@
         {/if}
       </div>
     {:else}
-      <FigureStrip {figures} />
+      <div {@attach loopAnalysisMark("loop-analysis-loop-health.tiles")}>
+        <FigureStrip {figures} />
+      </div>
 
-      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
+      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" {@attach loopAnalysisMark("loop-analysis-loop-health.hours")}>
         {#each activityStrips as strip (strip.id)}
           <div class="space-y-1">
             <TimeOfDayPanel
@@ -620,7 +623,7 @@
         </p>
       </div>
 
-      <section class="space-y-4 rounded-lg border bg-card p-4" aria-labelledby="loop-health-gaps">
+      <section class="space-y-4 rounded-lg border bg-card p-4" aria-labelledby="loop-health-gaps" {@attach loopAnalysisMark("loop-analysis-loop-health.gaps")}>
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h3 id="loop-health-gaps" class="font-medium">Gaps, longest first</h3>
           {#if pickedHour != null}

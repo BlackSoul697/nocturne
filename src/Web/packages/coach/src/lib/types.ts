@@ -43,6 +43,8 @@ export interface SequenceDefinition {
   steps: string[];
   prerequisite?: string;
   completesKeys?: string[];
+  /** Dismissing a step of this sequence also holds back every other mark until the next navigation. */
+  quietOnDismiss?: boolean;
 }
 
 export interface SequenceConfig {

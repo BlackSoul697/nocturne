@@ -74,6 +74,11 @@ export class CoachMarkContext {
   private _initialized = $state(false);
 
   private _forcedSequence = $state<string | null>(null);
+  /**
+   * The steps a replay has still to show, in order. A replay walks every step whatever its status
+   * and skips one whose target is not on the page, where a forced start waits for it to mount.
+   */
+  private _replayQueue: string[] | null = null;
   private _quietUntilNavigation = $state(false);
   private _disabled = $state(false);
 
@@ -125,6 +130,7 @@ export class CoachMarkContext {
     if (value) {
       this._activeSelection = null;
       this._forcedSequence = null;
+      this._replayQueue = null;
       if (this._settleTimer) {
         clearTimeout(this._settleTimer);
         this._settleTimer = null;
@@ -182,9 +188,9 @@ export class CoachMarkContext {
   dismiss(key: string, options?: DismissOptions): void {
     if (this._forcedSequence) {
       // Dismissing any step in a forced sequence dismisses ALL remaining unseen/seen steps
-      const seq = this.sequences[this._forcedSequence];
-      if (seq) {
-        for (const stepKey of seq.steps) {
+      const steps = this._replayQueue ?? this.sequences[this._forcedSequence]?.steps;
+      if (steps) {
+        for (const stepKey of steps) {
           const status = this.getStatus(stepKey);
           if (status === "unseen" || status === "seen") {
             this.updateStatus(stepKey, "dismissed");
@@ -216,7 +222,7 @@ export class CoachMarkContext {
     }
 
     this._activeSelection = null;
-    if (options?.quiet) {
+    if (options?.quiet || (seqName && this.sequences[seqName]?.quietOnDismiss)) {
       this._quietUntilNavigation = true;
     } else {
       this.scheduleSelection();
@@ -226,6 +232,7 @@ export class CoachMarkContext {
   complete(key: string): void {
     const wasActive = this._activeSelection?.key === key;
     this.updateStatus(key, "completed");
+    if (wasActive && this._replayQueue?.[0] === key) this._replayQueue.shift();
 
     // `completedWhen` and `completeOn` complete marks in the background; one that is not the
     // mark on screen must not replace it.
@@ -305,7 +312,29 @@ export class CoachMarkContext {
     }
 
     this._forcedSequence = name;
+    this._replayQueue = null;
     // Intentionally overrides quiet mode — a new forced sequence always wins
+    this._quietUntilNavigation = false;
+    this._activeSelection = null;
+    this.activateNextForcedStep();
+  }
+
+  /**
+   * Shows sequences again, one after the other, from their first steps, finished steps included,
+   * for a reader who asks to see them. Only the steps whose targets are on the page are shown.
+   * Only the first sequence's `completesKeys` apply.
+   */
+  replaySequence(...names: string[]): void {
+    if (this._disabled || names.length === 0) return;
+    const missing = names.find((name) => !this.sequences[name]);
+    if (missing !== undefined) {
+      console.warn(`[coach] Sequence "${missing}" not found.`);
+      return;
+    }
+
+    if (this._activeSelection) this.markSeen(this._activeSelection.key);
+    this._forcedSequence = names[0];
+    this._replayQueue = names.flatMap((name) => this.sequences[name].steps);
     this._quietUntilNavigation = false;
     this._activeSelection = null;
     this.activateNextForcedStep();
@@ -314,6 +343,7 @@ export class CoachMarkContext {
   clearQuiet(): void {
     this._quietUntilNavigation = false;
     this._forcedSequence = null;
+    this._replayQueue = null;
     this.scheduleSelection();
   }
 
@@ -324,6 +354,7 @@ export class CoachMarkContext {
     this._states = noMarkStates();
     this._activeSelection = null;
     this._forcedSequence = null;
+    this._replayQueue = null;
     this._quietUntilNavigation = false;
     this.scheduleSelection();
   }
@@ -347,6 +378,19 @@ export class CoachMarkContext {
 
     const seq = this.sequences[this._forcedSequence];
     if (!seq) return;
+
+    if (this._replayQueue) {
+      while (this._replayQueue.length > 0) {
+        const [first] = this.getMountedSteps(this._replayQueue[0]);
+        if (first) {
+          this._activeSelection = { key: first.key, step: first.step };
+          return;
+        }
+        this._replayQueue.shift();
+      }
+      this.onForcedSequenceComplete();
+      return;
+    }
 
     for (const stepKey of seq.steps) {
       const status = this.getStatus(stepKey);
@@ -390,6 +434,7 @@ export class CoachMarkContext {
 
     this._quietUntilNavigation = true;
     this._forcedSequence = null;
+    this._replayQueue = null;
     this._activeSelection = null;
   }
 

@@ -35,6 +35,7 @@
   import { cohortBands, hourTicks, slotMinute } from "./event-response-view";
   import { cohortLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   interface Props {
     response: EventResponseReport;
@@ -265,7 +266,7 @@
           <p class="text-sm">Select a longer range, make the cohorts wider, or use fewer filters.</p>
         </div>
       {:else}
-        <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
+        <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" {@attach loopAnalysisMark("loop-analysis-meals-and-events.curves")}>
           {#if comparing}
             <p class="text-xs text-muted-foreground">
               The charts show the comparison range as dashed outlines in the colour of each cohort.
@@ -349,12 +350,12 @@
           />
         {/if}
 
-        <section class="space-y-2" aria-labelledby="event-metrics-heading">
+        <section class="space-y-2" aria-labelledby="event-metrics-heading" {@attach loopAnalysisMark("loop-analysis-meals-and-events.metrics")}>
           <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
           <EventMetricsTable {cohorts} {primary} {comparison} backToStartMgdl={response.backToStartMgdl} />
         </section>
 
-        <section class="space-y-2" aria-labelledby="event-list-heading">
+        <section class="space-y-2" aria-labelledby="event-list-heading" {@attach listed ? loopAnalysisMark("loop-analysis-meals-and-events.events") : undefined}>
           <h3 id="event-list-heading" class="text-sm font-medium">Events</h3>
           {#if !listed}
             <p class="text-sm text-muted-foreground">{hiddenText()}</p>

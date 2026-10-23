@@ -6,6 +6,7 @@
     import {ReportsFilterSidebar} from "$lib/components/layout";
     import ResourceGuard from "$lib/components/reports/ResourceGuard.svelte";
     import ReportPageSwitcher from "$lib/components/reports/ReportPageSwitcher.svelte";
+    import { loopAnalysisHeaderMark } from "$lib/components/reports/loop-analysis/loop-analysis-tour.svelte";
     import HistoryLimitNotice from "$lib/components/layout/HistoryLimitNotice.svelte";
     import ReportPrintHeader from "$lib/components/reports/print/ReportPrintHeader.svelte";
     import {
@@ -148,6 +149,7 @@
 
         <div
                 class="sticky top-(--app-sticky-top,0px) z-20 transition-all duration-300 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
+                {@attach loopAnalysisHeaderMark()}
         >
             <div class="flex h-14 items-center justify-between gap-2 px-3 @md:px-6">
                 <div class="flex items-center gap-2">
