@@ -28,6 +28,18 @@ public interface IV4ToLegacyProjectionService
     );
 
     /// <summary>
+    /// The newest treatment of one legacy event type within the window, bounds inclusive, or
+    /// <c>null</c>. Served by an index seek, not a scan of the window. Only the types Nightscout's
+    /// dataloader looks up singly are served: a device event type, and a Profile Switch of zero duration.
+    /// </summary>
+    Task<Treatment?> GetLatestProjectedTreatmentAsync(
+        string eventType,
+        long fromMills,
+        long toMills,
+        CancellationToken ct = default
+    );
+
+    /// <summary>
     /// Returns legacy <see cref="Treatment"/> objects synthesised from V4 records whose system
     /// update stamp is strictly after the given threshold, oldest first. Used for v3 incremental
     /// sync, and shaped exactly as <see cref="GetProjectedTreatmentsAsync"/> shapes a time range:
@@ -59,11 +71,20 @@ public interface IV4ToLegacyProjectionService
     Task<bool> IsStateSpanDeletedByUserAsync(string id, CancellationToken ct = default);
 
     /// <summary>
-    /// The treatments the state spans decomposed from treatments add to a count of the record tables
-    /// over the window, bounds inclusive: the spans that start inside it, less the Notes their
-    /// treatments wrote beside them, which a record count holds but are served as part of the span.
+    /// The treatments the state spans and profile activations decomposed from treatments are served
+    /// as over the window, bounds inclusive: those that start inside it.
     /// </summary>
     Task<long> CountProjectedStateSpanTreatmentsAsync(
+        long? fromMills,
+        long? toMills,
+        CancellationToken ct = default
+    );
+
+    /// <summary>
+    /// The Notes served as treatments of their own over the window, bounds inclusive: every Note but
+    /// those a treatment wrote beside another record, which serves it as its <c>notes</c>.
+    /// </summary>
+    Task<long> CountNotesServedApartAsync(
         long? fromMills,
         long? toMills,
         CancellationToken ct = default

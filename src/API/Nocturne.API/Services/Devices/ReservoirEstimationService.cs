@@ -154,14 +154,14 @@ internal sealed class ReservoirEstimationService(
         // the lookback may straddle the window start, and the newest record's declared
         // end usually lies in the future — insulin not yet delivered.
         var anyTempBasalDelivery = false;
-        foreach (var (tb, effectiveEndMills) in StatisticsService.ClipOverlappingTempBasals(tempBasalRecords))
+        foreach (var tb in StatisticsService.ClipOverlappingTempBasals(tempBasalRecords, toMs))
         {
             var start = Math.Max(tb.StartMills, fromMs);
-            var end = Math.Min(effectiveEndMills, toMs);
-            if (end <= start)
+            var end = Math.Min(tb.EndMills!.Value, toMs);
+            if (end <= start || tb.Rate is not { } rate)
                 continue;
             anyTempBasalDelivery = true;
-            total += tb.Rate * ((end - start) / (1000.0 * 60 * 60));
+            total += rate * ((end - start) / (1000.0 * 60 * 60));
         }
 
         // No temp basal delivery and no algorithm boluses means basal isn't recorded

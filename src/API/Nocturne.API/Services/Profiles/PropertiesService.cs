@@ -328,16 +328,8 @@ public class PropertiesService : IPropertiesService
         try
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var diaHoursAgo = DateTime.UtcNow.AddHours(-8);
-
-            var boluses = (await _bolusRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
+            var (boluses, tempBasals) = await RecentTreatments.LoadInsulinAsync(
+                _bolusRepository, _tempBasalRepository);
 
             // Emit the property even with no insulin on board: legacy clients treat a
             // missing `iob` as "server doesn't support it" rather than "zero".
@@ -378,21 +370,10 @@ public class PropertiesService : IPropertiesService
         {
             _logger.LogDebug("SetCobProperties: Starting");
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var cobHoursAgo = DateTime.UtcNow.AddHours(-6);
-            var diaHoursAgo = DateTime.UtcNow.AddHours(-8);
 
-            var carbIntakes = (await _carbIntakeRepository.GetAsync(
-                from: cobHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var boluses = (await _bolusRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
+            var carbIntakes = await RecentTreatments.LoadCarbsAsync(_carbIntakeRepository);
+            var (boluses, tempBasals) = await RecentTreatments.LoadInsulinAsync(
+                _bolusRepository, _tempBasalRepository);
 
             // Emit the property even with no carbs on board: legacy clients treat a
             // missing `cob` as "server doesn't support it" rather than "zero".
@@ -763,21 +744,12 @@ public class PropertiesService : IPropertiesService
         {
             result.Treatment = tempBasalTreatment;
 
-            // Calculate temp basal rate - exact legacy logic
-            if (tempBasalTreatment.Percent != null)
-            {
-                // Percentage-based temp basal: percent field contains the target percentage (e.g., 150 for 150%)
-                result.TempBasal = result.Basal * tempBasalTreatment.Percent.Value / 100;
-            }
-            else if (tempBasalTreatment.Absolute != null)
-            {
-                // Absolute temp basal rate
-                result.TempBasal = tempBasalTreatment.Absolute.Value;
-            }
+            if (tempBasalTreatment.Absolute is { } absolute)
+                result.TempBasal = absolute;
+            else if (tempBasalTreatment.Percent is { } percent and not 0)
+                result.TempBasal = Nocturne.Core.Models.V4.TempBasal.RateRelativeTo(result.Basal, percent);
             else
-            {
                 result.TempBasal = result.Basal;
-            }
 
             result.TotalBasal = result.TempBasal;
         }

@@ -107,7 +107,7 @@ public class ActivityServiceTests
 
         _mockStateSpanService
             .Setup(x =>
-                x.GetActivitiesAsync(It.IsAny<string?>(), 10, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())
+                x.GetActivitiesAsync(10, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())
             )
             .ReturnsAsync(expectedActivities);
 
@@ -146,7 +146,6 @@ public class ActivityServiceTests
         _mockStateSpanService
             .Setup(x =>
                 x.GetActivitiesAsync(
-                    It.IsAny<string?>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
                     It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()
@@ -177,7 +176,6 @@ public class ActivityServiceTests
         _mockStateSpanService
             .Setup(x =>
                 x.GetActivitiesAsync(
-                    It.IsAny<string?>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
                     It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()
@@ -746,120 +744,6 @@ public class ActivityServiceTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
-    public async Task DeleteMultipleActivitiesAsync_WithoutFilter_DeletesAllStateSpanActivities()
-    {
-        // Arrange
-        var activities = new List<Activity>
-        {
-            new Activity { Id = "1", Type = "exercise", Mills = 1 },
-            new Activity { Id = "2", Type = "meal", Mills = 2 },
-        };
-        _mockStateSpanService
-            .Setup(s => s.GetActivitiesAsync(null, int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(activities);
-        _mockStateSpanService
-            .Setup(s => s.DeleteActivityAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string id, CancellationToken _) => (IReadOnlyList<string>)[id]);
-
-        // Act
-        var result = await _activityService.DeleteMultipleActivitiesAsync(
-            cancellationToken: CancellationToken.None
-        );
-
-        // Assert
-        Assert.Equal(2L, result);
-        _mockStateSpanService.Verify(
-            s => s.DeleteActivityAsync("1", It.IsAny<CancellationToken>()),
-            Times.Once
-        );
-        _mockStateSpanService.Verify(
-            s => s.DeleteActivityAsync("2", It.IsAny<CancellationToken>()),
-            Times.Once
-        );
-        _mockActivityDecomposer.Verify(
-            d => d.DeleteByLegacyIdAsync(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(2)
-        );
-        _mockSignalRBroadcastService.Verify(
-            s => s.BroadcastStorageDeleteAsync("activity", It.IsAny<object>()),
-            Times.Once
-        );
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
-    public async Task DeleteMultipleActivitiesAsync_WithFilter_PassesFilterAndCountsDeleted()
-    {
-        // Arrange
-        var find = "{\"type\":\"exercise\"}";
-        var activities = new List<Activity>
-        {
-            new Activity { Id = "1", Type = "exercise", Mills = 1 },
-        };
-        _mockStateSpanService
-            .Setup(s => s.GetActivitiesAsync(find, int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(activities);
-        _mockStateSpanService
-            .Setup(s => s.DeleteActivityAsync("1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<string>)["1"]);
-
-        // Act
-        var result = await _activityService.DeleteMultipleActivitiesAsync(
-            find,
-            CancellationToken.None
-        );
-
-        // Assert
-        Assert.Equal(1L, result);
-        _mockStateSpanService.Verify(
-            s => s.GetActivitiesAsync(find, int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()),
-            Times.Once
-        );
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
-    public async Task DeleteMultipleActivitiesAsync_WithNoMatches_ReturnsZeroAndDoesNotBroadcast()
-    {
-        // Arrange
-        _mockStateSpanService
-            .Setup(s => s.GetActivitiesAsync(null, int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Enumerable.Empty<Activity>());
-
-        // Act
-        var result = await _activityService.DeleteMultipleActivitiesAsync(
-            cancellationToken: CancellationToken.None
-        );
-
-        // Assert
-        Assert.Equal(0L, result);
-        _mockSignalRBroadcastService.Verify(
-            s => s.BroadcastStorageDeleteAsync(It.IsAny<string>(), It.IsAny<object>()),
-            Times.Never
-        );
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
-    public async Task DeleteMultipleActivitiesAsync_WithException_ThrowsException()
-    {
-        // Arrange
-        _mockStateSpanService
-            .Setup(s => s.GetActivitiesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Database error"));
-
-        // Act & Assert
-        await Assert.ThrowsAsync<Exception>(() =>
-            _activityService.DeleteMultipleActivitiesAsync(cancellationToken: CancellationToken.None)
-        );
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
     public void Constructor_WithNullStateSpanService_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() =>
@@ -1017,7 +901,7 @@ public class ActivityServiceTests
 
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(stateSpanActivities);
         _mockHeartRateService
             .Setup(s => s.GetHeartRatesAsync(int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
@@ -1039,7 +923,7 @@ public class ActivityServiceTests
     {
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new Activity { Id = "1", Mills = 1000 }]);
         _mockHeartRateService
             .Setup(s => s.GetHeartRatesAsync(int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
@@ -1087,7 +971,7 @@ public class ActivityServiceTests
         });
         _mockStateSpanService.Verify(
             s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _mockStepCountService.Verify(
             s => s.GetStepCountsAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()),
@@ -1113,7 +997,7 @@ public class ActivityServiceTests
         // Arrange
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<Activity>());
         _mockHeartRateService
             .Setup(s => s.GetHeartRatesAsync(int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
@@ -1400,18 +1284,21 @@ public class ActivityServiceTests
         result.Select(a => a.Id).Should().Equal(written.Id);
     }
 
-    [Fact]
+    [Theory]
     [Trait("Category", "Unit")]
-    public async Task CountActivitiesAsync_WithNonSleepFind_ExcludesSleepSessions()
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("exercise")]
+    [InlineData("sleep")]
+    public async Task CountActivitiesAsync_WithAFindThatHasNoConditions_CountsEverySourceUnfiltered(string? find)
     {
-        // Arrange
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Activity>
             {
-                new() { Id = "1", Mills = 1000 },
-                new() { Id = "2", Mills = 2000 },
+                new() { Id = "1", Type = "exercise", Mills = 1000 },
+                new() { Id = "2", Type = "meal", Mills = 2000 },
             });
         _mockSleepService
             .Setup(s => s.CountSessionsAsync(
@@ -1419,40 +1306,105 @@ public class ActivityServiceTests
                 It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(5);
 
-        // Act
-        var count = await _activityService.CountActivitiesAsync("exercise", CancellationToken.None);
+        var count = await _activityService.CountActivitiesAsync(find, CancellationToken.None);
 
-        // Assert: GetActivitiesAsync only merges sleep when `find` is empty or a
-        // sleep type; the count applies the same gate
-        Assert.Equal(2, count);
-        _mockSleepService.Verify(
-            s => s.CountSessionsAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
-                It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()),
-            Times.Never
-        );
+        count.Should().Be(7);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task CountActivitiesAsync_WithSleepFind_IncludesSleepSessions()
+    public async Task CountActivitiesAsync_WithBracketedFieldFilter_CountsOnlyTheMatchingActivities()
     {
-        // Arrange
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Enumerable.Empty<Activity>());
+                10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Activity>
+            {
+                new() { Id = "1", Type = "exercise", Mills = 1000 },
+                new() { Id = "2", Type = "exercise", Mills = 2000 },
+                new() { Id = "3", Type = "walking", Mills = 3000 },
+            });
+        _mockHeartRateService
+            .Setup(s => s.GetHeartRatesAsync(10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new HeartRate { Id = Guid.NewGuid().ToString(), Type = "heartrate", Mills = 4000 }]);
+        _mockStepCountService
+            .Setup(s => s.GetStepCountsAsync(10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<StepCount>());
         _mockSleepService
-            .Setup(s => s.CountSessionsAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
-                It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(5);
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(), It.IsAny<SleepSource?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<SleepSession>());
 
-        // Act
-        var count = await _activityService.CountActivitiesAsync("sleep", CancellationToken.None);
+        var count = await _activityService.CountActivitiesAsync("find[type]=exercise", CancellationToken.None);
 
-        // Assert
-        Assert.Equal(5, count);
+        count.Should().Be(2);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task CountActivitiesAsync_WithATimeBound_PassesItToEverySource()
+    {
+        var bounds = new Dictionary<string, (DateTime? From, DateTime? To)>();
+        _mockStateSpanService
+            .Setup(s => s.GetActivitiesAsync(
+                int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<int, int, DateTime?, DateTime?, CancellationToken>((_, _, from, to, _) => bounds["stateSpans"] = (from, to))
+            .ReturnsAsync(Enumerable.Empty<Activity>());
+        _mockHeartRateService
+            .Setup(s => s.GetHeartRatesAsync(int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<int, int, DateTime?, DateTime?, CancellationToken>((_, _, from, to, _) => bounds["heartRates"] = (from, to))
+            .ReturnsAsync(Enumerable.Empty<HeartRate>());
+        _mockStepCountService
+            .Setup(s => s.GetStepCountsAsync(int.MaxValue, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<int, int, DateTime?, DateTime?, CancellationToken>((_, _, from, to, _) => bounds["stepCounts"] = (from, to))
+            .ReturnsAsync(Enumerable.Empty<StepCount>());
+        _mockSleepService
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(), It.IsAny<SleepSource?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<DateTime?, DateTime?, SleepSessionType?, SleepSource?, int, int, bool, bool, CancellationToken>(
+                (from, to, _, _, _, _, _, _, _) => bounds["sleep"] = (from, to))
+            .ReturnsAsync(Enumerable.Empty<SleepSession>());
+
+        await _activityService.CountActivitiesAsync(
+            "find[created_at][$gte]=2026-01-01T00:00:00Z&find[created_at][$lte]=2026-02-01T00:00:00Z", CancellationToken.None);
+
+        var expectedFrom = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var expectedTo = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        bounds.Keys.Should().BeEquivalentTo("stateSpans", "heartRates", "stepCounts", "sleep");
+        bounds.Values.Should().OnlyContain(b => b.From == expectedFrom && b.To == expectedTo);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task CountActivitiesAsync_WithAFieldFilter_CountsSleepSessionsThatMatchAndStartInsideTheBound()
+    {
+        var lower = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        _mockStateSpanService
+            .Setup(s => s.GetActivitiesAsync(
+                10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<Activity>());
+        _mockHeartRateService
+            .Setup(s => s.GetHeartRatesAsync(10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<HeartRate>());
+        _mockStepCountService
+            .Setup(s => s.GetStepCountsAsync(10_000, 0, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<StepCount>());
+        _mockSleepService
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(), It.IsAny<SleepSource?>(),
+                10_000, 0, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[]
+            {
+                new SleepSession { Id = Guid.NewGuid().ToString(), StartTime = lower.AddHours(2), EndTime = lower.AddHours(9) },
+                new SleepSession { Id = Guid.NewGuid().ToString(), StartTime = lower.AddHours(-3), EndTime = lower.AddHours(5) },
+            });
+
+        var count = await _activityService.CountActivitiesAsync(
+            "find[created_at][$gte]=2026-01-01T00:00:00Z&find[type]=sleep", CancellationToken.None);
+
+        count.Should().Be(1);
     }
 
     /// <summary>
@@ -1474,7 +1426,7 @@ public class ActivityServiceTests
             .ReturnsAsync(Enumerable.Empty<HeartRate>());
         _mockStateSpanService
             .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<Activity>());
 
         var result = await _activityService.GetActivitiesAsync(

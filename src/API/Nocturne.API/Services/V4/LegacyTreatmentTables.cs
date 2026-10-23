@@ -139,6 +139,17 @@ internal interface ILegacyTreatmentTable
         CancellationToken ct
     );
 
+    /// <summary>
+    /// The live records written under one of <paramref name="treatmentKeys"/>, the treatment ids
+    /// <see cref="LegacyTreatmentTables.ServedKey"/> reads, non-primary copies left out as
+    /// <see cref="ModifiedSinceAsync"/> leaves them out.
+    /// </summary>
+    Task<IReadOnlyList<FetchedRecord>> LiveByTreatmentKeyAsync(
+        NocturneDbContext context,
+        IReadOnlyCollection<string> treatmentKeys,
+        CancellationToken ct
+    );
+
     /// <summary>Projects a record this table owns that is not part of a meal pairing.</summary>
     Treatment Project(object record, CarbFoodIndex foods);
 }
@@ -176,10 +187,11 @@ internal sealed class LegacyTreatmentTable<TRecord, TEntity>(
         if (range.NativeOnly)
             records = records.Where(r => legacyId(r) is null);
 
-        return records
-            .Select(r => new FetchedRecord(this, r, ((IV4Record)r).Id, CreatedAt(r), ModifiedAt(r)))
-            .ToList();
+        return records.Select(Fetch).ToList();
     }
+
+    internal FetchedRecord Fetch(TRecord record) =>
+        new(this, record, ((IV4Record)record).Id, CreatedAt(record), ModifiedAt(record));
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<FetchedRecord>> ModifiedSinceAsync(
@@ -191,6 +203,7 @@ internal sealed class LegacyTreatmentTable<TRecord, TEntity>(
     )
     {
         var entities = await HistoryPage.GetAsync(
+            context,
             table(context).IncludingDeleted().AsNoTracking().ExcludeNonPrimaryKeepingDeleted(context, dedupType),
             e => e.SysUpdatedAt,
             e => e.Id,
@@ -215,10 +228,29 @@ internal sealed class LegacyTreatmentTable<TRecord, TEntity>(
     )
     {
         var ids = correlationIds.Select(id => (Guid?)id).ToList();
+        return await LiveAsync(
+            context, e => ids.Contains(EF.Property<Guid?>(e, nameof(IV4Record.CorrelationId))), ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FetchedRecord>> LiveByTreatmentKeyAsync(
+        NocturneDbContext context,
+        IReadOnlyCollection<string> treatmentKeys,
+        CancellationToken ct
+    )
+    {
+        var keys = treatmentKeys.ToList();
+        return await LiveAsync(
+            context, e => keys.Contains(EF.Property<string?>(e, nameof(IV4Record.LegacyId))!), ct);
+    }
+
+    private async Task<IReadOnlyList<FetchedRecord>> LiveAsync(
+        NocturneDbContext context, Expression<Func<TEntity, bool>> filter, CancellationToken ct)
+    {
         var entities = await table(context)
             .AsNoTracking()
             .ExcludeNonPrimary(context, dedupType)
-            .Where(e => ids.Contains(EF.Property<Guid?>(e, nameof(IV4Record.CorrelationId))))
+            .Where(filter)
             .ToListAsync(ct);
 
         return entities
@@ -314,6 +346,7 @@ internal sealed class LegacyStateSpanTable(
     )
     {
         var spans = await HistoryPage.GetAsync(
+            context,
             Served(context.StateSpans.IncludingDeleted().AsNoTracking()),
             s => s.UpdatedAt, s => s.Id, cursorMills, limit, logger, RecordType, ct);
 
@@ -327,6 +360,18 @@ internal sealed class LegacyStateSpanTable(
         IReadOnlyCollection<Guid> correlationIds,
         CancellationToken ct
     ) => Task.FromResult<IReadOnlyList<FetchedRecord>>([]);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FetchedRecord>> LiveByTreatmentKeyAsync(
+        NocturneDbContext context,
+        IReadOnlyCollection<string> treatmentKeys,
+        CancellationToken ct
+    )
+    {
+        var keys = treatmentKeys.ToList();
+        var spans = await Rows(context).Where(s => keys.Contains(s.OriginalId!)).ToListAsync(ct);
+        return spans.Select(Fetched).ToList();
+    }
 
     /// <inheritdoc />
     public Treatment Project(object record, CarbFoodIndex foods)
@@ -378,6 +423,42 @@ internal sealed class LegacyProfileActivationTable : ILegacyTreatmentTable
         new(this, ProfileActivationMapper.ToDomainModel(entity), entity.Id, entity.SysCreatedAt, entity.SysUpdatedAt,
             entity.DeletedAt is not null);
 
+    private const int LatestSwitchPageSize = 50;
+
+    // Bounds the step over activations served as something else; Nightscout's read has no cap.
+    private const int LatestSwitchMaxPages = 20;
+
+    /// <summary>
+    /// The newest activation in the window that serves as a Profile Switch of zero duration, read
+    /// in pages off <c>ix_profile_activations_tenant_start_timestamp</c> so an activation served as
+    /// something else, or with a duration, is stepped over without reading the whole window.
+    /// </summary>
+    internal async Task<IReadOnlyList<FetchedRecord>> LatestSwitchAsync(
+        NocturneDbContext context, DateTime from, DateTime to, CancellationToken ct)
+    {
+        for (var page = 0; page < LatestSwitchMaxPages; page++)
+        {
+            var rows = await InWindow(context, from, to)
+                .OrderByDescending(a => a.Timestamp)
+                .ThenBy(a => a.Id)
+                .Skip(page * LatestSwitchPageSize)
+                .Take(LatestSwitchPageSize)
+                .ToListAsync(ct);
+
+            foreach (var row in rows.Select(Fetched))
+            {
+                var treatment = LegacyTreatmentTables.ProjectProfileActivation((ProfileActivation)row.Record);
+                if (treatment.EventType == TreatmentTypes.ProfileSwitch && treatment.Duration == 0)
+                    return [row];
+            }
+
+            if (rows.Count < LatestSwitchPageSize)
+                break;
+        }
+
+        return [];
+    }
+
     /// <inheritdoc />
     /// <remarks>Every activation served here mirrors a legacy write, so <see cref="LegacyTreatmentRange.NativeOnly"/> leaves none.</remarks>
     public async Task<IReadOnlyList<FetchedRecord>> InRangeAsync(
@@ -411,6 +492,7 @@ internal sealed class LegacyProfileActivationTable : ILegacyTreatmentTable
     )
     {
         var rows = await HistoryPage.GetAsync(
+            context,
             Served(context.ProfileActivations.IncludingDeleted().AsNoTracking()),
             a => a.SysUpdatedAt, a => a.Id, cursorMills, limit, logger, RecordType, ct);
 
@@ -424,6 +506,18 @@ internal sealed class LegacyProfileActivationTable : ILegacyTreatmentTable
         IReadOnlyCollection<Guid> correlationIds,
         CancellationToken ct
     ) => Task.FromResult<IReadOnlyList<FetchedRecord>>([]);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FetchedRecord>> LiveByTreatmentKeyAsync(
+        NocturneDbContext context,
+        IReadOnlyCollection<string> treatmentKeys,
+        CancellationToken ct
+    )
+    {
+        var keys = treatmentKeys.ToList();
+        var rows = await Rows(context).Where(a => keys.Contains(a.LegacyId!)).ToListAsync(ct);
+        return rows.Select(Fetched).ToList();
+    }
 
     /// <inheritdoc />
     public Treatment Project(object record, CarbFoodIndex foods) =>
@@ -507,12 +601,26 @@ internal static class LegacyTreatmentTables
             .Concat(LegacyProfileActivationTable.Rows(context).Select(a => a.LegacyId!));
 
     /// <summary>
-    /// The notes a served state span's or activation's treatment wrote as a Note of its own before
-    /// <see cref="NotesKey"/> was kept on the span: one treatment, served once, as the span.
+    /// The treatment ids every live record other than a Note was written under, with
+    /// <see cref="ServedStateSpanKeys"/>.
     /// </summary>
-    internal static IQueryable<NoteEntity> NotesWrittenBesideServedStateSpans(NocturneDbContext context)
+    private static IQueryable<string> TreatmentKeysOfRecords(NocturneDbContext context) =>
+        context.Boluses.Where(r => r.LegacyId != null).Select(r => r.LegacyId!)
+            .Concat(context.CarbIntakes.Where(r => r.LegacyId != null).Select(r => r.LegacyId!))
+            .Concat(context.BGChecks.Where(r => r.LegacyId != null).Select(r => r.LegacyId!))
+            .Concat(context.DeviceEvents.Where(r => r.LegacyId != null).Select(r => r.LegacyId!))
+            .Concat(context.TempBasals.Where(r => r.LegacyId != null).Select(r => r.LegacyId!))
+            .Concat(context.BolusCalculations.Where(r => r.LegacyId != null).Select(r => r.LegacyId!))
+            .Concat(ServedStateSpanKeys(context));
+
+    /// <summary>
+    /// The Notes a treatment's <c>notes</c> wrote beside the record it is served as, which serves
+    /// them as its own <c>notes</c> (<see cref="Assemble"/>): one treatment, served once. A state
+    /// span's or activation's treatment wrote one only before <see cref="NotesKey"/> was kept on it.
+    /// </summary>
+    internal static IQueryable<NoteEntity> NotesServedWithAnotherRecord(NocturneDbContext context)
     {
-        var keys = ServedStateSpanKeys(context);
+        var keys = TreatmentKeysOfRecords(context);
         return context.Notes.Where(n => n.LegacyId != null && keys.Contains(n.LegacyId));
     }
 
@@ -539,6 +647,40 @@ internal static class LegacyTreatmentTables
             .Aggregate(Queryable.Concat);
         return context.StateSpans.Where(s => served.Contains(s.Id));
     }
+
+    /// <summary>
+    /// The newest record serving as <paramref name="eventType"/> in the window, bounds inclusive, or
+    /// none: a device event off <c>ix_device_events_tenant_event_type_timestamp</c>, or a zero-duration
+    /// Profile Switch off <see cref="LegacyProfileActivationTable.LatestSwitchAsync"/>.
+    /// </summary>
+    internal static async Task<IReadOnlyList<FetchedRecord>> LatestOfTypeAsync(
+        LegacyTreatmentRepositories repositories,
+        NocturneDbContext context,
+        string eventType,
+        DateTime from,
+        DateTime to,
+        CancellationToken ct)
+    {
+        if (eventType == TreatmentTypes.ProfileSwitch)
+            return await ProfileActivationTable.LatestSwitchAsync(context, from, to, ct);
+
+        if (!TreatmentTypes.DeviceEventTypeMap.TryGetValue(eventType, out var type))
+            return [];
+
+        var latest = await repositories.DeviceEvents.GetLatestByEventTypeAsync(type, to, ct);
+        if (latest is null || latest.Timestamp < from)
+            return [];
+
+        return [DeviceEventTable.Fetch(latest)];
+    }
+
+    private static readonly LegacyTreatmentTable<DeviceEvent, DeviceEventEntity> DeviceEventTable = new(
+        (repositories, range, ct) => repositories.DeviceEvents.GetAsync(
+            from: range.From, to: range.To, device: null, source: null,
+            limit: range.Limit, offset: 0, descending: range.Descending, nativeOnly: range.NativeOnly, ct: ct),
+        r => r.LegacyId,
+        c => c.DeviceEvents, RecordType.DeviceEvent, DeviceEventMapper.ToDomainModel,
+        (r, _) => ProjectDeviceEvent(r));
 
     internal static readonly IReadOnlyList<ILegacyTreatmentTable> All =
     [
@@ -570,13 +712,7 @@ internal static class LegacyTreatmentTables
             r => r.LegacyId,
             c => c.Notes, RecordType.Note, NoteMapper.ToDomainModel,
             (r, _) => ProjectNote(r)),
-        new LegacyTreatmentTable<DeviceEvent, DeviceEventEntity>(
-            (repositories, range, ct) => repositories.DeviceEvents.GetAsync(
-                from: range.From, to: range.To, device: null, source: null,
-                limit: range.Limit, offset: 0, descending: range.Descending, nativeOnly: range.NativeOnly, ct: ct),
-            r => r.LegacyId,
-            c => c.DeviceEvents, RecordType.DeviceEvent, DeviceEventMapper.ToDomainModel,
-            (r, _) => ProjectDeviceEvent(r)),
+        DeviceEventTable,
         new LegacyTreatmentTable<TempBasal, TempBasalEntity>(
             (repositories, range, ct) => repositories.TempBasals.GetAsync(
                 from: range.From, to: range.To, device: null, source: null,
@@ -727,17 +863,18 @@ internal static class LegacyTreatmentTables
     /// <see cref="V4ToLegacyProjectionService.GetProjectedTreatmentsModifiedSinceAsync"/>.
     /// </summary>
     /// <remarks>
-    /// <c>spanNotes</c> holds the text of the Note a served span's treatment wrote beside it, by
-    /// treatment id, served on the span when the span keeps none itself; see
-    /// <see cref="NotesWrittenBesideServedStateSpans"/>.
+    /// <c>notes</c> holds the text of the Note a served record's treatment wrote beside it, by
+    /// treatment id, served on the record over any copy a span keeps; see
+    /// <see cref="NotesServedWithAnotherRecord"/>. A device event keeps the one copy of its notes,
+    /// which its own V4 edits reach, so a Note written beside one before that is not served on it.
     /// </remarks>
     internal static List<Treatment> Assemble(
         IReadOnlyList<FetchedRecord> rows,
         CarbFoodIndex foods,
-        IReadOnlyDictionary<string, string>? spanNotes = null)
+        IReadOnlyDictionary<string, string>? notes = null)
     {
         var treatments = new List<Treatment>();
-        var paired = PairMeals(rows, foods, treatments);
+        var paired = PairMeals(rows, foods, notes, treatments);
 
         foreach (var row in rows)
         {
@@ -745,25 +882,31 @@ internal static class LegacyTreatmentTables
                 continue;
 
             var treatment = row.Table.Project(row.Record, foods);
-            if (treatment.Notes is null
-                && ServedKey(row.Record) is { } key
-                && spanNotes?.GetValueOrDefault(key) is { } notes)
-                treatment.Notes = notes;
-
+            if (row.Record is not DeviceEvent)
+                treatment = WithNotes(treatment, ServedKey(row.Record), notes);
             treatments.Add(Stamp(treatment, row.Created, row.Modified, row.Deleted));
         }
 
         return treatments;
     }
 
+    private static Treatment WithNotes(
+        Treatment treatment, string? key, IReadOnlyDictionary<string, string>? notes)
+    {
+        if (key is not null && notes?.GetValueOrDefault(key) is { } text)
+            treatment.Notes = text;
+        return treatment;
+    }
+
     /// <summary>
-    /// The treatment id a served state span or activation was written under, which the Note its
-    /// treatment wrote beside it carries; see <see cref="NotesWrittenBesideServedStateSpans"/>.
+    /// The treatment id a served record other than a Note was written under, which the Note its
+    /// treatment wrote beside it carries; see <see cref="NotesServedWithAnotherRecord"/>.
     /// </summary>
     internal static string? ServedKey(object record) => record switch
     {
         StateSpanEntity span => span.OriginalId,
-        ProfileActivation activation => activation.LegacyId,
+        Note => null,
+        IV4Record v4 => v4.LegacyId,
         _ => null,
     };
 
@@ -780,6 +923,7 @@ internal static class LegacyTreatmentTables
     private static HashSet<object> PairMeals(
         IReadOnlyList<FetchedRecord> records,
         CarbFoodIndex foods,
+        IReadOnlyDictionary<string, string>? notes,
         List<Treatment> treatments
     )
     {
@@ -809,7 +953,10 @@ internal static class LegacyTreatmentTables
             // record above the cursor the consumer derives from this page, which re-serves the same
             // meal on the next request without ever advancing.
             treatments.Add(Stamp(
-                ProjectMealBolus(bolus.Record, carb.Record, foods.For(carb.Record.Id)),
+                WithNotes(
+                    ProjectMealBolus(bolus.Record, carb.Record, foods.For(carb.Record.Id)),
+                    bolus.Record.LegacyId ?? carb.Record.LegacyId,
+                    notes),
                 Oldest(bolus.Record.CreatedAt, carb.Record.CreatedAt),
                 Newest(bolus.Modified, carb.Modified),
                 key.Deleted));
@@ -846,9 +993,12 @@ internal static class LegacyTreatmentTables
             Id = bolus.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(bolus.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(bolus.AdditionalProperties),
-            EventType = TreatmentTypes.MealBolus,
+            EventType = TreatmentUploadedEventType.Of(bolus.AdditionalProperties)
+                ?? TreatmentUploadedEventType.Of(carb.AdditionalProperties)
+                ?? TreatmentTypes.MealBolus,
             Mills = bolus.Mills,
             Insulin = bolus.Insulin,
+            PreBolus = TreatmentUploadedPreBolus.Of(bolus.AdditionalProperties),
             Carbs = carb.Carbs,
             FoodType = DeriveFoodType(foods),
             Fat = DeriveTotalFat(foods),
@@ -869,9 +1019,10 @@ internal static class LegacyTreatmentTables
             Id = bolus.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(bolus.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(bolus.AdditionalProperties),
-            EventType = TreatmentTypes.CorrectionBolus,
+            EventType = TreatmentUploadedEventType.Of(bolus.AdditionalProperties) ?? TreatmentTypes.CorrectionBolus,
             Mills = bolus.Mills,
             Insulin = bolus.Insulin,
+            PreBolus = TreatmentUploadedPreBolus.Of(bolus.AdditionalProperties),
             EnteredBy = bolus.Device,
             DataSource = bolus.DataSource,
             SyncIdentifier = bolus.SyncIdentifier,
@@ -890,7 +1041,7 @@ internal static class LegacyTreatmentTables
             Id = carb.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(carb.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(carb.AdditionalProperties),
-            EventType = TreatmentTypes.CarbCorrection,
+            EventType = TreatmentUploadedEventType.Of(carb.AdditionalProperties) ?? TreatmentTypes.CarbCorrection,
             Mills = carb.Mills,
             Carbs = carb.Carbs,
             FoodType = DeriveFoodType(foods),

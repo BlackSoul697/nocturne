@@ -11,6 +11,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
 using System.Linq;
@@ -254,10 +255,10 @@ public class RetrospectiveController : ControllerBase
             limit: 5000, offset: 0, descending: false, ct: cancellationToken
         )).ToList();
         // Get device status
-        var deviceStatus = await _projectionService.GetAsync(
+        var deviceStatus = await _projectionService.GetMatchingAsync(
+            FindQuery.Empty,
             count: 500,
             skip: 0,
-            find: null,
             ct: cancellationToken
         );
         var deviceStatusList = deviceStatus?
@@ -482,12 +483,12 @@ public class RetrospectiveController : ControllerBase
         {
             var startTime = tb.StartMills;
             var endTime = tb.EndMills;
-            if (endTime == null) continue;
+            if (endTime == null || tb.Rate is not { } rate) continue;
             if (targetTime >= startTime && targetTime < endTime)
             {
                 return new BasalData
                 {
-                    Rate = tb.Rate,
+                    Rate = rate,
                     IsTemp = true
                 };
             }
@@ -523,8 +524,8 @@ public class RetrospectiveController : ControllerBase
     {
         foreach (var tb in tempBasals.Where(tb => tb.EndMills is not null))
         {
-            if (targetTime >= tb.StartMills && targetTime < tb.EndMills)
-                return new BasalData { Rate = tb.Rate, IsTemp = true };
+            if (targetTime >= tb.StartMills && targetTime < tb.EndMills && tb.Rate is { } rate)
+                return new BasalData { Rate = rate, IsTemp = true };
         }
         return new BasalData { Rate = scheduledRateAt(targetTime), IsTemp = false };
     }

@@ -6,6 +6,7 @@ using Moq;
 using Nocturne.API.Configuration;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Profiles;
+using Nocturne.API.Tests.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Profiles;
@@ -38,7 +39,7 @@ public class SummaryServiceTests
     {
         _mockDDataService = new Mock<IDDataService>();
         _mockPropertiesService = new Mock<IPropertiesService>();
-        _mockActiveProfileResolver = new Mock<IActiveProfileResolver>();
+        _mockActiveProfileResolver = ActiveProfileResolverMock.WithDefault();
         _mockTherapySettings = new Mock<ITherapySettingsRepository>();
         _mockTherapySettings
             .Setup(x => x.GetDefaultsAsync(It.IsAny<CancellationToken>()))
@@ -363,10 +364,27 @@ public class SummaryServiceTests
 
         // Assert
         result.Should().HaveCount(2);
-        result[0].Sgv.Should().Be(120);
-        result[0].Noise.Should().BeNull(); // Noise of 1 should be excluded
-        result[1].Sgv.Should().Be(110);
-        result[1].Noise.Should().Be(2); // Noise != 1 should be included
+        result[0].Sgv.Should().Be(110);
+        result[0].Noise.Should().Be(2); // Noise != 1 should be included
+        result[1].Sgv.Should().Be(120);
+        result[1].Noise.Should().BeNull(); // Noise of 1 should be excluded
+    }
+
+    [Fact]
+    public void ProcessSgvs_GivenNewestFirst_ListsOldestFirst()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var sgvs = new List<Entry>
+        {
+            new() { Mills = now - 1000, Mgdl = 120 },
+            new() { Mills = now - 2000, Mgdl = 118 },
+            new() { Mills = now - 3000, Mgdl = 116 },
+        };
+
+        var result = _service.ProcessSgvs(sgvs, 6);
+
+        result.Select(r => r.Mills).Should().BeInAscendingOrder();
+        result.Select(r => r.Sgv).Should().Equal(116, 118, 120);
     }
 
     [Fact]
@@ -402,10 +420,26 @@ public class SummaryServiceTests
 
         // Assert
         result.Treatments.Should().HaveCount(2); // Should filter out 8-hour old treatment
-        result.Treatments[0].Insulin.Should().Be(5.5);
-        result.Treatments[0].Carbs.Should().Be(30);
-        result.Treatments[1].Insulin.Should().Be(2.0);
-        result.Treatments[1].Carbs.Should().BeNull();
+        result.Treatments[0].Insulin.Should().Be(2.0);
+        result.Treatments[0].Carbs.Should().BeNull();
+        result.Treatments[1].Insulin.Should().Be(5.5);
+        result.Treatments[1].Carbs.Should().Be(30);
+    }
+
+    [Fact]
+    public void ProcessTreatments_GivenNewestFirst_ListsOldestFirst()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var treatments = new List<Treatment>
+        {
+            new() { Mills = now - 1000, EventType = "Meal Bolus", Insulin = 5.0 },
+            new() { Mills = now - 2000, EventType = "Correction Bolus", Insulin = 2.0 },
+        };
+
+        var result = _service.ProcessTreatments(treatments, null, 6);
+
+        result.Treatments.Select(t => t.Mills).Should().BeInAscendingOrder();
+        result.Treatments.Select(t => t.Insulin).Should().Equal(2.0, 5.0);
     }
 
     [Fact]
@@ -489,6 +523,108 @@ public class SummaryServiceTests
         result.Cage.Should().Be(48);
         result.Sage.Should().Be(72);
         result.Battery.Should().Be(85);
+    }
+
+    [Fact]
+    public async Task ConstructStateAsync_WithNoProperties_WritesNullIobNullCobAndZeroBwp()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object>());
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json.ContainsKey("iob").Should().BeTrue();
+        json["iob"].Should().BeNull();
+        json.ContainsKey("cob").Should().BeTrue();
+        json["cob"].Should().BeNull();
+        json["bwp"]!.GetValue<double>().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ConstructStateAsync_WithZeroIobAndCob_WritesZeroNotNull()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                new Dictionary<string, object>
+                {
+                    ["iob"] = new Dictionary<string, object> { ["iob"] = 0.0 },
+                    ["cob"] = new Dictionary<string, object> { ["cob"] = 0.0 },
+                }
+            );
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json["iob"]!.GetValue<double>().Should().Be(0);
+        json["cob"]!.GetValue<int>().Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(2.3456, 24.6, 2.35, 25)]
+    [InlineData(0.125, 24.5, 0.13, 25)]
+    [InlineData(-0.125, 0.5, -0.12, 1)]
+    [InlineData(2.344, 24.4, 2.34, 24)]
+    public async Task ConstructStateAsync_RoundsIobAndCobHalfUpAsJavaScriptDoes(
+        double iob,
+        double cob,
+        double expectedIob,
+        int expectedCob
+    )
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                new Dictionary<string, object>
+                {
+                    ["iob"] = new Dictionary<string, object> { ["iob"] = iob },
+                    ["cob"] = new Dictionary<string, object> { ["cob"] = cob },
+                }
+            );
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json["iob"]!.GetValue<double>().Should().Be(expectedIob);
+        json["cob"]!.GetValue<int>().Should().Be(expectedCob);
+    }
+
+    [Fact]
+    public void ProcessTempBasals_PercentTemp_ReportsTheRateItResolvedTo()
+    {
+        var profile = new ProfileData
+        {
+            Basal = new List<TimeValue> { new() { Time = "00:00", Value = 0.6 } },
+        };
+        var start = DateTimeOffset.UtcNow.AddMinutes(-40).ToUnixTimeMilliseconds();
+        var temps = new List<Treatment>
+        {
+            new() { EventType = "Temp Basal", Mills = start, Duration = 30, Percent = -50, DeliveredRate = 0.4 },
+        };
+
+        var result = _service.ProcessTempBasals(profile, temps, start - 1);
+
+        result.Should().Contain(t => t.Start == start).Which.Absolute.Should().Be(0.4);
+    }
+
+    [Fact]
+    public void ProcessTempBasals_PercentTempOfUnknownRate_LeavesTheProfileBasal()
+    {
+        var profile = new ProfileData
+        {
+            Basal = new List<TimeValue> { new() { Time = "00:00", Value = 0.6 } },
+        };
+        var start = DateTimeOffset.UtcNow.AddMinutes(-40).ToUnixTimeMilliseconds();
+        var temps = new List<Treatment>
+        {
+            new() { EventType = "Temp Basal", Mills = start, Duration = 30, Percent = -50 },
+        };
+
+        var result = _service.ProcessTempBasals(profile, temps, start - 1);
+
+        result.Should().NotContain(t => t.Absolute == 0);
     }
 
     [Fact]

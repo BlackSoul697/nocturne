@@ -30,6 +30,14 @@ public interface ITreatmentService
         CancellationToken cancellationToken = default
     );
 
+    /// <inheritdoc cref="ITreatmentStore.GetLatestOfTypeAsync"/>
+    Task<Treatment?> GetLatestTreatmentOfTypeAsync(
+        string eventType,
+        long fromMills,
+        long toMills,
+        CancellationToken cancellationToken = default
+    );
+
     /// <returns>Treatment if found, null otherwise</returns>
     Task<Treatment?> GetTreatmentByIdAsync(
         string id,
@@ -81,7 +89,23 @@ public interface ITreatmentService
     /// Created treatments with assigned IDs, carrying how many of their records were not written
     /// because the user had deleted them.
     /// </returns>
+    /// <exception cref="TreatmentBatchFailedException">
+    /// A treatment could not be stored. The ones before it are stored and announced.
+    /// </exception>
     Task<BulkWrite<Treatment>> CreateTreatmentsAsync(
+        IEnumerable<Treatment> treatments,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// <see cref="CreateTreatmentsAsync"/> for treatments posted to the v1 API, where a meal with a
+    /// <c>preBolus</c> is stored as a bolus and its carbs at the preBolus offset, as Nightscout's
+    /// POST stores it. Both halves are returned, the bolus first.
+    /// </summary>
+    /// <exception cref="TreatmentBatchFailedException">
+    /// A treatment could not be stored. The ones before it are stored and announced.
+    /// </exception>
+    Task<BulkWrite<Treatment>> CreateV1TreatmentsAsync(
         IEnumerable<Treatment> treatments,
         CancellationToken cancellationToken = default
     );

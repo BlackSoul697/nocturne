@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Routing;
 using Nocturne.API.Attributes;
 using Nocturne.API.Controllers.V4.Base;
+using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.API.Tests.Authorization;
@@ -188,6 +189,7 @@ public class V4WriteScopeGatingTests
             // the class.
             ["CompatibilityController"] = NotDataCategory.SuperuserAttribute,
             ["ServicesController"] = NotDataCategory.TenantSettingsScope,
+            ["RejectedUploadsController"] = NotDataCategory.TenantSettingsScope,
 
             ["ChatIdentityDirectoryController"] = NotDataCategory.InstanceKey,
 
@@ -203,6 +205,7 @@ public class V4WriteScopeGatingTests
             ["ConnectedAppsController"] = NotDataCategory.IdentityAndDelegation,
             ["GuestLinkController"] = NotDataCategory.IdentityAndDelegation,
             ["MemberInviteController"] = NotDataCategory.IdentityAndDelegation,
+            ["MemberRecoveryController"] = NotDataCategory.IdentityAndDelegation,
             ["MembershipRequestController"] = NotDataCategory.IdentityAndDelegation,
             ["RoleController"] = NotDataCategory.IdentityAndDelegation,
             ["SessionsController"] = NotDataCategory.IdentityAndDelegation,
@@ -341,6 +344,9 @@ public class V4WriteScopeGatingTests
             // schedules are the therapy category (therapy.read on the read side); v1 and v3 profile
             // writes require therapy.readwrite.
             ["ProfileController"] = Scope.TherapyReadWrite,
+            // therapy: an activation runs a stored profile, so recording, ending and deleting a
+            // person's profile switch takes therapy.readwrite, as writing the profile does.
+            ["ProfileActivationsController"] = Scope.TherapyReadWrite,
 
             // treatments: carb_intakes sits under treatments.read, POST /meals also writes a bolus,
             // and treatment_foods is keyed by carb intake (the food catalog is only read).
@@ -929,43 +935,13 @@ public class V4WriteScopeGatingTests
         return context.Result;
     }
 
-    /// <summary>
-    /// Runs the filters that apply to an action, its controller's and its own (authorization filters
-    /// first, as MVC does), so the assertion covers both which gate is present and the scope it names.
-    /// </summary>
     private static IActionResult? EvaluateAction(
-        Type controller, string actionName, bool authenticated, params string[] grantedScopes)
-    {
-        var action = controller.GetMethod(actionName, BindingFlags.Public | BindingFlags.Instance)
-            ?? throw new InvalidOperationException($"{controller.Name} has no action named {actionName}");
-        var filters = AppliedAttributes(controller, action);
-
-        var actionContext = new ActionContext(
-            NewHttpContext(authenticated, grantedScopes), new RouteData(), new ActionDescriptor());
-
-        foreach (var filter in filters.OfType<IAuthorizationFilter>())
-        {
-            var authorizationContext = new AuthorizationFilterContext(actionContext, new List<IFilterMetadata>());
-            filter.OnAuthorization(authorizationContext);
-            if (authorizationContext.Result is not null)
-                return authorizationContext.Result;
-        }
-
-        var executingContext = new ActionExecutingContext(
-            actionContext,
-            new List<IFilterMetadata>(),
-            new Dictionary<string, object?>(),
-            ScopeDeclarationInstance(controller));
-
-        foreach (var filter in filters.OfType<IActionFilter>())
-        {
-            filter.OnActionExecuting(executingContext);
-            if (executingContext.Result is not null)
-                return executingContext.Result;
-        }
-
-        return null;
-    }
+        Type controller, string actionName, bool authenticated, params string[] grantedScopes) =>
+        ActionGate.Evaluate(
+            controller,
+            actionName,
+            new HashSet<string>(grantedScopes),
+            authenticated ? new AuthContext { IsAuthenticated = true } : null);
 
     private static DefaultHttpContext NewHttpContext(bool authenticated, string[] grantedScopes)
     {

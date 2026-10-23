@@ -24,20 +24,30 @@
   import { getProfileSummary, setDefaultProfile } from "$api/generated/profiles.generated.remote";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import ScheduleView from "$lib/components/schedule/ScheduleView.svelte";
+  import ProfileSwitchDialog from "$lib/components/profile/ProfileSwitchDialog.svelte";
+  import ActiveProfileActivation from "$lib/components/profile/ActiveProfileActivation.svelte";
   import TargetRangeCard from "$lib/components/schedule/TargetRangeCard.svelte";
 
   type Summary = Awaited<ReturnType<typeof getProfileSummary>>;
 
-  let switchingProfile = $state<string | null>(null);
+  let defaultingProfile = $state<string | null>(null);
+  let switchDialogOpen = $state(false);
+  let switchProfileName = $state("");
 
-  async function handleSetActive(profileName: string) {
-    switchingProfile = profileName;
+  async function handleMakeDefault(profileName: string) {
+    defaultingProfile = profileName;
     try {
       await setDefaultProfile(profileName);
     } finally {
-      switchingProfile = null;
+      defaultingProfile = null;
     }
+  }
+
+  function openSwitch(profileName: string) {
+    switchProfileName = profileName;
+    switchDialogOpen = true;
   }
 
   // Query for profile summary data. Read reactively via .current/.loading/.error
@@ -155,7 +165,7 @@
   {@const sensitivity = selectedProfileName ? getSensitivityForProfile(data, selectedProfileName) : null}
   {@const targetRange = selectedProfileName ? getTargetRangeForProfile(data, selectedProfileName) : null}
   {@const profileConfigured = (data?.basalSchedules ?? []).length > 0}
-  <div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6" {@attach coachmark({ key: "onboarding.therapy-profile", title: "Automatically synced", description: "Your basal rates, carb ratios, and sensitivity factors are imported from your uploader (AAPS, Loop, xDrip+). No manual entry needed.", completedWhen: () => profileConfigured })}>
+  <div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6" {@attach coachmark({ ...coachFor("onboarding.therapy-profile"), completedWhen: () => profileConfigured })}>
     <!-- Header -->
     <div class="flex flex-wrap items-start justify-between gap-2">
       <div class="flex items-center gap-3">
@@ -205,6 +215,8 @@
         </CardContent>
       </Card>
     {:else}
+      <ActiveProfileActivation />
+
       <!-- Profile Name Tabs (when multiple profiles exist) -->
       {#if profileNames.length > 1}
         <Card>
@@ -258,18 +270,25 @@
                       </span>
                       {#if isDefault}
                         <Badge variant="success">
-                          Active
+                          Default
                         </Badge>
                       {:else}
                         <Button
                           variant="subtle"
                           size="inline-xs"
-                          onclick={(e: MouseEvent) => { e.preventDefault(); handleSetActive(profileName); }}
-                          disabled={switchingProfile !== null}
+                          onclick={(e: MouseEvent) => { e.preventDefault(); handleMakeDefault(profileName); }}
+                          disabled={defaultingProfile !== null}
                         >
-                          {switchingProfile === profileName ? "Switching..." : "Set as active"}
+                          {defaultingProfile === profileName ? "Saving..." : "Make default"}
                         </Button>
                       {/if}
+                      <Button
+                        variant="subtle"
+                        size="inline-xs"
+                        onclick={(e: MouseEvent) => { e.preventDefault(); openSwitch(profileName); }}
+                      >
+                        Switch…
+                      </Button>
                       {#if isExternal}
                         <Badge variant="outline">
                           <Lock class="h-3 w-3" />
@@ -316,7 +335,7 @@
                   {selectedProfileName}
                   {#if therapy.isDefault}
                     <Badge variant="success">
-                      Active
+                      Default
                     </Badge>
                   {/if}
                   {#if therapy.isExternallyManaged}
@@ -335,6 +354,9 @@
                   </CardDescription>
                 {/if}
               </div>
+              <Button variant="outline" size="sm" onclick={() => openSwitch(selectedProfileName)}>
+                Switch…
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -452,3 +474,4 @@
   </div>
 {/if}
 
+<ProfileSwitchDialog bind:open={switchDialogOpen} profileName={switchProfileName} />

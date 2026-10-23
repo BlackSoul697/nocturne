@@ -20,6 +20,9 @@ public interface ITreatmentStore
     /// <returns>A read-only list of <see cref="Treatment"/> records matching the query.</returns>
     Task<IReadOnlyList<Treatment>> QueryAsync(TreatmentQuery query, CancellationToken ct = default);
 
+    /// <inheritdoc cref="Nocturne.Core.Contracts.V4.IV4ToLegacyProjectionService.GetLatestProjectedTreatmentAsync"/>
+    Task<Treatment?> GetLatestOfTypeAsync(string eventType, long fromMills, long toMills, CancellationToken ct = default);
+
     /// <summary>
     /// Whether <paramref name="id"/> names a treatment record the user deleted, under any key
     /// <see cref="GetByIdAsync"/> resolves.
@@ -66,7 +69,15 @@ public interface ITreatmentStore
     /// The created <see cref="Treatment"/> records, each under the id reads serve for it, carrying
     /// how many of their records were not written because the user had deleted them.
     /// </returns>
-    Task<BulkWrite<Treatment>> CreateAsync(IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
+    /// <exception cref="TreatmentBatchFailedException">A treatment could not be stored.</exception>
+    /// <param name="treatments">The treatments to write, in order.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <param name="stored">
+    /// Receives each treatment as it is stored, so a caller still knows what landed when the batch
+    /// ends in an exception it does not expect.
+    /// </param>
+    Task<BulkWrite<Treatment>> CreateAsync(
+        IReadOnlyList<Treatment> treatments, CancellationToken ct = default, ICollection<Treatment>? stored = null);
 
     /// <summary>
     /// Updates an existing treatment by ID, propagating changes to V4 tables.
