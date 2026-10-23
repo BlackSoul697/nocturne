@@ -416,10 +416,10 @@ public class DemoDataGenerator : IDemoDataGenerator
                         stepTreatments.Add(CreateManualCorrectionBolusTreatment(currentTime, manualCorrectionBolus));
                         simulator.AddInsulinDose(currentTime, manualCorrectionBolus);
                     }
-                    // AID correction bolus every 30 minutes when significantly high
+                    // A larger automatic bolus every 30 minutes when significantly high. Trio uploads it
+                    // as an SMB like any other, so it is not read as the person's correction.
                     else if (
-                        !correctedRecently
-                        && smbEnabled
+                        smbEnabled
                         && glucose > targetGlucose + 40
                         && currentTime.Minute % 30 == 0
                         && insulinToDeliver > 0.1
@@ -427,7 +427,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                     {
                         var correctionBolus = insulinToDeliver * (0.3 + _random.NextDouble() * 0.1);
                         correctionBolus = NormalizeBolus(Math.Clamp(correctionBolus, 0.1, 1.0));
-                        stepTreatments.Add(CreateCorrectionBolusTreatment(currentTime, correctionBolus));
+                        stepTreatments.Add(CreateAlgorithmBolusTreatment(currentTime, correctionBolus));
                         simulator.AddInsulinDose(currentTime, correctionBolus);
                     }
                     // SMBs every 5 minutes for fine-tuning when moderately high
@@ -1024,19 +1024,6 @@ public class DemoDataGenerator : IDemoDataGenerator
             Mills = new DateTimeOffset(time).ToUnixTimeMilliseconds(),
             Created_at = time.ToString("o"),
             EnteredBy = "demo-user",
-            DataSource = DataSources.DemoService,
-        };
-    }
-
-    private Treatment CreateCorrectionBolusTreatment(DateTime time, double insulin)
-    {
-        return new Treatment
-        {
-            EventType = "Correction Bolus",
-            Insulin = insulin,
-            Mills = new DateTimeOffset(time).ToUnixTimeMilliseconds(),
-            Created_at = time.ToString("o"),
-            EnteredBy = "demo-pump", // AID pump delivers partial corrections
             DataSource = DataSources.DemoService,
         };
     }
