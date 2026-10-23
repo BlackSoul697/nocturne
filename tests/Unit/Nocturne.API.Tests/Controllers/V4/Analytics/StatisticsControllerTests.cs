@@ -2025,6 +2025,45 @@ public class StatisticsControllerTests
     }
 
     [Fact]
+    public async Task GetAidSystemMetrics_ReportsReadAlone_WithholdsEveryCategorisedFigure()
+    {
+        _aidMetricsServiceMock
+            .Setup(s => s.Calculate(
+                It.IsAny<IReadOnlyList<DeviceSegmentInput>>(),
+                It.IsAny<IReadOnlyList<ApsLoopCycle>>(),
+                It.IsAny<IReadOnlyList<TempBasal>>(),
+                It.IsAny<int>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<double?>(),
+                It.IsAny<double?>(),
+                It.IsAny<double?>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>()))
+            .Returns(new AidSystemMetrics
+            {
+                CgmDeviceNames = "Dexcom G7",
+                PumpDeviceNames = "Omnipod 5",
+                PumpUsePercent = 98,
+                AidActivePercent = 91,
+                CgmActivePercent = 95,
+                TargetLow = 80,
+                TargetHigh = 140,
+                SiteChangeCount = 3,
+                Segments = [new AidTimeSegment { Algorithm = AidAlgorithm.Trio, DurationHours = 24 }],
+            });
+        var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var controller = CreateController();
+        controller.HttpContext.Items["GrantedScopes"] = new HashSet<string> { Scope.ReportsRead };
+
+        var result = await controller.GetAidSystemMetrics(start, start.AddDays(1));
+
+        var metrics = (AidSystemMetrics)((OkObjectResult)result.Result!).Value!;
+        metrics.Should().BeEquivalentTo(
+            new AidSystemMetrics(), o => o.Excluding(m => m.TimeZoneUnavailableReason));
+    }
+
+    [Fact]
     public async Task GetAidSystemMetrics_FetchesTheWholeWindowRatherThanACappedFirstPage()
     {
         SetupAidMetricsEcho();
@@ -2058,9 +2097,8 @@ public class StatisticsControllerTests
     public async Task GetAidSystemMetrics_MeasuresGlucoseThroughToTheEndOfTheWindow()
     {
         SetupAidMetricsEcho();
-        // A one-minute sensor over 90 days: 129,600 readings, well past the 50,000 the
-        // endpoint used to ask for. The stub honours the limit it is given, so a capped,
-        // oldest-first fetch stops around day 35.
+        // A one-minute sensor over 90 days: 129,600 readings, more than any fixed page. The stub
+        // honours the limit it is given, so a capped, oldest-first fetch stops around day 35.
         var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         var end = start.AddDays(90);
         var readings = Enumerable

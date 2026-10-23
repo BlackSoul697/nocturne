@@ -77,7 +77,7 @@ internal static partial class LoopAnalysisReadScopeGuard
             ? []
             : [.. EventOptions.Select(o => new LoopAnalysisUnavailableFilter { Filter = o.Name, RequiredScope = Scope.TreatmentsRead })];
 
-    /// <summary>The event series and figures the caller's scopes withhold, as <see cref="Withheld"/> is for the Daily profile.</summary>
+    /// <summary>The event series and figures the caller's scopes withhold, as <see cref="WithheldDailyProfile"/> is for the Daily profile.</summary>
     public static HashSet<LoopAnalysisSeries> WithheldEvents(IReadOnlySet<string> grantedScopes)
     {
         var withheld = new HashSet<LoopAnalysisSeries>();

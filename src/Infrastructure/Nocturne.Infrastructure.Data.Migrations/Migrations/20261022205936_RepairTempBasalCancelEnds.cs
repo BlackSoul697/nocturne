@@ -5,9 +5,9 @@
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     /// <summary>
-    /// Ends every temp basal the decomposer stored from a Temp Basal with no duration where it
-    /// starts. Nightscout reads such a treatment as a cancel, and the decomposer now stores it so,
-    /// but it used to store no end, which reads as a temp still running.
+    /// Ends every temp basal the decomposer stored with no end from a Temp Basal with no duration
+    /// where it starts. Nightscout reads such a treatment as a cancel, but a row with no end reads as
+    /// a temp still running.
     /// </summary>
     /// <remarks>
     /// A row the decomposer writes carries a legacy id and a correlation id, and never a sync
@@ -16,6 +16,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
     /// takes over a decomposed row. The predicate names all three columns, so a temp a client or a
     /// connector left open, which is still running, is left alone. A row ended at its start is not matched
     /// again, so running this twice changes nothing more, and <c>sys_updated_at</c> is left alone.
+    /// Soft-deleted rows are ended too, so that a row, should it be restored, does not return with the
+    /// end it was deleted with.
     /// FORCE ROW LEVEL SECURITY binds the migrator, hence the per-tenant GUC.
     /// </remarks>
     public partial class RepairTempBasalCancelEnds : Migration

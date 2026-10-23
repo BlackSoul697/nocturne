@@ -13,9 +13,8 @@ public readonly record struct TenantClock(TimeZoneInfo? Zone, TimeZoneUnavailabl
 /// </summary>
 /// <remarks>
 /// A share gets no zone and the reason <see cref="TimeZoneUnavailableReason.Share"/> without a
-/// lookup. RLS hides the therapy settings the zone lives in from share connections, but
-/// <see cref="ITherapySettingsResolver"/> caches briefly by tenant, so a lookup made for a share just
-/// after the owner's could otherwise be served the owner's zone.
+/// lookup. The zone is a therapy setting, and therapy is not a share category, so a share can never
+/// read it.
 /// </remarks>
 public sealed class TenantClockResolver(
     ITherapySettingsResolver therapySettingsResolver,

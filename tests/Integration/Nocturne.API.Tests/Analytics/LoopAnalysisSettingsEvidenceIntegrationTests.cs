@@ -165,6 +165,22 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
     }
 
     [Fact]
+    public async Task A_share_gets_its_reason_and_no_evidence()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        await SeedDaysAsync(WeekStart, 7);
+        using var share = await CreateShareClientAsync();
+
+        var body = await GetOkAsync(share, Query($"{Week}&compare=previous"));
+
+        body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("Share");
+        body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString()).Should().Contain("SettingsEvidence");
+        Absent(body, "primaryRange").Should().BeTrue();
+        Absent(body, "primary").Should().BeTrue();
+        Absent(body, "comparison").Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Returns_no_ranges_without_a_tenant_timezone()
     {
         await SeedDaysAsync(WeekStart, 7);
