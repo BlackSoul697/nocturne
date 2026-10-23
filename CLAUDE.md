@@ -25,8 +25,9 @@ aspire resource nocturne-api restart
 dotnet build
 
 # Alerts evaluate only in the Rust cdylib (crates/nocturne-alerts-ffi); the API will not start
-# without it. `aspire start` builds it (resource nocturne-alerts-native); tests and a plain
-# `dotnet build` pack it from crates/target/release, so build it first:
+# without it. Every build packs a local cargo build at least as new as crates/, else (crates/
+# unchanged) downloads the one main published for that crates/ tree (alerts-native release).
+# After changing crates/, rebuild it yourself; `aspire start` does when cargo is installed:
 cd crates && cargo build --release -p nocturne-alerts-ffi
 
 # Run unit tests (excludes integration/performance)

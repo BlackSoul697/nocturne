@@ -376,17 +376,22 @@ class Program
                 .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
 
             // Alerts evaluate only in the nocturne_alerts native library, which the API refuses to
-            // start without. The API's build packs it from crates/target/release, so the cargo build
-            // finishes first. The API loads that packed copy, never the cargo output: on Windows a
-            // loaded library cannot be replaced, and a later cargo build would fail on it.
-            var alertsNative = builder
-                .AddExecutable(
-                    "nocturne-alerts-native",
-                    "cargo",
-                    Path.Combine(solutionRoot, "crates"),
-                    "build", "--release", "-p", "nocturne-alerts-ffi")
-                .WithParentRelationship(watchedApi);
-            watchedApi.WaitForCompletion(alertsNative);
+            // start without. With Rust installed, the API's build packs it from crates/target/release,
+            // so the cargo build finishes first; without, the build downloads the library main
+            // published for this crates/ tree (Nocturne.Core.Alerts.Native.csproj). The API loads
+            // the packed copy, never the cargo output: on Windows a loaded library cannot be
+            // replaced, and a later cargo build would fail on it.
+            if (CargoAvailable())
+            {
+                var alertsNative = builder
+                    .AddExecutable(
+                        "nocturne-alerts-native",
+                        "cargo",
+                        Path.Combine(solutionRoot, "crates"),
+                        "build", "--release", "-p", "nocturne-alerts-ffi")
+                    .WithParentRelationship(watchedApi);
+                watchedApi.WaitForCompletion(alertsNative);
+            }
             // Without a dashboard there is no collector, and the exporter would retry every second.
             if (includeDashboard)
             {
@@ -985,5 +990,28 @@ class Program
         var isPublish = string.Equals(config["AppHost:Operation"], "publish", StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrEmpty(config["Publishing:Publisher"]);
         return isPublish || config.GetValue(DashboardEnabledKey, false);
+    }
+
+    /// <summary>Whether <c>cargo</c> starts from <c>PATH</c>.</summary>
+    private static bool CargoAvailable()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cargo", "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (process is null)
+                return false;
+            process.WaitForExit(10_000);
+            return process.HasExited && process.ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
     }
 }

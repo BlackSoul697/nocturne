@@ -32,6 +32,7 @@
          the NOCTURNE_ALERTS_NATIVE_DIR environment variable, so a freshly built library can
          be picked up without rebuilding this project. -->
     <PropertyGroup>
+        <_NocturneAlertsNativeDirDefaulted Condition="'$(NocturneAlertsNativeDir)' == ''">true</_NocturneAlertsNativeDirDefaulted>
         <NocturneAlertsNativeDir Condition="'$(NocturneAlertsNativeDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\crates\target\release\</NocturneAlertsNativeDir>
         <!-- Cross-compiled cargo outputs land under target/<triple>/release; CI builds
              aarch64 alongside the host build so multi-arch container publishes can pack
@@ -63,4 +64,81 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+    <!-- A developer build without Rust: when there is no local cargo build at least as new as
+         every crates/ source, and crates/ has no uncommitted changes, download the library that
+         main published for this exact crates/ tree (.github/workflows/alerts-native-publish.yml)
+         and pack it for the host RID instead. Never in CI, never for another RID, and never when
+         the caller names NocturneAlertsNativeDir (image builds), so what is tested and shipped is
+         built from source. NocturneAlertsDownload=false turns it off. -->
+    <PropertyGroup>
+        <NocturneAlertsRepository Condition="'$(NocturneAlertsRepository)' == ''">nightscout/nocturne</NocturneAlertsRepository>
+        <_NocturneAlertsCratesRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\crates'))</_NocturneAlertsCratesRoot>
+        <_NocturneAlertsHostRid>$(NETCoreSdkRuntimeIdentifier)</_NocturneAlertsHostRid>
+        <_NocturneAlertsHostFile Condition="$(_NocturneAlertsHostRid.StartsWith('win'))">nocturne_alerts.dll</_NocturneAlertsHostFile>
+        <_NocturneAlertsHostFile Condition="$(_NocturneAlertsHostRid.StartsWith('linux'))">libnocturne_alerts.so</_NocturneAlertsHostFile>
+        <_NocturneAlertsHostFile Condition="$(_NocturneAlertsHostRid.StartsWith('osx'))">libnocturne_alerts.dylib</_NocturneAlertsHostFile>
+        <_NocturneAlertsHostExtension>$([System.IO.Path]::GetExtension('$(_NocturneAlertsHostFile)'))</_NocturneAlertsHostExtension>
+    </PropertyGroup>
+
+    <UsingTask TaskName="NocturneAlertsLocalBuildIsFresh" TaskFactory="RoslynCodeTaskFactory"
+               AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <Library ParameterType="System.String" Required="true" />
+            <CratesRoot ParameterType="System.String" Required="true" />
+            <Fresh ParameterType="System.Boolean" Output="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Linq" />
+            <Code Type="Fragment" Language="cs"><![CDATA[
+var target = Path.Combine(CratesRoot, "target") + Path.DirectorySeparatorChar;
+Fresh = File.Exists(Library) && !Directory
+    .EnumerateFiles(CratesRoot, "*", SearchOption.AllDirectories)
+    .Where(f => !f.StartsWith(target, StringComparison.OrdinalIgnoreCase))
+    .Where(f => f.EndsWith(".rs") || f.EndsWith("Cargo.toml") || f.EndsWith("Cargo.lock"))
+    .Any(f => File.GetLastWriteTimeUtc(f) > File.GetLastWriteTimeUtc(Library));
+]]></Code>
+        </Task>
+    </UsingTask>
+
+    <Target Name="ResolvePrebuiltNocturneAlerts" BeforeTargets="AssignTargetPaths"
+            Condition="'$(CI)' != 'true' and '$(_NocturneAlertsNativeDirDefaulted)' == 'true' and '$(NocturneAlertsDownload)' != 'false' and '$(_NocturneAlertsHostFile)' != '' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(_NocturneAlertsHostRid)')">
+        <NocturneAlertsLocalBuildIsFresh Library="$(NocturneAlertsNativeDir)$(_NocturneAlertsHostFile)" CratesRoot="$(_NocturneAlertsCratesRoot)">
+            <Output TaskParameter="Fresh" PropertyName="_NocturneAlertsLocalFresh" />
+        </NocturneAlertsLocalBuildIsFresh>
+
+        <Exec Condition="'$(_NocturneAlertsLocalFresh)' != 'true'" Command="git status --porcelain -- ."
+              WorkingDirectory="$(_NocturneAlertsCratesRoot)" ConsoleToMSBuild="true" IgnoreExitCode="true"
+              StandardOutputImportance="low" StandardErrorImportance="low">
+            <Output TaskParameter="ConsoleOutput" PropertyName="_NocturneAlertsCratesChanges" />
+            <Output TaskParameter="ExitCode" PropertyName="_NocturneAlertsGitStatusExit" />
+        </Exec>
+        <Exec Condition="'$(_NocturneAlertsLocalFresh)' != 'true' and '$(_NocturneAlertsGitStatusExit)' == '0' and '$(_NocturneAlertsCratesChanges)' == ''"
+              Command="git rev-parse HEAD:crates" WorkingDirectory="$(_NocturneAlertsCratesRoot)\.."
+              ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+            <Output TaskParameter="ConsoleOutput" PropertyName="_NocturneAlertsTree" />
+            <Output TaskParameter="ExitCode" PropertyName="_NocturneAlertsTreeExit" />
+        </Exec>
+
+        <PropertyGroup Condition="'$(_NocturneAlertsTreeExit)' == '0'">
+            <_NocturneAlertsPrebuiltDir>$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)alerts-native\$(_NocturneAlertsTree)\</_NocturneAlertsPrebuiltDir>
+            <_NocturneAlertsPrebuilt>$(_NocturneAlertsPrebuiltDir)$(_NocturneAlertsHostFile)</_NocturneAlertsPrebuilt>
+            <_NocturneAlertsPrebuiltUrl>https://github.com/$(NocturneAlertsRepository)/releases/download/alerts-native/nocturne_alerts-$(_NocturneAlertsTree)-$(_NocturneAlertsHostRid)$(_NocturneAlertsHostExtension)</_NocturneAlertsPrebuiltUrl>
+        </PropertyGroup>
+        <DownloadFile Condition="'$(_NocturneAlertsPrebuilt)' != '' and !Exists('$(_NocturneAlertsPrebuilt)')"
+                      SourceUrl="$(_NocturneAlertsPrebuiltUrl)" DestinationFolder="$(_NocturneAlertsPrebuiltDir)"
+                      DestinationFileName="$(_NocturneAlertsHostFile)" ContinueOnError="WarnAndContinue" />
+
+        <ItemGroup Condition="'$(_NocturneAlertsPrebuilt)' != '' and Exists('$(_NocturneAlertsPrebuilt)')">
+            <Content Remove="@(Content)" Condition="$([System.String]::Copy('%(Content.Link)').StartsWith('runtimes\$(_NocturneAlertsHostRid)\native\'))" />
+            <Content Include="$(_NocturneAlertsPrebuilt)" Link="runtimes\$(_NocturneAlertsHostRid)\native\$(_NocturneAlertsHostFile)">
+                <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            </Content>
+        </ItemGroup>
+        <Message Importance="high" Condition="'$(_NocturneAlertsPrebuilt)' != '' and Exists('$(_NocturneAlertsPrebuilt)')"
+                 Text="nocturne_alerts: using the library main published for crates tree $(_NocturneAlertsTree)" />
+        <Warning Condition="'$(_NocturneAlertsLocalFresh)' != 'true' and !('$(_NocturneAlertsPrebuilt)' != '' and Exists('$(_NocturneAlertsPrebuilt)'))"
+                 Text="nocturne_alerts: no current library for this build. crates/ has local changes, or main has not published this crates/ tree yet. Install Rust (https://rustup.rs) and run 'cargo build --release -p nocturne-alerts-ffi' in crates/; the API will not start without it." />
+    </Target>
 </Project>
