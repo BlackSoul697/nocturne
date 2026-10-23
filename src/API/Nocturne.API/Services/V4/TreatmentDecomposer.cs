@@ -781,7 +781,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         model.LegacyId = treatment.Id;
         model.CorrelationId = correlationId;
         model.DataSource = treatment.DataSource;
-        model.Device = treatment.EnteredBy;
+        model.Device = UploadedDevice(treatment);
         model.Origin = ProfileActivationSource.OriginOf(model.App, treatment.EnteredBy, treatment.OriginalProfileName);
         if (!isEffective && model.RequestedDurationMs is > 0 and var duration)
             model.EndTimestamp = start.AddMilliseconds(duration);
@@ -895,6 +895,10 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         catch (OverflowException ex) { throw new TreatmentMappingException(ex); }
     }
 
+    /// <summary>
+    /// A Temp Basal with no duration ends where it starts: Nightscout reads one as a cancel, which
+    /// ends the temp before it and delivers nothing.
+    /// </summary>
     internal static V4Models.TempBasal MapToTempBasal(Treatment treatment, Guid? correlationId)
     {
         var startTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime;
@@ -908,12 +912,14 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             LegacyId = treatment.Id,
             AdditionalProperties = TempBasalUploadedFields.Keep(
                 TempBasalAutomaticFlag.Keep(
-                    TreatmentUploadedTimestamp.AddTo(TreatmentClientId.ToRecord(treatment), treatment), treatment.Automatic),
+                    TreatmentUploadedTimestamp.AddTo(TreatmentClientId.ToRecord(treatment), treatment),
+                    treatment.Automatic
+                    ?? (evidence is V4Models.TempBasalOriginEvidence.Reported ? TempBasalAutomaticFlag.Of(origin) : null)),
                 treatment),
             StartTimestamp = startTimestamp,
-            EndTimestamp = durationMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills + durationMs).UtcDateTime : null,
+            EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills + Math.Max(durationMs, 0)).UtcDateTime,
             UtcOffset = treatment.UtcOffset,
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             App = treatment.EnteredBy,
             DataSource = treatment.DataSource,
             CorrelationId = correlationId,
@@ -986,9 +992,8 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// Decides whether an echoed origin beside echoed non-<see cref="V4Models.TempBasalOriginEvidence.Reported"/>
     /// evidence is an edit or the stored row read back. A different origin is the user's statement only when
     /// the evidence echoed with it is the stored row's, since that proves the body was read from this state;
-    /// a stale echo keeps the stored origin. A kept verdict (<see cref="V4Models.TempBasalOriginEvidence.Snapshot"/>,
-    /// <see cref="V4Models.TempBasalOriginEvidence.Uncorroborated"/>) stands only while the start, rate and
-    /// percent it was judged on are unchanged, and is otherwise judged again.
+    /// a stale echo is a default for the stored origin, which <see cref="V4Models.TempBasalOriginProvenance.OnUpdate"/>
+    /// settles as it does a re-upload's. A rate the edit left unset is the stored one unless its percent changed.
     /// </summary>
     internal static void SettleEchoedTempBasalOrigin(V4Models.TempBasal model, Treatment treatment, V4Models.TempBasal? stored)
     {
@@ -1006,21 +1011,18 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             return;
         }
 
-        model.Origin = stored.Origin;
-        var verdict = storedEvidence is V4Models.TempBasalOriginEvidence.Snapshot or V4Models.TempBasalOriginEvidence.Uncorroborated;
-        var unchanged = model.StartTimestamp == stored.StartTimestamp
-            && (model.Rate ?? stored.Rate) == stored.Rate
-            && model.Percent == stored.Percent;
-        if (verdict && !unchanged)
-        {
-            model.OriginEvidence = V4Models.TempBasalOriginEvidence.Uploader;
-            model.ApsSnapshotId = null;
-        }
-        else
-        {
-            model.OriginEvidence = storedEvidence;
-            model.ApsSnapshotId = stored.ApsSnapshotId;
-        }
+        var settled = V4Models.TempBasalOriginProvenance.OnUpdate(
+            new V4Models.TempBasalOriginState(
+                stored.Origin, storedEvidence, stored.ApsSnapshotId, stored.StartMills, stored.Rate),
+            new V4Models.TempBasalOriginState(
+                stored.Origin,
+                V4Models.TempBasalOriginEvidence.Uploader,
+                null,
+                model.StartMills,
+                model.Percent == stored.Percent ? model.Rate ?? stored.Rate : model.Rate));
+        model.Origin = settled.Origin;
+        model.OriginEvidence = settled.Evidence;
+        model.ApsSnapshotId = settled.ApsSnapshotId;
     }
 
     internal static V4Models.Bolus MapToBolus(Treatment treatment, Guid? correlationId, bool keepEventType = true)
@@ -1038,7 +1040,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             BolusType = ParseBolusType(treatment.BolusType),
             Automatic = treatment.Automatic ?? false,
             Duration = treatment.Duration,
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1061,7 +1063,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
                 treatment, keepEventType, TreatmentTypes.CarbCorrection),
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime,
             Carbs = treatment.Carbs ?? 0,
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1085,7 +1087,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             Glucose = treatment.Glucose ?? 0,
             GlucoseType = ParseGlucoseType(treatment.GlucoseType),
             Units = ParseGlucoseUnit(treatment.Units),
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1103,7 +1105,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             Text = treatment.Notes ?? string.Empty,
             EventType = treatment.EventType,
             IsAnnouncement = isAnnouncement || (treatment.IsAnnouncement ?? false),
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1120,7 +1122,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime,
             EventType = deviceEventType,
             Notes = treatment.Notes,
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1142,7 +1144,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             InsulinRecommendation = treatment.InsulinRecommendationForCorrection,
             CarbRatio = treatment.CR,
             CalculationType = MapCalculationType(treatment.CalculationType),
-            Device = treatment.EnteredBy,
+            Device = UploadedDevice(treatment),
             DataSource = treatment.DataSource,
             UtcOffset = treatment.UtcOffset,
             CorrelationId = correlationId,
@@ -1223,6 +1225,13 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// </summary>
     internal static bool IsAapsUpload(Treatment treatment) =>
         string.Equals(UploadedString(treatment, "app"), "AAPS", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The device a record names: its uploader, else the <c>device</c> the upload sent. The uploader
+    /// comes first because it is the key a temp basal is matched to its loop's snapshots by.
+    /// </summary>
+    private static string? UploadedDevice(Treatment treatment) =>
+        treatment.EnteredBy ?? UploadedString(treatment, "device");
 
     /// <summary>An uploaded field the treatment has no property for, when it is a string.</summary>
     private static string? UploadedString(Treatment treatment, string key) =>
