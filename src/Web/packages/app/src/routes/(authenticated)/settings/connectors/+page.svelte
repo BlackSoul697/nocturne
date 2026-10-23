@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getStatus as getConnectorStatuses } from "$api/generated/connectorStatus.generated.remote";
+  import { getGoogleHealth } from "$api/generated/googleHealths.generated.remote";
   import {
     getServicesOverview,
     getConnectorCapabilities,
@@ -11,6 +12,7 @@
     DataSourceInfo,
     ConnectorStatusDto,
     ConnectorCapabilities,
+    SyncResult,
   } from "$lib/api/generated/nocturne-api-client";
 
   import {
@@ -35,14 +37,14 @@
   import KeyRound from "@lucide/svelte/icons/key-round";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
   import DataSourceRow from "$lib/components/settings/DataSourceRow.svelte";
+  import GoogleHealthSourceRow from "$lib/components/connectors/GoogleHealthSourceRow.svelte";
   import type { DataSourceStatus } from "$lib/components/settings/DataSourceRow.svelte";
   import ConnectedApps from "$lib/components/settings/ConnectedApps.svelte";
   import ClientDevices from "$lib/components/settings/ClientDevices.svelte";
   import ApiTokens from "$lib/components/settings/ApiTokens.svelte";
   import UploaderSetupDialog from "$lib/components/connectors/UploaderSetupDialog.svelte";
-  import { createUploaderTokenHandoff } from "./uploader-token-handoff";
   import ConnectorDetailsDialog from "$lib/components/connectors/ConnectorDetailsDialog.svelte";
-  import ManualSyncDialog, { type BatchSyncResult } from "$lib/components/connectors/ManualSyncDialog.svelte";
+  import ManualSyncDialog from "$lib/components/connectors/ManualSyncDialog.svelte";
   import UploaderAppsCard from "$lib/components/connectors/UploaderAppsCard.svelte";
   import ServerConnectorsCard, { type ConnectorStatusWithDescription } from "$lib/components/connectors/ServerConnectorsCard.svelte";
   import DataSourceManageDialog from "$lib/components/connectors/DataSourceManageDialog.svelte";
@@ -53,16 +55,36 @@
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { createCopyFeedback } from "$lib/hooks/copy-feedback.svelte";
   import { createTerminalRunTracker } from "./terminal-run-tracker";
+  import { canManageConnectors } from "$lib/authorization/connector-management";
+  import { page } from "$app/state";
 
   // Queries — fire on the server during SSR; results land in cache for hydration.
   const servicesOverviewQuery = getServicesOverview();
   const connectorStatusesQuery = getConnectorStatuses();
+  const canManage = $derived(
+    canManageConnectors(
+      page.data.effectivePermissions,
+      page.data.refusedAsDemoSubject
+    )
+  );
+  const googleHealthQuery = $derived(canManage ? getGoogleHealth() : null);
 
   const servicesOverview = $derived<ServicesOverview | null>(
     servicesOverviewQuery.current ?? null,
   );
   const connectorStatuses = $derived<ConnectorStatusDto[]>(
     connectorStatusesQuery.current ?? [],
+  );
+  const googleHealth = $derived(googleHealthQuery?.current ?? null);
+  const googleHealthLoading = $derived(googleHealthQuery?.loading ?? false);
+  const googleHealthFailed = $derived(!!googleHealthQuery?.error);
+  const hasGoogleHealthStatus = $derived(
+    !!googleHealth?.configured && !googleHealthLoading && !googleHealthFailed,
+  );
+  const otherDataSources = $derived(
+    (servicesOverview?.activeDataSources ?? []).filter(
+      (source) => !hasGoogleHealthStatus || (source.sourceType !== "google-health-connector" && source.deviceId !== "google-health-connector"),
+    ),
   );
   const isLoading = $derived(
     servicesOverviewQuery.current === undefined,
@@ -85,7 +107,7 @@
   // Manual sync state
   let isManualSyncing = $state(false);
   let showManualSyncDialog = $state(false);
-  let manualSyncResult = $state<BatchSyncResult | null>(null);
+  let manualSyncResults = $state<Record<string, SyncResult> | null>(null);
 
   // Connector heartbeat metrics state
   let selectedConnector = $state<ConnectorStatusWithDescription | null>(null);
@@ -121,11 +143,10 @@
     }
   });
 
-  // API token create dialog (triggered from uploader setup)
+  // API token create dialog, opened from the connection details card
   let apiTokenCreateOpen = $state(false);
   let apiTokenPrefillLabel = $state("");
   let apiTokenPrefillScopes = $state<string[]>([]);
-  const uploaderHandoff = createUploaderTokenHandoff();
 
   // Whether the user has already been told these lists are stale. The effect
   // below refreshes once per finished run, so a batch of them and the refresh
@@ -164,7 +185,8 @@
   async function refreshAll() {
     await refreshQuietly(
       () => servicesOverviewQuery.refresh(),
-      () => connectorStatusesQuery.refresh()
+      () => connectorStatusesQuery.refresh(),
+      () => googleHealthQuery?.refresh() ?? Promise.resolve()
     );
   }
 
@@ -173,7 +195,10 @@
   }
 
   async function loadConnectorStatuses() {
-    await refreshQuietly(() => connectorStatusesQuery.refresh());
+    await refreshQuietly(
+      () => connectorStatusesQuery.refresh(),
+      () => googleHealthQuery?.refresh() ?? Promise.resolve()
+    );
   }
 
   async function loadConnectorCapabilitiesFor(connectorId?: string) {
@@ -205,13 +230,11 @@
 
   async function triggerManualSync() {
     isManualSyncing = true;
-    manualSyncResult = null;
+    manualSyncResults = null;
     showManualSyncDialog = true;
 
-    const startTime = new Date();
     const connectorsToSync = connectorStatuses.filter((c) => c.isEnabled !== false);
-    const results: BatchSyncResult["connectorResults"] = [];
-    let successes = 0;
+    const results: Record<string, SyncResult> = {};
 
     const to = new Date();
     const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -222,61 +245,24 @@
         const connectorId = connector.id;
         if (!connectorId) continue;
 
-        const start = performance.now();
-        let success = false;
-        let errorMsg = undefined;
-
         try {
-          const result = await triggerConnectorSync({ id: connectorId, request });
-          success = result.success ?? false;
-          if (!success) errorMsg = result.message || "Unknown error";
+          results[connectorId] = await triggerConnectorSync({ id: connectorId, request });
         } catch (e) {
-          success = false;
-          errorMsg = describeSubmitError(
-            e,
-            "We couldn't start this sync. Please try again."
-          );
+          results[connectorId] = {
+            success: false,
+            message: describeSubmitError(
+              e,
+              "We couldn't start this sync. Please try again."
+            ),
+          };
         }
-
-        const durationMs = performance.now() - start;
-        results.push({
-          connectorName: connectorId,
-          success,
-          errorMessage: errorMsg,
-          duration: `${Math.round(durationMs)}ms`,
-        });
-
-        if (success) successes++;
       }
 
-      const endTime = new Date();
-      manualSyncResult = {
-        success: successes === connectorsToSync.length,
-        totalConnectors: connectorsToSync.length,
-        successfulConnectors: successes,
-        failedConnectors: connectorsToSync.length - successes,
-        startTime,
-        endTime,
-        connectorResults: results,
-      };
+      manualSyncResults = results;
 
-      if (successes > 0) {
+      if (Object.values(results).some((r) => r.success)) {
         await refreshAll();
       }
-    } catch (e) {
-      manualSyncResult = {
-        success: false,
-        errorMessage: describeSubmitError(
-          e,
-          "We couldn't start the sync. Please try again."
-        ),
-        totalConnectors: 0,
-        successfulConnectors: 0,
-        failedConnectors: 0,
-        startTime: new Date(),
-        endTime: new Date(),
-        connectorResults: [],
-      };
     } finally {
       isManualSyncing = false;
     }
@@ -420,7 +406,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {#if !servicesOverview.activeDataSources || servicesOverview.activeDataSources.length === 0}
+        {#if !hasGoogleHealthStatus && otherDataSources.length === 0}
           <div class="text-center py-8 text-muted-foreground">
             <WifiOff class="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p class="font-medium">No data sources detected</p>
@@ -430,7 +416,10 @@
           </div>
         {:else}
           <div class="space-y-3">
-            {#each servicesOverview.activeDataSources as source (source.id)}
+            {#if hasGoogleHealthStatus && googleHealth}
+              <GoogleHealthSourceRow connection={googleHealth} />
+            {/if}
+            {#each otherDataSources as source (source.id)}
               {@const matchingUploader = getMatchingUploader(source)}
               {@const isDemo = isDemoDataSource(source)}
               <DataSourceRow
@@ -438,7 +427,7 @@
                 icon={source.icon}
                 status={mapDataSourceStatus(source)}
                 totalEntries={source.totalEntries}
-                totalCoversLast30Days
+                totalEntriesWindowDays={source.totalEntriesWindowDays}
                 entriesLast24h={source.entriesLast24h}
                 lastSeen={source.lastSeen}
                 subtitle={source.name !== source.deviceId ? source.deviceId : undefined}
@@ -494,6 +483,9 @@
           await loadConnectorCapabilitiesFor(connectorId);
           showConnectorDialog = true;
         }}
+        {googleHealth}
+        {googleHealthLoading}
+        {googleHealthFailed}
       />
     </div>
 
@@ -564,25 +556,13 @@
         bind:createOpen={apiTokenCreateOpen}
         prefillLabel={apiTokenPrefillLabel}
         prefillScopes={apiTokenPrefillScopes}
-        onCreateClose={() => {
-          if (uploaderHandoff.resumes()) showSetupDialog = true;
-        }}
       />
     </div>
   {/if}
 </div>
 
 <!-- Setup Instructions Dialog -->
-<UploaderSetupDialog
-  bind:open={showSetupDialog}
-  {selectedUploader}
-  onRequestApiKey={(label, scopes) => {
-    apiTokenPrefillLabel = label;
-    apiTokenPrefillScopes = scopes;
-    uploaderHandoff.handOff();
-    apiTokenCreateOpen = true;
-  }}
-/>
+<UploaderSetupDialog bind:open={showSetupDialog} {selectedUploader} />
 
 <!-- Data Source Management Dialog -->
 <DataSourceManageDialog
@@ -591,7 +571,7 @@
   onDeleteComplete={loadServices}
 />
 
-<ManualSyncDialog bind:open={showManualSyncDialog} {isManualSyncing} {manualSyncResult} syncProgress={isManualSyncing ? activeSyncProgress : null} />
+<ManualSyncDialog bind:open={showManualSyncDialog} {isManualSyncing} {manualSyncResults} syncProgress={isManualSyncing ? activeSyncProgress : null} />
 
 <!-- Connector Details Dialog -->
 <ConnectorDetailsDialog bind:open={showConnectorDialog} {selectedConnector} {selectedConnectorCapabilities} onSyncComplete={loadConnectorStatuses} />

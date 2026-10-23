@@ -75,7 +75,15 @@ services:
       BASE_DOMAIN: *base-domain
       WEB_URL: http://web:5173
       DemoService__Enabled: "false"
+      # Specs read v3 history the moment they write; production keeps the default commit margin.
+      PostgreSql__HistoryCommitMarginMilliseconds: "0"
       NOCTURNE_ENABLE_DEV_ONLY_ENDPOINTS: "true"
+      NOCTURNE_GOOGLE_HEALTH_MOCK: "true"
+      NOCTURNE_EVERSENSE_MOCK: "true"
+      GOOGLE_HEALTH_CLIENT_ID: e2e.apps.googleusercontent.com
+      GOOGLE_HEALTH_CLIENT_SECRET: e2e-google-secret
+      # The apex over the test TLS proxy: BASE_DOMAIN's default would name the plain-HTTP web port.
+      GOOGLE_HEALTH_REDIRECT_URI: https://nocturne.localhost:${E2E_WEB_TLS_PORT:-1635}/api/v4/google-health/oauth/callback
       # Workstation GC with a conserving heap: the server GC sizes its heaps per core.
       DOTNET_gcServer: "0"
       DOTNET_GCConserveMemory: "5"
@@ -122,6 +130,7 @@ services:
       BASE_DOMAIN: *base-domain
       NOCTURNE_POSTGRES_URI: postgresql://nocturne_web:e2e-web-password@postgres:5432/nocturne
       NODE_OPTIONS: --max-old-space-size=192
+      PROTOCOL_HEADER: x-forwarded-proto
     ports:
       - "127.0.0.1:${E2E_WEB_PORT:-1631}:5173"
     depends_on:
@@ -134,3 +143,15 @@ services:
       interval: 1s
       timeout: 3s
       retries: 60
+
+  web-tls:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:${E2E_WEB_TLS_PORT:-1635}:8443"
+    depends_on:
+      web:
+        condition: service_healthy
+    mem_limit: 96m
+    cpus: 0.25

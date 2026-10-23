@@ -36,7 +36,7 @@
     status: DataSourceStatus;
     statusMessage?: string;
     totalEntries?: number;
-    totalCoversLast30Days?: boolean;
+    totalEntriesWindowDays?: number | null;
     entriesLast24h?: number;
     lastSeen?: string;
     lastSyncAttempt?: string;
@@ -51,6 +51,8 @@
     actions?: Snippet;
     onclick?: () => void;
     subtitle?: string;
+    logo?: Snippet;
+    metrics?: Snippet;
   }
 
   let {
@@ -59,7 +61,7 @@
     status,
     statusMessage,
     totalEntries,
-    totalCoversLast30Days = false,
+    totalEntriesWindowDays,
     entriesLast24h,
     lastSeen,
     lastSyncAttempt,
@@ -71,6 +73,8 @@
     actions,
     onclick,
     subtitle,
+    logo,
+    metrics,
   }: Props = $props();
 
   function getIconColors(s: DataSourceStatus): {
@@ -152,9 +156,11 @@
   const iconColors = $derived(getIconColors(status));
   const itemVariant = $derived(getItemVariant(status));
   const totalRecordsLabel = $derived(
-    totalCoversLast30Days
-      ? `${formatNumber(totalEntries)} records in the last 30 days`
-      : `${formatNumber(totalEntries)} records`
+    totalEntries === undefined
+      ? undefined
+      : totalEntriesWindowDays == null
+        ? `${formatNumber(totalEntries)} records in total`
+        : `${formatNumber(totalEntries)} records in the last ${totalEntriesWindowDays} days`
   );
 </script>
 
@@ -198,7 +204,11 @@
       <div
         class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {iconColors.bg}"
       >
-        <AppLogo {icon} invertMode />
+        {#if logo}
+          {@render logo()}
+        {:else}
+          <AppLogo {icon} invertMode />
+        {/if}
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 flex-wrap">
@@ -272,7 +282,9 @@
         </div>
 
         <!-- Metrics line -->
-        {#if syncProgress?.phase === "Syncing" && syncProgress.messageType}
+        {#if metrics}
+          {@render metrics()}
+        {:else if syncProgress?.phase === "Syncing" && syncProgress.messageType}
           <p class="text-sm text-info">
             {formatSyncMessage(
               syncProgress.messageType,
@@ -281,18 +293,20 @@
           </p>
         {:else}
           <p class="text-sm text-muted-foreground">
-            {#if totalBreakdown && Object.keys(totalBreakdown).length > 0}
+            {#if totalRecordsLabel !== undefined && totalBreakdown && Object.keys(totalBreakdown).length > 0}
               {@render breakdownTerm(
                 totalRecordsLabel,
                 "Breakdown by type:",
                 totalBreakdown
               )}
-            {:else}
+            {:else if totalRecordsLabel !== undefined}
               {totalRecordsLabel}
             {/if}
 
             {#if (entriesLast24h ?? 0) > 0}
-              <span class="mx-1">&middot;</span>
+              {#if totalRecordsLabel !== undefined}
+                <span class="mx-1">&middot;</span>
+              {/if}
               {#if last24hBreakdown && Object.keys(last24hBreakdown).length > 0}
                 {@render breakdownTerm(
                   `${formatNumber(entriesLast24h)} in 24h`,

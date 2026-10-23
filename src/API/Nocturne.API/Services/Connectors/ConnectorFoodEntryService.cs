@@ -4,7 +4,9 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Mappers;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Connectors;
 
@@ -16,17 +18,17 @@ namespace Nocturne.API.Services.Connectors;
 /// <seealso cref="IConnectorFoodEntryService"/>
 public class ConnectorFoodEntryService : IConnectorFoodEntryService
 {
-    private readonly NocturneDbContext _context;
+    private readonly INocturneDbContextFactory _contexts;
     private readonly IMealMatchingService _mealMatchingService;
     private readonly ILogger<ConnectorFoodEntryService> _logger;
 
     public ConnectorFoodEntryService(
-        NocturneDbContext context,
+        INocturneDbContextFactory contexts,
         IMealMatchingService mealMatchingService,
         ILogger<ConnectorFoodEntryService> logger
     )
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _mealMatchingService = mealMatchingService ?? throw new ArgumentNullException(nameof(mealMatchingService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -37,6 +39,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
         CancellationToken cancellationToken = default
     )
     {
+        await using var db = await _contexts.CreateAsync(cancellationToken);
         var importList = imports?.ToList() ?? new List<ConnectorFoodEntryImport>();
         if (importList.Count == 0)
         {
@@ -87,21 +90,28 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
                 }
                 else
                 {
-                    // Check database
-                    foodEntity = await _context.Foods.FirstOrDefaultAsync(
-                        f => f.ExternalSource == connectorSource && f.ExternalId == foodExternalId,
-                        cancellationToken
-                    );
+                    // A deleted food keeps its external key. The user's delete stands, as it
+                    // does for every other re-imported record; a system sweep's is undone on the
+                    // same row.
+                    var stored = db.Foods.IncludingDeleted().Where(
+                        f => f.ExternalSource == connectorSource && f.ExternalId == foodExternalId);
+                    var blocking = await stored.WhereBlocksRecreation().FirstOrDefaultAsync(cancellationToken);
 
-                    if (foodEntity == null)
+                    if (blocking is { DeletedAt: not null })
                     {
-                        foodEntity = BuildFoodEntity(import.Food, connectorSource);
-                        _context.Foods.Add(foodEntity);
-                        batchFoodCache[foodCacheKey] = foodEntity;
+                        foodEntity = null;
+                    }
+                    else if ((blocking ?? await stored.FirstOrDefaultAsync(cancellationToken)) is { } existing)
+                    {
+                        foodEntity = existing;
+                        UpdateFoodEntity(foodEntity, import.Food);
+                        foodEntity.DeletedAt = null;
                     }
                     else
                     {
-                        UpdateFoodEntity(foodEntity, import.Food);
+                        foodEntity = BuildFoodEntity(import.Food, connectorSource);
+                        db.Foods.Add(foodEntity);
+                        batchFoodCache[foodCacheKey] = foodEntity;
                     }
                 }
 
@@ -121,14 +131,14 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
                 }
                 else
                 {
-                    foodEntity = await _context.Foods.FirstOrDefaultAsync(
+                    foodEntity = await db.Foods.FirstOrDefaultAsync(
                         f => f.ExternalSource == connectorSource && f.ExternalId == externalFoodId,
                         cancellationToken
                     );
                 }
             }
 
-            var entryEntity = await _context.ConnectorFoodEntries.FirstOrDefaultAsync(
+            var entryEntity = await db.ConnectorFoodEntries.FirstOrDefaultAsync(
                 e => e.ConnectorSource == connectorSource && e.ExternalEntryId == externalEntryId,
                 cancellationToken
             );
@@ -154,7 +164,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
                     Status = ConnectorFoodEntryStatus.Pending,
                 };
 
-                _context.ConnectorFoodEntries.Add(entryEntity);
+                db.ConnectorFoodEntries.Add(entryEntity);
                 idsForMatching.Add(entryEntity.Id);
             }
             else
@@ -217,7 +227,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
             return Array.Empty<ConnectorFoodEntry>();
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
 
         // Matching raises notifications, which need a subject. The entries and the suggestion list
         // do not, so a tenant with no resolvable owner still gets both.
@@ -247,6 +257,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
         CancellationToken cancellationToken = default
     )
     {
+        await using var db = await _contexts.CreateAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(connectorSource))
         {
             return 0;
@@ -259,7 +270,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
         // Only entries still awaiting a decision are withdrawn. A matched or dismissed one has been
         // acted on and its carbs are linked to a treatment. Pending is also the only status that
         // produces match suggestions.
-        var candidates = await _context.ConnectorFoodEntries
+        var candidates = await db.ConnectorFoodEntries
             .Where(e => e.ConnectorSource == source
                         && e.Status == ConnectorFoodEntryStatus.Pending
                         && e.ConsumedAt >= from
@@ -279,7 +290,7 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
             entry.ResolvedAt = now;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
 
         // The suggestion is a separate record from the entry and stays live until withdrawn.
         // A suggestion only exists against a subject, so with none there is nothing to withdraw.

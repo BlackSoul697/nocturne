@@ -34,7 +34,7 @@
   import CreateInviteCard from "$lib/components/members/CreateInviteCard.svelte";
   import PendingInvitesList from "$lib/components/members/PendingInvitesList.svelte";
   import PendingRequestsList from "$lib/components/members/PendingRequestsList.svelte";
-  import MemberCard from "$lib/components/members/MemberCard.svelte";
+  import MemberCard, { type MemberChanges } from "$lib/components/members/MemberCard.svelte";
   import GuestLinksSection from "$lib/components/members/GuestLinksSection.svelte";
   import PublicAccessCard from "$lib/components/members/PublicAccessCard.svelte";
   import MembershipRequestsCard from "$lib/components/members/MembershipRequestsCard.svelte";
@@ -63,17 +63,19 @@
   );
 
   // Queries
-  const membersQuery = getMembers();
+  const canListMembers = $derived(canInvite || canManageMembers);
+  const membersQuery = $derived(canListMembers ? getMembers() : null);
   const invitesQuery = $derived(canInvite ? listInvites() : null);
   const rolesQuery = getRoles();
   const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
+  retainQuery(() => membersQuery);
   retainQuery(() => invitesQuery);
   retainQuery(() => pendingRequestsQuery);
   retainQuery(() => shareQuery);
 
   // Data
-  const allMembers = $derived(membersQuery.current ?? []);
+  const allMembers = $derived(membersQuery?.current ?? []);
   const invites = $derived(invitesQuery?.current ?? []);
   const activeInvites = $derived(invites.filter((i) => i.isValid));
   const allRoles = $derived(rolesQuery.current ?? []);
@@ -104,6 +106,7 @@
   // --- Member edit state ---
   let expandedMember = $state<string | null>(null);
   let isSavingMember = $state(false);
+  let memberSaveError = $state<string | null>(null);
   let isRevokingInvite = $state<string | null>(null);
 
   // Visible members — system subjects (e.g. Public) are managed via the
@@ -120,6 +123,7 @@
   }
 
   function toggleExpandMember(memberId: string) {
+    memberSaveError = null;
     if (expandedMember === memberId) {
       expandedMember = null;
     } else {
@@ -127,23 +131,30 @@
     }
   }
 
-  async function saveMemberChanges(memberId: string, roleIds: string[], permissions: string[]) {
+  async function saveMemberChanges(memberId: string, changes: MemberChanges) {
     isSavingMember = true;
-    errorMessage = null;
+    memberSaveError = null;
+    const { access, limitTo24Hours } = changes;
     try {
       await Promise.all([
-        setMemberRoles({ id: memberId, request: { roleIds } }),
-        setMemberPermissions({
-          id: memberId,
-          request: { directPermissions: permissions },
-        }),
+        ...(access
+          ? [
+              setMemberRoles({ id: memberId, request: { roleIds: access.roleIds } }),
+              setMemberPermissions({
+                id: memberId,
+                request: { directPermissions: access.permissions },
+              }),
+            ]
+          : []),
+        ...(limitTo24Hours !== undefined
+          ? [setMemberLimitTo24Hours({ id: memberId, request: { limitTo24Hours } })]
+          : []),
       ]);
       successMessage = "Member updated successfully.";
       expandedMember = null;
       clearMessages();
     } catch (e) {
-      errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
-      clearMessages();
+      memberSaveError = describeSubmitError(e, "Failed to update member. Please try again.");
     } finally {
       isSavingMember = false;
     }
@@ -155,7 +166,7 @@
       await approveRequest({ id: requestId, request: { roleIds } });
       // The approved requester becomes a member; GetMembers is on another
       // controller so ApproveRequest's Invalidates cannot name it.
-      await membersQuery.refresh();
+      await membersQuery?.refresh();
       successMessage = "Membership request approved.";
       clearMessages();
     } catch (err) {
@@ -209,10 +220,12 @@
           {publicStatus}
         </span>
       {/if}
-      <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
-        <Users class="h-3.5 w-3.5 text-muted-foreground" />
-        {memberCount} member{memberCount !== 1 ? "s" : ""}
-      </span>
+      {#if canListMembers}
+        <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
+          <Users class="h-3.5 w-3.5 text-muted-foreground" />
+          {memberCount} member{memberCount !== 1 ? "s" : ""}
+        </span>
+      {/if}
     </div>
   </div>
 
@@ -277,20 +290,9 @@
               currentSubjectId={page.data.user?.subjectId}
               isExpanded={expandedMember === member.subjectId}
               isSaving={isSavingMember}
+              saveError={expandedMember === member.subjectId ? memberSaveError : null}
               onToggleExpand={() => toggleExpandMember(member.subjectId!)}
-              onSaveRoles={(roleIds, permissions) =>
-                saveMemberChanges(member.id!, roleIds, permissions)}
-              onSaveLimitTo24Hours={async (limitTo24Hours) => {
-                try {
-                  await setMemberLimitTo24Hours({
-                    id: member.id!,
-                    request: { limitTo24Hours },
-                  });
-                } catch (e) {
-                  errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
-                  clearMessages();
-                }
-              }}
+              onSave={(changes) => saveMemberChanges(member.id!, changes)}
               onRemove={async () => {
                 if (!member.subjectId) return;
                 errorMessage = null;

@@ -21,6 +21,8 @@ namespace Nocturne.Infrastructure.Data;
 /// page may therefore exceed <c>limit</c>, with no cap;</item>
 /// <item>log a warning when it does, naming the table, the millisecond and the row count.</item>
 /// </list>
+/// Rows at or after the <see cref="HistoryHorizon"/> are left for a later page. The horizon falls on
+/// a millisecond boundary, so the extension never crosses it.
 /// A single millisecond can only hold up to <see cref="NocturneDbContext.SystemTimestampGroupSize"/>
 /// rows of one type, because the write path spreads a bulk save across successive milliseconds, and
 /// controllers clamp <c>limit</c> to the same size, so the extension adds at most one page.
@@ -30,6 +32,7 @@ namespace Nocturne.Infrastructure.Data;
 public static class HistoryPage
 {
     public static async Task<List<T>> GetAsync<T>(
+        DbContext context,
         IQueryable<T> source,
         Expression<Func<T, DateTime>> stamp,
         Expression<Func<T, Guid>> id,
@@ -40,8 +43,9 @@ public static class HistoryPage
         CancellationToken ct)
     {
         var from = DateTimeOffset.FromUnixTimeMilliseconds(cursorMills + 1).UtcDateTime;
+        var horizon = await HistoryHorizon.GetAsync(context, logger, ct);
         var page = await source
-            .Where(InRange(stamp, from, null))
+            .Where(InRange(stamp, from, horizon))
             .OrderBy(stamp)
             .ThenBy(id)
             .Take(limit)
@@ -91,6 +95,14 @@ public static class HistoryPage
             .ThenBy(id)
             .ToListAsync(ct);
     }
+
+    /// <summary>
+    /// <paramref name="source"/> with the soft-delete filter lifted and tenant isolation kept. A v3
+    /// history read pages it so, and a deleted row sorts in at its delete, since every soft delete
+    /// moves the row's stamp.
+    /// </summary>
+    public static IQueryable<T> IncludingDeleted<T>(this IQueryable<T> source) where T : class =>
+        source.IgnoreQueryFilters([NocturneDbContext.SoftDeleteFilterKey]);
 
     public static long ToMilliseconds(DateTime stamp) =>
         new DateTimeOffset(stamp, TimeSpan.Zero).ToUnixTimeMilliseconds();

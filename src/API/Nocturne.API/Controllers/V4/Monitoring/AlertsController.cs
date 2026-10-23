@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +19,9 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 /// </summary>
 /// <remarks>
 /// Acknowledging, snoozing and recording a delivery outcome all silence or close an excursion, so
-/// every write action here requires <see cref="Scope.AlertsReadWrite"/>; the class-level
+/// every write action here requires <see cref="Scope.AlertsReadWrite"/>, as does
+/// <see cref="GetPendingDeliveries"/>, which returns other recipients' destinations and payloads
+/// to the delivery adapters; the class-level
 /// <c>[Authorize]</c> alone is satisfied by read-only credentials such as a guest-link session,
 /// which holds <c>alerts.read</c>. <see cref="AcknowledgeExcursion"/> additionally accepts
 /// <see cref="Scope.DeviceNotify"/>, because for a caller without <c>alerts.readwrite</c> it mutes
@@ -34,7 +35,7 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 [Route("api/v4/alerts")]
 public class AlertsController : ControllerBase
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
     private readonly IAlertAcknowledgementService _acknowledgementService;
     private readonly IAlertDeliveryService _deliveryService;
     private readonly IAlertSnoozeService _snoozeService;
@@ -51,7 +52,7 @@ public class AlertsController : ControllerBase
     /// <param name="tenantAccessor">Accessor for the current request tenant context.</param>
     /// <param name="logger">Logger instance.</param>
     public AlertsController(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IAlertAcknowledgementService acknowledgementService,
         IAlertDeliveryService deliveryService,
         IAlertSnoozeService snoozeService,
@@ -214,33 +215,6 @@ public class AlertsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Who to record as having acknowledged an alert.
-    /// </summary>
-    /// <remarks>
-    /// Taken from the authenticated principal, not from the request. The web app
-    /// used to send a fixed "web_user", which made "who silenced the 3am low?"
-    /// unanswerable on a tenant with more than one caregiver — and any caller
-    /// could have claimed to be anyone. The request field is honoured only for
-    /// callers with no name claim at all (a machine token), where it is the only
-    /// information available.
-    /// </remarks>
-    private string ResolveAcknowledger(AcknowledgeRequest request)
-    {
-        var name = User.FindFirstValue(ClaimTypes.Name);
-        if (!string.IsNullOrWhiteSpace(name))
-            return name;
-
-        var subjectId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-        if (!string.IsNullOrWhiteSpace(subjectId))
-            return subjectId;
-
-        return string.IsNullOrWhiteSpace(request.AcknowledgedBy)
-            ? "unknown"
-            : request.AcknowledgedBy;
-    }
-
     /// <inheritdoc cref="IAlertAcknowledgementService.AcknowledgeAllAsync"/>
     [HttpPost("acknowledge")]
     [RequireScope(Scope.AlertsReadWrite)]
@@ -253,7 +227,7 @@ public class AlertsController : ControllerBase
 
         await _acknowledgementService.AcknowledgeAllAsync(
             tenantId,
-            ResolveAcknowledger(request),
+            User.ResolveAcknowledger(request.AcknowledgedBy),
             ct);
 
         return NoContent();
@@ -297,7 +271,7 @@ public class AlertsController : ControllerBase
         var outcome = await _acknowledgementService.AcknowledgeExcursionAsync(
             tenantId,
             excursionId,
-            ResolveAcknowledger(request),
+            User.ResolveAcknowledger(request.AcknowledgedBy),
             HttpContext.GetAlertAcknowledgementAuthority(),
             broadcast: true,
             ct);
@@ -363,6 +337,7 @@ public class AlertsController : ControllerBase
     /// Used by bot/adapter services to poll for work.
     /// </summary>
     [HttpGet("deliveries/pending")]
+    [RequireScope(Scope.AlertsReadWrite)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<PendingDeliveryResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<PendingDeliveryResponse>>> GetPendingDeliveries(

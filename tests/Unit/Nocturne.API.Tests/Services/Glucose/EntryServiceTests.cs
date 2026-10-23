@@ -3,7 +3,6 @@ using Moq;
 using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -20,7 +19,6 @@ public class EntryServiceTests
     private readonly Mock<IEntryStore> _store = new();
     private readonly Mock<IEntryDecomposer> _decomposer = new();
     private readonly Mock<IEntryCache> _cache = new();
-    private readonly Mock<IDataEventSink<Entry>> _events = new();
     private readonly EntryService _sut;
 
     public EntryServiceTests()
@@ -36,7 +34,6 @@ public class EntryServiceTests
             _store.Object,
             _decomposer.Object,
             _cache.Object,
-            _events.Object,
             Mock.Of<ILogger<EntryService>>());
     }
 
@@ -271,44 +268,12 @@ public class EntryServiceTests
 
     #endregion
 
-    #region AdvancedFilter — Pure Delegation (No Caching)
+    #region QueryEntriesAsync — Pure Delegation (No Caching)
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
-    public async Task GetEntriesWithAdvancedFilterAsync_DelegatesToStore()
-    {
-        // Arrange
-        var find = "{\"type\":\"sgv\",\"sgv\":{\"$gte\":100}}";
-        var expectedEntries = new List<Entry>
-        {
-            new() { Id = "1", Type = "sgv", Sgv = 120, Mills = 1234567890 },
-            new() { Id = "2", Type = "sgv", Sgv = 110, Mills = 1234567880 },
-        };
-
-        _store
-            .Setup(x => x.QueryAsync(
-                It.Is<EntryQuery>(q => q.Find == find && q.Count == 50 && q.Skip == 10),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedEntries);
-
-        // Act
-        var result = await _sut.GetEntriesWithAdvancedFilterAsync(find, 50, 10, CancellationToken.None);
-
-        // Assert
-        Assert.Equal(2, result.Count());
-        _cache.Verify(
-            x => x.GetOrComputeAsync(
-                It.IsAny<EntryQuery>(),
-                It.IsAny<Func<Task<IReadOnlyList<Entry>>>>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
-    public async Task GetEntriesWithAdvancedFilterAsync_WithFullParameterSet_PassesAllParams()
+    public async Task QueryEntriesAsync_PassesTheQueryToTheStore()
     {
         // Arrange
         var type = "sgv";
@@ -329,11 +294,16 @@ public class EntryServiceTests
             .ReturnsAsync(expectedEntries);
 
         // Act
-        var result = await _sut.GetEntriesWithAdvancedFilterAsync(
-            type, 20, 10, findQuery, dateString, true, CancellationToken.None);
+        var result = await _sut.QueryEntriesAsync(
+            new EntryQuery
+            {
+                Type = type, Find = findQuery, Count = 20, Skip = 10, DateString = dateString, ReverseResults = true,
+            },
+            CancellationToken.None);
 
         // Assert
         Assert.Single(result);
+        _cache.VerifyNoOtherCalls();
     }
 
     #endregion
@@ -366,9 +336,6 @@ public class EntryServiceTests
             Times.Once);
         // Cache invalidation + broadcasting is handled by the chokepoint, not the service.
         _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _events.Verify(
-            x => x.OnCreatedAsync(It.IsAny<IReadOnlyList<Entry>>(), It.IsAny<CancellationToken>()),
-            Times.Never);
     }
 
     [Fact]
@@ -566,7 +533,7 @@ public class EntryServiceTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
-    public async Task DeleteEntriesAsync_CallsStoreAndFiresEvent()
+    public async Task DeleteEntriesAsync_DelegatesToTheDecomposer_AndRaisesNoEventItself()
     {
         // Arrange
         var find = "{\"type\":\"sgv\"}";
@@ -583,15 +550,12 @@ public class EntryServiceTests
         _decomposer.Verify(x => x.BulkDeleteAsync(find, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
         // Cache invalidation is handled by the EventSink, not the service
         _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _events.Verify(
-            x => x.OnBulkDeletedAsync(5, It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
-    public async Task DeleteEntriesAsync_WithNoMatches_StillFiresEvent()
+    public async Task DeleteEntriesAsync_WithNoMatches_RaisesNoEventItself()
     {
         // Arrange
         var find = "{\"type\":\"nonexistent\"}";
@@ -607,9 +571,6 @@ public class EntryServiceTests
         Assert.Equal(0, result);
         // Cache invalidation is handled by the EventSink, not the service
         _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _events.Verify(
-            x => x.OnBulkDeletedAsync(0, It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]

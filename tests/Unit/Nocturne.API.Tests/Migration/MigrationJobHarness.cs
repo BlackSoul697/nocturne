@@ -1,3 +1,4 @@
+using Nocturne.Infrastructure.Data.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,12 +81,13 @@ internal static class MigrationJobHarness
             .ReturnsAsync(new DecompositionResult());
 
         return new ServiceCollection()
-            .AddDbContext<NocturneDbContext>(o =>
+            .AddDbContextFactory<NocturneDbContext>(o =>
             {
                 o.UseInMemoryDatabase(database);
                 if (interceptor is not null)
                     o.AddInterceptors(interceptor);
             })
+            .AddDataServices()
             .AddScoped<ITenantAccessor, FixedTenantAccessor>()
             .AddScoped<IAuditContext, AuditContext>()
             .AddSingleton<IHttpClientFactory>(new StubHttpClientFactory(handler))
@@ -107,10 +109,10 @@ internal static class MigrationJobHarness
     /// </summary>
     public static async Task<MigrationJobStatus> RunAsync(
         IServiceProvider provider, Action<MigrationJob>? onCreated, string[] collections, ILogger? logger = null,
-        string nightscoutUrl = "https://example-nightscout.invalid")
+        string nightscoutUrl = "https://example-nightscout.invalid", Guid? tenantId = null)
     {
         var tenant = new TenantContext(
-            Guid.CreateVersion7(), "migrated", "Migrated Tenant", true, IsDemo: false);
+            tenantId ?? Guid.CreateVersion7(), "migrated", "Migrated Tenant", true, IsDemo: false);
 
         var job = new MigrationJob(
             Guid.CreateVersion7(),

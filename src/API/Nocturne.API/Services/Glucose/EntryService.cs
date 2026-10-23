@@ -1,7 +1,7 @@
 using System.Text.Json;
+using Nocturne.API.Helpers;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -10,9 +10,9 @@ using Nocturne.Core.Models.Queries;
 namespace Nocturne.API.Services.Glucose;
 
 /// <summary>
-/// Domain service implementation for <see cref="Entry"/> operations using Store/Cache/EventSink ports.
+/// Domain service implementation for <see cref="Entry"/> operations using Store/Cache ports.
 /// Delegates reads through <see cref="IEntryCache"/> with fallback to <see cref="IEntryStore"/>,
-/// and writes through <see cref="IEntryDecomposer"/> to V4 tables with event notification via <see cref="IDataEventSink{T}"/>.
+/// and writes through <see cref="IEntryDecomposer"/> to V4 tables, whose repositories raise the events.
 /// </summary>
 /// <seealso cref="IEntryService"/>
 /// <seealso cref="IEntryStore"/>
@@ -20,15 +20,14 @@ namespace Nocturne.API.Services.Glucose;
 /// <seealso cref="IEntryCache"/>
 public class EntryService : IEntryService
 {
-    private static readonly HashSet<string> ValidEntryTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "sgv", "mbg", "cal"
-    };
+    private static readonly HashSet<string> ValidEntryTypes = new(
+        LegacyEntryTypes.All,
+        StringComparer.OrdinalIgnoreCase
+    );
 
     private readonly IEntryStore _store;
     private readonly IEntryDecomposer _decomposer;
     private readonly IEntryCache _cache;
-    private readonly IDataEventSink<Entry> _events;
     private readonly ILogger<EntryService> _logger;
 
     /// <summary>
@@ -37,19 +36,16 @@ public class EntryService : IEntryService
     /// <param name="store">The entry store for query operations.</param>
     /// <param name="decomposer">The entry decomposer for writing to V4 tables.</param>
     /// <param name="cache">The entry cache for read-through caching.</param>
-    /// <param name="events">The event sink for broadcasting create/update/delete events.</param>
     /// <param name="logger">The logger instance.</param>
     public EntryService(
         IEntryStore store,
         IEntryDecomposer decomposer,
         IEntryCache cache,
-        IDataEventSink<Entry> events,
         ILogger<EntryService> logger)
     {
         _store = store;
         _decomposer = decomposer;
         _cache = cache;
-        _events = events;
         _logger = logger;
     }
 
@@ -139,44 +135,9 @@ public class EntryService : IEntryService
         _store.GetModifiedSinceAsync(cursorMills, limit, cancellationToken);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Entry>> GetEntriesWithAdvancedFilterAsync(
-        string find,
-        int count,
-        int skip,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new EntryQuery
-        {
-            Find = find,
-            Count = count,
-            Skip = skip
-        };
-
-        return await _store.QueryAsync(query, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<Entry>> GetEntriesWithAdvancedFilterAsync(
-        string? type,
-        int count,
-        int skip,
-        string? findQuery,
-        string? dateString,
-        bool reverseResults,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new EntryQuery
-        {
-            Type = type,
-            Find = findQuery,
-            Count = count,
-            Skip = skip,
-            DateString = dateString,
-            ReverseResults = reverseResults
-        };
-
-        return await _store.QueryAsync(query, cancellationToken);
-    }
+    public async Task<IEnumerable<Entry>> QueryEntriesAsync(
+        EntryQuery query, CancellationToken cancellationToken = default) =>
+        await _store.QueryAsync(query, cancellationToken);
 
     /// <inheritdoc />
     /// <remarks>
@@ -302,10 +263,6 @@ public class EntryService : IEntryService
         string? find = null,
         CancellationToken cancellationToken = default)
     {
-        var deletedCount = await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
-
-        await _events.OnBulkDeletedAsync(deletedCount, cancellationToken);
-
-        return deletedCount;
+        return await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
     }
 }

@@ -20,7 +20,7 @@ public class SleepSessionTombstoneTests(RlsCompletenessFixture fx)
     public async Task Replacement_CascadesOldStagesAndSamples(bool update)
     {
         await using var conn = await OpenForNewTenantAsync();
-        var repository = new SleepSessionRepository(new TestTenantDbContextFactory(Context(conn)));
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(Context(conn)));
         var original = Session("sleep-original");
         original.Stages = [new SleepStageInterval
         {
@@ -100,7 +100,7 @@ public class SleepSessionTombstoneTests(RlsCompletenessFixture fx)
     public async Task Update_OntoAKeyALiveSessionHolds_IsRefused()
     {
         await using var conn = await OpenForNewTenantAsync();
-        var repository = new SleepSessionRepository(new TestTenantDbContextFactory(Context(conn)));
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(Context(conn)));
         await repository.UpsertSessionAsync(Session("sleep-live-holder"));
         var live = await repository.UpsertSessionAsync(Session("sleep-to-move"));
 
@@ -129,13 +129,46 @@ public class SleepSessionTombstoneTests(RlsCompletenessFixture fx)
     public async Task Delete_SoftDeletesTheSession()
     {
         await using var conn = await OpenForNewTenantAsync();
-        var repository = new SleepSessionRepository(new TestTenantDbContextFactory(Context(conn)));
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(Context(conn)));
         var created = await repository.UpsertSessionAsync(Session("sleep-to-delete"));
 
         (await repository.DeleteSessionAsync(Guid.Parse(created.Id!))).Should().BeTrue();
 
         (await repository.CountSessionsAsync()).Should().Be(0);
         (await CountRowsAsync(conn, "sleep-to-delete")).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Replacement_PreservesIdentityAndCreatedAtAndReplacesStages(bool updateById)
+    {
+        await using var conn = await OpenForNewTenantAsync();
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(Context(conn)));
+        var original = Session("sleep-replacement");
+        original.CreatedAt = new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc);
+        original.Stages = [new SleepStageInterval
+        {
+            StartTime = original.StartTime, EndTime = original.EndTime, Stage = SleepStageType.Light,
+        }];
+        var created = await repository.UpsertSessionAsync(original);
+
+        var replacement = Session("sleep-replacement");
+        replacement.CreatedAt = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        replacement.Stages = [new SleepStageInterval
+        {
+            StartTime = replacement.StartTime, EndTime = replacement.EndTime, Stage = SleepStageType.Deep,
+        }];
+        var updated = updateById
+            ? await repository.UpdateSessionAsync(Guid.Parse(created.Id!), replacement)
+            : await repository.UpsertSessionAsync(replacement);
+
+        updated!.Id.Should().Be(created.Id);
+        updated.CreatedAt.Should().Be(created.CreatedAt);
+        var stored = await repository.GetSessionByIdAsync(Guid.Parse(created.Id!));
+        stored!.CreatedAt.Should().Be(created.CreatedAt);
+        stored.Stages.Should().ContainSingle().Which.Stage.Should().Be(SleepStageType.Deep);
+        (await CountRowsAsync(conn, "sleep-replacement")).Should().Be(1);
     }
 
     private async Task<SleepSessionRepository> SeedTombstoneAsync(NpgsqlConnection conn, string originalId, bool byUser)
@@ -154,7 +187,7 @@ public class SleepSessionTombstoneTests(RlsCompletenessFixture fx)
             await ctx.SaveChangesAsync();
         }
 
-        return new SleepSessionRepository(new TestTenantDbContextFactory(Context(conn)));
+        return new SleepSessionRepository(new TestNocturneDbContextFactory(Context(conn)));
     }
 
     private static SleepSession Session(string originalId) => new()

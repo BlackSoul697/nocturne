@@ -7,33 +7,33 @@ using Nocturne.Core.Models.V4;
 namespace Nocturne.Core.Models;
 
 /// <summary>
-/// Represents a Nightscout treatment entry with 1:1 legacy JavaScript compatibility.
+/// Nightscout treatment entry with 1:1 legacy JavaScript compatibility.
 /// Compatible with both the API and Connect projects.
 /// </summary>
 /// <remarks>
 /// <para>Follows the mills-first timestamp pattern: <see cref="Mills"/> is computed from
 /// <see cref="Created_at"/> if not explicitly set. <see cref="Created_at"/> is likewise
 /// computed from Mills when not set.</para>
-/// <para><see cref="Insulin"/>, <see cref="Rate"/>, and <see cref="Duration"/> form a
-/// computed triangle: any two can derive the third. <see cref="Absolute"/> and
-/// <see cref="Amount"/> are synonyms for Rate and Insulin respectively.</para>
+/// <para><see cref="Rate"/> derives from Insulin ÷ Duration and <see cref="Duration"/> from
+/// Insulin ÷ Rate when not set; <see cref="Insulin"/> is never derived from the other two (see its
+/// remarks). <see cref="Absolute"/> and <see cref="Amount"/> are synonyms for Rate and Insulin
+/// respectively.</para>
 /// </remarks>
 /// <seealso cref="ProcessableDocumentBase"/>
 /// <seealso cref="Entry"/>
 /// <seealso cref="DeviceStatus"/>
-/// <seealso cref="TreatmentEventType"/>
 /// <seealso cref="CalculationType"/>
 public class Treatment : ProcessableDocumentBase
 {
     /// <summary>
-    /// Gets or sets the MongoDB ObjectId
+    /// MongoDB ObjectId
     /// </summary>
     [JsonPropertyName("_id")]
     [JsonConverter(typeof(ObjectIdJsonConverter))]
     public override string? Id { get; set; }
 
     /// <summary>
-    /// Gets the V3 API identifier - alias for Id for Nightscout V3 compatibility.
+    /// V3 API identifier - alias for Id for Nightscout V3 compatibility.
     /// Nightscout V3 API returns both _id and identifier fields with the same value.
     /// </summary>
     [JsonPropertyName("identifier")]
@@ -41,7 +41,7 @@ public class Treatment : ProcessableDocumentBase
     public string? Identifier => Id;
 
     /// <summary>
-    /// Gets the server-modified timestamp for V3 compatibility.
+    /// Server-modified timestamp for V3 compatibility.
     /// Falls back to Mills, which already resolves every other timestamp this document
     /// carries. See <see cref="V3Timestamps"/> for why it may never serialize as null.
     /// </summary>
@@ -55,7 +55,7 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets the server-created timestamp for V3 compatibility.
+    /// Server-created timestamp for V3 compatibility.
     /// </summary>
     private long? _srvCreated;
 
@@ -67,33 +67,27 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the event type (e.g., "Meal Bolus", "Correction Bolus", "BG Check")
+    /// Event type (e.g., "Meal Bolus", "Correction Bolus", "BG Check")
     /// </summary>
     [JsonPropertyName("eventType")]
     [Sanitizable]
     public string? EventType { get; set; }
 
-    /// <summary>
-    /// Gets or sets the treatment reason
-    /// </summary>
     [JsonPropertyName("reason")]
     [Sanitizable]
     public string? Reason { get; set; }
 
-    /// <summary>
-    /// Gets or sets the glucose value for the treatment
-    /// </summary>
     [JsonPropertyName("glucose")]
     public double? Glucose { get; set; }
 
     /// <summary>
-    /// Gets or sets the glucose type (e.g., "Finger", "Sensor")
+    /// Glucose type (e.g., "Finger", "Sensor")
     /// </summary>
     [JsonPropertyName("glucoseType")]
     public string? GlucoseType { get; set; }
 
     /// <summary>
-    /// Gets or sets the carbohydrates in grams.
+    /// Carbohydrates in grams.
     /// Note: Nightscout V1 always includes this field even when null.
     /// </summary>
     [JsonPropertyName("carbs")]
@@ -103,33 +97,23 @@ public class Treatment : ProcessableDocumentBase
     private double? _insulin;
 
     /// <summary>
-    /// Gets or sets the insulin amount in units.
-    /// Derives from Amount if null, or calculates from Rate * Duration.
+    /// Insulin amount in units. Derives from Amount if null.
     /// </summary>
+    /// <remarks>
+    /// Never derived from <see cref="Rate"/> × <see cref="Duration"/>: that is what a temp basal
+    /// delivers, not a dose, and AAPS classifies any served record carrying <c>insulin &gt; 0</c> as a
+    /// bolus before it looks at <c>eventType</c> (nssdk TreatmentMapper.toTreatment), so a temp basal
+    /// served with it comes back as a phantom bolus under the temp basal's identifier.
+    /// </remarks>
     [JsonPropertyName("insulin")]
     public double? Insulin
     {
-        get
-        {
-            if (_insulin.HasValue)
-                return _insulin;
-            if (_amount.HasValue)
-                return _amount;
-
-            // Try to calculate from Rate * Duration
-            // resolving synonyms for Rate
-            var r = _rate ?? _absolute;
-            if (r.HasValue && _duration.HasValue && _duration.Value > 0)
-            {
-                return r.Value * (_duration.Value / 60.0);
-            }
-            return null;
-        }
+        get => _insulin ?? _amount;
         set => _insulin = value;
     }
 
     /// <summary>
-    /// Gets or sets the protein content in grams
+    /// Protein content in grams
     /// </summary>
     [JsonPropertyName("protein")]
     // AAPS parses protein as an Int; a fractional value crashes its sync loop
@@ -137,28 +121,25 @@ public class Treatment : ProcessableDocumentBase
     public double? Protein { get; set; }
 
     /// <summary>
-    /// Gets or sets the fat content in grams
+    /// Fat content in grams
     /// </summary>
     [JsonPropertyName("fat")]
     // AAPS parses fat as an Int; a fractional value crashes its sync loop
     [JsonConverter(typeof(RoundedNullableDoubleConverter))]
     public double? Fat { get; set; }
 
-    /// <summary>
-    /// Gets or sets the food type
-    /// </summary>
     [JsonPropertyName("foodType")]
     [Sanitizable]
     public string? FoodType { get; set; }
 
     /// <summary>
-    /// Gets or sets the units (e.g., "mg/dl", "mmol")
+    /// Units (e.g., "mg/dl", "mmol")
     /// </summary>
     [JsonPropertyName("units")]
     public string? Units { get; set; }
 
     /// <summary>
-    /// Gets or sets the time in milliseconds since the Unix epoch.
+    /// Time in milliseconds since the Unix epoch.
     /// </summary>
     [JsonPropertyName("mills")]
     public override long Mills
@@ -205,7 +186,7 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the created at timestamp as ISO string
+    /// Created at timestamp as ISO string
     /// </summary>
     [JsonPropertyName("created_at")]
     public string? Created_at
@@ -231,7 +212,7 @@ public class Treatment : ProcessableDocumentBase
     private double? _duration;
 
     /// <summary>
-    /// Gets or sets the treatment duration in minutes.
+    /// Treatment duration in minutes.
     /// Calculates from Insulin / Rate if null, defaults to 0.
     /// Note: Nightscout V1 always includes this field (defaults to 0).
     /// </summary>
@@ -263,7 +244,7 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the percent of temporary basal rate
+    /// Percent of temporary basal rate
     /// </summary>
     [JsonPropertyName("percent")]
     public double? Percent { get; set; }
@@ -271,25 +252,35 @@ public class Treatment : ProcessableDocumentBase
     private double? _absolute;
 
     /// <summary>
-    /// Gets or sets the absolute temporary basal rate.
-    /// Returns Rate if this is null.
+    /// Absolute temporary basal rate.
+    /// Returns Rate if this is null, unless <see cref="Percent"/> is set.
     /// </summary>
+    /// <remarks>
+    /// Nightscout takes a temp basal as absolute only when <c>absolute</c> is present, and otherwise
+    /// applies <see cref="Percent"/> to the scheduled rate. AAPS sends a percent temp as
+    /// <c>percent</c> plus its own conversion in <c>rate</c>, with no <c>absolute</c>.
+    /// </remarks>
     [JsonPropertyName("absolute")]
     public double? Absolute
     {
-        get => _absolute ?? Rate;
+        get => _absolute ?? (Percent is null ? Rate : null);
         set => _absolute = value;
     }
 
     /// <summary>
-    /// Gets or sets the treatment notes
+    /// The U/h a temp basal delivers as Nocturne stores it, including a rate it resolved from
+    /// <see cref="Percent"/>; null when unknown. Not served: a temp basal reads back with only the
+    /// rate fields its upload carried.
     /// </summary>
+    [JsonIgnore]
+    public double? DeliveredRate { get; set; }
+
     [JsonPropertyName("notes")]
     [Sanitizable]
     public string? Notes { get; set; }
 
     /// <summary>
-    /// Gets or sets who entered the treatment.
+    /// Who entered the treatment.
     /// Note: Nightscout V1 always includes this field even when null.
     /// </summary>
     [JsonPropertyName("enteredBy")]
@@ -297,26 +288,17 @@ public class Treatment : ProcessableDocumentBase
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public string? EnteredBy { get; set; }
 
-    /// <summary>
-    /// Gets or sets the treatment target top
-    /// </summary>
     [JsonPropertyName("targetTop")]
     public double? TargetTop { get; set; }
 
-    /// <summary>
-    /// Gets or sets the treatment target bottom
-    /// </summary>
     [JsonPropertyName("targetBottom")]
     public double? TargetBottom { get; set; }
 
-    /// <summary>
-    /// Gets or sets the treatment profile
-    /// </summary>
     [JsonPropertyName("profile")]
     public string? Profile { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this entry was split from another
+    /// Whether this entry was split from another
     /// </summary>
     [JsonPropertyName("split")]
     public string? Split { get; set; }
@@ -324,7 +306,7 @@ public class Treatment : ProcessableDocumentBase
     private long? _date;
 
     /// <summary>
-    /// Gets or sets when this treatment was created (Unix milliseconds).
+    /// When this treatment was created (Unix milliseconds).
     /// Falls back to Mills — which already resolves <c>created_at</c>, <c>eventTime</c> and
     /// <c>timestamp</c> — so a broadcast treatment carries the same <c>date</c> the V3 REST
     /// layer projects. <see cref="ResolveMills"/> reads the backing field directly to avoid
@@ -338,13 +320,13 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the carb time offset
+    /// Carb time offset
     /// </summary>
     [JsonPropertyName("carbTime")]
     public int? CarbTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the bolus calculator values.
+    /// Bolus calculator values.
     /// Note: Nightscout V1 API does not include boluscalc when empty.
     /// </summary>
     [JsonPropertyName("boluscalc")]
@@ -352,13 +334,13 @@ public class Treatment : ProcessableDocumentBase
     public Dictionary<string, object>? BolusCalc { get; set; }
 
     /// <summary>
-    /// Gets or sets the UTCOFFSET
+    /// UTC offset in minutes.
     /// </summary>
     [JsonPropertyName("utcOffset")]
     public override int? UtcOffset { get; set; }
 
     /// <summary>
-    /// Gets or sets the creation timestamp - alias for Created_at for API compatibility
+    /// Creation timestamp - alias for Created_at for API compatibility
     /// </summary>
     [JsonIgnore]
     public override string? CreatedAt
@@ -421,25 +403,25 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the profile name that cut this treatment (used by duration processing)
+    /// Profile name that cut this treatment (used by duration processing)
     /// </summary>
     [JsonPropertyName("cuttedby")]
     public string? CuttedBy { get; set; }
 
     /// <summary>
-    /// Gets or sets the profile name that this treatment cut (used by duration processing)
+    /// Profile name that this treatment cut (used by duration processing)
     /// </summary>
     [JsonPropertyName("cutting")]
     public string? Cutting { get; set; }
 
     /// <summary>
-    /// Gets or sets the event time as ISO string (used by Glooko connector)
+    /// Event time as ISO string (used by Glooko connector)
     /// </summary>
     [JsonPropertyName("eventTime")]
     public string? EventTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the pre-bolus time in minutes (used by Glooko connector)
+    /// Pre-bolus time in minutes (used by Glooko connector)
     /// </summary>
     [JsonPropertyName("preBolus")]
     // AAPS parses preBolus as an Int; a fractional value crashes its sync loop
@@ -447,7 +429,7 @@ public class Treatment : ProcessableDocumentBase
     public double? PreBolus { get; set; }
 
     /// <summary>
-    /// Gets or sets the basal rate (used for temp basal treatments).
+    /// Basal rate (used for temp basal treatments).
     /// If not explicitly set, checks Absolute, or attempts to calculate from Insulin / (Duration/60).
     /// </summary>
     [JsonPropertyName("rate")]
@@ -475,72 +457,65 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the blood glucose value in mg/dL
+    /// Blood glucose value in mg/dL
     /// </summary>
     [JsonPropertyName("mgdl")]
     public double? Mgdl { get; set; }
 
     /// <summary>
-    /// Gets or sets the blood glucose value in mmol/L
+    /// Blood glucose value in mmol/L
     /// </summary>
     [JsonPropertyName("mmol")]
     public double? Mmol { get; set; }
 
     /// <summary>
-    /// Gets or sets the end time in milliseconds for duration treatments
+    /// End time in milliseconds for duration treatments
     /// </summary>
     [JsonPropertyName("endmills")]
     public long? EndMills { get; set; }
 
     /// <summary>
-    /// Gets or sets the duration type (e.g., "indefinite")
+    /// Duration type (e.g., "indefinite")
     /// </summary>
     [JsonPropertyName("durationType")]
     [Sanitizable]
     public string? DurationType { get; set; }
 
-    /// <summary>
-    /// Gets or sets whether this treatment is an announcement
-    /// </summary>
     [JsonPropertyName("isAnnouncement")]
     [JsonConverter(typeof(FlexibleBooleanJsonConverter))]
     public bool? IsAnnouncement { get; set; }
 
     /// <summary>
-    /// Gets or sets the JSON string of profile data for profile switches
+    /// JSON string of profile data for profile switches
     /// </summary>
     [JsonPropertyName("profileJson")]
     [Sanitizable]
-    [NocturneOnly]
     public string? ProfileJson { get; set; }
 
-    /// <summary>
-    /// Gets or sets the end profile name for profile switches
-    /// </summary>
     [JsonPropertyName("endprofile")]
     [Sanitizable]
     public string? EndProfile { get; set; }
 
     /// <summary>
-    /// Gets or sets the insulin scaling factor for adjustments
+    /// Insulin scaling factor for adjustments
     /// </summary>
     [JsonPropertyName("insulinNeedsScaleFactor")]
     public double? InsulinNeedsScaleFactor { get; set; }
 
     /// <summary>
-    /// Gets or sets the carb absorption time in minutes
+    /// Carb absorption time in minutes
     /// </summary>
     [JsonPropertyName("absorptionTime")]
     public int? AbsorptionTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the manually entered insulin amount (for combo bolus)
+    /// Manually entered insulin amount (for combo bolus)
     /// </summary>
     [JsonPropertyName("enteredinsulin")]
     public double? EnteredInsulin { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage of combo bolus delivered immediately
+    /// Percentage of combo bolus delivered immediately
     /// </summary>
     [JsonPropertyName("splitNow")]
     // AAPS parses splitNow as an Int; a fractional value crashes its sync loop
@@ -548,16 +523,13 @@ public class Treatment : ProcessableDocumentBase
     public double? SplitNow { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage of combo bolus delivered extended
+    /// Percentage of combo bolus delivered extended
     /// </summary>
     [JsonPropertyName("splitExt")]
     // AAPS parses splitExt as an Int; a fractional value crashes its sync loop
     [JsonConverter(typeof(RoundedNullableDoubleConverter))]
     public double? SplitExt { get; set; }
 
-    /// <summary>
-    /// Gets or sets the treatment status
-    /// </summary>
     [JsonPropertyName("status")]
     [Sanitizable]
     public string? Status { get; set; }
@@ -565,7 +537,7 @@ public class Treatment : ProcessableDocumentBase
     private double? _relative;
 
     /// <summary>
-    /// Gets or sets the relative basal rate change
+    /// Relative basal rate change
     /// </summary>
     [JsonPropertyName("relative")]
     public double? Relative
@@ -575,13 +547,13 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the carb ratio
+    /// Carb ratio
     /// </summary>
     [JsonPropertyName("CR")]
     public double? CR { get; set; }
 
     /// <summary>
-    /// Gets or sets the Nightscout client identifier
+    /// Nightscout client identifier
     /// </summary>
     [JsonPropertyName("NSCLIENT_ID")]
     [Sanitizable]
@@ -589,28 +561,28 @@ public class Treatment : ProcessableDocumentBase
     public string? NsClientId { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this is the first treatment in a series
+    /// Whether this is the first treatment in a series
     /// </summary>
     [JsonPropertyName("first")]
     [JsonConverter(typeof(FlexibleBooleanJsonConverter))]
     public bool? First { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this is the end treatment in a series
+    /// Whether this is the end treatment in a series
     /// </summary>
     [JsonPropertyName("end")]
     [JsonConverter(typeof(FlexibleBooleanJsonConverter))]
     public bool? End { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this is a CircadianPercentageProfile treatment
+    /// Whether this is a CircadianPercentageProfile treatment
     /// </summary>
     [JsonPropertyName("CircadianPercentageProfile")]
     [JsonConverter(typeof(FlexibleBooleanJsonConverter))]
     public bool? CircadianPercentageProfile { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage for CircadianPercentageProfile
+    /// Percentage for CircadianPercentageProfile
     /// </summary>
     [JsonPropertyName("percentage")]
     // AAPS parses percentage as an Int; a fractional value crashes its sync loop
@@ -618,7 +590,8 @@ public class Treatment : ProcessableDocumentBase
     public double? Percentage { get; set; }
 
     /// <summary>
-    /// Gets or sets the timeshift for CircadianPercentageProfile (in hours)
+    /// The timeshift for CircadianPercentageProfile, in the unit it was uploaded in: hours from
+    /// Nightscout's careportal, milliseconds from AAPS (<see cref="ProfileSpanMetadata.UnitOfUploadedTimeshift"/>).
     /// </summary>
     [JsonPropertyName("timeshift")]
     // AAPS parses timeshift as a Long; a fractional value crashes its sync loop
@@ -626,53 +599,50 @@ public class Treatment : ProcessableDocumentBase
     public double? Timeshift { get; set; }
 
     /// <summary>
-    /// Gets or sets the transmitter ID (used by CGM devices)
+    /// Transmitter ID (used by CGM devices)
     /// </summary>
     [JsonPropertyName("transmitterId")]
     [Sanitizable]
     public string? TransmitterId { get; set; }
 
     /// <summary>
-    /// Gets or sets the remote carb entry amount in grams (for Loop remote commands)
+    /// Remote carb entry amount in grams (for Loop remote commands)
     /// </summary>
     [JsonPropertyName("remoteCarbs")]
     public double? RemoteCarbs { get; set; }
 
     /// <summary>
-    /// Gets or sets the remote carb absorption time in hours (for Loop remote commands)
+    /// Remote carb absorption time in hours (for Loop remote commands)
     /// </summary>
     [JsonPropertyName("remoteAbsorption")]
     public double? RemoteAbsorption { get; set; }
 
     /// <summary>
-    /// Gets or sets the remote bolus amount in units (for Loop remote commands)
+    /// Remote bolus amount in units (for Loop remote commands)
     /// </summary>
     [JsonPropertyName("remoteBolus")]
     public double? RemoteBolus { get; set; }
 
-    /// <summary>
-    /// Gets or sets the display name for override reason
-    /// </summary>
     [JsonPropertyName("reasonDisplay")]
     [Sanitizable]
     public string? ReasonDisplay { get; set; }
 
     /// <summary>
-    /// Gets or sets the one-time password for secure remote operations
+    /// One-time password for secure remote operations
     /// </summary>
     [JsonPropertyName("otp")]
     [Sanitizable]
     public string? Otp { get; set; }
 
     /// <summary>
-    /// Gets or sets the sync identifier used by Loop for deduplication.
+    /// Sync identifier used by Loop for deduplication.
     /// This is a unique identifier that Loop uses to prevent duplicate treatments.
     /// </summary>
     [JsonPropertyName("syncIdentifier")]
     public string? SyncIdentifier { get; set; }
 
     /// <summary>
-    /// Gets or sets the insulin type (e.g., "Humalog", "Novolog", "Fiasp").
+    /// Insulin type (e.g., "Humalog", "Novolog", "Fiasp").
     /// Used by Loop and other AID systems.
     /// </summary>
     [JsonPropertyName("insulinType")]
@@ -680,14 +650,14 @@ public class Treatment : ProcessableDocumentBase
     public string? InsulinType { get; set; }
 
     /// <summary>
-    /// Gets or sets whether this treatment was automatically administered by an AID system.
+    /// Whether this treatment was automatically administered by an AID system.
     /// True for automatic dosing decisions, false for user-initiated actions.
     /// </summary>
     [JsonPropertyName("automatic")]
     public bool? Automatic { get; set; }
 
     /// <summary>
-    /// Gets or sets the temp basal type ("absolute" or "percentage").
+    /// Temp basal type ("absolute" or "percentage").
     /// Used by Loop for temp basal treatments.
     /// </summary>
     [JsonPropertyName("temp")]
@@ -696,7 +666,7 @@ public class Treatment : ProcessableDocumentBase
     private double? _amount;
 
     /// <summary>
-    /// Gets or sets the insulin amount delivered in units.
+    /// Insulin amount delivered in units.
     /// Returns Insulin if this is null.
     /// Note: Nightscout V1 API does not include amount in treatment responses.
     /// </summary>
@@ -710,34 +680,34 @@ public class Treatment : ProcessableDocumentBase
     }
 
     /// <summary>
-    /// Gets or sets the originally programmed insulin dose in units.
+    /// Originally programmed insulin dose in units.
     /// May differ from amount if delivery was interrupted.
     /// </summary>
     [JsonPropertyName("programmed")]
     public double? Programmed { get; set; }
 
     /// <summary>
-    /// Gets or sets unabsorbed insulin from previous boluses.
+    /// Unabsorbed insulin from previous boluses.
     /// </summary>
     [JsonPropertyName("unabsorbed")]
     public double? Unabsorbed { get; set; }
 
     /// <summary>
-    /// Gets or sets the bolus type (e.g., "normal", "square", "dual").
+    /// Bolus type (e.g., "normal", "square", "dual").
     /// Maps to the standard Nightscout "type" field.
     /// </summary>
     [JsonPropertyName("type")]
     public string? BolusType { get; set; }
 
     /// <summary>
-    /// Gets or sets the Loop-specific bolus type.
+    /// Loop-specific bolus type.
     /// Maps to the "bolusType" field sent by Loop.
     /// </summary>
     [JsonPropertyName("bolusType")]
     public string? LoopBolusType { get; set; }
 
     /// <summary>
-    /// Gets or sets the data source identifier indicating where this treatment originated from.
+    /// Data source identifier indicating where this treatment originated from.
     /// Use constants from <see cref="Core.Constants.DataSources"/> for consistent values.
     /// </summary>
     /// <example>
@@ -843,7 +813,7 @@ public class Treatment : ProcessableDocumentBase
     public long? OriginalEnd { get; set; }
 
     /// <summary>
-    /// Gets or sets additional/overflow properties for the treatment.
+    /// Additional/overflow properties for the treatment.
     /// Captures unknown JSON fields (e.g., Medtronic raw_rate, raw_duration, wizard, bolus,
     /// medtronic URI, _type) so they survive round-trip through the API.
     /// </summary>
@@ -851,7 +821,7 @@ public class Treatment : ProcessableDocumentBase
     public Dictionary<string, object>? AdditionalProperties { get; set; }
 
     /// <summary>
-    /// Gets or sets the canonical group ID for deduplication.
+    /// Canonical group ID for deduplication.
     /// Records with the same CanonicalId represent the same underlying event from different sources.
     /// </summary>
     [JsonPropertyName("canonicalId")]
@@ -859,7 +829,7 @@ public class Treatment : ProcessableDocumentBase
     public Guid? CanonicalId { get; set; }
 
     /// <summary>
-    /// Gets or sets the list of data sources that contributed to this unified record.
+    /// List of data sources that contributed to this unified record.
     /// Only populated when returning merged/unified DTOs.
     /// </summary>
     [JsonPropertyName("sources")]
@@ -867,7 +837,7 @@ public class Treatment : ProcessableDocumentBase
     public string[]? Sources { get; set; }
 
     /// <summary>
-    /// Gets or sets the snapshot of insulin pharmacokinetic properties at treatment delivery time.
+    /// Snapshot of insulin pharmacokinetic properties at treatment delivery time.
     /// Captures DIA, peak, curve, and concentration so IOB calculations use the correct values
     /// regardless of future changes to the patient's insulin configuration.
     /// </summary>

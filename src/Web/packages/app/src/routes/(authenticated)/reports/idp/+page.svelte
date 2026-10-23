@@ -1,5 +1,10 @@
 <script lang="ts">
   import {
+    a1cLabel,
+    a1cUnitLabel,
+    formatA1cValue,
+  } from "$lib/utils/a1c-formatting";
+  import {
     Card,
     CardContent,
     CardDescription,
@@ -95,8 +100,8 @@
     figures={[
       { label: "Avg Total Daily Dose", value: insulinStats?.tdd?.toFixed(1) ?? "--", unit: "U/day" },
       { label: "Average", value: stats.mean ? String(bg(stats.mean)) : "--", unit: bgLabel() },
-      { label: "Est. A1C", value: variability.estimatedA1c?.toFixed(1) ?? "--", unit: "%", note: "From mean glucose" },
-      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: "Target: ≤33%" },
+      { label: a1cLabel(true), value: formatA1cValue(variability.estimatedA1cDisplay), unit: a1cUnitLabel(), note: "From mean glucose", },
+      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: variability.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
     ]}
   />
 
@@ -143,6 +148,9 @@
               style:--share="{bolusPct}%"
             ></div>
           </div>
+          <p class="text-xs text-muted-foreground tabular-nums">
+            Bolus total: manual {(insulinStats?.manualBolus ?? 0).toFixed(1)} U / automatic {(insulinStats?.automaticBolus ?? 0).toFixed(1)} U
+          </p>
         </div>
 
         <Separator />

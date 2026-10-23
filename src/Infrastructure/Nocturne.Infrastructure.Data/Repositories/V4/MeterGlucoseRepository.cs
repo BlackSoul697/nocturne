@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Events;
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Projections;
@@ -25,7 +26,7 @@ public class MeterGlucoseRepository : V4RepositoryBase<MeterGlucose, MeterGlucos
     /// Initializes a new instance of the <see cref="MeterGlucoseRepository"/> class.
     /// </summary>
     // logger is unused for this LegacyId-only type but retained for DI + direct test construction.
-    public MeterGlucoseRepository(ITenantDbContextFactory contextFactory, IAuditContext auditContext, ILogger<MeterGlucoseRepository> logger, IV4RecordBroadcaster<MeterGlucose>? broadcaster = null, IDataEventSink<Entry>? entrySink = null)
+    public MeterGlucoseRepository(INocturneDbContextFactory contextFactory, IAuditContext auditContext, ILogger<MeterGlucoseRepository> logger, IV4RecordBroadcaster<MeterGlucose>? broadcaster = null, IDataEventSink<Entry>? entrySink = null)
         : base(contextFactory, auditContext, logger, broadcaster, entrySink)
     {
     }
@@ -63,23 +64,25 @@ public class MeterGlucoseRepository : V4RepositoryBase<MeterGlucose, MeterGlucos
     /// Deletes all meter glucose records for the given data source.
     /// </summary>
     /// <param name="source">Data source identifier.</param>
+    /// <param name="origin">Whether the delete is a live event; see <see cref="V4RepositoryBase{TModel,TEntity}.RaiseBroadcastAsync"/>.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>Number of records deleted.</returns>
-    public async Task<int> DeleteBySourceAsync(string source, CancellationToken ct = default)
+    public async Task<int> DeleteBySourceAsync(string source, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        return await ctx.AuditedSoftDeleteAsync(
-            ctx.MeterGlucose.FromSource(source), AuditContext, $"data_source={source}", ct);
+        return await AuditedSoftDeleteAndBroadcastAsync(
+            ctx, ctx.MeterGlucose.FromSource(source), $"data_source={source}", DuplicateDelete.PromoteSurvivor, origin, ct);
     }
 
     /// <summary>
     /// Deletes all meter glucose records within the given time range.
     /// </summary>
     /// <param name="from">Inclusive start, or null for no lower bound.</param>
-    /// <param name="to">Exclusive end, or null for no upper bound.</param>
+    /// <param name="to">Inclusive end, or null for no upper bound.</param>
+    /// <param name="origin">Whether the delete is a live event; see <see cref="V4RepositoryBase{TModel,TEntity}.RaiseBroadcastAsync"/>.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>Number of records deleted.</returns>
-    public async Task<int> DeleteByTimeRangeAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<int> DeleteByTimeRangeAsync(DateTime? from, DateTime? to, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
         var query = ctx.MeterGlucose.AsQueryable();
@@ -87,9 +90,10 @@ public class MeterGlucoseRepository : V4RepositoryBase<MeterGlucose, MeterGlucos
         if (from.HasValue)
             query = query.Where(e => e.Timestamp >= from.Value);
         if (to.HasValue)
-            query = query.Where(e => e.Timestamp < to.Value);
+            query = query.Where(e => e.Timestamp <= to.Value);
 
-        return await ctx.AuditedSoftDeleteAsync(query, AuditContext, $"timestamp={from:O}..{to:O}", ct);
+        return await AuditedSoftDeleteAndBroadcastAsync(
+            ctx, query, $"timestamp={from:O}..{to:O}", DuplicateDelete.PromoteSurvivor, origin, ct);
     }
 
     /// <inheritdoc />

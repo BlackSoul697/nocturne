@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Nocturne.Core.Models.Configuration;
 
 namespace Nocturne.Core.Models;
 
@@ -27,20 +28,11 @@ public class ClockFace
     /// </summary>
     public ClockFaceConfig Config { get; set; } = new();
 
-    /// <summary>
-    /// When this clock face was created
-    /// </summary>
     public DateTime CreatedAt { get; set; }
 
-    /// <summary>
-    /// When this clock face was last updated
-    /// </summary>
     public DateTime? UpdatedAt { get; set; }
 }
 
-/// <summary>
-/// Configuration for a clock face layout
-/// </summary>
 public class ClockFaceConfig
 {
     /// <summary>
@@ -49,21 +41,57 @@ public class ClockFaceConfig
     [JsonPropertyName("rows")]
     public List<ClockRow> Rows { get; set; } = [];
 
-    /// <summary>
-    /// Global settings for the clock face
-    /// </summary>
     [JsonPropertyName("settings")]
     public ClockSettings Settings { get; set; } = new();
+
+    /// <summary>
+    /// Returns a "field: message" description of the first invalid setting, or null when the
+    /// config can be saved.
+    /// </summary>
+    public string? Validate() => Settings is null ? "settings: must be an object" : Settings.Validate();
+
+    /// <summary>
+    /// The layout every new face starts from: glucose and trend arrow, then delta, then reading
+    /// age. It takes the creator's units and time format, which the face then keeps whoever
+    /// views it; a preference the creator never set, or one outside the allowed set, leaves the
+    /// <see cref="ClockSettings"/> default.
+    /// </summary>
+    public static ClockFaceConfig Starter(UserDisplayPreferences creator)
+    {
+        var settings = new ClockSettings();
+        if (creator.GlucoseUnits is { } units && UserDisplayPreferences.AllowedGlucoseUnits.Contains(units))
+        {
+            settings.GlucoseUnits = units;
+        }
+        if (creator.TimeFormat is { } timeFormat && UserDisplayPreferences.AllowedTimeFormats.Contains(timeFormat))
+        {
+            settings.TimeFormat = timeFormat;
+        }
+
+        return new ClockFaceConfig
+        {
+            Rows =
+            [
+                new ClockRow { Elements = [Element("sg", 40, "dynamic"), Element("arrow", 25, "dynamic")] },
+                new ClockRow { Elements = [Element("delta", 14, "dynamic", showUnits: true)] },
+                new ClockRow { Elements = [Element("age", 10, color: null, opacity: 0.7)] },
+            ],
+            Settings = settings,
+        };
+
+        static ClockElement Element(
+            string type, int size, string? color, bool? showUnits = null, double opacity = 1.0) => new()
+        {
+            Type = type,
+            Size = size,
+            ShowUnits = showUnits,
+            Style = new ClockElementStyle { Color = color, Font = "system", FontWeight = "medium", Opacity = opacity },
+        };
+    }
 }
 
-/// <summary>
-/// A row of elements in the clock face
-/// </summary>
 public class ClockRow
 {
-    /// <summary>
-    /// Elements in this row
-    /// </summary>
     [JsonPropertyName("elements")]
     public List<ClockElement> Elements { get; set; } = [];
 }
@@ -86,7 +114,7 @@ public class ClockElement
     public int? Size { get; set; }
 
     /// <summary>
-    /// Whether to show units (for delta element)
+    /// Whether to show units (for sg and delta elements); shown unless false
     /// </summary>
     [JsonPropertyName("showUnits")]
     public bool? ShowUnits { get; set; }
@@ -114,12 +142,6 @@ public class ClockElement
     /// </summary>
     [JsonPropertyName("minutesAhead")]
     public int? MinutesAhead { get; set; }
-
-    /// <summary>
-    /// Time format for time element: "auto" (follow the viewer's preference), "12h", or "24h"
-    /// </summary>
-    [JsonPropertyName("format")]
-    public string? Format { get; set; }
 
     /// <summary>
     /// Tracker definition ID (for single tracker element)
@@ -151,22 +173,13 @@ public class ClockElement
     [JsonPropertyName("text")]
     public string? Text { get; set; }
 
-    /// <summary>
-    /// Styling configuration for the element
-    /// </summary>
     [JsonPropertyName("style")]
     public ClockElementStyle? Style { get; set; }
 
-    /// <summary>
-    /// Chart configuration (for chart element)
-    /// </summary>
     [JsonPropertyName("chartConfig")]
     public ClockChartConfig? ChartConfig { get; set; }
 }
 
-/// <summary>
-/// Styling configuration for clock elements
-/// </summary>
 public class ClockElementStyle
 {
     /// <summary>
@@ -201,20 +214,11 @@ public class ClockElementStyle
     public Dictionary<string, string>? Custom { get; set; }
 }
 
-/// <summary>
-/// Configuration for an embedded chart element
-/// </summary>
 public class ClockChartConfig
 {
-    /// <summary>
-    /// Show IOB track
-    /// </summary>
     [JsonPropertyName("showIob")]
     public bool ShowIob { get; set; }
 
-    /// <summary>
-    /// Show COB track
-    /// </summary>
     [JsonPropertyName("showCob")]
     public bool ShowCob { get; set; }
 
@@ -224,15 +228,9 @@ public class ClockChartConfig
     [JsonPropertyName("showBasal")]
     public bool ShowBasal { get; set; }
 
-    /// <summary>
-    /// Show bolus markers
-    /// </summary>
     [JsonPropertyName("showBolus")]
     public bool ShowBolus { get; set; } = true;
 
-    /// <summary>
-    /// Show carb markers
-    /// </summary>
     [JsonPropertyName("showCarbs")]
     public bool ShowCarbs { get; set; } = true;
 
@@ -242,9 +240,6 @@ public class ClockChartConfig
     [JsonPropertyName("showDeviceEvents")]
     public bool ShowDeviceEvents { get; set; }
 
-    /// <summary>
-    /// Show alarm markers
-    /// </summary>
     [JsonPropertyName("showAlarms")]
     public bool ShowAlarms { get; set; }
 
@@ -254,9 +249,6 @@ public class ClockChartConfig
     [JsonPropertyName("showTrackers")]
     public bool ShowTrackers { get; set; }
 
-    /// <summary>
-    /// Show prediction lines
-    /// </summary>
     [JsonPropertyName("showPredictions")]
     public bool ShowPredictions { get; set; }
 
@@ -266,9 +258,6 @@ public class ClockChartConfig
     [JsonPropertyName("lockToggles")]
     public bool LockToggles { get; set; } = true;
 
-    /// <summary>
-    /// Show legend controls
-    /// </summary>
     [JsonPropertyName("showLegend")]
     public bool ShowLegend { get; set; }
 
@@ -319,11 +308,27 @@ public class ClockSettings
     /// </summary>
     [JsonPropertyName("screensaverMode")]
     public bool ScreensaverMode { get; set; }
+
+    /// <summary>
+    /// Glucose units the face shows: "mg/dl" or "mmol". Carried by the face rather than read from
+    /// the viewer, because a clock link is opened by people who are not its owner.
+    /// </summary>
+    [JsonPropertyName("glucoseUnits")]
+    public string GlucoseUnits { get; set; } = "mg/dl";
+
+    /// <summary>Time format the face shows: "12" or "24". Every time element uses it.</summary>
+    [JsonPropertyName("timeFormat")]
+    public string TimeFormat { get; set; } = "12";
+
+    /// <summary>
+    /// Validates against the <see cref="UserDisplayPreferences"/> vocabulary. A face saved before
+    /// these settings existed deserialises to the defaults, so only an explicit value can fail.
+    /// </summary>
+    public string? Validate() =>
+        UserDisplayPreferences.Check("settings.glucoseUnits", GlucoseUnits ?? "null", UserDisplayPreferences.AllowedGlucoseUnits)
+        ?? UserDisplayPreferences.Check("settings.timeFormat", TimeFormat ?? "null", UserDisplayPreferences.AllowedTimeFormats);
 }
 
-/// <summary>
-/// DTO for creating a new clock face
-/// </summary>
 public class CreateClockFaceRequest
 {
     /// <summary>
@@ -332,14 +337,12 @@ public class CreateClockFaceRequest
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Clock face configuration
+    /// Clock face configuration. Omitted, the face starts from <see cref="ClockFaceConfig.Starter"/>
+    /// with the creator's preferences.
     /// </summary>
-    public ClockFaceConfig Config { get; set; } = new();
+    public ClockFaceConfig? Config { get; set; }
 }
 
-/// <summary>
-/// DTO for updating a clock face
-/// </summary>
 public class UpdateClockFaceRequest
 {
     /// <summary>
@@ -347,20 +350,11 @@ public class UpdateClockFaceRequest
     /// </summary>
     public string? Name { get; set; }
 
-    /// <summary>
-    /// Clock face configuration (optional)
-    /// </summary>
     public ClockFaceConfig? Config { get; set; }
 }
 
-/// <summary>
-/// DTO for clock face list item
-/// </summary>
 public class ClockFaceListItem
 {
-    /// <summary>
-    /// Clock face ID
-    /// </summary>
     public Guid Id { get; set; }
 
     /// <summary>
@@ -368,14 +362,8 @@ public class ClockFaceListItem
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>
-    /// When created
-    /// </summary>
     public DateTime CreatedAt { get; set; }
 
-    /// <summary>
-    /// When last updated
-    /// </summary>
     public DateTime? UpdatedAt { get; set; }
 }
 
@@ -384,14 +372,8 @@ public class ClockFaceListItem
 /// </summary>
 public class ClockFacePublicDto
 {
-    /// <summary>
-    /// Clock face ID
-    /// </summary>
     public Guid Id { get; set; }
 
-    /// <summary>
-    /// Clock face configuration
-    /// </summary>
     public ClockFaceConfig Config { get; set; } = new();
 }
 

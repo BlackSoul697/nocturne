@@ -14,13 +14,13 @@ namespace Nocturne.Infrastructure.Data.Repositories;
 /// </summary>
 public class SleepSessionRepository : ISleepSessionRepository
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SleepSessionRepository"/> class.
     /// </summary>
     /// <param name="contextFactory">The tenant database context factory.</param>
-    public SleepSessionRepository(ITenantDbContextFactory contextFactory)
+    public SleepSessionRepository(INocturneDbContextFactory contextFactory)
     {
         _contextFactory = contextFactory;
     }
@@ -108,6 +108,7 @@ public class SleepSessionRepository : ISleepSessionRepository
 
             if (existing is not null)
             {
+                entity.CreatedAt = existing.CreatedAt;
                 ctx.SleepSessions.Remove(existing);
                 await ctx.SaveChangesAsync(token);
             }
@@ -190,7 +191,7 @@ public class SleepSessionRepository : ISleepSessionRepository
                 }
             }
 
-            // Remove old entity, then insert updated version preserving the original ID
+            entity.CreatedAt = existing.CreatedAt;
             ctx.SleepSessions.Remove(existing);
             await ctx.SaveChangesAsync(token);
 

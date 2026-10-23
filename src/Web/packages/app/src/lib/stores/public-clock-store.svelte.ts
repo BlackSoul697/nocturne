@@ -5,10 +5,11 @@
 // endpoint keyed by the clock UUID. It exposes the same surface a clock face renders
 // (ClockGlucoseSource) so ClockFaceRenderer works unchanged for logged-out viewers.
 
-import { getApiClient } from "$lib/api/client";
+import { clockFacesClient } from "$lib/api/browser-clients";
 import type { ClockGlucoseDto } from "$lib/api";
+import { resolveChartThresholds } from "$lib/constants/glucose-thresholds";
 import {
-  clockGlucoseDelta,
+  glucoseDelta,
   type ClockGlucoseSource,
 } from "./realtime-store.svelte";
 
@@ -32,10 +33,11 @@ export class PublicClockStore implements ClockGlucoseSource {
   currentBG = $derived(this.readings[0]?.mgdl ?? null);
   direction = $derived(this.readings[0]?.direction ?? "");
   lastUpdated = $derived(this.readings[0]?.mills ?? null);
+  thresholds = resolveChartThresholds();
   demoMode = $derived(this.readings.some((r) => r.dataSource === "demo-service"));
 
   bgDelta = $derived(
-    clockGlucoseDelta(
+    glucoseDelta(
       this.readings[0]?.delta,
       this.readings[0]?.mgdl,
       this.readings[1]?.mgdl
@@ -57,7 +59,7 @@ export class PublicClockStore implements ClockGlucoseSource {
 
   private async poll(): Promise<void> {
     try {
-      const data = await getApiClient().clockFaces.getGlucose(this.clockId);
+      const data = await clockFacesClient().getGlucose(this.clockId);
       this.readings = data ?? [];
     } catch (err) {
       // A transient failure shouldn't blank the clock; keep the last good readings.

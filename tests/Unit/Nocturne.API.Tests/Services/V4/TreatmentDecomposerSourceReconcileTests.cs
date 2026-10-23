@@ -1,13 +1,12 @@
+using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
-using Nocturne.Core.Contracts.Infrastructure;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
@@ -16,7 +15,6 @@ using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
-using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
@@ -36,35 +34,34 @@ public class TreatmentDecomposerSourceReconcileTests : IDisposable
 
     private static readonly DateTime At = new(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
 
+    private readonly Mock<IProfileDecomposer> _profiles = new();
     private readonly SqliteTestDatabase _db;
     private readonly NocturneDbContext _context;
     private readonly TreatmentDecomposer _decomposer;
 
     public TreatmentDecomposerSourceReconcileTests()
     {
-        _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId);
+        _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId, SqliteNpgsqlJson.Translate);
         _context = _db.CreateContext();
 
-        _decomposer = NewDecomposer(new DeduplicationService(
-            _context, Mock.Of<IServiceScopeFactory>(), NullLogger<DeduplicationService>.Instance));
-    }
-
-    private TreatmentDecomposer NewDecomposer(IDeduplicationService deduplication) =>
-        new(
-            _context,
+        _decomposer = new(
+            _context.AsFactory(),
             Mock.Of<IBolusRepository>(), Mock.Of<ITempBasalRepository>(),
             Mock.Of<ICarbIntakeRepository>(), Mock.Of<IBGCheckRepository>(), Mock.Of<INoteRepository>(),
             Mock.Of<IDeviceEventRepository>(), Mock.Of<IBolusCalculationRepository>(),
             Mock.Of<IStateSpanService>(),
+            ProfileActivationTestDeps.Repository(_context),
+            ProfileActivationTestDeps.Writer(_context),
             Mock.Of<ITreatmentFoodService>(),
             Mock.Of<IDeviceService>(),
             Mock.Of<IPatientDeviceStamper>(),
-            Mock.Of<IProfileDecomposer>(),
+            _profiles.Object,
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
+            TempBasalTestDeps.Unscheduled(),
             new AuditContext { IsSystem = true },
-            deduplication,
             NullLogger<TreatmentDecomposer>.Instance);
+    }
 
     public void Dispose()
     {
@@ -120,25 +117,6 @@ public class TreatmentDecomposerSourceReconcileTests : IDisposable
     }
 
     [Fact]
-    public async Task A_failed_repoint_rolls_the_delete_back()
-    {
-        var named = await AddCarbAsync("t-1", Connector);
-        var deduplication = new Mock<IDeduplicationService>();
-        deduplication
-            .Setup(d => d.RepointPrimariesAwayFromAsync(
-                It.IsAny<RecordType>(), It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("repoint failed"));
-        var decomposer = NewDecomposer(deduplication.Object);
-
-        var act = () => decomposer.DeleteFromSourceAsync(Connector, new HashSet<string> { "t-1" });
-
-        await act.Should().ThrowAsync<InvalidOperationException>();
-        _context.ChangeTracker.Clear();
-        (await DeletedAtAsync<CarbIntakeEntity>(named)).Should().BeNull(
-            "a deleted primary left in place would hide the other sources' copies");
-    }
-
-    [Fact]
     public async Task Stored_ids_are_this_sources_live_rows_in_the_window()
     {
         await AddCarbAsync("in-window", Connector);
@@ -151,6 +129,76 @@ public class TreatmentDecomposerSourceReconcileTests : IDisposable
         var stored = await _decomposer.GetLegacyIdsFromSourceAsync(Connector, At.AddHours(-1), At.AddHours(1));
 
         stored.Should().BeEquivalentTo(new Dictionary<string, DateTime> { ["in-window"] = At, ["temp-basal"] = At });
+    }
+
+    [Fact]
+    public async Task Stored_ids_include_the_spans_this_source_stored_treatments_as_in_the_window()
+    {
+        AddActivation("switch", Connector, At);
+        AddSpan("override", "Override", Connector, """{"collection":"treatments","utcOffset":0}""", At.AddMinutes(5));
+        AddSpan("target", "TemporaryTarget", Connector, """{"utcOffset":0}""", At.AddMinutes(10));
+        AddSpan("devicestatus-override", "Override", Connector, """{"reason":"devicestatus"}""", At);
+        AddSpan("old-profile-span", "Profile", Connector, """{"utcOffset":0}""", At);
+        AddActivation("other-source", Other, At);
+        AddActivation("before-window", Connector, At.AddHours(-3));
+        await _context.SaveChangesAsync();
+
+        var stored = await _decomposer.GetLegacyIdsFromSourceAsync(Connector, At.AddHours(-1), At.AddHours(1));
+
+        stored.Should().BeEquivalentTo(new Dictionary<string, DateTime>
+        {
+            ["switch"] = At, ["override"] = At.AddMinutes(5), ["target"] = At.AddMinutes(10),
+        });
+    }
+
+    [Fact]
+    public async Task A_profile_switch_is_deleted_with_its_profile_rows_once_the_source_drops_it()
+    {
+        AddActivation("switch", Connector, At);
+        AddActivation("kept", Connector, At.AddMinutes(5));
+        await _context.SaveChangesAsync();
+        var upstream = new HashSet<string> { "kept" };
+
+        var gone = (await _decomposer.GetLegacyIdsFromSourceAsync(Connector, At.AddHours(-1), At.AddHours(1)))
+            .Keys.Where(id => !upstream.Contains(id)).ToHashSet();
+        await _decomposer.DeleteFromSourceAsync(Connector, gone);
+
+        gone.Should().BeEquivalentTo(["switch"]);
+        (await _context.ProfileActivations.IgnoreQueryFilters().AsNoTracking().SingleAsync(a => a.LegacyId == "switch"))
+            .DeletedAt.Should().NotBeNull();
+        (await _context.ProfileActivations.IgnoreQueryFilters().AsNoTracking().SingleAsync(a => a.LegacyId == "kept"))
+            .DeletedAt.Should().BeNull();
+        _profiles.Verify(p => p.DeleteByLegacyIdAsync("switch", WriteOrigin.Live, It.IsAny<CancellationToken>()), Times.Once);
+        _profiles.VerifyNoOtherCalls();
+    }
+
+    private void AddActivation(string legacyId, string source, DateTime start) =>
+        _context.ProfileActivations.Add(new ProfileActivationEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, LegacyId = legacyId, DataSource = source, Timestamp = start,
+            Phase = nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Requested),
+            Origin = nameof(Nocturne.Core.Models.V4.ProfileActivationOrigin.Uploader), BaseProfileName = "Weekend",
+        });
+
+    private void AddSpan(string originalId, string category, string source, string metadataJson, DateTime start) =>
+        _context.StateSpans.Add(new StateSpanEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, OriginalId = originalId, Category = category,
+            State = "Active", StartTimestamp = start, Source = source, MetadataJson = metadataJson,
+        });
+
+    [Fact]
+    public async Task A_legacy_span_with_a_note_beside_it_counts_once()
+    {
+        AddSpan("legacy", "Override", Connector, """{"collection":"treatments","utcOffset":0}""", At);
+        _context.Notes.Add(new NoteEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, LegacyId = "legacy", DataSource = Connector,
+            Timestamp = At, Text = "beside",
+        });
+        await _context.SaveChangesAsync();
+
+        (await _decomposer.DeleteFromSourceAsync(Connector, new HashSet<string> { "legacy" })).Should().Be(1);
     }
 
     [Fact]

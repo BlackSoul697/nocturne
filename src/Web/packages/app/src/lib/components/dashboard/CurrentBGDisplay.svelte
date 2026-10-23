@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { browser } from "$app/environment";
+  import { page } from "$app/state";
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { TrackerCategory } from "$lib/api";
   import { Badge } from "$lib/components/ui/badge";
   import {
@@ -10,11 +13,9 @@
     TrackerPillBar,
   } from "$lib/components/status-pills";
   import { GlucoseValueIndicator } from "$lib/components/shared";
-  import { TrackerCompletionDialog } from "$lib/components/trackers";
-  import { EntryEditDialog } from "$lib/components/entries";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
-  import { getSettingsStore } from "$lib/stores/settings-store.svelte";
+  import { getUiSettings } from "$api/ui-settings.remote";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import {
     formatGlucoseValue,
@@ -35,11 +36,11 @@
   let { showPills = true }: ComponentProps = $props();
 
   const realtimeStore = getRealtimeStore();
-  const settingsStore = getSettingsStore();
+  const uiSettingsQuery = getUiSettings();
 
   // Tracker pills global enable setting (visibility is now per-tracker-definition)
   const trackerPillsEnabled = $derived(
-    settingsStore.features?.trackerPills?.enabled ?? true
+    uiSettingsQuery.current?.features?.trackerPills?.enabled ?? true
   );
 
   const glucose = displayedGlucose(realtimeStore);
@@ -91,11 +92,58 @@
     })
   );
 
-  // Entry Dialog State
-  let showEntryDialog = $state(false);
+  // The pills arrive after the page paints and can wrap onto more rows than the one the row
+  // starts with, so the rows last rendered for this tenant are held until they do. Until then
+  // the pills are empty placeholders, whose row count says nothing about the loaded ones.
+  // StatusPill is 2.75rem tall (text-xs label, text-sm value, py-1) and rows sit gap-y-1 apart.
+  const pillRowsKey = $derived(`nocturne:status-pill-rows:${page.data.tenantSlug ?? ""}`);
+
+  const MAX_PILL_ROWS = 4;
+
+  function storedPillRows(): number {
+    try {
+      const rows = Number(localStorage.getItem(pillRowsKey));
+      return Number.isInteger(rows) && rows > 1 ? Math.min(rows, MAX_PILL_ROWS) : 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  let reservedPillRows = $state(browser ? storedPillRows() : 1);
+  let pillsEl = $state<HTMLElement>();
+
+  function renderedPillRows(el: HTMLElement): number {
+    const items = [...el.children].flatMap((child) =>
+      getComputedStyle(child).display === "contents" ? [...child.children] : [child]
+    );
+    const centres = items
+      .map((item) => item.getBoundingClientRect())
+      .filter((rect) => rect.height > 0)
+      .map((rect) => Math.round(rect.top + rect.height / 2));
+    return new Set(centres).size;
+  }
+
+  $effect(() => {
+    const el = pillsEl;
+    if (!el || !realtimeStore.isReady) return;
+    const observer = new ResizeObserver(() => {
+      const rows = renderedPillRows(el);
+      if (rows === 0) return;
+      reservedPillRows = rows;
+      try {
+        localStorage.setItem(pillRowsKey, String(rows));
+      } catch {
+        // Storage is unavailable; the next load reserves one row.
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 
   // Tracker Completion Dialog State
-  let showCompletionDialog = $state(false);
+  const trackerCompletionDialog = lazyComponent(
+    () => import("$lib/components/trackers/TrackerCompletionDialog.svelte"),
+  );
   let completingInstanceId = $state<string | null>(null);
   let completingInstanceName = $state("");
   let completingCategory = $state<TrackerCategory | undefined>(undefined);
@@ -114,11 +162,11 @@
     completingCategory = category;
     completingDefinitionId = definitionId;
     completingCompletionEventType = completionEventType;
-    showCompletionDialog = true;
+    trackerCompletionDialog.open = true;
   }
 
   function handleCompletionDialogClose() {
-    showCompletionDialog = false;
+    trackerCompletionDialog.open = false;
     completingInstanceId = null;
     completingInstanceName = "";
     completingCategory = undefined;
@@ -147,32 +195,38 @@
       </div>
     </div>
 
-    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="status-pills">
-      {#if displayDemoMode}
-        <Badge variant="demo">
-          <span class="size-2 rounded-full bg-demo animate-pulse" aria-hidden="true"></span>
-          Demo Mode
-        </Badge>
-      {/if}
-      {#if showPills}
-        <COBPill data={realtimeStore.pillsData.cob} />
-        <BasalPill data={realtimeStore.pillsData.basal} />
-        <IOBPill data={realtimeStore.pillsData.iob} />
-        <LoopPill data={realtimeStore.pillsData.loop} />
-        <!-- Many pumps and pods report no numeric reservoir (e.g. Omnipod above 50 U). -->
-        {#if realtimeStore.currentReservoir !== null}
-          <ReservoirPill reservoir={realtimeStore.currentReservoir} />
+    <div
+      class="min-h-[calc(var(--pill-rows)*2.75rem+(var(--pill-rows)-1)*0.25rem)] min-w-0 flex-1"
+      style:--pill-rows={reservedPillRows}
+      data-testid="status-pills"
+    >
+      <div bind:this={pillsEl} class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {#if displayDemoMode}
+          <Badge variant="demo">
+            <span class="size-2 rounded-full bg-demo animate-pulse" aria-hidden="true"></span>
+            Demo Mode
+          </Badge>
         {/if}
-      {/if}
-      {#if trackerPillsEnabled && realtimeStore.trackerInstances.length > 0}
-        <TrackerPillBar
-          instances={realtimeStore.trackerInstances}
-          definitions={realtimeStore.trackerDefinitions}
-          now={realtimeStore.now}
-          onComplete={handleTrackerComplete}
-          class="contents"
-        />
-      {/if}
+        {#if showPills}
+          <COBPill data={realtimeStore.pillsData.cob} />
+          <BasalPill data={realtimeStore.pillsData.basal} />
+          <IOBPill data={realtimeStore.pillsData.iob} />
+          <LoopPill data={realtimeStore.pillsData.loop} />
+          <!-- Many pumps and pods report no numeric reservoir (e.g. Omnipod above 50 U). -->
+          {#if realtimeStore.currentReservoir !== null}
+            <ReservoirPill reservoir={realtimeStore.currentReservoir} />
+          {/if}
+        {/if}
+        {#if trackerPillsEnabled && realtimeStore.trackerInstances.length > 0}
+          <TrackerPillBar
+            instances={realtimeStore.trackerInstances}
+            definitions={realtimeStore.trackerDefinitions}
+            now={realtimeStore.now}
+            onComplete={handleTrackerComplete}
+            class="contents"
+          />
+        {/if}
+      </div>
     </div>
 
     <div class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
@@ -191,18 +245,14 @@
   </div>
 {/if}
 
-<EntryEditDialog
-  bind:open={showEntryDialog}
-  entry={null}
-  onClose={() => (showEntryDialog = false)}
-/>
-
-<TrackerCompletionDialog
-  bind:open={showCompletionDialog}
-  instanceId={completingInstanceId}
-  instanceName={completingInstanceName}
-  category={completingCategory}
-  definitionId={completingDefinitionId}
-  completionEventType={completingCompletionEventType}
-  onClose={handleCompletionDialogClose}
-/>
+{#if trackerCompletionDialog.component}
+  <trackerCompletionDialog.component
+    bind:open={trackerCompletionDialog.open}
+    instanceId={completingInstanceId}
+    instanceName={completingInstanceName}
+    category={completingCategory}
+    definitionId={completingDefinitionId}
+    completionEventType={completingCompletionEventType}
+    onClose={handleCompletionDialogClose}
+  />
+{/if}

@@ -1,3 +1,4 @@
+using Nocturne.Infrastructure.Data.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,7 +29,6 @@ namespace Nocturne.API.Tests.Services.V4;
 /// </summary>
 public class V4ToLegacyProjectionServiceTests
 {
-    private readonly Mock<ISensorGlucoseRepository> _sensorGlucoseRepo = new();
     private readonly Mock<IBolusRepository> _bolusRepo = new();
     private readonly Mock<ICarbIntakeRepository> _carbIntakeRepo = new();
     private readonly Mock<IBGCheckRepository> _bgCheckRepo = new();
@@ -120,6 +120,67 @@ public class V4ToLegacyProjectionServiceTests
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(carbs);
+
+    [Fact]
+    public async Task GetProjectedTreatments_Ascending_ReadsEachTableFromItsOldestEnd_AndReturnsOldestFirst()
+    {
+        var start = new DateTime(2025, 01, 01, 12, 0, 0, DateTimeKind.Utc);
+        var boluses = Enumerable.Range(0, 3)
+            .Select(i => new Bolus { Id = Guid.CreateVersion7(), Timestamp = start.AddMinutes(i), Insulin = 1.0 + i })
+            .ToList();
+        _bolusRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(),
+                false, It.IsAny<bool>(),
+                It.IsAny<BolusKind?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? _, DateTime? _, string? _, string? _, int limit, int _, bool _, bool _,
+                    BolusKind? _, DateTime? _, Guid? _, CancellationToken _) =>
+                boluses.OrderBy(b => b.Timestamp).Take(limit).ToList());
+
+        var result = (await _service.GetProjectedTreatmentsAsync(null, null, 2, nativeOnly: false, descending: false)).ToList();
+
+        result.Select(t => t.Insulin).Should().Equal(1.0, 2.0);
+        _bolusRepo.Verify(r => r.GetAsync(
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<int>(), It.IsAny<int>(), true, It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+            It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatments_Ascending_MergesTablesAndKeepsTheOldestRowsOfEachBeforeTheLimit()
+    {
+        var start = new DateTime(2025, 01, 01, 12, 0, 0, DateTimeKind.Utc);
+        var boluses = new[] { 0, 2, 4, 6 }
+            .Select(i => new Bolus { Id = Guid.CreateVersion7(), Timestamp = start.AddMinutes(i), Insulin = 1.0 })
+            .ToList();
+        var notes = new[] { 1, 3, 5, 7 }
+            .Select(i => new Note { Id = Guid.CreateVersion7(), Timestamp = start.AddMinutes(i), Text = $"n{i}" })
+            .ToList();
+        _bolusRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? _, DateTime? _, string? _, string? _, int limit, int _, bool descending, bool _,
+                    BolusKind? _, DateTime? _, Guid? _, CancellationToken _) =>
+                (descending ? boluses.OrderByDescending(b => b.Timestamp) : boluses.OrderBy(b => b.Timestamp)).Take(limit).ToList());
+        _noteRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? _, DateTime? _, string? _, string? _, int limit, int _, bool descending, bool _, CancellationToken _) =>
+                (descending ? notes.OrderByDescending(n => n.Timestamp) : notes.OrderBy(n => n.Timestamp)).Take(limit).ToList());
+
+        var result = (await _service.GetProjectedTreatmentsAsync(
+            null, null, 5, nativeOnly: false, descending: false)).ToList();
+
+        result.Select(t => t.Mills).Should().Equal(
+            Enumerable.Range(0, 5).Select(i => new DateTimeOffset(start.AddMinutes(i)).ToUnixTimeMilliseconds()));
+    }
 
     [Fact]
     public async Task GetProjectedTreatments_MultipleBolusesInCorrelation_SelectsLargestAsMealBolus()
@@ -532,6 +593,153 @@ public class V4ToLegacyProjectionServiceTests
     }
 
     [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_DeletedRecords_AreProjectedWithIsValidFalse()
+    {
+        // Nightscout's v3 history returns a deleted document with isValid: false and its delete as
+        // srvModified; without it a history-syncing client keeps what was deleted elsewhere.
+        var deletedAt = Cursor.AddMinutes(2);
+        var deletedNote = new NoteEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Text = "removed", DeletedAt = deletedAt,
+        };
+        var liveNote = new NoteEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Text = "kept",
+        };
+        await AddModifiedAsync((deletedNote, deletedAt), (liveNote, Cursor.AddMinutes(1)));
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        result.Select(t => (t.Id, t.IsValid, t.SrvModified)).Should().Equal(
+            (liveNote.Id.ToString(), (bool?)null, new DateTimeOffset(Cursor.AddMinutes(1), TimeSpan.Zero).ToUnixTimeMilliseconds()),
+            (deletedNote.Id.ToString(), (bool?)false, new DateTimeOffset(deletedAt, TimeSpan.Zero).ToUnixTimeMilliseconds()));
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_DeletedMeal_IsOneDeletedMealBolus()
+    {
+        var correlationId = Guid.CreateVersion7();
+        var deletedAt = Cursor.AddMinutes(3);
+        var bolus = new BolusEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Insulin = 4.0,
+            CorrelationId = correlationId, DeletedAt = deletedAt,
+        };
+        var carb = new CarbIntakeEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Carbs = 40.0,
+            CorrelationId = correlationId, DeletedAt = deletedAt,
+        };
+        await AddModifiedAsync((bolus, deletedAt), (carb, deletedAt));
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        var meal = result.Should().ContainSingle().Subject;
+        meal.EventType.Should().Be(TreatmentTypes.MealBolus);
+        meal.Id.Should().Be(bolus.Id.ToString());
+        meal.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_DeletedAndLiveConstituents_DoNotPair()
+    {
+        var correlationId = Guid.CreateVersion7();
+        var bolus = new BolusEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Insulin = 4.0,
+            CorrelationId = correlationId, DeletedAt = Cursor.AddMinutes(2),
+        };
+        var carb = new CarbIntakeEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor, Carbs = 40.0,
+            CorrelationId = correlationId,
+        };
+        await AddModifiedAsync((bolus, Cursor.AddMinutes(2)), (carb, Cursor.AddMinutes(1)));
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        result.Select(t => (t.EventType, t.IsValid)).Should().Equal(
+            (TreatmentTypes.CarbCorrection, (bool?)null),
+            (TreatmentTypes.CorrectionBolus, (bool?)false));
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_MealBolusDeleted_ResendsTheSurvivingCarbsUnderTheirOwnId()
+    {
+        // The client knew the meal under the bolus id. The carbs now read as a standalone treatment
+        // under their own id, and their row is older than the cursor.
+        var deletedAt = Cursor.AddMinutes(2);
+        var (bolus, carb) = await AddMealAsync(
+            bolusDeletedAt: deletedAt, bolusModified: deletedAt,
+            carbDeletedAt: null, carbModified: Cursor.AddMinutes(-5));
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        result.Select(t => (t.Id, t.EventType, t.IsValid, t.SrvModified)).Should().BeEquivalentTo(new[]
+        {
+            (bolus.Id.ToString(), TreatmentTypes.CorrectionBolus, (bool?)false, Mills(deletedAt)),
+            (carb.Id.ToString(), TreatmentTypes.CarbCorrection, (bool?)null, Mills(deletedAt)),
+        });
+        result.Max(t => t.SrvModified).Should().Be(Mills(deletedAt));
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_MealCarbsDeleted_ResendsTheSurvivingBolusUnderTheMealId()
+    {
+        // The client knew the meal under the bolus id, carbs included. The bolus now reads without
+        // them under that same id, and its row is older than the cursor.
+        var deletedAt = Cursor.AddMinutes(2);
+        var (bolus, carb) = await AddMealAsync(
+            bolusDeletedAt: null, bolusModified: Cursor.AddMinutes(-5),
+            carbDeletedAt: deletedAt, carbModified: deletedAt);
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        var survivor = result.Should().ContainSingle(t => t.Id == bolus.Id.ToString()).Subject;
+        survivor.EventType.Should().Be(TreatmentTypes.CorrectionBolus);
+        survivor.Carbs.Should().BeNull();
+        survivor.IsValid.Should().BeNull();
+        survivor.SrvModified.Should().Be(Mills(deletedAt));
+        result.Should().ContainSingle(t => t.Id == carb.Id.ToString()).Which.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetProjectedTreatmentsModifiedSince_BothMealHalvesDeletedApart_ReadTogether_TombstoneTheMeal()
+    {
+        var bolusDeletedAt = Cursor.AddMinutes(2);
+        var carbDeletedAt = Cursor.AddMinutes(4);
+        var (bolus, _) = await AddMealAsync(
+            bolusDeletedAt: bolusDeletedAt, bolusModified: bolusDeletedAt,
+            carbDeletedAt: carbDeletedAt, carbModified: carbDeletedAt);
+
+        var result = (await _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100)).ToList();
+
+        var meal = result.Should().ContainSingle().Subject;
+        (meal.Id, meal.EventType, meal.IsValid, meal.SrvModified)
+            .Should().Be((bolus.Id.ToString(), TreatmentTypes.MealBolus, (bool?)false, Mills(carbDeletedAt)));
+    }
+
+    private async Task<(BolusEntity Bolus, CarbIntakeEntity Carb)> AddMealAsync(
+        DateTime? bolusDeletedAt, DateTime bolusModified, DateTime? carbDeletedAt, DateTime carbModified)
+    {
+        var correlationId = Guid.CreateVersion7();
+        var bolus = new BolusEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor.AddHours(-1), Insulin = 4.0,
+            CorrelationId = correlationId, DeletedAt = bolusDeletedAt,
+        };
+        var carb = new CarbIntakeEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, Timestamp = Cursor.AddHours(-1), Carbs = 40.0,
+            CorrelationId = correlationId, DeletedAt = carbDeletedAt,
+        };
+        await AddModifiedAsync((bolus, bolusModified), (carb, carbModified));
+        return (bolus, carb);
+    }
+
+    private static long Mills(DateTime value) => new DateTimeOffset(value, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+    [Fact]
     public async Task GetProjectedTreatmentsModifiedSince_LegacyOriginatedRecord_IsProjected()
     {
         // A treatment uploaded through v1/v2/v3 is stored as a V4 record with LegacyId set, and
@@ -578,9 +786,9 @@ public class V4ToLegacyProjectionServiceTests
         using var abandoned = TestDbContextFactory.CreateInMemoryContext();
         var abandonedSet = abandoned.Set<BolusEntity>();
         await abandoned.DisposeAsync();
-        _dbContext.Boluses = abandonedSet;
+        var service = CreateService(new TestNocturneDbContextFactory(_dbContext) { Prepare = c => c.Boluses = abandonedSet });
 
-        var read = () => _service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100);
+        var read = () => service.GetProjectedTreatmentsModifiedSinceAsync(CursorMills, 100);
 
         await read.Should().ThrowAsync<ObjectDisposedException>();
     }
@@ -682,9 +890,9 @@ public class V4ToLegacyProjectionServiceTests
         using var abandoned = TestDbContextFactory.CreateInMemoryContext();
         var abandonedSet = abandoned.Set<StateSpanEntity>();
         await abandoned.DisposeAsync();
-        _dbContext.StateSpans = abandonedSet;
+        var service = CreateService(new TestNocturneDbContextFactory(_dbContext) { Prepare = c => c.StateSpans = abandonedSet });
 
-        var lookup = () => _service.GetProjectedStateSpanTreatmentAsync(Guid.NewGuid().ToString());
+        var lookup = () => service.GetProjectedStateSpanTreatmentAsync(Guid.NewGuid().ToString());
 
         await lookup.Should().ThrowAsync<ObjectDisposedException>();
     }
@@ -956,8 +1164,10 @@ public class V4ToLegacyProjectionServiceTests
     }
 
     private V4ToLegacyProjectionService CreateService(NocturneDbContext dbContext) =>
+        CreateService(dbContext.AsFactory());
+
+    private V4ToLegacyProjectionService CreateService(INocturneDbContextFactory contexts) =>
         new(
-            _sensorGlucoseRepo.Object,
             _bolusRepo.Object,
             _carbIntakeRepo.Object,
             _bgCheckRepo.Object,
@@ -966,7 +1176,7 @@ public class V4ToLegacyProjectionServiceTests
             _tempBasalRepo.Object,
             _bolusCalcRepo.Object,
             _treatmentFoodService.Object,
-            dbContext,
+            contexts,
             NullLogger<V4ToLegacyProjectionService>.Instance
         );
 }

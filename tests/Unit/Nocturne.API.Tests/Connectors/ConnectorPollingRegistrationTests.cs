@@ -1,3 +1,4 @@
+using Nocturne.Tests.Shared.Infrastructure;
 using System.Reflection;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public class ConnectorPollingRegistrationTests
 {
     private static readonly string[] Polling =
     [
-        "CareLink", "Dexcom", "Eversense", "Glooko", "Gluroo", "LibreLinkUp", "MyFitnessPal",
+        "CareLink", "Dexcom", "Eversense", "Glooko", "Gluroo", "GoogleHealth", "LibreLinkUp", "MyFitnessPal",
         "MyLife", "Nightscout", "NocturneRemote", "Tandem", "Tidepool", "Twiist",
     ];
 
@@ -147,7 +148,7 @@ public class ConnectorPollingRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApiCoreServices(new ConfigurationBuilder().Build());
-        services.AddSingleton(Mock.Of<IDbContextFactory<NocturneDbContext>>());
+        services.AddSingleton(Mock.Of<IDbContextFactory<NocturneDbContext>>().AsNocturneFactory());
         services.AddSingleton(new ConnectorSyncBudget());
         using var provider = services.BuildServiceProvider();
         var registered = provider.GetRequiredService<ActiveTenantSnapshot>();

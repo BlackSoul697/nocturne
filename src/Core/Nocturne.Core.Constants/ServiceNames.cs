@@ -40,13 +40,11 @@ public static class ServiceNames
     /// <summary>
     /// Hub name for real-time CGM data and treatment updates via SignalR.
     /// </summary>
-    /// <seealso cref="WebSocketEvents"/>
     public const string DataHub = "data";
 
     /// <summary>
     /// Hub name for alarm and notification delivery via SignalR.
     /// </summary>
-    /// <seealso cref="WebSocketEvents"/>
     public const string NotificationHub = "notification";
 
     // ========================================================================
@@ -123,6 +121,8 @@ public static class ServiceNames
     /// </summary>
     /// <seealso cref="DataSources.CareLinkConnector"/>
     public const string CareLinkConnector = "carelink-connector";
+
+    public const string GoogleHealthConnector = "google-health-connector";
 
     /// <summary>
     /// Aspire resource name for the Tandem Source (t:connect) connector service,

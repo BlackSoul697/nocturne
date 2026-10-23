@@ -24,7 +24,7 @@ public class SleepSessionRepositoryTests : IDisposable
         var dbName = $"sleep_session_tests_{Guid.NewGuid()}";
         _context = TestDbContextFactory.CreateInMemoryContext(dbName);
         _context.TenantId = TenantA;
-        _repository = new SleepSessionRepository(new TestTenantDbContextFactory(_context));
+        _repository = new SleepSessionRepository(new TestNocturneDbContextFactory(_context));
     }
 
     public void Dispose()
@@ -422,7 +422,7 @@ public class SleepSessionRepositoryTests : IDisposable
     {
         using var database = TestDbContextFactory.CreateSqliteWithTenant(TenantA);
         await using var context = database.CreateContext();
-        var repository = new SleepSessionRepository(new TestTenantDbContextFactory(context));
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(context));
         var existing = CreateEntity(TenantA,
             new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
@@ -510,6 +510,53 @@ public class SleepSessionRepositoryTests : IDisposable
         var second = await _repository.UpsertSessionAsync(session2);
 
         second.Id.Should().Be(first.Id);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Replacement_preserves_identity_and_creation_time_and_replaces_children(bool updateById)
+    {
+        using var database = TestDbContextFactory.CreateSqliteWithTenant(TenantA);
+        await using var context = database.CreateContext();
+        var repository = new SleepSessionRepository(new TestNocturneDbContextFactory(context));
+        var original = Session("sleep-replacement");
+        original.CreatedAt = new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc);
+        original.Stages = [new SleepStageInterval
+        {
+            StartTime = original.StartTime, EndTime = original.EndTime, Stage = SleepStageType.Light,
+        }];
+        original.BiometricSamples = [new SleepBiometricSample
+        {
+            Timestamp = original.StartTime, HeartRate = 60,
+        }];
+        var created = await repository.UpsertSessionAsync(original);
+        context.ChangeTracker.Clear();
+
+        var replacement = Session("sleep-replacement");
+        replacement.CreatedAt = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        replacement.Stages = [new SleepStageInterval
+        {
+            StartTime = replacement.StartTime, EndTime = replacement.EndTime, Stage = SleepStageType.Deep,
+        }];
+        replacement.BiometricSamples = [new SleepBiometricSample
+        {
+            Timestamp = replacement.StartTime, HeartRate = 55,
+        }];
+        var updated = updateById
+            ? await repository.UpdateSessionAsync(Guid.Parse(created.Id!), replacement)
+            : await repository.UpsertSessionAsync(replacement);
+
+        updated!.Id.Should().Be(created.Id);
+        updated.CreatedAt.Should().Be(created.CreatedAt);
+        context.ChangeTracker.Clear();
+        var stored = await repository.GetSessionByIdAsync(Guid.Parse(created.Id!));
+        stored!.CreatedAt.Should().Be(created.CreatedAt);
+        stored.Stages.Should().ContainSingle().Which.Stage.Should().Be(SleepStageType.Deep);
+        stored.BiometricSamples.Should().ContainSingle().Which.HeartRate.Should().Be(55);
+        (await repository.CountSessionsAsync()).Should().Be(1);
+        (await context.SleepStages.CountAsync()).Should().Be(1);
+        (await context.SleepBiometricSamples.CountAsync()).Should().Be(1);
     }
 
     // --- UpdateSessionAsync ---
