@@ -3022,7 +3022,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_oauth_clients_tenant_client_id");
 
                     b.HasIndex("TenantId", "SoftwareId")
-                        .IsUnique()
                         .HasDatabaseName("ix_oauth_clients_tenant_software_id")
                         .HasFilter("\"software_id\" IS NOT NULL");
 
@@ -8747,6 +8746,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("origin");
+
+                    b.Property<string>("OriginEvidence")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("origin_evidence");
 
                     b.Property<Guid?>("PatientDeviceId")
                         .HasColumnType("uuid")

@@ -15,6 +15,7 @@
   import CopyButton from "$lib/components/members/CopyButton.svelte";
   import { Artwork } from "@nocturne/watercolour";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor, inviteLinkCopy } from "$lib/coach-marks/copy.svelte";
   import { createInvite } from "$api/generated/memberInvites.generated.remote";
   import type { TenantRoleDto } from "$lib/api/generated/nocturne-api-client";
   import { describeSubmitError } from "$lib/forms";
@@ -136,8 +137,7 @@
 
         <div class="flex gap-2" {@attach coachmark({
           key: "setup-invite.copy-link",
-          title: "Send the link",
-          description: `The link expires in ${expiryLabel}. They'll need to sign in or create an account to accept.`,
+          ...inviteLinkCopy(expiryLabel),
         })}>
           <Input
             type="text"
@@ -175,9 +175,7 @@
 
         <!-- Role multi-select -->
         <div class="space-y-2" {@attach coachmark({
-          key: "setup-invite.roles",
-          title: "Choose their access",
-          description: "Roles control what they can see and do. Viewer for a quick glance, Caretaker if they help manage your diabetes.",
+          ...coachFor("setup-invite.roles"),
         })}>
           <Label>Roles</Label>
           <div class="grid gap-2 @sm:grid-cols-2">
