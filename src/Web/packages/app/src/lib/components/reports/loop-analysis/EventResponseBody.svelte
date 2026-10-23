@@ -224,7 +224,7 @@
 {#if response.timeZoneUnavailableReason}
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
-  <div class="space-y-6">
+  <div class="space-y-6" data-testid="loop-analysis-event-response">
     <HistoryClampNote {response} />
 
     <IgnoredFiltersNotice ignored={[...new Set([...(response.ignoredFilters ?? []), ...cleanedFilters])]} />
@@ -265,7 +265,7 @@
           <p class="text-sm">Select a longer range, make the cohorts wider, or use fewer filters.</p>
         </div>
       {:else}
-        <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" {@attach loopAnalysisMark("loop-analysis-meals-and-events.curves")}>
+        <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" data-testid="loop-analysis-event-curves" {@attach loopAnalysisMark("loop-analysis-meals-and-events.curves")}>
           {#if comparing}
             <p class="text-xs text-muted-foreground">
               The charts show the comparison range as dashed outlines in the colour of each cohort.

@@ -307,7 +307,7 @@
         <p class="text-sm">Select a longer range, or use fewer filters.</p>
       </div>
     {:else}
-      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
+      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" data-testid="loop-analysis-daily-curves">
         {#if comparing}
           <p class="text-xs text-muted-foreground">
             The charts show the comparison range as dashed outlines on each series.

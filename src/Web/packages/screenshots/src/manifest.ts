@@ -89,6 +89,16 @@ async function openThresholdTrackerEditor(page: Page): Promise<void> {
 	await openWith(edit, page.getByTestId('tracker-editor'));
 }
 
+/**
+ * Hides every child of `container` that matches none of `keep`. A Loop Analysis page draws its
+ * charts as one stack, and only the last chart in it labels the time axis they share: this shows one
+ * chart over that last chart, where a clip of the whole stack would be taller than the docs column
+ * can show legibly.
+ */
+async function showOnly(page: Page, container: string, keep: string[]): Promise<void> {
+	await page.addStyleTag({ content: `${container} > :not(${keep.join(', ')}) { display: none !important; }` });
+}
+
 async function seededClockFace({ fetch }: ArrangeContext): Promise<Record<string, string>> {
 	const faces = await fetch('/api/v4/clockfaces');
 	const clockId = stringField(Array.isArray(faces) ? faces[0] : undefined, 'id');
@@ -504,9 +514,14 @@ export const definitions: ScreenshotDefinition[] = [
 		id: 'loop-analysis-daily-glucose',
 		route: '/reports/loop-analysis/daily-profile?days=7',
 		scenario: 'patient',
-		clip: '[data-testid="loop-analysis-panel-glucose"]',
+		prepare: (page) =>
+			showOnly(page, '[data-testid="loop-analysis-daily-curves"]', [
+				':has(> [data-testid="loop-analysis-panel-glucose"])',
+				'[data-testid="loop-analysis-panel-carbs"]',
+			]),
+		clip: '[data-testid="loop-analysis-daily-curves"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The glucose chart of the Daily profile page. A line shows the median glucose at each time of day. Two shaded bands around the line show the middle half and most of the readings. The target range is behind them.',
+		alt: 'The glucose chart of the Daily profile page, with the carbs chart under it. The carbs chart is the last chart on the page, and its axis shows the time of day for all the charts. On the glucose chart, a line shows the median glucose at each time of day. Two shaded bands around the line show the middle half and most of the readings. The target range is behind them. A key under the glucose chart gives the name of each band.',
 	},
 	{
 		id: 'loop-analysis-net-correction',
@@ -527,9 +542,21 @@ export const definitions: ScreenshotDefinition[] = [
 		id: 'loop-analysis-event-glucose-change',
 		route: '/reports/loop-analysis/meals-and-events?days=7',
 		scenario: 'patient',
-		clip: '[data-testid="loop-analysis-panel-glucose-change"]',
+		prepare: async (page) => {
+			await showOnly(page, '[data-testid="loop-analysis-event-response"]', [
+				'ul',
+				'[data-testid="loop-analysis-event-window"]',
+				'[data-testid="loop-analysis-event-curves"]',
+			]);
+			await showOnly(page, '[data-testid="loop-analysis-event-curves"]', [
+				'[data-testid="loop-analysis-panel-glucose-change"]',
+				'[data-testid="loop-analysis-panel-cob"]',
+				'p',
+			]);
+		},
+		clip: '[data-testid="loop-analysis-event-response"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The change in glucose chart of the Meals and events page. All meals are aligned at zero, the time of the meal. A line shows the median change in glucose from the start, with shaded bands for the spread, from one hour before to five hours after.',
+		alt: 'The change in glucose chart of the Meals and events page, with the carbs on board chart under it. The carbs on board chart is the last chart on the page, and its axis shows the hours before and after the event for all the charts. Above the charts, a key gives the colour of the meals and the number of meals. All meals are aligned at zero, the time of the meal. A line shows the median change in glucose from the start, with shaded bands for the spread, from one hour before to five hours after. A note under the charts tells what the bands show.',
 	},
 	{
 		id: 'loop-analysis-event-metrics',
