@@ -992,9 +992,8 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// Decides whether an echoed origin beside echoed non-<see cref="V4Models.TempBasalOriginEvidence.Reported"/>
     /// evidence is an edit or the stored row read back. A different origin is the user's statement only when
     /// the evidence echoed with it is the stored row's, since that proves the body was read from this state;
-    /// a stale echo keeps the stored origin. A kept verdict (<see cref="V4Models.TempBasalOriginEvidence.Snapshot"/>,
-    /// <see cref="V4Models.TempBasalOriginEvidence.Uncorroborated"/>) stands only while the start, rate and
-    /// percent it was judged on are unchanged, and is otherwise judged again.
+    /// a stale echo is a default for the stored origin, which <see cref="V4Models.TempBasalOriginProvenance.OnUpdate"/>
+    /// settles as it does a re-upload's. A rate the edit left unset is the stored one unless its percent changed.
     /// </summary>
     internal static void SettleEchoedTempBasalOrigin(V4Models.TempBasal model, Treatment treatment, V4Models.TempBasal? stored)
     {
@@ -1012,21 +1011,18 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             return;
         }
 
-        model.Origin = stored.Origin;
-        var verdict = storedEvidence is V4Models.TempBasalOriginEvidence.Snapshot or V4Models.TempBasalOriginEvidence.Uncorroborated;
-        var unchanged = model.StartTimestamp == stored.StartTimestamp
-            && (model.Rate ?? stored.Rate) == stored.Rate
-            && model.Percent == stored.Percent;
-        if (verdict && !unchanged)
-        {
-            model.OriginEvidence = V4Models.TempBasalOriginEvidence.Uploader;
-            model.ApsSnapshotId = null;
-        }
-        else
-        {
-            model.OriginEvidence = storedEvidence;
-            model.ApsSnapshotId = stored.ApsSnapshotId;
-        }
+        var settled = V4Models.TempBasalOriginProvenance.OnUpdate(
+            new V4Models.TempBasalOriginState(
+                stored.Origin, storedEvidence, stored.ApsSnapshotId, stored.StartMills, stored.Rate),
+            new V4Models.TempBasalOriginState(
+                stored.Origin,
+                V4Models.TempBasalOriginEvidence.Uploader,
+                null,
+                model.StartMills,
+                model.Percent == stored.Percent ? model.Rate ?? stored.Rate : model.Rate));
+        model.Origin = settled.Origin;
+        model.OriginEvidence = settled.Evidence;
+        model.ApsSnapshotId = settled.ApsSnapshotId;
     }
 
     internal static V4Models.Bolus MapToBolus(Treatment treatment, Guid? correlationId, bool keepEventType = true)

@@ -1528,8 +1528,8 @@ public class TreatmentDecomposerTests : IDisposable
 
     [Theory]
     [InlineData(V4Models.TempBasalOriginEvidence.Snapshot)]
+    [InlineData(V4Models.TempBasalOriginEvidence.OtherDevice)]
     [InlineData(V4Models.TempBasalOriginEvidence.Uploader)]
-    [InlineData(V4Models.TempBasalOriginEvidence.Uncorroborated)]
     public async Task DecomposeAsync_APutEchoingTheStoredOrigin_KeepsItAndItsEvidence(
         V4Models.TempBasalOriginEvidence echoed)
     {
@@ -1539,6 +1539,19 @@ public class TreatmentDecomposerTests : IDisposable
 
         written.Origin.Should().Be(V4Models.TempBasalOrigin.Algorithm);
         written.OriginEvidence.Should().Be(echoed);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_APutEchoingAnUncorroboratedOrigin_KeepsTheOriginForJudgingAgain()
+    {
+        var stored = StoredTempBasal(V4Models.TempBasalOrigin.Algorithm, V4Models.TempBasalOriginEvidence.Uncorroborated);
+
+        var written = await PutStoredTempBasalAsync(
+            stored, V4Models.TempBasalOrigin.Algorithm, V4Models.TempBasalOriginEvidence.Uncorroborated);
+
+        written.Origin.Should().Be(V4Models.TempBasalOrigin.Algorithm);
+        written.OriginEvidence.Should().Be(V4Models.TempBasalOriginEvidence.Uploader,
+            "a re-upload of the same temp sends an uncorroborated default back to be judged, and an echo is one");
     }
 
     [Fact]
@@ -1555,6 +1568,7 @@ public class TreatmentDecomposerTests : IDisposable
 
     [Theory]
     [InlineData(V4Models.TempBasalOriginEvidence.Snapshot)]
+    [InlineData(V4Models.TempBasalOriginEvidence.OtherDevice)]
     [InlineData(V4Models.TempBasalOriginEvidence.Uncorroborated)]
     public async Task DecomposeAsync_APutKeepingAVerdictOverAChangedStartOrRate_JudgesItAgain(
         V4Models.TempBasalOriginEvidence verdict)
