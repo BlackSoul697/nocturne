@@ -3,7 +3,6 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Services.Alerts.Evaluators;
 using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Alerts.Native;
 
@@ -75,8 +74,7 @@ internal sealed class AlertOrchestrator(
             {
                 await EvaluateRuleAsync(rule, enriched, tenantId, ct);
             }
-            catch (Exception ex) when (ex is ConditionTreeFaultException
-                                       or RustAlertEngineException { IsConditionRejection: true })
+            catch (RustAlertEngineException ex) when (ex.IsConditionRejection)
             {
                 if (conditionLog.FirstFor(rule.Id, rule.ConditionType, rule.ConditionParams))
                 {
@@ -97,19 +95,15 @@ internal sealed class AlertOrchestrator(
     /// Logs, once per version of a rule's condition, what a save of it would reject. A stored
     /// rule keeps evaluating such a tree, where an unknown kind reads false and a missing operand
     /// reads as its default, so the rule can go on never firing with nothing else to say so. A
-    /// tree that fails evaluation is left to the per-rule catch, which reports it. A failure of
-    /// the check itself is logged and never keeps the rule from evaluating.
+    /// failure of the check itself is logged and never keeps the rule from evaluating.
     /// </summary>
     private void ReportConditionIssues(AlertRuleSnapshot rule, Guid tenantId)
     {
         IReadOnlyList<RustValidationIssue> issues;
         try
         {
-            if (!conditionLog.FirstIssueCheckFor(rule.Id, rule.ConditionType, rule.ConditionParams)
-                || ConditionTreeFaults.InRule(rule.ConditionType, rule.ConditionParams) is not null)
-            {
+            if (!conditionLog.FirstIssueCheckFor(rule.Id, rule.ConditionType, rule.ConditionParams))
                 return;
-            }
 
             issues = conditionValidator.Validate(
                 rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,

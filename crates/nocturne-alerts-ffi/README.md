@@ -435,6 +435,15 @@ Response — a recursive `tree`:
   wrong `schema_version`) is an error envelope. A malformed *payload* is not —
   it collapses to a single best-effort leaf with default operands, mirroring
   the engine's silent-fail.
+- **Auto-resolve tree.** A request may also carry `auto_resolve_params`, a full
+  condition node as a rule stores it. The response then has
+  `auto_resolve_tree`, described the same way with paths under the
+  `auto_resolve` root and leaf ids numbered from 0, as `evaluate_node` numbers
+  them for that root. It is `null` when the tree is `null` or cannot be
+  evaluated, since evaluation never reads such a tree. Without
+  `auto_resolve_params` the field is absent. The backend reads the leaves of
+  both trees to decide what context to fetch and which rules an `alert_state`
+  reference ties together.
 
 ## Validate (`nocturne_alerts_validate`)
 

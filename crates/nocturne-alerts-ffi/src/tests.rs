@@ -1275,6 +1275,59 @@ fn describe_null_composite_slot_is_a_typeless_leaf() {
 }
 
 #[test]
+fn describe_without_auto_resolve_params_has_no_auto_resolve_tree() {
+    let response = describe(&json!({
+        "schema_version": 1,
+        "condition_type": "threshold",
+        "condition_params": { "direction": "below", "value": 70 },
+    }));
+    assert!(response.get("auto_resolve_tree").is_none());
+}
+
+#[test]
+fn describe_auto_resolve_tree_is_rooted_at_auto_resolve() {
+    let response = describe(&json!({
+        "schema_version": 1,
+        "condition_type": "threshold",
+        "condition_params": { "direction": "below", "value": 70 },
+        "auto_resolve_params": {
+            "type": "composite",
+            "composite": {
+                "operator": "and",
+                "conditions": [
+                    { "type": "threshold", "threshold": { "direction": "above", "value": 90 } },
+                    { "type": "Iob", "iob": { "operator": "<", "value": 1 } }
+                ]
+            }
+        },
+    }));
+    let tree = &response["auto_resolve_tree"];
+    assert_eq!(tree["path"], json!("auto_resolve"));
+    let conds = tree["conditions"].as_array().unwrap();
+    assert_eq!(conds[0]["leaf_id"], json!(0));
+    assert_eq!(conds[0]["path"], json!("auto_resolve[0].threshold"));
+    assert_eq!(conds[1]["kind"], json!("iob"));
+    assert_eq!(response["tree"]["leaf_id"], json!(0));
+}
+
+#[test]
+fn describe_null_or_unevaluable_auto_resolve_tree_is_null() {
+    for params in [
+        Value::Null,
+        json!({ "type": "threshold", "threshold": { "value": 90 } }),
+    ] {
+        let response = describe(&json!({
+            "schema_version": 1,
+            "condition_type": "threshold",
+            "condition_params": { "direction": "below", "value": 70 },
+            "auto_resolve_params": params,
+        }));
+        assert_eq!(response["ok"], json!(true));
+        assert_eq!(response["auto_resolve_tree"], Value::Null, "for {params}");
+    }
+}
+
+#[test]
 fn describe_rejects_unknown_condition_type() {
     assert_error(
         &describe(

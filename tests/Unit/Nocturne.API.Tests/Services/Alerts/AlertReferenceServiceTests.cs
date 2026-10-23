@@ -1,6 +1,7 @@
 using Nocturne.Tests.Shared.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
+using Nocturne.Alerts.ParityCorpus.Generator.Harness;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -71,7 +72,7 @@ public class AlertReferenceServiceTests
 
     // ---- FindReferencingRulesAsync ----
 
-    [Fact]
+    [NativeFact]
     public async Task FindReferencing_DirectAlertStateReference_ReturnsReferencingId()
     {
         var target = await SeedRuleAsync(AlertConditionType.Threshold,
@@ -84,7 +85,7 @@ public class AlertReferenceServiceTests
         refs.Should().BeEquivalentTo(new[] { referencingId });
     }
 
-    [Fact]
+    [NativeFact]
     public async Task FindReferencing_NestedInComposite_ReturnsReferencingId()
     {
         var target = await SeedRuleAsync(AlertConditionType.Threshold,
@@ -101,7 +102,7 @@ public class AlertReferenceServiceTests
         refs.Should().BeEquivalentTo(new[] { referencingId });
     }
 
-    [Fact]
+    [NativeFact]
     public async Task FindReferencing_NoReferences_ReturnsEmpty()
     {
         var target = await SeedRuleAsync(AlertConditionType.Threshold,
@@ -115,19 +116,16 @@ public class AlertReferenceServiceTests
 
     // ---- DetectCycleAsync ----
 
-    [Fact]
+    [NativeFact]
     public async Task DetectCycle_SelfReference_ReturnsTrue()
     {
         var ruleId = Guid.NewGuid();
-        var node = new ConditionNode("alert_state",
-            AlertState: new AlertStateCondition(ruleId, "active", null));
-
-        var cycle = await _sut.DetectCycleAsync(ruleId, node, CancellationToken.None);
+        var cycle = await _sut.DetectCycleAsync(ruleId, [ruleId], CancellationToken.None);
 
         cycle.Should().BeTrue();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task DetectCycle_TwoStepCycle_ReturnsTrue()
     {
         // ruleA -> ruleB -> ruleA  (we're updating ruleA's tree to reference ruleB)
@@ -135,15 +133,12 @@ public class AlertReferenceServiceTests
         var ruleB = await SeedRuleAsync(AlertConditionType.AlertState,
             new AlertStateCondition(ruleA, "active", null));
 
-        var proposedRoot = new ConditionNode("alert_state",
-            AlertState: new AlertStateCondition(ruleB, "active", null));
-
-        var cycle = await _sut.DetectCycleAsync(ruleA, proposedRoot, CancellationToken.None);
+        var cycle = await _sut.DetectCycleAsync(ruleA, [ruleB], CancellationToken.None);
 
         cycle.Should().BeTrue();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task DetectCycle_AcyclicChain_ReturnsFalse()
     {
         // ruleA -> ruleB -> ruleC (terminates)
@@ -153,22 +148,16 @@ public class AlertReferenceServiceTests
         var ruleB = await SeedRuleAsync(AlertConditionType.AlertState,
             new AlertStateCondition(ruleC, "active", null));
 
-        var proposedRoot = new ConditionNode("alert_state",
-            AlertState: new AlertStateCondition(ruleB, "active", null));
-
-        var cycle = await _sut.DetectCycleAsync(ruleA, proposedRoot, CancellationToken.None);
+        var cycle = await _sut.DetectCycleAsync(ruleA, [ruleB], CancellationToken.None);
 
         cycle.Should().BeFalse();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task DetectCycle_NoRuleId_AlwaysFalse()
     {
         // Create path: ruleId is unknown -> can't form a cycle.
-        var node = new ConditionNode("alert_state",
-            AlertState: new AlertStateCondition(Guid.NewGuid(), "active", null));
-
-        var cycle = await _sut.DetectCycleAsync(ruleId: null, node, CancellationToken.None);
+        var cycle = await _sut.DetectCycleAsync(ruleId: null, [Guid.NewGuid()], CancellationToken.None);
 
         cycle.Should().BeFalse();
     }

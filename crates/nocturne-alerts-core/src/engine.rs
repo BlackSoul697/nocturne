@@ -55,7 +55,8 @@ impl Rule {
 }
 
 /// An auto-resolve tree when it is present, not `null` and evaluable.
-pub(crate) fn parse_auto_resolve(params: Option<&Value>) -> Option<Node> {
+#[must_use]
+pub fn parse_auto_resolve(params: Option<&Value>) -> Option<Node> {
     params
         .filter(|v| !v.is_null())
         .and_then(|v| Node::parse(v).ok())

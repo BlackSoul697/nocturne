@@ -178,15 +178,12 @@ public class AlertSweepServiceWallClockTests
         fixture.InstancesCreated.Should().Be(1);
     }
 
-    [Fact]
-    public Task Managed_engine_reports_an_unevaluable_tree_once() =>
-        RunUnevaluableAsync(useRustEngine: false);
-
+    /// <summary>
+    /// The engine reads a body it cannot evaluate as its root kind alone, so a wall-clock leaf
+    /// inside it does not put the rule on the sweep; the per-reading pass reports the fault.
+    /// </summary>
     [NativeFact]
-    public Task Rust_backed_engine_reports_an_unevaluable_tree_once() =>
-        RunUnevaluableAsync(useRustEngine: true);
-
-    private static async Task RunUnevaluableAsync(bool useRustEngine)
+    public async Task An_unevaluable_tree_is_not_swept()
     {
         const string lossAndBroken = """
             {"operator": "and", "conditions": [
@@ -194,7 +191,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "composite"}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine, AlertConditionType.Composite, lossAndBroken)
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, lossAndBroken)
         {
             LastReadingAt = T0,
         };
@@ -203,8 +200,8 @@ public class AlertSweepServiceWallClockTests
         await fixture.SweepAt(T0.AddMinutes(2));
         await fixture.SweepAt(T0.AddMinutes(3));
 
-        fixture.OrchestratorLogger.Entries.Should().ContainSingle(e => e.Level >= LogLevel.Warning)
-            .Which.Message.Should().Contain("cannot be evaluated");
+        fixture.OrchestratorLogger.Entries.Should().BeEmpty();
+        fixture.InstancesCreated.Should().Be(0);
     }
 
     [NativeFact]

@@ -13,14 +13,14 @@ use uuid::Uuid;
 use nocturne_alerts_core::classify::classify;
 use nocturne_alerts_core::context::{SensorContext, check_timestamp};
 use nocturne_alerts_core::engine::{
-    EngineState, Rule, WireRule, evaluate_parsed_rule, format_instant,
+    EngineState, Rule, WireRule, evaluate_parsed_rule, format_instant, parse_auto_resolve,
 };
 use nocturne_alerts_core::enums::WireEnum;
 use nocturne_alerts_core::eval::{Env, eval_node};
 use nocturne_alerts_core::excursion::{ExcursionTracker, TrackerState, TrackerStateKind};
 use nocturne_alerts_core::facts::{self, ContextFact, RuleConditions};
 use nocturne_alerts_core::model::{ConditionKind, Container, Node, parse_payload_structure};
-use nocturne_alerts_core::paths::node_child_path;
+use nocturne_alerts_core::paths::{AUTO_RESOLVE_ROOT, node_child_path};
 use nocturne_alerts_core::sustained::{TimerOp, TimerStore};
 use nocturne_alerts_core::wall_clock::references_wall_clock;
 
@@ -411,20 +411,40 @@ fn walk_paths(
     }
 }
 
+/// [`RuleBodyRequest`] plus, optionally, an auto-resolve tree to describe.
+#[derive(Deserialize)]
+struct DescribeRequest {
+    #[serde(flatten)]
+    body: RuleBodyRequest,
+    #[serde(default)]
+    auto_resolve_params: Option<Value>,
+}
+
 /// A rule's condition tree as leaf-id-tagged authored operands, for condition
 /// readouts (ADR 0007). Leaf ids and paths match `evaluate`'s leaf log and
 /// timer keys. A body that does not parse describes as one leaf with default
-/// operands.
+/// operands. A request carrying `auto_resolve_params` also gets
+/// `auto_resolve_tree`, under the `auto_resolve` path root, or `null` when that
+/// tree is `null` or cannot be evaluated.
 pub(crate) fn describe(request_json: &str) -> Result<Value, String> {
-    let req = read_rule_body(request_json)?;
-    let kind = known_kind(&req.condition_type)?;
-    let payload = match &req.condition_params {
+    let req: DescribeRequest =
+        read_request(request_json, |r: &DescribeRequest| r.body.schema_version)?;
+    let kind = known_kind(&req.body.condition_type)?;
+    let payload = match &req.body.condition_params {
         Value::Null => None,
         v => parse_payload_structure(kind, v).ok(),
     };
     let node = Node::from_rule(kind, payload);
     let tree = describe_node(Some(&node), kind.name().to_owned(), &mut 0);
-    Ok(ok(json!({ "tree": tree })))
+    let mut response = Map::new();
+    response.insert("tree".to_owned(), tree);
+    if let Some(params) = &req.auto_resolve_params {
+        let auto_resolve = parse_auto_resolve(Some(params)).map_or(Value::Null, |tree| {
+            describe_node(Some(&tree), AUTO_RESOLVE_ROOT.to_owned(), &mut 0)
+        });
+        response.insert("auto_resolve_tree".to_owned(), auto_resolve);
+    }
+    Ok(ok(Value::Object(response)))
 }
 
 /// Pre-order, numbering leaves as the leaf log does. A leaf shows the payload

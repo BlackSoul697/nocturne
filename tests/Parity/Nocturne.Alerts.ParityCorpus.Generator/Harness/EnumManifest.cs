@@ -63,12 +63,12 @@ public static class EnumManifest
             .ToArray());
     }
 
-    /// <summary>The wire names of <see cref="WallClockConditions.Kinds"/>, in ordinal order.</summary>
+    /// <summary>The wire names of <see cref="WallClockKinds.Kinds"/>, in ordinal order.</summary>
     private static JsonArray WallClockWireNames()
     {
         var wire = WireNames<AlertConditionType>();
         return new JsonArray(ContiguousValues<AlertConditionType>()
-            .Where(WallClockConditions.Kinds.Contains)
+            .Where(WallClockKinds.Kinds.Contains)
             .Select(v => (JsonNode)wire[(int)v]!.GetValue<string>())
             .ToArray());
     }

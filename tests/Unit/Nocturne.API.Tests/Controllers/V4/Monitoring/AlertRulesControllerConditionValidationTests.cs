@@ -159,7 +159,7 @@ public class AlertRulesControllerConditionValidationTests
     {
         var logger = new ListLogger<AlertRulesController>();
         var (controller, db) = CreateController(
-            new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance), logger);
+            new AlertRuleConditionValidator(), logger);
         var id = Guid.NewGuid();
         db.AlertRules.Add(LegacyRule(id));
         await db.SaveChangesAsync();
@@ -182,7 +182,7 @@ public class AlertRulesControllerConditionValidationTests
     public async Task UpdateRule_rejects_an_unknown_property_the_stored_rule_did_not_have()
     {
         var (controller, db) = CreateController(
-            new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance));
+            new AlertRuleConditionValidator());
         var id = Guid.NewGuid();
         db.AlertRules.Add(LegacyRule(id));
         await db.SaveChangesAsync();
@@ -223,7 +223,7 @@ public class AlertRulesControllerConditionValidationTests
     [Fact]
     public void Validator_reports_a_zone_nothing_resolves()
     {
-        var validator = new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance);
+        var validator = new AlertRuleConditionValidator();
 
         var issues = validator.Validate(
             AlertConditionType.TimeOfDay,
@@ -239,7 +239,7 @@ public class AlertRulesControllerConditionValidationTests
     [NativeFact]
     public void Validator_checks_the_body_the_enabled_auto_resolve_tree_and_smart_snooze_conditions()
     {
-        var validator = new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance);
+        var validator = new AlertRuleConditionValidator();
 
         var issues = validator.Validate(
             AlertConditionType.Composite,
@@ -257,7 +257,7 @@ public class AlertRulesControllerConditionValidationTests
     [NativeFact]
     public void Validator_skips_trees_that_are_never_evaluated()
     {
-        var validator = new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance);
+        var validator = new AlertRuleConditionValidator();
 
         var issues = validator.Validate(
             AlertConditionType.Threshold,
@@ -278,7 +278,7 @@ public class AlertRulesControllerConditionValidationTests
         string type, string conditionParams, string path)
     {
         var (controller, db) = CreateController(
-            new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance));
+            new AlertRuleConditionValidator());
 
         var result = await controller.CreateRule(new CreateAlertRuleRequest
         {

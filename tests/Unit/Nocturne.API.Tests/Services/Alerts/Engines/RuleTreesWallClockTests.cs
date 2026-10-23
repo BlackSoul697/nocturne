@@ -1,38 +1,40 @@
 using FluentAssertions;
-using Nocturne.API.Services.Alerts;
+using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.Alerts;
+namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
+/// <summary><see cref="RuleTrees.ReferencesWallClock"/>: which rules the sweep evaluates on the clock.</summary>
 [Trait("Category", "Unit")]
-public class WallClockConditionsTests
+public class RuleTreesWallClockTests
 {
     [Fact]
     public void Every_condition_type_is_classified_exactly_once()
     {
         var all = Enum.GetValues<AlertConditionType>();
 
-        WallClockConditions.Kinds.Intersect(WallClockConditions.NotWallClock).Should().BeEmpty();
-        WallClockConditions.Kinds.Union(WallClockConditions.NotWallClock)
+        WallClockKinds.Kinds.Intersect(WallClockKinds.NotWallClock).Should().BeEmpty();
+        WallClockKinds.Kinds.Union(WallClockKinds.NotWallClock)
             .Should().BeEquivalentTo(all, "a new condition kind must be placed on one side");
     }
 
-    [Theory]
+    [NativeTheory]
     [InlineData(AlertConditionType.SignalLoss, """{"timeout_minutes": 15}""")]
     [InlineData(AlertConditionType.Staleness, """{"operator": ">", "value": 20}""")]
     [InlineData(AlertConditionType.TrackerAge, "not json")]
     public void Wall_clock_root_is_selected_without_parsing(AlertConditionType type, string conditionParams) =>
-        WallClockConditions.ReferencesWallClock(Rule(type, conditionParams)).Should().BeTrue();
+        RuleTrees.ReferencesWallClock(Rule(type, conditionParams)).Should().BeTrue();
 
-    [Fact]
+    [NativeFact]
     public void Reading_driven_root_is_not_selected() =>
-        WallClockConditions.ReferencesWallClock(
+        RuleTrees.ReferencesWallClock(
                 Rule(AlertConditionType.Threshold, """{"direction": "below", "value": 70}"""))
             .Should().BeFalse();
 
-    [Theory]
+    [NativeTheory]
     [InlineData("""{"type": "signal_loss", "signal_loss": {"timeout_minutes": 15}}""")]
     [InlineData("""{"type": "not", "not": {"child": {"type": "staleness", "staleness": {"operator": ">", "value": 5}}}}""")]
     [InlineData("""{"type": "sustained", "sustained": {"minutes": 10, "child": {"type": "loop_stale", "loop_stale": {"operator": ">", "minutes": 30}}}}""")]
@@ -42,10 +44,10 @@ public class WallClockConditionsTests
         var tree = """{"operator": "and", "conditions": [{"type": "threshold", "threshold": {"direction": "below", "value": 70}}, """
                    + child + "]}";
 
-        WallClockConditions.ReferencesWallClock(Rule(AlertConditionType.Composite, tree)).Should().BeTrue();
+        RuleTrees.ReferencesWallClock(Rule(AlertConditionType.Composite, tree)).Should().BeTrue();
     }
 
-    [Fact]
+    [NativeFact]
     public void Tree_of_reading_driven_leaves_and_calendar_gates_is_not_selected()
     {
         const string tree = """
@@ -56,15 +58,30 @@ public class WallClockConditionsTests
             ]}
             """;
 
-        WallClockConditions.ReferencesWallClock(Rule(AlertConditionType.Composite, tree)).Should().BeFalse();
+        RuleTrees.ReferencesWallClock(Rule(AlertConditionType.Composite, tree)).Should().BeFalse();
     }
 
-    [Theory]
+    [NativeTheory]
     [InlineData("not json")]
     [InlineData("null")]
     public void Unparseable_container_is_not_selected(string conditionParams) =>
-        WallClockConditions.ReferencesWallClock(Rule(AlertConditionType.Composite, conditionParams))
+        RuleTrees.ReferencesWallClock(Rule(AlertConditionType.Composite, conditionParams))
             .Should().BeFalse();
+
+    [NativeTheory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void Wall_clock_leaf_in_the_auto_resolve_tree_counts_while_auto_resolve_is_enabled(
+        bool autoResolveEnabled, bool expected)
+    {
+        var rule = Rule(AlertConditionType.Threshold, """{"direction": "below", "value": 70}""") with
+        {
+            AutoResolveEnabled = autoResolveEnabled,
+            AutoResolveParams = """{"type": "staleness", "staleness": {"operator": ">", "value": 20}}""",
+        };
+
+        RuleTrees.ReferencesWallClock(rule).Should().Be(expected);
+    }
 
     private static AlertRuleSnapshot Rule(AlertConditionType type, string conditionParams) =>
         new(Guid.NewGuid(), Guid.NewGuid(), "rule", type, conditionParams,

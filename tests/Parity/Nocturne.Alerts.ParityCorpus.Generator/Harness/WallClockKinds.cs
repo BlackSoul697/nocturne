@@ -1,18 +1,13 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Nocturne.API.Services.Alerts.Evaluators;
-using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 
-namespace Nocturne.API.Services.Alerts;
+namespace Nocturne.Alerts.ParityCorpus.Generator.Harness;
 
 /// <summary>
-/// The condition kinds whose truth can change while every fact except the clock stands still.
-/// A rule containing one is evaluated on the wall clock as well as per reading
-/// (<c>docs/alerts/engine-semantics.md</c> §5.1). The Rust crate mirrors this list and checks it
-/// against the committed enum manifest.
+/// The condition kinds whose truth can change while every fact except the clock stands still
+/// (<c>docs/alerts/engine-semantics.md</c> §5.1), written into the enum manifest the Rust crate
+/// checks its own list against. The engine decides which rules the sweep evaluates.
 /// </summary>
-public static class WallClockConditions
+public static class WallClockKinds
 {
     /// <summary>
     /// Kinds that measure elapsed time against an anchor a reading does not move. The anchors are
@@ -65,45 +60,4 @@ public static class WallClockConditions
         AlertConditionType.DayOfWeek,
         AlertConditionType.SleepSessionActive,
     };
-
-    /// <summary>
-    /// True when the rule's root kind, or any node of its condition tree, is in
-    /// <see cref="Kinds"/>. A tree that does not parse is false: node dispatch cannot evaluate it
-    /// either.
-    /// </summary>
-    public static bool ReferencesWallClock(AlertRuleSnapshot rule)
-    {
-        if (Kinds.Contains(rule.ConditionType)) return true;
-        if (rule.ConditionType is not (AlertConditionType.Composite
-            or AlertConditionType.Not
-            or AlertConditionType.Sustained))
-        {
-            return false;
-        }
-
-        var root = TryBuildNode(rule);
-        return root is not null
-               && ConditionPath.Walk<object>(root, (node, _) =>
-                   AlertConditionTypeNames.Resolve(node.Type) is { } kind && Kinds.Contains(kind)
-                       ? node
-                       : null) is not null;
-    }
-
-    private static ConditionNode? TryBuildNode(AlertRuleSnapshot rule)
-    {
-        var wire = AlertConditionTypeNames.ToWireString(rule.ConditionType);
-        try
-        {
-            var node = new JsonObject
-            {
-                ["type"] = wire,
-                [wire] = JsonNode.Parse(rule.ConditionParams),
-            };
-            return node.Deserialize<ConditionNode>(EvaluatorJson.Options);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }

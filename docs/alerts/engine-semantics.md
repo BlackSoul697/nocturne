@@ -348,9 +348,7 @@ host must evaluate enabled wall-clock rules periodically as well as per reading,
 the normal driver sequence (§7). Otherwise such a rule stays unfired for as long as no
 reading arrives. The backend does this from `AlertSweepService` every 30 s; Prelude needs
 an equivalent periodic evaluation. The crate's `wall_clock::references_wall_clock` reads
-a rule's kinds as §5.2 does. The backend's `WallClockConditions` holds the same set of
-wall-clock kinds, which the enum manifest's `WallClockConditionTypes` keeps equal, but its
-rule walk does not yet cover the auto-resolve tree (#2139).
+a rule's kinds as §5.2 does, and the backend's sweep asks it which rules to evaluate.
 
 A periodic evaluation uses the context the per-reading path builds for the newest
 reading, with only `now` advanced. Its `LastReadingAt` / `LatestTimestamp` are that

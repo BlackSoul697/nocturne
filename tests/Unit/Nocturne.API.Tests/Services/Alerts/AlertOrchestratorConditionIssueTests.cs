@@ -64,7 +64,7 @@ public class AlertOrchestratorConditionIssueTests
     [NativeFact]
     public void A_wizard_urgent_low_is_one_a_save_would_reject()
     {
-        new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance)
+        new AlertRuleConditionValidator()
             .Validate(AlertConditionType.Threshold, WizardUrgentLow, false, null, null)
             .Select(i => i.Reason)
             .Should().Contain("field_missing");
@@ -109,7 +109,7 @@ public class AlertOrchestratorConditionIssueTests
     }
 
     [Fact]
-    public async Task A_tree_that_fails_evaluation_is_left_to_the_fault_report()
+    public async Task A_tree_that_fails_evaluation_is_checked_once_like_any_other()
     {
         var harness = new Harness();
         harness.Validator
@@ -123,7 +123,7 @@ public class AlertOrchestratorConditionIssueTests
         harness.Validator.Verify(
             v => v.Validate(It.IsAny<AlertConditionType>(), It.IsAny<string>(), It.IsAny<bool>(),
                 It.IsAny<string?>(), It.IsAny<string?>()),
-            Times.Never);
+            Times.Once);
     }
 
     [Fact]
