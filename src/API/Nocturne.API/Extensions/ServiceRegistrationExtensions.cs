@@ -913,6 +913,7 @@ public static class ServiceRegistrationExtensions
         // Push notifications
         services.AddScoped<INotificationV2Service, NotificationV2Service>();
         services.AddScoped<INotificationV1Service, NotificationV1Service>();
+        services.AddSingleton<LegacyAlarmSnoozeStore>();
         services.AddScoped<IApnsClientFactory, ApnsClientFactory>();
         services.AddHttpClient(
             "dotAPNS",
@@ -1013,6 +1014,8 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IAlertAcknowledgementService, AlertAcknowledgementService>();
         services.AddScoped<IAlertSnoozeService, AlertSnoozeService>();
         services.AddScoped<IExcursionResolutionHandler, ExcursionResolutionHandler>();
+        services.AddScoped<IEngineAlarmRelay, EngineAlarmRelay>();
+        services.AddScoped<IAlarmAckHandler, AlarmAckHandler>();
         services.AddScoped<IAlertReferenceService, AlertReferenceService>();
         services.AddScoped<IAlertReplayService, AlertReplayService>();
         // Scope-class classification (scoped Do Not Disturb, ADR 0004): stateless over
