@@ -395,6 +395,7 @@ msgstr ""
 #~ msgid "Failed to save alarm configuration"
 #~ msgstr ""
 
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/settings/DataSourceRow.svelte
 msgid "Just now"
 msgstr ""
@@ -449,6 +450,7 @@ msgid "Unnamed {0}"
 msgstr ""
 
 #: src/lib/components/account/SecurityCredentialCard.svelte
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/connectors/ConnectorSetup.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
@@ -1340,7 +1342,6 @@ msgstr ""
 msgid "Normal"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
@@ -6934,6 +6935,7 @@ msgstr ""
 msgid "App"
 msgstr ""
 
+#: src/lib/components/alerts/channelText.svelte.ts
 #: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
@@ -7392,7 +7394,6 @@ msgstr ""
 msgid "{0} old · Started {1} <0/>"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
@@ -7401,7 +7402,6 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
@@ -15066,12 +15066,8 @@ msgstr ""
 msgid "Severity: {0}"
 msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-#: src/lib/components/ui/dropdown-menu/nested-in-popover.test.svelte
-#: src/lib/navigation/app-navigation.svelte.ts
-msgid "Do Not Disturb"
-msgstr ""
+#~ msgid "Do Not Disturb"
+#~ msgstr ""
 
 #: src/lib/components/alerts/DndPanel.svelte
 #: src/lib/components/tenants/TenantsOverview.svelte
@@ -15132,9 +15128,8 @@ msgstr ""
 #~ msgid "Rules that decide when, how, and where you're notified."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "<0/> Do Not Disturb"
-msgstr ""
+#~ msgid "<0/> Do Not Disturb"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/+page.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -15213,9 +15208,8 @@ msgstr ""
 msgid "Failed to save DND settings"
 msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "Do Not Disturb · Alerts · Nocturne"
-msgstr ""
+#~ msgid "Do Not Disturb · Alerts · Nocturne"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
@@ -15232,9 +15226,8 @@ msgstr ""
 msgid "Toggle DND on right now, optionally with an automatic expiry."
 msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "Do Not Disturb is currently"
-msgstr ""
+#~ msgid "Do Not Disturb is currently"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 msgid "Auto-expire (optional)"
@@ -15305,9 +15298,8 @@ msgstr ""
 #~ msgid "Why this alert exists, what it should trigger"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/[id]/+page.svelte
-msgid "Allow through Do Not Disturb"
-msgstr ""
+#~ msgid "Allow through Do Not Disturb"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Critical-severity rules implicitly bypass DND regardless of this flag."
@@ -15480,9 +15472,8 @@ msgstr ""
 #~ msgid "Scheduled DND active"
 #~ msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Toggle Do Not Disturb"
-msgstr ""
+#~ msgid "Toggle Do Not Disturb"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/navigation/app-navigation.svelte.ts
@@ -15774,8 +15765,9 @@ msgstr ""
 #~ msgid "{0}u insulin"
 #~ msgstr ""
 
-#~ msgid "Email"
-#~ msgstr ""
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Email"
+msgstr ""
 
 #~ msgid "{0} ago"
 #~ msgstr ""
@@ -16405,11 +16397,13 @@ msgid "{0}s ago"
 msgstr ""
 
 #. 0: minutes
+#. 0: diffMin
 #. 0: minutes
 #. 0: diffMins
 #. 0: mins
 #. 0: diffMins
 #: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/lib/components/layout/NotificationItem.svelte
 #: src/lib/components/status-pills/LoopPill.svelte
@@ -16763,9 +16757,11 @@ msgstr ""
 msgid "Screensaver mode (bouncing)"
 msgstr ""
 
+#. 0: Math.floor(diffHr / 24)
 #. 0: diffDays
 #. 0: days
 #. 0: diffDays
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/layout/NotificationItem.svelte
 #: src/lib/components/status-pills/LoopPill.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
@@ -21185,9 +21181,8 @@ msgstr ""
 #~ msgid "I've written down my recovery codes"
 #~ msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Scheduled Do Not Disturb window configured"
-msgstr ""
+#~ msgid "Scheduled Do Not Disturb window configured"
+#~ msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 msgid "sleep session is"
@@ -21494,9 +21489,8 @@ msgstr ""
 #~ msgid "We've opened a pre-filled GitHub issue form in a new tab as a fallback. You can paste your screenshots there manually. Your entries are kept here if you'd like to try again."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "You do not have permission to change Do Not Disturb. Contact your tenant administrator for access."
-msgstr ""
+#~ msgid "You do not have permission to change Do Not Disturb. Contact your tenant administrator for access."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Failed to save the alert rule. Please try again."
@@ -26417,9 +26411,8 @@ msgstr ""
 msgid "Scheduled, on now"
 msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Scheduled Do Not Disturb window is on now"
-msgstr ""
+#~ msgid "Scheduled Do Not Disturb window is on now"
+#~ msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
@@ -26689,9 +26682,8 @@ msgstr ""
 msgid "Portion <0/>"
 msgstr ""
 
-#: src/lib/components/alerts/DndNoticeStrip.svelte
-msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
-msgstr ""
+#~ msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
+#~ msgstr ""
 
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
 msgid "Fill in the configuration form. Set a strong password for each PostgreSQL role and a unique <0/> (minimum 32 characters). Use the generator below for each secret field."
@@ -30585,14 +30577,11 @@ msgstr ""
 msgid "{0} not linked. Connect it in Connectors & Apps to enable delivery."
 msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-msgid "Could not load Do Not Disturb."
-msgstr ""
+#~ msgid "Could not load Do Not Disturb."
+#~ msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Could not change Do Not Disturb. Try again."
-msgstr ""
+#~ msgid "Could not change Do Not Disturb. Try again."
+#~ msgstr ""
 
 #: src/lib/components/alerts/ReplayView.svelte
 msgid "No events yet. The playhead is at the start of the window."
@@ -31811,7 +31800,11 @@ msgstr ""
 msgid "Override active"
 msgstr ""
 
+#: src/lib/components/alerts/DndPanel.svelte
+#: src/lib/components/alerts/SidebarDndToggle.svelte
 #: src/lib/components/alerts/factText.svelte.ts
+#: src/lib/components/ui/dropdown-menu/nested-in-popover.test.svelte
+#: src/lib/navigation/app-navigation.svelte.ts
 msgid "Do not disturb"
 msgstr ""
 
@@ -31988,4 +31981,203 @@ msgstr ""
 
 #: src/lib/components/alerts/factText.svelte.ts
 msgid "State spans"
+msgstr ""
+
+#: src/lib/components/alerts/DndNoticeStrip.svelte
+msgid "Do not disturb is on. Only critical rules and rules allowed through Do not disturb will fire."
+msgstr ""
+
+#: src/lib/components/alerts/DndPanel.svelte
+msgid "Could not load Do not disturb."
+msgstr ""
+
+#: src/lib/components/alerts/DndPanel.svelte
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Could not change Do not disturb. Try again."
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Scheduled Do not disturb window is on now"
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Scheduled Do not disturb window configured"
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Toggle Do not disturb"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In-app"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Webhook"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Discord DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Discord channel"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Slack DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Slack channel"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Telegram DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Telegram group"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "WhatsApp DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Show alerts in the Nocturne notification center"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "POST to a custom URL"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Discord identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Discord channel the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Slack identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Slack channel the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Telegram identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Telegram group the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via WhatsApp Business"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Send alerts to an email address via Resend"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Send an actuation intent to a registered device by kind"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Webhook URL"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Channel ID"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Chat ID"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Phone (E.164)"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Email address"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Discord account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In Discord, turn on Settings → Advanced → Developer Mode, then right-click the channel and choose Copy Channel ID."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Slack account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In Slack, open the channel, choose View channel details, and copy the ID at the bottom."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Telegram account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Add the bot to the group, then use its chat ID (a negative number) or the group's @username."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Include the + and country code. Without the +, WhatsApp prepends the sending business number's country code."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A channel ID is 17-20 digits."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A channel ID starts with C, G or D."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A group chat ID is a negative number, or an @username."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A phone number starts with + and a country code, digits only."
+msgstr ""
+
+#. 0: channelDestinationLabel(meta.type) ?? channelLabel(meta.type)
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "{0} is required."
+msgstr ""
+
+#. 0: diffHr; 1: diffMin % 60
+#: src/lib/components/alerts/alertTime.svelte.ts
+msgid "{0}h {1}m ago"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "Do not disturb · Alerts · Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "<0/> Do not disturb"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "Do not disturb is currently"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "You do not have permission to change Do not disturb. Contact your tenant administrator for access."
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/[id]/+page.svelte
+msgid "Allow through Do not disturb"
 msgstr ""
