@@ -31,6 +31,12 @@
 
   let { analysis }: Props = $props();
 
+  const targetRange = $derived(
+    analysis?.thresholds?.targetBottom != null && analysis.thresholds.targetTop != null
+      ? { low: analysis.thresholds.targetBottom, high: analysis.thresholds.targetTop }
+      : null
+  );
+
   // Format hours for X-axis (ticks are always on hour boundaries)
   function formatHoursFromChange(minutes: number): string {
     const hours = Math.round(minutes / 60);
@@ -189,11 +195,11 @@
         }}
         padding={{ top: 20, right: 20, bottom: 40, left: 50 }}
       >
-        <!-- Target range overlay (70-180 mg/dL, plotted in display units) -->
         {#snippet aboveMarks()}
-          <!-- Horizontal reference lines for target range -->
-          <Rule y={bgValue(70)} class="stroke-success/50 stroke-1" dashArray="4 4" />
-          <Rule y={bgValue(180)} class="stroke-warning/50 stroke-1" dashArray="4 4" />
+          {#if targetRange}
+            <Rule y={bgValue(targetRange.low)} class="stroke-success/50 stroke-1" dashArray="4 4" />
+            <Rule y={bgValue(targetRange.high)} class="stroke-warning/50 stroke-1" dashArray="4 4" />
+          {/if}
           <!-- Vertical line at site change point -->
           <Rule x={0} class="stroke-primary stroke-2" />
         {/snippet}
@@ -206,7 +212,9 @@
         { texture: "percentile-outer", label: "10th–25th / 75th–90th percentile" },
         { texture: "percentile-inner", label: "25th–75th percentile" },
         { texture: "percentile-median", label: "Median glucose", shape: "line" },
-        { texture: "target-range-limit", label: `Target range (${bgRange(70, 180)})`, shape: "line" },
+        ...(targetRange
+          ? [{ texture: "target-range-limit" as const, label: `Consensus target range (${bgRange(targetRange.low, targetRange.high)})`, shape: "line" as const }]
+          : []),
       ]}
     />
 

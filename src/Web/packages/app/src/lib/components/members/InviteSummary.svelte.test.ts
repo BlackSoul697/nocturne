@@ -79,7 +79,7 @@ describe("InviteSummary", () => {
     });
 
     await expect
-      .element(page.getByText(/only the last 24 hours/))
+      .element(page.getByText(/see only the last 24 hours/))
       .toBeVisible();
   });
 
@@ -87,7 +87,7 @@ describe("InviteSummary", () => {
     render(InviteSummary, { props: { invite: viewerInvite, signedIn: false } });
 
     await expect
-      .element(page.getByText(/only the last 24 hours/))
+      .element(page.getByText(/see only the last 24 hours/))
       .not.toBeInTheDocument();
   });
 

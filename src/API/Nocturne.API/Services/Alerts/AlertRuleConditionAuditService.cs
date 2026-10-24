@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Alerts.Native;
+using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Alerts;
@@ -35,6 +36,7 @@ public sealed class AlertRuleConditionAuditService : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var factory = scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>();
+            var alerts = scope.ServiceProvider.GetRequiredService<IAlertRepository>();
             var validator = scope.ServiceProvider.GetRequiredService<IAlertRuleConditionValidator>();
 
             List<Guid> tenantIds;
@@ -52,7 +54,7 @@ public sealed class AlertRuleConditionAuditService : BackgroundService
             {
                 try
                 {
-                    flagged += await AuditTenantAsync(factory, validator, tenantId, stoppingToken);
+                    flagged += await AuditTenantAsync(alerts, validator, tenantId, stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -73,28 +75,15 @@ public sealed class AlertRuleConditionAuditService : BackgroundService
     }
 
     private async Task<int> AuditTenantAsync(
-        INocturneDbContextFactory factory,
+        IAlertRepository alerts,
         IAlertRuleConditionValidator validator,
         Guid tenantId,
         CancellationToken ct)
     {
-        await using var db = await factory.CreateForTenantAsync(tenantId, ct);
+        var (rules, unreadable) = await alerts.ReadEnabledRulesAsync(tenantId, ct);
 
-        var rules = await db.AlertRules
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId && r.IsEnabled)
-            .Select(r => new
-            {
-                r.Id,
-                r.ConditionType,
-                r.ConditionParams,
-                r.AutoResolveEnabled,
-                r.AutoResolveParams,
-                r.ClientConfiguration,
-            })
-            .ToListAsync(ct);
-
-        var flagged = 0;
+        // The repository has already logged each unreadable rule by id.
+        var flagged = unreadable.Count;
         foreach (var rule in rules)
         {
             IReadOnlyList<RustValidationIssue> issues;

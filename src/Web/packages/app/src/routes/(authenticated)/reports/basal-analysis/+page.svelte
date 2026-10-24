@@ -27,7 +27,6 @@
 </script>
 
 <svelte:head>
-  <title>Basal rate analysis - Nocturne reports</title>
   <meta
     name="description"
     content="Analyze your basal insulin delivery patterns with percentile visualization"

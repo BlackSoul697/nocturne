@@ -25,6 +25,19 @@ function focusSlider(name: string) {
   return slider;
 }
 
+
+async function iobTickValues(): Promise<number[]> {
+  const panel = () => document.querySelector('[data-testid="loop-analysis-panel-iob"]');
+  await expect.poll(() => panel()?.querySelectorAll("svg text").length ?? 0).toBeGreaterThan(0);
+  return Array.from(panel()!.querySelectorAll("svg text"), (t) => t.textContent?.trim() ?? "")
+    .filter((label) => label !== "")
+    .map(Number)
+    .filter(Number.isFinite);
+}
+
+// Net basal IOB goes below zero while basal is withheld, so the bands can too.
+const negativeIob = { p10: -1.5, p25: -1, p50: -0.5, p75: 0, p90: 0.5, mean: -0.5, n: 14, sparse: false };
+
 describe("EventResponseBody", () => {
   it("stacks every series on the shared axis of minutes from the event", async () => {
     render(EventResponseBody, { props: { response: eventResponse() } });
@@ -210,5 +223,13 @@ describe("EventResponseBody", () => {
     await expect
       .element(page.getByTestId("loop-analysis-event-window"))
       .toHaveTextContent(/60 minutes before to\s+5 hours after each event\.\s+Isolated events only\./);
+  });
+
+  it("extends the IOB axis below zero to the lowest band", async () => {
+    const response = eventResponse();
+    for (const cohort of response.primary!.cohorts!) for (const slot of cohort.slots!) slot.iob = { ...negativeIob };
+    render(EventResponseBody, { props: { response } });
+
+    expect(Math.min(...(await iobTickValues()))).toBeLessThanOrEqual(-1.5);
   });
 });

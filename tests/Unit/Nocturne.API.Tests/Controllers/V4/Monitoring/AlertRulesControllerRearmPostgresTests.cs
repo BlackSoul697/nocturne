@@ -14,8 +14,10 @@ using Nocturne.Core.Models.Alerts;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Interceptors;
+using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
+using Nocturne.Tests.Shared.Mocks;
 using Npgsql;
 using Xunit;
 
@@ -88,6 +90,11 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
         public override ValueTask<NocturneDbContext> CreateAsync(CancellationToken ct = default) => ValueTask.FromResult(create());
     }
 
+    private sealed class RawFactory(Func<NocturneDbContext> create) : IDbContextFactory<NocturneDbContext>
+    {
+        public NocturneDbContext CreateDbContext() => create();
+    }
+
     private NocturneDbContext Context(Guid tenant, Failure failure) =>
         new(new DbContextOptionsBuilder<NocturneDbContext>()
             .UseNpgsql(database.AppConnectionString, npgsql => npgsql.EnableRetryOnFailure(
@@ -149,6 +156,8 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
             .Returns([]);
         var controller = new AlertRulesController(
             new Factory(() => Context(tenant, failure)),
+            new AlertRepository(new RawFactory(() => Context(tenant, failure))),
+            MockTenantAccessor.Create(tenant).Object,
             Mock.Of<IAlertReferenceService>(),
             Mock.Of<IAlertDeliveryService>(),
             Mock.Of<IRuleScopeClassifier>(),

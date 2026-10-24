@@ -257,7 +257,6 @@
 </script>
 
 <svelte:head>
-  <title>Sleep & overnight - Nocturne reports</title>
   <meta
     name="description"
     content="Sleep pattern actogram with glucose overlay"

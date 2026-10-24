@@ -97,7 +97,6 @@
 </script>
 
 <svelte:head>
-  <title>Battery report - Nocturne</title>
   <meta
     name="description"
     content="Device battery statistics and charge cycle history"

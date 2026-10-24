@@ -73,10 +73,15 @@
   const units = $derived(glucoseUnits.current);
   const glucoseFormatting = $derived({
     unitLabel: getUnitLabel(units),
-    targetRangeDisplay: formatGlucoseRange(70, 180, units),
   });
 
   const tir = $derived(analysis?.timeInRange?.percentages);
+  const consensusRange = $derived.by(() => {
+    const served = analysis?.timeInRange?.thresholds;
+    return served?.targetBottom != null && served.targetTop != null
+      ? { low: served.targetBottom, high: served.targetTop }
+      : undefined;
+  });
   const variability = $derived(analysis?.glycemicVariability);
   const stats = $derived(analysis?.basicStats);
 
@@ -113,7 +118,6 @@
 </script>
 
 <svelte:head>
-  <title>Reports - Nocturne</title>
   <meta
     name="description"
     content="Comprehensive diabetes management analytics and insights"
@@ -178,7 +182,7 @@
               <h2 class="text-sm font-medium text-muted-foreground">Time in range</h2>
               {#if tirValue != null}
                 <div class="h-64 @sm:h-72">
-                  <TIRStackedChart percentages={tir} personalRange={personalRangeOverlay} showThresholds />
+                  <TIRStackedChart percentages={tir} personalRange={personalRangeOverlay} thresholds={consensusRange} />
                 </div>
               {:else}
                 <p class="text-xl text-muted-foreground">No data</p>
@@ -233,7 +237,7 @@
           </CardHeader>
           <CardContent>
             <div class="h-64">
-              <AmbulatoryGlucoseProfile {averagedStats} />
+              <AmbulatoryGlucoseProfile {averagedStats} thresholds={analysis?.timeInRange?.thresholds} />
             </div>
           </CardContent>
         </Card>

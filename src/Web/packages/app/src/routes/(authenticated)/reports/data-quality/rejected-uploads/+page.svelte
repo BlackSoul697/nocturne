@@ -91,10 +91,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Rejected uploads - Nocturne</title>
-</svelte:head>
-
 <div class="@container space-y-6">
   <a
     href={resolve("/reports/data-quality")}

@@ -18,6 +18,7 @@
   import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import type {
     DailySummaryDay,
+    GlycemicThresholds,
     GriTimelinePeriod,
     TimeZoneUnavailableReason,
     YearOverviewColorPreferences,
@@ -235,27 +236,40 @@
   // Glucose color scale
   // =========================================================================
 
-  const GLUCOSE_BANDS = [54, 70, 180, 250];
+  let thresholds = $state<GlycemicThresholds>();
 
-  const glucoseColorScale = scaleThreshold<number, string>()
-    .domain(GLUCOSE_BANDS)
-    .range([
-      "var(--glucose-very-low)",
-      "var(--glucose-low)",
-      "var(--glucose-in-range)",
-      "var(--glucose-high)",
-      "var(--glucose-very-high)",
-    ]);
+  const glucoseBands = $derived(
+    thresholds?.veryLow != null &&
+      thresholds.low != null &&
+      thresholds.high != null &&
+      thresholds.veryHigh != null
+      ? [thresholds.veryLow, thresholds.low, thresholds.high, thresholds.veryHigh]
+      : []
+  );
 
-  const glucoseHatchScale = scaleThreshold<number, TextureKey | null>()
-    .domain(GLUCOSE_BANDS)
-    .range([
-      "very-low-hatch",
-      "low-hatch",
-      null,
-      "high-hatch",
-      "very-high-hatch",
-    ]);
+  const glucoseColorScale = $derived(
+    scaleThreshold<number, string>()
+      .domain(glucoseBands)
+      .range([
+        "var(--glucose-very-low)",
+        "var(--glucose-low)",
+        "var(--glucose-in-range)",
+        "var(--glucose-high)",
+        "var(--glucose-very-high)",
+      ])
+  );
+
+  const glucoseHatchScale = $derived(
+    scaleThreshold<number, TextureKey | null>()
+      .domain(glucoseBands)
+      .range([
+        "very-low-hatch",
+        "low-hatch",
+        null,
+        "high-hatch",
+        "very-high-hatch",
+      ])
+  );
 
   function getCellHatch(data: CalendarDatum | undefined): TextureKey | null {
     if (selectedMetric !== "avgGlucose" || data?.value == null) return null;
@@ -298,12 +312,10 @@
   const sortedYears = $derived([...availableYears].sort((a, b) => b - a));
 
   setReportPrintMeta(() => {
-    const title = "Year overview";
-    if (sortedYears.length === 0) return { title };
+    if (sortedYears.length === 0) return {};
     const first = sortedYears.at(-1);
     const last = sortedYears[0];
     return {
-      title,
       period: { label: first === last ? `${last}` : `${first} – ${last}` },
     };
   });
@@ -330,6 +342,7 @@
         if (disposed) return;
         availableYears = result.years ?? [];
         availableDataSources = result.availableDataSources ?? [];
+        thresholds = result.thresholds;
         timeZoneReason = result.timeZoneUnavailableReason;
         metadataLoaded = true;
       } catch (err) {
@@ -581,7 +594,6 @@
 </script>
 
 <svelte:head>
-  <title>Year overview - Nocturne</title>
   <meta
     name="description"
     content="Multi-year heatmap overview of all your diabetes data"
@@ -621,7 +633,7 @@
       onBoundariesChange={setScaleBoundaries}
       onDimChange={setDim}
       onReset={resetScale}
-      glucoseBands={GLUCOSE_BANDS}
+      {glucoseBands}
     />
 
     <!-- Loading state for metadata -->
@@ -689,6 +701,7 @@
             {getCellHatch}
             {navigateToDayInReview}
             {glucoseColorScale}
+            {glucoseBands}
             {units}
             {unitLabel}
             {formatUnits}

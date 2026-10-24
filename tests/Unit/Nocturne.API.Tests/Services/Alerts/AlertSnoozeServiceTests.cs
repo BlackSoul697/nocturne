@@ -207,13 +207,17 @@ public class AlertSnoozeServiceTests
         };
         var time = new ManualTimeProvider();
         time.SetUtcNow(Now);
-        var engine = EngineTestHarness.BuildRustEngine(time, new InMemoryTrackerRepository([]));
-        var escalation = JsonDocument.Parse(
-            $$$"""{"type":"alert_state","alert_state":{"alert_id":"{{{seeded.RuleId}}}","state":"unacknowledged","for_minutes":15}}""")
-            .RootElement;
+        var escalation =
+            $$$"""[{"type":"alert_state","alert_state":{"alert_id":"{{{seeded.RuleId}}}","state":"unacknowledged","for_minutes":15}}]""";
+        var watcher = new AlertRule
+        {
+            Id = Guid.NewGuid(),
+            ClientConfiguration = $$$"""{"snooze":{"smartSnooze":true,"conditions":{{{escalation}}}}}""",
+        };
+        var engine = EngineTestHarness.BuildRustEngine(time, new InMemoryTrackerRepository([watcher]));
 
-        var unacknowledged = await engine.EvaluateNodeAsync(
-            Guid.NewGuid(), escalation, context, "escalation", CancellationToken.None);
+        var unacknowledged = await engine.EvaluateSnoozeAsync(
+            watcher.Id, JsonDocument.Parse(escalation).RootElement, context, CancellationToken.None);
 
         unacknowledged.Should().BeTrue();
     }

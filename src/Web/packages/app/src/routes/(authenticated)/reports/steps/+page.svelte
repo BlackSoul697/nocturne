@@ -59,7 +59,6 @@
 </script>
 
 <svelte:head>
-  <title>Step count - Nocturne reports</title>
   <meta
     name="description"
     content="Step count actogram with glucose overlay"

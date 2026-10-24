@@ -1,6 +1,6 @@
 /**
  * Remote functions for the Insulin Dosing Profile (IDP) report Fetches sensor
- * glucose, boluses, carb intakes, insulin delivery stats, profile summary,
+ * glucose, boluses, carb intakes, insulin delivery stats, the profiles in force,
  * extended glucose analytics, averaged stats, and basal analysis
  */
 import { getRequestEvent, query } from "$app/server";
@@ -28,12 +28,12 @@ export const getIdpData = query(DateRangeSchema.optional(), async (input) => {
   const boluses = bolusResult.data ?? [];
 
   // Insulin/profile/AID stats and server-side glucose analytics in parallel.
-  const [insulinDeliveryStats, profileSummary, rangeAnalytics, aidSystemMetrics] =
+  const [insulinDeliveryStats, activeSchedules, rangeAnalytics, aidSystemMetrics] =
     await Promise.all([
       apiClient.statistics.getInsulinDeliveryStatistics(startDate, endDate),
       // Therapy settings need therapy.read; without it the report renders
       // with no basal schedule rather than not at all.
-      readable(() => apiClient.profile.getProfileSummary(startDate, endDate)),
+      readable(() => apiClient.profile.getActiveSchedules(startDate, endDate)),
       apiClient.statistics.getRangeAnalytics(startDate, endDate),
       apiClient.statistics.getAidSystemMetrics(startDate, endDate),
     ]);
@@ -42,7 +42,7 @@ export const getIdpData = query(DateRangeSchema.optional(), async (input) => {
     entries,
     boluses,
     insulinDeliveryStats,
-    profileSummary,
+    activeSchedules: activeSchedules ?? [],
     analysis: rangeAnalytics.analysis,
     averagedStats: rangeAnalytics.averagedStats,
     aidSystemMetrics,

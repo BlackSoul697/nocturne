@@ -10,7 +10,6 @@
 </script>
 
 <svelte:head>
-  <title>Prediction accuracy - Loop analysis - Nocturne reports</title>
   <meta name="description" content="The glucose predictions of the loop compared with the glucose readings that followed them." />
 </svelte:head>
 

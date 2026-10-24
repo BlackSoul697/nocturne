@@ -111,7 +111,6 @@
 </script>
 
 <svelte:head>
-  <title>Insulin delivery report - Nocturne reports</title>
   <meta
     name="description"
     content="Analyze your insulin delivery patterns including basal/bolus ratios and TDD trends"

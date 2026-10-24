@@ -12,6 +12,7 @@ using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Auth;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Core.Models.Authorization;
@@ -56,6 +57,8 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 public class AlertRulesController : ControllerBase
 {
     private readonly INocturneDbContextFactory _contextFactory;
+    private readonly IAlertRepository _alerts;
+    private readonly ITenantAccessor _tenantAccessor;
     private readonly IAlertReferenceService _referenceService;
     private readonly IAlertDeliveryService _deliveryService;
     private readonly IRuleScopeClassifier _scopeClassifier;
@@ -70,6 +73,8 @@ public class AlertRulesController : ControllerBase
     /// </summary>
     public AlertRulesController(
         INocturneDbContextFactory contextFactory,
+        IAlertRepository alerts,
+        ITenantAccessor tenantAccessor,
         IAlertReferenceService referenceService,
         IAlertDeliveryService deliveryService,
         IRuleScopeClassifier scopeClassifier,
@@ -80,6 +85,8 @@ public class AlertRulesController : ControllerBase
         ILogger<AlertRulesController> logger)
     {
         _contextFactory = contextFactory;
+        _alerts = alerts;
+        _tenantAccessor = tenantAccessor;
         _referenceService = referenceService;
         _deliveryService = deliveryService;
         _scopeClassifier = scopeClassifier;
@@ -99,15 +106,8 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(typeof(List<AlertRuleResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<AlertRuleResponse>>> GetRules(CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateAsync(ct);
-
-        var rules = await db.AlertRules
-            .AsNoTracking()
-            .Include(r => r.Channels)
-            .OrderBy(r => r.SortOrder)
-            .ToListAsync(ct);
-
-        return Ok(await ToResponsesAsync(db, rules, ct));
+        var rules = await _alerts.GetRulesAsync(_tenantAccessor.TenantId, ct);
+        return Ok(await ToResponsesAsync(rules, ct));
     }
 
     /// <summary>
@@ -120,17 +120,11 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AlertRuleResponse>> GetRule(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateAsync(ct);
-
-        var rule = await db.AlertRules
-            .AsNoTracking()
-            .Include(r => r.Channels)
-            .FirstOrDefaultAsync(r => r.Id == id, ct);
-
+        var rule = await _alerts.GetRuleAsync(_tenantAccessor.TenantId, id, ct);
         if (rule is null)
             return NotFound();
 
-        return Ok(await ToResponseAsync(db, rule, ct));
+        return Ok(await ToResponseAsync(rule, ct));
     }
 
     /// <summary>
@@ -195,12 +189,7 @@ public class AlertRulesController : ControllerBase
         db.AlertRules.Add(rule);
         await db.SaveChangesAsync(ct);
 
-        var created = await db.AlertRules
-            .AsNoTracking()
-            .Include(r => r.Channels)
-            .FirstAsync(r => r.Id == rule.Id, ct);
-
-        return CreatedAtAction(nameof(GetRule), new { id = created.Id }, await ToResponseAsync(db, created, ct));
+        return CreatedAtAction(nameof(GetRule), new { id = rule.Id }, await ReadBackAsync(tenantId, rule.Id, ct));
     }
 
     /// <summary>
@@ -254,9 +243,9 @@ public class AlertRulesController : ControllerBase
             || !sameBody
             || rule.AutoResolveEnabled != request.AutoResolveEnabled
             || !sameAutoResolve;
-        var snoozeChanged = !ConditionTreeEquality.Same(
-            SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration)?.GetRawText(),
-            SmartSnoozeConfig.StoredConditions(trees.ClientConfiguration)?.GetRawText());
+        var snoozeChanged = !SmartSnoozeConfig.SameConditions(
+            SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration),
+            SmartSnoozeConfig.StoredConditions(trees.ClientConfiguration));
 
         rule.Name = request.Name;
         rule.Description = request.Description;
@@ -304,12 +293,7 @@ public class AlertRulesController : ControllerBase
         if (wasEnabled && !request.IsEnabled)
             await _retirement.CloseAsync([id], tenantId, CancellationToken.None);
 
-        var updated = await db.AlertRules
-            .AsNoTracking()
-            .Include(r => r.Channels)
-            .FirstAsync(r => r.Id == id, ct);
-
-        return Ok(await ToResponseAsync(db, updated, ct));
+        return Ok(await ReadBackAsync(tenantId, id, ct));
     }
 
     /// <summary>
@@ -370,10 +354,7 @@ public class AlertRulesController : ControllerBase
         await using var unit = await DbUnitOfWork.OpenAsync(_contextFactory, ct);
         var db = unit.Context;
 
-        var rule = await db.AlertRules
-            .Include(r => r.Channels)
-            .FirstOrDefaultAsync(r => r.Id == id, ct);
-
+        var rule = await db.AlertRules.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (rule is null)
             return NotFound();
 
@@ -384,7 +365,7 @@ public class AlertRulesController : ControllerBase
         if (wasEnabled)
             await _retirement.CloseAsync([id], db.TenantId, CancellationToken.None);
 
-        return Ok(await ToResponseAsync(db, rule, ct));
+        return Ok(await ReadBackAsync(db.TenantId, id, ct));
     }
 
     /// <summary>
@@ -399,23 +380,11 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TestFire(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateAsync(ct);
-
-        var rule = await db.AlertRules
-            .AsNoTracking()
-            .Include(r => r.Channels)
-            .FirstOrDefaultAsync(r => r.Id == id, ct);
-
+        var tenantId = _tenantAccessor.TenantId;
+        var rule = await _alerts.GetRuleAsync(tenantId, id, ct);
         if (rule is null) return NotFound();
 
-        var channels = rule.Channels
-            .OrderBy(c => c.SortOrder)
-            .Select(c => new AlertRuleChannelSnapshot(
-                c.Id, c.AlertRuleId, c.ChannelType,
-                c.Destination, c.DestinationLabel, c.SortOrder, c.Metadata, c.Secret))
-            .ToList();
-
-        await _deliveryService.TestFireAsync(rule.Id, channels, BuildTestPayload(rule, db.TenantId), ct);
+        await _deliveryService.TestFireAsync(id, rule.Channels, BuildTestPayload(rule.Rule, tenantId), ct);
         return Accepted();
     }
 
@@ -481,7 +450,7 @@ public class AlertRulesController : ControllerBase
         return Accepted();
     }
 
-    private static AlertPayload BuildTestPayload(AlertRuleEntity rule, Guid tenantId) => new()
+    private static AlertPayload BuildTestPayload(AlertRuleSnapshot rule, Guid tenantId) => new()
     {
         AlertType = rule.ConditionType,
         RuleName = $"[Test] {rule.Name}",
@@ -808,15 +777,21 @@ public class AlertRulesController : ControllerBase
     private static string? SerializeMetadata(object? metadata) =>
         metadata is not null ? JsonSerializer.Serialize(metadata) : null;
 
-    private async Task<AlertRuleResponse> ToResponseAsync(
-        NocturneDbContext db, AlertRuleEntity rule, CancellationToken ct) =>
-        (await ToResponsesAsync(db, [rule], ct))[0];
+    private async Task<AlertRuleResponse> ToResponseAsync(AlertRuleRecord rule, CancellationToken ct) =>
+        (await ToResponsesAsync([rule], ct))[0];
+
+    /// <summary>The response for a rule this request has just committed.</summary>
+    private async Task<AlertRuleResponse> ReadBackAsync(Guid tenantId, Guid ruleId, CancellationToken ct) =>
+        await ToResponseAsync(
+            await _alerts.GetRuleAsync(tenantId, ruleId, ct)
+                ?? throw new InvalidOperationException($"Alert rule {ruleId} was not found after it was saved."),
+            ct);
 
     /// <summary>
     /// What a save of the stored rule would reject. A rule the engine cannot take at all is logged
     /// and listed without issues, so one such rule does not fail the whole list.
     /// </summary>
-    private IReadOnlyList<RustValidationIssue> StoredIssues(AlertRuleEntity rule)
+    private IReadOnlyList<RustValidationIssue> StoredIssues(AlertRuleSnapshot rule)
     {
         try
         {
@@ -837,9 +812,9 @@ public class AlertRulesController : ControllerBase
     /// This is not a privacy boundary: member names are readable more widely (issue #2359).
     /// </summary>
     private async Task<List<AlertRuleResponse>> ToResponsesAsync(
-        NocturneDbContext db, IEnumerable<AlertRuleEntity> rules, CancellationToken ct)
+        IEnumerable<AlertRuleRecord> rules, CancellationToken ct)
     {
-        var responses = rules.Select(rule => MapToResponse(rule, StoredIssues(rule))).ToList();
+        var responses = rules.Select(rule => MapToResponse(rule, StoredIssues(rule.Rule))).ToList();
         var inApp = responses
             .SelectMany(r => r.Channels)
             .Where(c => c.ChannelType == ChannelType.InApp)
@@ -849,6 +824,7 @@ public class AlertRulesController : ControllerBase
             return responses;
         }
 
+        await using var db = await _contextFactory.CreateAsync(ct);
         var recipients = await InAppRecipients.ListAsync(db, db.TenantId, ct);
         foreach (var channel in inApp)
         {
@@ -885,28 +861,27 @@ public class AlertRulesController : ControllerBase
     }
 
     private static AlertRuleResponse MapToResponse(
-        AlertRuleEntity entity, IReadOnlyList<RustValidationIssue> conditionIssues) => new()
+        AlertRuleRecord record, IReadOnlyList<RustValidationIssue> conditionIssues) => new()
     {
-        Id = entity.Id,
-        Name = entity.Name,
-        Description = entity.Description,
-        ConditionType = entity.ConditionType,
-        ConditionParams = DeserializeJson(entity.ConditionParams),
-        IsEnabled = entity.IsEnabled,
-        SortOrder = entity.SortOrder,
-        Severity = entity.Severity,
-        AllowThroughDnd = entity.AllowThroughDnd,
-        ScopeClass = entity.ScopeClass,
-        ManagedBy = entity.ManagedBy,
-        ReviewReason = entity.ReviewReason,
+        Id = record.Rule.Id,
+        Name = record.Rule.Name,
+        Description = record.Description,
+        ConditionType = record.Rule.ConditionType,
+        ConditionParams = DeserializeJson(record.Rule.ConditionParams),
+        IsEnabled = record.IsEnabled,
+        SortOrder = record.Rule.SortOrder,
+        Severity = record.Rule.Severity,
+        AllowThroughDnd = record.Rule.AllowThroughDnd,
+        ScopeClass = record.Rule.ScopeClass,
+        ManagedBy = record.ManagedBy,
+        ReviewReason = record.ReviewReason,
         ConditionIssues = [.. conditionIssues],
-        AutoResolveEnabled = entity.AutoResolveEnabled,
-        AutoResolveParams = entity.AutoResolveParams is null
+        AutoResolveEnabled = record.Rule.AutoResolveEnabled,
+        AutoResolveParams = record.Rule.AutoResolveParams is null
             ? null
-            : DeserializeJson(entity.AutoResolveParams),
-        ClientConfiguration = DeserializeJson(entity.ClientConfiguration),
-        Channels = entity.Channels
-            .OrderBy(c => c.SortOrder)
+            : DeserializeJson(record.Rule.AutoResolveParams),
+        ClientConfiguration = DeserializeJson(record.Rule.ClientConfiguration),
+        Channels = record.Channels
             .Select(c => new AlertRuleChannelResponse
             {
                 Id = c.Id,

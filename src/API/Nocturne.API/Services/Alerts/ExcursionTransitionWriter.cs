@@ -186,7 +186,7 @@ internal static class ExcursionTransitionWriter
             return new Written(new ExcursionTransition(ExcursionTransitionType.None), null, null, now);
         }
 
-        await ApplyTimerOpsAsync(repository.Timers, ruleId, timerOps, ct);
+        await ApplyOpsAsync(repository.Timers, ruleId, timerOps, ct);
 
         var priorId = prior?.ActiveExcursionId;
         Guid? activeId = priorId;
@@ -258,8 +258,36 @@ internal static class ExcursionTransitionWriter
         return new Written(transition, autoResolve, state, now);
     }
 
+    /// <summary>
+    /// Writes the <paramref name="timerOps"/> of an evaluation that makes no tracker decision, in a
+    /// transaction under the rule's transition lock, when the rule read under that lock still holds
+    /// what the evaluation read (<paramref name="evaluatedAgainst"/>). Otherwise it writes nothing,
+    /// as a dropped decision drops its timers.
+    /// </summary>
+    /// <returns>Whether the rule still holds it, so the evaluation stands.</returns>
+    public static Task<bool> ApplyTimerOpsAsync(
+        IAlertTrackerRepository repository,
+        ILogger logger,
+        Guid ruleId,
+        Func<AlertRule, bool> evaluatedAgainst,
+        IReadOnlyList<RustTimerOp>? timerOps,
+        CancellationToken ct) =>
+        repository.ExecuteInTransactionAsync(async (tx, token) =>
+        {
+            await tx.LockRuleAsync(ruleId, token);
+            if (await tx.GetRuleAsync(ruleId, token) is not { } rule || !evaluatedAgainst(rule))
+            {
+                logger.LogInformation(
+                    "Alert rule {AlertRuleId} changed since its evaluation read it; its sustained timers are dropped",
+                    ruleId);
+                return false;
+            }
+            await ApplyOpsAsync(tx.Timers, ruleId, timerOps, token);
+            return true;
+        }, ct: ct);
+
     /// <summary>Applies timer deltas in the order the engine executed them.</summary>
-    public static async Task ApplyTimerOpsAsync(
+    private static async Task ApplyOpsAsync(
         IConditionTimerStore timers, Guid ruleId, IReadOnlyList<RustTimerOp>? ops, CancellationToken ct)
     {
         foreach (var op in ops ?? [])

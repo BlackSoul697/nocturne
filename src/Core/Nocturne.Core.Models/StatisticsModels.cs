@@ -207,6 +207,9 @@ public class GlycemicThresholds
 
 public class TimeInRangeMetrics
 {
+    /// <summary>The band edges the percentages, durations and episodes were measured against.</summary>
+    public GlycemicThresholds? Thresholds { get; set; }
+
     /// <summary>
     /// Percentages of time in each range
     /// </summary>
@@ -1521,8 +1524,8 @@ public sealed class ContributingDevice
     /// <summary>The registered <see cref="PatientDevice"/> id, or <c>null</c> for the unattributed bucket.</summary>
     public Guid? PatientDeviceId { get; set; }
 
-    /// <summary>Display name of the device, or "Unattributed" for readings with no <see cref="PatientDeviceId"/>.</summary>
-    public string Name { get; set; } = string.Empty;
+    /// <summary>Display name of the device, or <c>null</c> for the unattributed bucket.</summary>
+    public string? Name { get; set; }
 
     /// <summary>Number of readings attributed to this device within the requested window.</summary>
     public int ReadingCount { get; set; }
@@ -1629,6 +1632,11 @@ public class InsulinDeliveryStatistics
     /// Total carbohydrates consumed in grams
     /// </summary>
     public double TotalCarbs { get; set; }
+
+    /// <summary>
+    /// Grams of carbohydrate per day: <see cref="TotalCarbs"/> over <see cref="WindowDays"/>
+    /// </summary>
+    public double CarbsPerDay { get; set; }
 
     /// <summary>
     /// Number of manually initiated boluses in the period. Algorithm-delivered boluses
@@ -2106,6 +2114,9 @@ public class SiteChangeImpactAnalysis
 
     /// <summary>Summary statistics comparing before vs after</summary>
     public SiteChangeImpactSummary Summary { get; set; } = new();
+
+    /// <summary>The consensus band edges the chart draws its target range between.</summary>
+    public required GlycemicThresholds Thresholds { get; set; }
 
     /// <summary>Hours analyzed before site change</summary>
     public int HoursBeforeChange { get; set; }

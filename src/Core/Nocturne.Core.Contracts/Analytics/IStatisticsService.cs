@@ -383,11 +383,13 @@ public interface IStatisticsService
     /// Carb intakes, when given, fill each day's <see cref="DailyBasalBolusRatioData.Carbs"/>. A day with carbs and no
     /// insulin gets a row but is not counted in <see cref="DailyBasalBolusRatioResponse.DaysWithData"/>.
     /// </summary>
+    /// <param name="startDate">Start of the window; a temp basal that began before it counts from here.</param>
     /// <param name="untilMills">As for <see cref="CalculateInsulinDeliveryStatistics"/>.</param>
     DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        DateTime startDate,
         long untilMills,
         TimeZoneInfo userTimeZone,
         IEnumerable<BasalInjection>? basalInjections = null,
@@ -432,7 +434,7 @@ public interface IStatisticsService
 
     /// <summary>
     /// The registered CGMs that contributed <paramref name="readings"/>, each with its reading count,
-    /// then an "Unattributed" entry when any reading has no device.
+    /// then a nameless entry with no device id when any reading has no device.
     /// </summary>
     IEnumerable<ContributingDevice> CalculateContributingDevices(
         IReadOnlyCollection<SensorGlucose> readings,

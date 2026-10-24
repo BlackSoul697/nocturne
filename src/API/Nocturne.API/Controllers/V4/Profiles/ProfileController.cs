@@ -5,6 +5,7 @@ using Nocturne.API.Attributes;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Profiles;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -167,6 +168,35 @@ public class ProfileController : ControllerBase, IWriteScopedController
 
         return Ok(summary);
     }
+
+    /// <summary>
+    /// The profiles in force over [<paramref name="from"/>, <paramref name="to"/>), the longest first,
+    /// each with the schedules it read then.
+    /// </summary>
+    [HttpGet("active-schedules")]
+    [RequireScope(Scope.TherapyRead)]
+    [RemoteQuery]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(List<ActiveProfileSchedules>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<ActiveProfileSchedules>>> GetActiveSchedules(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromServices] IActiveProfileSchedulesService activeSchedules,
+        CancellationToken ct = default
+    )
+    {
+        if (to <= from)
+            return Problem(detail: "The range must end after it starts.", statusCode: 400, title: "Bad Request");
+        if (this.RejectDateSpan(from, to) is { } overlong)
+            return overlong;
+
+        var profiles = await activeSchedules.GetForRangeAsync(ToMills(from), ToMills(to), ct);
+        return Ok(profiles.ToList());
+    }
+
+    private static long ToMills(DateTime instant) =>
+        new DateTimeOffset(DateTime.SpecifyKind(instant, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
     /// <summary>
     /// Make the newest settings row of <paramref name="profileName"/> (exact name) the tenant's only default profile.

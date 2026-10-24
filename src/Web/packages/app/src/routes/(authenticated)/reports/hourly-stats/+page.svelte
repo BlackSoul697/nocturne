@@ -58,7 +58,6 @@
 </script>
 
 <svelte:head>
-  <title>Hourly patterns - Nocturne reports</title>
   <meta
     name="description"
     content="Which hours of the day spend the most and least time in the glucose target range"

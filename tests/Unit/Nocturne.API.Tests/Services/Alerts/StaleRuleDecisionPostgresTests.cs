@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
@@ -37,6 +38,9 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
     private const string SustainedResolve = """{"type":"sustained","sustained":{"minutes":5,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}""";
     private const string EditedSustainedResolve = """{"type":"sustained","sustained":{"minutes":6,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}""";
     private const string SustainedSnooze = """{"snooze":{"smartSnooze":true,"conditions":[{"type":"sustained","sustained":{"minutes":5,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}]}}""";
+    private const string SustainedSnoozeConditions = """[{"type":"sustained","sustained":{"minutes":5,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}]""";
+    private const string LongerSustainedSnooze = """{"snooze":{"smartSnooze":true,"conditions":[{"type":"sustained","sustained":{"minutes":6,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}]}}""";
+    private const string ReorderedSnooze = """{"snooze":{"smartSnooze":true,"conditions":[{"type":"threshold","threshold":{"direction":"above","value":90}},{"type":"sustained","sustained":{"minutes":5,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}]}}""";
     private static readonly DateTimeOffset Now = new(2026, 1, 5, 12, 0, 0, TimeSpan.Zero);
 
     public sealed class Database : IAsyncLifetime
@@ -151,6 +155,19 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         await new AlertRuleRearm(new AlertRuleEvaluationGate())
             .SaveAndClearAsync(unit, rule, CancellationToken.None);
     };
+
+    /// <summary>An edit of the smart-snooze conditions alone, saved as the alert rule editor saves it, on another replica.</summary>
+    private Func<Task> EditSnoozeOnAnotherReplica(Guid tenant, Guid rule, string clientConfiguration) => async () =>
+    {
+        await using var unit = DbUnitOfWork.Own(Context(tenant));
+        var stored = await unit.Context.AlertRules.SingleAsync(r => r.Id == rule);
+        stored.ClientConfiguration = clientConfiguration;
+        stored.UpdatedAt = DateTime.UtcNow;
+        await new AlertRuleRearm(new AlertRuleEvaluationGate())
+            .SaveAndPruneAsync(unit, rule, CancellationToken.None);
+    };
+
+    private static JsonElement SnoozeConditions => JsonDocument.Parse(SustainedSnoozeConditions).RootElement;
 
     private static ExcursionTracker Tracker(AlertTrackerRepository repository) =>
         EngineTestHarness.BuildRustTracker(new FakeTimeProvider(Now), repository);
@@ -349,5 +366,57 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         await EditOnAnotherReplica(tenant, rule.Id, r => r.ConditionParams = EditedSustainedBody)();
 
         (await TimersAsync(tenant)).Keys.Should().BeEquivalentTo("sustained", "auto_resolve", "snooze[0].sustained");
+    }
+
+    [NativeFact]
+    public async Task A_snooze_evaluation_of_replaced_conditions_writes_no_sustained_timer()
+    {
+        var (tenant, rule, _) = await SeedAsync(active: false, clientConfiguration: SustainedSnooze);
+        await using var db = Context(tenant);
+        var edit = EditSnoozeOnAnotherReplica(tenant, rule.Id, ReorderedSnooze);
+
+        await Engine(new EditBeforeLockRepository(db, edit))
+            .EvaluateSnoozeAsync(rule.Id, SnoozeConditions, Glucose(120), CancellationToken.None);
+
+        (await TimersAsync(tenant)).Should().BeEmpty();
+    }
+
+    [NativeFact]
+    public async Task A_snooze_evaluation_of_replaced_conditions_does_not_extend()
+    {
+        var (tenant, rule, _) = await SeedAsync(active: false, clientConfiguration: SustainedSnooze);
+        var started = Now.UtcDateTime.AddMinutes(-10);
+        await using (var seed = Context(tenant))
+        {
+            seed.AlertConditionTimers.Add(new AlertConditionTimerEntity
+            {
+                TenantId = tenant,
+                AlertRuleId = rule.Id,
+                ConditionPath = "snooze[0].sustained",
+                FirstTrueAt = started,
+            });
+            await seed.SaveChangesAsync();
+        }
+        await using var db = Context(tenant);
+        var edit = EditSnoozeOnAnotherReplica(tenant, rule.Id, LongerSustainedSnooze);
+
+        var holds = await Engine(new EditBeforeLockRepository(db, edit))
+            .EvaluateSnoozeAsync(rule.Id, SnoozeConditions, Glucose(120), CancellationToken.None);
+
+        holds.Should().BeFalse();
+        (await TimersAsync(tenant)).Should().Equal(new Dictionary<string, DateTime> { ["snooze[0].sustained"] = started });
+    }
+
+    [NativeFact]
+    public async Task A_snooze_evaluation_of_the_current_conditions_writes_its_sustained_timer()
+    {
+        var (tenant, rule, _) = await SeedAsync(active: false, clientConfiguration: SustainedSnooze);
+        await using var db = Context(tenant);
+
+        var holds = await Engine(new EditBeforeLockRepository(db, () => Task.CompletedTask))
+            .EvaluateSnoozeAsync(rule.Id, SnoozeConditions, Glucose(120), CancellationToken.None);
+
+        holds.Should().BeFalse("the window starts on the first true tick");
+        (await TimersAsync(tenant)).Should().Equal(new Dictionary<string, DateTime> { ["snooze[0].sustained"] = Now.UtcDateTime });
     }
 }

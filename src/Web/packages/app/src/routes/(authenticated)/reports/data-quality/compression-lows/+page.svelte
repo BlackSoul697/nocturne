@@ -84,7 +84,6 @@
 	});
 
 	setReportPrintMeta(() => ({
-		title: 'Compression lows',
 		period: nightSpan ?? { label: 'All recorded nights' }
 	}));
 
@@ -345,10 +344,6 @@
 	const isPending = $derived(suggestionDetail?.suggestion?.status?.toLowerCase() === 'pending');
 	const DetailStatusIcon = $derived(getStatusIcon(suggestionDetail?.suggestion?.status));
 </script>
-
-<svelte:head>
-	<title>Compression lows - Nocturne</title>
-</svelte:head>
 
 {#if suggestionsResource.current}
 	<div class="@container space-y-6">

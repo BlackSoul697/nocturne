@@ -337,7 +337,7 @@ public static class ServiceRegistrationExtensions
 
         services.AddScoped<IDDataService, DDataService>();
         services.AddScoped<IPropertiesService, PropertiesService>();
-        services.AddScoped<ICurrentIobCobReader, CurrentIobCobReader>();
+        services.AddScoped<IIobCobReader, IobCobReader>();
         services.AddScoped<ISummaryService, SummaryService>();
         // Prediction service — configurable via Predictions:Source (None, DeviceStatus, OrefWasm)
         var predictionSource = PredictionOptions.ResolveSource(configuration);
@@ -718,6 +718,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<ProfileStoreTimelineSource>();
         services.AddScoped<IBasalRateResolver, BasalRateResolver>();
         services.AddScoped<IBasalSegmentService, BasalSegmentService>();
+        services.AddScoped<IActiveProfileSchedulesService, ActiveProfileSchedulesService>();
         services.AddScoped<ISensitivityResolver, SensitivityResolver>();
         services.AddScoped<ICarbRatioResolver, CarbRatioResolver>();
         services.AddScoped<ITargetRangeResolver, TargetRangeResolver>();

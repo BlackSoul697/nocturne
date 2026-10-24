@@ -10,7 +10,6 @@
 </script>
 
 <svelte:head>
-  <title>Loop health - Loop analysis - Nocturne reports</title>
   <meta name="description" content="How much of the time the loop was closed, why it stopped and how frequently it reached its limits." />
 </svelte:head>
 

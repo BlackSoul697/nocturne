@@ -5,13 +5,15 @@ using Nocturne.API.Services.Treatments;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Treatments;
 
-public class CurrentIobCobReaderTests
+public class IobCobReaderTests
 {
     private readonly List<ApsSnapshot> _snapshots = [];
     private readonly Mock<IBolusRepository> _boluses = new();
@@ -20,7 +22,7 @@ public class CurrentIobCobReaderTests
     private readonly List<Bolus> _storedBoluses = [];
     private readonly List<CarbIntake> _storedCarbs = [];
 
-    public CurrentIobCobReaderTests()
+    public IobCobReaderTests()
     {
         _boluses
             .Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
@@ -33,7 +35,7 @@ public class CurrentIobCobReaderTests
             .ReturnsAsync(() => _storedCarbs.ToList());
     }
 
-    private CurrentIobCobReader NewReader(string? partition = "full")
+    private IobCobReader NewReader(string? partition = "full", ICobCalculator? cobCalculator = null)
     {
         var aps = new Mock<IApsSnapshotRepository>();
         aps.Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -63,9 +65,9 @@ public class CurrentIobCobReaderTests
         var cob = new CobCalculator(
             NullLogger<CobCalculator>.Instance, iob, sensitivity.Object, carbRatio.Object, therapy.Object, aps.Object);
 
-        return new CurrentIobCobReader(
-            iob, cob, _boluses.Object, _tempBasals.Object, _carbs.Object,
-            TestTenantCache.Create(partition: partition));
+        return new IobCobReader(
+            iob, cobCalculator ?? cob, _boluses.Object, _tempBasals.Object, _carbs.Object,
+            TestTenantCache.Create(partition: partition), NullLogger<IobCobReader>.Instance);
     }
 
     private void Snapshot(AidAlgorithm algorithm, int minutesAgo, double? iob, double? cob) =>
@@ -77,6 +79,10 @@ public class CurrentIobCobReaderTests
             Cob = cob,
         });
 
+    private static long NowMills => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    private static Task<IobCobReading> Live(IobCobReader reader) => reader.ReadTotalAsync(NowMills, live: true);
+
     private void VerifyBolusReads(Times times) =>
         _boluses.Verify(
             r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
@@ -86,17 +92,17 @@ public class CurrentIobCobReaderTests
     [InlineData(AidAlgorithm.AndroidAps)]
     [InlineData(AidAlgorithm.Trio)]
     [InlineData(AidAlgorithm.OpenAps)]
-    public async Task RecentOrefSnapshot_SuppliesIobAndCob(AidAlgorithm algorithm)
+    public async Task RecentOrefSnapshot_SuppliesIobAndCob_WithNoTreatments(AidAlgorithm algorithm)
     {
         Snapshot(algorithm, 5, iob: 1.254, cob: 23);
 
-        var current = await NewReader().GetAsync();
+        var current = await Live(NewReader());
 
-        current.Iob.Should().Be(1.25);
-        current.IobDisplay.Should().Be("1.25");
-        current.IobSource.Should().Be("OpenAPS");
-        current.Cob.Should().Be(23);
-        current.CobSource.Should().Be("OpenAPS");
+        current.Iob.Iob.Should().Be(1.254);
+        IobResult.FormatDisplay(current.Iob.Iob).Should().Be("1.25");
+        current.Iob.Source.Should().Be("OpenAPS");
+        current.Cob.Cob.Should().Be(23);
+        current.Cob.Source.Should().Be("OpenAPS");
     }
 
     [Fact]
@@ -104,12 +110,12 @@ public class CurrentIobCobReaderTests
     {
         Snapshot(AidAlgorithm.Loop, 3, iob: 0.8, cob: 12);
 
-        var current = await NewReader().GetAsync();
+        var current = await Live(NewReader());
 
-        current.Iob.Should().Be(0.8);
-        current.IobSource.Should().Be("Loop");
-        current.Cob.Should().Be(12);
-        current.CobSource.Should().Be("Loop");
+        current.Iob.Iob.Should().Be(0.8);
+        current.Iob.Source.Should().Be("Loop");
+        current.Cob.Cob.Should().Be(12);
+        current.Cob.Source.Should().Be("Loop");
     }
 
     [Fact]
@@ -118,51 +124,49 @@ public class CurrentIobCobReaderTests
         Snapshot(AidAlgorithm.AndroidAps, 45, iob: 9.99, cob: 99);
         _storedBoluses.Add(new Bolus { Timestamp = DateTime.UtcNow.AddMinutes(-30), Insulin = 2 });
 
-        var current = await NewReader().GetAsync();
+        var current = await Live(NewReader());
 
-        current.IobSource.Should().NotBe("OpenAPS");
-        current.Iob.Should().BeInRange(0.01, 2);
-        current.Cob.Should().Be(0);
+        current.Iob.Source.Should().NotBe("OpenAPS");
+        current.Iob.Iob.Should().BeInRange(0.01, 2);
+        current.Cob.Cob.Should().Be(0);
     }
 
     [Fact]
-    public async Task NoSnapshotAndNoTreatments_IsZeroWithNoSource()
+    public async Task NoSnapshotAndNoTreatments_IsZero()
     {
-        var current = await NewReader().GetAsync();
+        var current = await Live(NewReader());
 
-        current.Iob.Should().Be(0);
-        current.IobDisplay.Should().Be("0");
-        current.IobSource.Should().BeNull();
-        current.Cob.Should().Be(0);
+        current.Iob.Iob.Should().Be(0);
+        IobResult.FormatDisplay(current.Iob.Iob).Should().Be("0");
+        current.Cob.Cob.Should().Be(0);
     }
 
     [Fact]
-    public async Task NegativeIob_KeepsTwoDecimalsAsNightscoutShowsIt()
+    public async Task ReadsTheLookbacks_EndingAtTheInstant()
     {
-        Snapshot(AidAlgorithm.AndroidAps, 5, iob: -0.3, cob: 0);
+        var at = NowMills - 3 * 60 * 60 * 1000;
+        var atUtc = DateTimeOffset.FromUnixTimeMilliseconds(at).UtcDateTime;
 
-        var current = await NewReader().GetAsync();
+        await NewReader().ReadInputsAsync(at);
 
-        current.IobDisplay.Should().Be("-0.30");
+        var insulinFrom = atUtc.AddHours(-IIobCobReader.InsulinLookbackHours);
+        _boluses.Verify(r => r.GetAsync(
+            insulinFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<bool>(),
+            It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _tempBasals.Verify(r => r.GetAsync(
+            insulinFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()), Times.Once);
+        _carbs.Verify(r => r.GetAsync(
+            atUtc.AddHours(-IIobCobReader.CarbLookbackHours), atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<bool>(),
+            It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task FractionalCob_IsRoundedToOneDecimalAsNightscoutShowsIt()
-    {
-        Snapshot(AidAlgorithm.AndroidAps, 5, iob: 1, cob: 17.8333333);
-
-        var current = await NewReader().GetAsync();
-
-        current.Cob.Should().Be(17.8);
-    }
-
-    [Fact]
-    public async Task SecondCallWithinAMinute_IsServedFromTheCache()
+    public async Task SecondLiveReadWithinAMinute_IsServedFromTheCache()
     {
         var reader = NewReader();
 
-        await reader.GetAsync();
-        await reader.GetAsync();
+        await Live(reader);
+        await Live(reader);
 
         VerifyBolusReads(Times.Once());
     }
@@ -172,9 +176,37 @@ public class CurrentIobCobReaderTests
     {
         var reader = NewReader(partition: null);
 
-        await reader.GetAsync();
-        await reader.GetAsync();
+        await Live(reader);
+        await Live(reader);
 
         VerifyBolusReads(Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task AReadAtAPastInstant_IsNeverServedFromTheLiveCache()
+    {
+        var reader = NewReader();
+        Snapshot(AidAlgorithm.AndroidAps, 5, iob: 1.5, cob: 10);
+        await Live(reader);
+
+        var past = await reader.ReadTotalAsync(NowMills - 3 * 60 * 60 * 1000, live: false);
+
+        past.Iob.Iob.Should().Be(0);
+        VerifyBolusReads(Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task ACobFailure_LeavesTheIob()
+    {
+        Snapshot(AidAlgorithm.AndroidAps, 5, iob: 1.5, cob: 10);
+        var failing = new Mock<ICobCalculator>();
+        failing
+            .Setup(c => c.CalculateTotalAsync(It.IsAny<List<CarbIntake>>(), It.IsAny<List<Bolus>?>(), It.IsAny<List<TempBasal>?>(), It.IsAny<long>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("cob"));
+
+        var current = await Live(NewReader(cobCalculator: failing.Object));
+
+        current.Iob.Iob.Should().Be(1.5);
+        current.Cob.Should().BeNull();
     }
 }

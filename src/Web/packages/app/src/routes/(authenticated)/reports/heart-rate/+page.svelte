@@ -67,7 +67,6 @@
 </script>
 
 <svelte:head>
-  <title>Heart rate - Nocturne reports</title>
   <meta
     name="description"
     content="Heart rate actogram with glucose overlay"

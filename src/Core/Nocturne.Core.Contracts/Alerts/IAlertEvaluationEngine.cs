@@ -84,20 +84,22 @@ public interface IAlertEvaluationEngine
         CancellationToken ct);
 
     /// <summary>
-    /// Evaluates a single condition tree outside the per-rule driver (no tracker, no
-    /// auto-resolve) under a reserved path root — used for smart-snooze conditions
-    /// (<c>snooze</c>) and other auxiliary evaluation scopes. Sustained timers inside the
-    /// tree are keyed by <c>(ruleId, path)</c> exactly like rule-body timers.
+    /// Evaluates a rule's smart-snooze conditions, outside the per-rule driver (no tracker, no
+    /// auto-resolve), under the reserved <c>snooze</c> path root. Sustained timers inside them are
+    /// keyed by <c>(ruleId, path)</c> exactly like rule-body timers.
     /// </summary>
-    /// <param name="ruleId">The rule whose timer rows the tree's sustained nodes are keyed under.</param>
-    /// <param name="node">The condition tree to evaluate, a full condition node as stored.</param>
+    /// <param name="ruleId">The rule the conditions were read from.</param>
+    /// <param name="conditions">The rule's stored snooze <c>conditions</c> list, as read.</param>
     /// <param name="context">Enriched sensor context.</param>
-    /// <param name="pathRoot">Root path segment (e.g. <c>snooze</c>).</param>
-    Task<bool> EvaluateNodeAsync(
+    /// <returns>
+    /// Whether the conditions hold. False, with no timer written, when the rule no longer stores
+    /// <paramref name="conditions"/>: an extension decided on a replaced tree is not trusted, so the
+    /// snooze lapses.
+    /// </returns>
+    Task<bool> EvaluateSnoozeAsync(
         Guid ruleId,
-        JsonElement node,
+        JsonElement conditions,
         SensorContext context,
-        string pathRoot,
         CancellationToken ct);
 
     /// <summary>
