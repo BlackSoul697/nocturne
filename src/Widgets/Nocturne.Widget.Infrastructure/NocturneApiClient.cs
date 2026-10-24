@@ -29,9 +29,6 @@ public class NocturneApiClient : INocturneApiClient, IAsyncDisposable
     /// <summary>Client identifier sent with the data-hub authorization request.</summary>
     private const string ClientName = "Nocturne.Widget.Windows11";
 
-    /// <summary>Notification level (URGENT) at or above which an alarm is treated as urgent.</summary>
-    private const int UrgentAlarmLevel = 2;
-
     /// <summary>
     /// Record collections the data hub subscribes to: the native V4 categories (glucose/care/device)
     /// plus the legacy v1 collections, so realtime works whether the tenant writes V4 or legacy shapes.
@@ -397,7 +394,7 @@ public class NocturneApiClient : INocturneApiClient, IAsyncDisposable
     {
         foreach (var (eventName, kind) in AlarmHubEvents.Kinds)
         {
-            connection.On<JsonElement>(eventName, payload => RaiseAlarm(payload, kind.Urgent, kind.Cleared));
+            connection.On<JsonElement>(eventName, payload => RaiseAlarm(payload, kind));
         }
     }
 
@@ -411,7 +408,7 @@ public class NocturneApiClient : INocturneApiClient, IAsyncDisposable
             }
         );
 
-    private void RaiseAlarm(JsonElement payload, bool urgent, bool cleared)
+    private void RaiseAlarm(JsonElement payload, AlarmEventKind kind)
     {
         var level = GetInt(payload, "level");
         var args = new AlarmEventArgs
@@ -420,11 +417,11 @@ public class NocturneApiClient : INocturneApiClient, IAsyncDisposable
             Title = GetString(payload, "title"),
             Message = GetString(payload, "message"),
             Level = level,
-            Urgent = urgent || level >= UrgentAlarmLevel,
+            Urgent = kind.IsUrgent(level),
             Timestamp = GetLong(payload, "timestamp"),
         };
 
-        if (cleared)
+        if (kind.Cleared)
         {
             AlarmCleared?.Invoke(this, args);
         }
