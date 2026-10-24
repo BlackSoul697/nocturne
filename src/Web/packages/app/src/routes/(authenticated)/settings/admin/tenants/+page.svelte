@@ -34,6 +34,8 @@
   import { getTransitionStatus } from "$api/generated/platforms.generated.remote";
   import { describeSubmitError } from "$lib/forms/submit-error";
   import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { invalidate } from "$app/navigation";
+  import { SHELL_DATA_KEY } from "$lib/constants/shell-data";
 
   const tenantIdQuery = getCurrentTenantId();
   const currentTenantId = $derived(tenantIdQuery.current ?? undefined);
@@ -229,6 +231,7 @@
       });
       createdSlug = normalizedSlug;
       isCreateDialogOpen = false;
+      void invalidate(SHELL_DATA_KEY);
     } catch (err) {
       createError = describeSubmitError(
         err,
