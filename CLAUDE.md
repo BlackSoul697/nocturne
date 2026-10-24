@@ -269,9 +269,10 @@ Every context comes from `INocturneDbContextFactory`:
 
 - `CreateAsync` — the scope's reader, including its resolved tenant.
 - `CreateForTenantAsync(tenantId)` — pins the tenant in place of the scope's.
-- `CreateForSubjectAsync(subjectId)` — no tenant; sets `app.current_subject_id`. No policy
-  reads that GUC today: its callers (tenant switcher, caregiver overview, membership
-  enumeration) work because the identity tables carry no RLS.
+- `CreateForSubjectAsync(subjectId)` — no tenant; sets `app.current_subject_id`, which the
+  `subject_pin` policy on `subjects`, `tenant_members` and `refresh_tokens` reads: a pinned
+  context sees only that subject's rows there, and a context with the GUC unset sees all of them.
+  Its callers are the tenant switcher, the caregiver overview and membership enumeration.
 - `CreatePlatformAsync` — no tenant, no subject, for platform tables.
 
 A pin replaces only the tenant or subject: share, clamp and audit state always come from the
