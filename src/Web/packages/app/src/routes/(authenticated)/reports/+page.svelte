@@ -113,7 +113,6 @@
 </script>
 
 <svelte:head>
-  <title>Reports - Nocturne</title>
   <meta
     name="description"
     content="Comprehensive diabetes management analytics and insights"

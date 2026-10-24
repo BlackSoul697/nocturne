@@ -69,7 +69,6 @@
 </script>
 
 <svelte:head>
-  <title>Insulin Dosing Profile - Nocturne Reports</title>
   <meta
     name="description"
     content="Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"

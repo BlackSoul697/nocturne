@@ -402,6 +402,24 @@ export function reportTitle(category: ReportCategory, report: ReportItem): strin
   return category.pages ? `${category.title}: ${report.title}` : report.title;
 }
 
+const reportSubRouteTitles: Record<string, string> = {
+  "/reports/data-quality/compression-lows": "Compression Lows",
+  "/reports/data-quality/sensor-integrity": "Signal Integrity",
+  "/reports/data-quality/cgm-comparison": "CGM Comparison",
+  "/reports/data-quality/rejected-uploads": "Rejected Uploads",
+  "/reports/sleep/[date]": "Sleep Night Report",
+};
+
+/**
+ * The name of a report route the registry does not list, resolvable on the
+ * server where a page's own effects do not run.
+ */
+export function reportSubRouteTitle(pathname: string): string | undefined {
+  return reportSubRouteTitles[
+    /^\/reports\/sleep\/[^/]+$/.test(pathname) ? "/reports/sleep/[date]" : pathname
+  ];
+}
+
 /** The viewer a report list is built for. */
 export interface ReportViewer {
   /**

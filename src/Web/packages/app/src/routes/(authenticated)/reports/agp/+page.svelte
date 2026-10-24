@@ -49,7 +49,6 @@
 </script>
 
 <svelte:head>
-  <title>Ambulatory Glucose Profile - Nocturne Reports</title>
   <meta
     name="description"
     content="Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"

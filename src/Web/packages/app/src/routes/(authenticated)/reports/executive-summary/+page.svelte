@@ -65,7 +65,6 @@
 </script>
 
 <svelte:head>
-  <title>Executive Summary - Nocturne Reports</title>
   <meta
     name="description"
     content="High-level overview of your diabetes management metrics"
