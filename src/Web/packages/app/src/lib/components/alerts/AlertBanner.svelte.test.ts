@@ -2,7 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { page as pageState } from "$app/state";
-import { AlertReceiptActorKind, type ActiveExcursionResponse } from "$api-clients";
+import { AlertConditionType, AlertReceiptActorKind, type ActiveExcursionResponse } from "$api-clients";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 
 let activeAlerts = $state<ActiveExcursionResponse[]>([]);
@@ -47,6 +47,25 @@ describe("AlertBanner", () => {
 			.element(page.getByText("Seen by Public link, Grandma (guest link)"))
 			.toBeVisible();
 		await expect.element(page.getByRole("button", { name: "Acknowledge" })).toBeVisible();
+	});
+
+	it("labels a threshold alert by what it watches, not its condition type", async () => {
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.readwrite"] };
+		activeAlerts = [{ ...firing, conditionType: AlertConditionType.Threshold }];
+
+		render(AlertBanner);
+
+		await expect.element(page.getByText("Glucose threshold")).toBeVisible();
+		expect(page.getByText("threshold", { exact: true }).elements()).toHaveLength(0);
+	});
+
+	it("labels a leaf alert with the rule builder's name for it", async () => {
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.readwrite"] };
+		activeAlerts = [{ ...firing, conditionType: AlertConditionType.SignalLoss }];
+
+		render(AlertBanner);
+
+		await expect.element(page.getByText("Signal loss")).toBeVisible();
 	});
 
 	it("offers a share or guest link only Seen", async () => {
