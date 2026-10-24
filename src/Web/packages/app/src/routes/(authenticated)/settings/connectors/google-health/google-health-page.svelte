@@ -36,6 +36,7 @@
     connectionOutcome,
     errorMessage,
     knownErrorMessage,
+    lookbackSentence,
     noticeText,
     type NoticeKey,
   } from "./google-health-copy.svelte";
@@ -277,6 +278,7 @@
         {:else}
           Each sync refreshes today and imports one older calendar month.
         {/if}
+        Imported history is kept.
       </p>
     </div>
   {/if}
@@ -403,9 +405,14 @@
             />
           </label>
           <p class="text-sm text-muted-foreground">
-            Choose an earlier date to import older data shared with Google
-            Health. Empty results are not errors. Clear all selections and save
-            to pause imports; previously imported data is kept.
+            A date requests a one-time import of older data shared with Google
+            Health, back to that day. Choose an earlier date and save to request
+            more history. The field clears once the requested history is
+            complete. {lookbackSentence(status.historyDays)} Automatic sync does
+            not re-import that period each time, and an empty field does not
+            remove older records. Empty results are not errors. Clear all
+            selections and save to pause imports; previously imported data is
+            kept.
           </p>
           {#if inventoryBusy}
             <p class="text-sm text-muted-foreground">
