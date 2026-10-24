@@ -19,6 +19,22 @@ public interface IAlertRepository
     Task<IReadOnlyList<AlertRuleSnapshot>> GetEnabledRulesAsync(Guid tenantId, CancellationToken ct);
 
     /// <summary>
+    /// Returns every rule of the tenant, enabled or not, in <c>SortOrder</c>, each with its channels.
+    /// </summary>
+    Task<IReadOnlyList<AlertRuleRecord>> GetRulesAsync(Guid tenantId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns one rule of the tenant, enabled or not, with its channels; null when the tenant has
+    /// no rule <paramref name="ruleId"/>.
+    /// </summary>
+    Task<AlertRuleRecord?> GetRuleAsync(Guid tenantId, Guid ruleId, CancellationToken ct);
+
+    /// <summary>
+    /// Counts the tenant's rules, enabled or not.
+    /// </summary>
+    Task<int> CountRulesAsync(Guid tenantId, CancellationToken ct);
+
+    /// <summary>
     /// Returns the flat per-rule channel list. Channels are dispatched in parallel when the
     /// rule fires; <see cref="AlertRuleChannelSnapshot.SortOrder"/> is cosmetic only.
     /// </summary>

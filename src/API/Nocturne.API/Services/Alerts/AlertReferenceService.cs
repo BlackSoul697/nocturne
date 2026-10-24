@@ -1,10 +1,9 @@
-using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Alerts.Native;
+using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
-using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Alerts;
 
@@ -40,7 +39,7 @@ public interface IAlertReferenceService
 }
 
 internal sealed class AlertReferenceService(
-    INocturneDbContextFactory contextFactory,
+    IAlertRepository alerts,
     ITenantAccessor tenantAccessor,
     ILogger<AlertReferenceService> logger)
     : IAlertReferenceService
@@ -110,12 +109,7 @@ internal sealed class AlertReferenceService(
                 "AlertReferenceService requires a resolved tenant context.");
         }
 
-        await using var db = await contextFactory.CreateAsync(ct);
-
-        var rows = await db.AlertRules
-            .AsNoTracking()
-            .Select(r => new { r.Id, r.ConditionType, r.ConditionParams })
-            .ToListAsync(ct);
+        var rows = (await alerts.GetRulesAsync(tenantAccessor.TenantId, ct)).Select(r => r.Rule).ToList();
 
         var result = new List<(Guid, IReadOnlyCollection<Guid>)>(rows.Count);
         foreach (var r in rows)

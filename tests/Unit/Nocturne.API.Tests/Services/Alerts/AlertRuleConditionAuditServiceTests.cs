@@ -7,9 +7,11 @@ using Moq;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Alerts.Native;
+using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Repositories;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Alerts;
@@ -71,6 +73,7 @@ public class AlertRuleConditionAuditServiceTests
             .ReturnsAsync(() => new NocturneDbContext(_options));
         var services = new ServiceCollection()
             .AddSingleton(factory.Object.AsNocturneFactory())
+            .AddSingleton<IAlertRepository>(new AlertRepository(factory.Object))
             .AddSingleton(_validator.Object)
             .BuildServiceProvider();
 

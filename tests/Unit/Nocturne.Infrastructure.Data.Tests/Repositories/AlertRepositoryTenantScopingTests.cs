@@ -49,6 +49,64 @@ public class AlertRepositoryTenantScopingTests
     }
 
     [Fact]
+    public async Task GetRulesAsync_ReturnsEveryRuleOfTheTenantInSortOrderWithItsChannels()
+    {
+        var options = NewStore();
+        var second = NewRule(TenantA, "Second");
+        second.SortOrder = 2;
+        second.Description = "described";
+        second.ManagedBy = "tracker:1";
+        second.ReviewReason = "repaired";
+        var first = NewRule(TenantA, "First");
+        first.SortOrder = 1;
+        first.IsEnabled = false;
+        await SeedAsync(options, ctx =>
+        {
+            ctx.AlertRules.AddRange(second, first, NewRule(TenantB, "Other tenant"));
+            ctx.AlertRuleChannels.AddRange(
+                NewChannel(TenantA, second.Id, sortOrder: 1, "https://b.example", secret: "ciphertext"),
+                NewChannel(TenantA, second.Id, sortOrder: 0, "https://a.example"));
+        });
+        var repo = new AlertRepository(new InMemoryContextFactory(options, staleTenantId: TenantB));
+
+        var rules = await repo.GetRulesAsync(TenantA, CancellationToken.None);
+
+        rules.Select(r => (r.Rule.Name, r.IsEnabled)).Should().Equal(("First", false), ("Second", true));
+        var record = rules[1];
+        (record.Description, record.ManagedBy, record.ReviewReason)
+            .Should().Be(("described", "tracker:1", "repaired"));
+        record.Channels.Select(c => (c.Destination, c.Secret))
+            .Should().Equal(("https://a.example", (string?)null), ("https://b.example", "ciphertext"));
+        rules[0].Channels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetRuleAsync_ReturnsNullForAnotherTenantsRule()
+    {
+        var options = NewStore();
+        var mine = NewRule(TenantA, "Mine");
+        var theirs = NewRule(TenantB, "Theirs");
+        await SeedAsync(options, ctx => ctx.AlertRules.AddRange(mine, theirs));
+        var repo = new AlertRepository(new InMemoryContextFactory(options, staleTenantId: TenantB));
+
+        (await repo.GetRuleAsync(TenantA, theirs.Id, CancellationToken.None)).Should().BeNull();
+        (await repo.GetRuleAsync(TenantA, mine.Id, CancellationToken.None))!.Rule.Name.Should().Be("Mine");
+    }
+
+    [Fact]
+    public async Task CountRulesAsync_CountsTheTenantsRulesEnabledOrNot()
+    {
+        var options = NewStore();
+        var disabled = NewRule(TenantA, "Disabled");
+        disabled.IsEnabled = false;
+        await SeedAsync(options, ctx => ctx.AlertRules.AddRange(
+            NewRule(TenantA, "Enabled"), disabled, NewRule(TenantB, "Other tenant")));
+        var repo = new AlertRepository(new InMemoryContextFactory(options, staleTenantId: TenantB));
+
+        (await repo.CountRulesAsync(TenantA, CancellationToken.None)).Should().Be(2);
+    }
+
+    [Fact]
     public async Task GetAllEnabledRulesAsync_ReturnsRulesAcrossEveryActiveTenant()
     {
         var options = NewStore();
@@ -182,6 +240,18 @@ public class AlertRepositoryTenantScopingTests
         SortOrder = 0,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow,
+    };
+
+    private static AlertRuleChannelEntity NewChannel(
+        Guid tenantId, Guid ruleId, int sortOrder, string destination, string? secret = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        TenantId = tenantId,
+        AlertRuleId = ruleId,
+        ChannelType = ChannelType.Webhook,
+        Destination = destination,
+        Secret = secret,
+        SortOrder = sortOrder,
     };
 
     /// <summary>

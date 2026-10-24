@@ -112,6 +112,59 @@ public class AlertRepository : IAlertRepository
     }
 
     /// <inheritdoc/>
+    public virtual async Task<IReadOnlyList<AlertRuleRecord>> GetRulesAsync(Guid tenantId, CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        context.TenantId = tenantId;
+
+        var rules = await RulesWithChannels(context, tenantId)
+            .OrderBy(r => r.SortOrder)
+            .ToListAsync(ct);
+        return rules.Select(ToRecord).ToList();
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<AlertRuleRecord?> GetRuleAsync(Guid tenantId, Guid ruleId, CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        context.TenantId = tenantId;
+
+        var rule = await RulesWithChannels(context, tenantId).FirstOrDefaultAsync(r => r.Id == ruleId, ct);
+        return rule is null ? null : ToRecord(rule);
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<int> CountRulesAsync(Guid tenantId, CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        context.TenantId = tenantId;
+
+        return await context.AlertRules.CountAsync(r => r.TenantId == tenantId, ct);
+    }
+
+    private static IQueryable<AlertRuleEntity> RulesWithChannels(NocturneDbContext context, Guid tenantId) =>
+        context.AlertRules
+            .AsNoTracking()
+            .Include(r => r.Channels)
+            .Where(r => r.TenantId == tenantId);
+
+    private static AlertRuleRecord ToRecord(AlertRuleEntity r) => new(
+        new AlertRuleSnapshot(
+            r.Id, r.TenantId, r.Name, r.ConditionType,
+            r.ConditionParams, r.Severity, r.ClientConfiguration, r.SortOrder,
+            r.AutoResolveEnabled, r.AutoResolveParams, r.AllowThroughDnd, r.ScopeClass),
+        r.Description,
+        r.IsEnabled,
+        r.ManagedBy,
+        r.ReviewReason,
+        r.Channels
+            .OrderBy(c => c.SortOrder)
+            .Select(c => new AlertRuleChannelSnapshot(
+                c.Id, c.AlertRuleId, c.ChannelType,
+                c.Destination, c.DestinationLabel, c.SortOrder, c.Metadata, c.Secret))
+            .ToList());
+
+    /// <inheritdoc/>
     public virtual async Task<IReadOnlyList<AlertRuleChannelSnapshot>> GetChannelsForRuleAsync(
         Guid tenantId, Guid ruleId, CancellationToken ct)
     {
