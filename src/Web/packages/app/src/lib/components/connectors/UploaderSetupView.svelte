@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import type {
     UploaderApp,
     UploaderSetupResponse,
@@ -79,6 +79,7 @@
         scopes: ["health.readwrite"],
       });
       apiToken = result.token ?? null;
+      if (apiToken) startPolling();
     } catch (err) {
       apiTokenError = describeSubmitError(
         err,
@@ -91,12 +92,14 @@
 
   // ── Connection polling ────────────────────────────────────────
 
-  let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  let destroyed = false;
 
   const dataSourcesQuery = getActiveDataSources();
   const dataSources = $derived<DataSourceInfo[]>(dataSourcesQuery.current ?? []);
 
   onDestroy(() => {
+    destroyed = true;
     stopPolling();
   });
 
@@ -184,6 +187,7 @@
   }
 
   function startPolling() {
+    if (destroyed) return;
     stopPolling();
     pollInterval = setInterval(async () => {
       try {
@@ -206,20 +210,15 @@
     }
   }
 
-  // Initialize QR code or generate API key when setupResponse arrives
   $effect(() => {
-    if (setupResponse?.connectUrl) {
-      generateQrCode(setupResponse.connectUrl);
-    } else if (setupResponse && !setupResponse.connectUrl) {
-      generateApiToken();
-    }
-  });
-
-  // Start polling for data once the API key has been generated
-  $effect(() => {
-    if (apiToken) {
-      startPolling();
-    }
+    const response = setupResponse;
+    untrack(() => {
+      if (response?.connectUrl) {
+        generateQrCode(response.connectUrl);
+      } else if (response) {
+        generateApiToken();
+      }
+    });
   });
 </script>
 
