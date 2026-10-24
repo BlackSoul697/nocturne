@@ -108,6 +108,91 @@ public class ShareAlertsIntegrationTests : ApiIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task ReceiptsFromAShareAndAGuest_AreListedForMembers_AndEachViewerSeesOnlyItsOwn()
+    {
+        var share = await EnableShareAsync("glucose.read", "alerts.read");
+        using var guest = await ActivateGuestAsync("Grandma");
+
+        (await share.PostAsync($"/api/v4/alerts/excursions/{_excursionId}/seen", null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await guest.PostAsync($"/api/v4/alerts/excursions/{_excursionId}/seen", null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await guest.PostAsync($"/api/v4/alerts/excursions/{_excursionId}/seen", null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "recording it again keeps the first");
+
+        var memberView = await ReceiptsAsync(_admin);
+        memberView.Select(r => r["actorKind"]!.GetValue<string>())
+            .Should().BeEquivalentTo(["public_link", "guest"]);
+        memberView.Single(r => r["actorKind"]!.GetValue<string>() == "guest")["actorLabel"]!
+            .GetValue<string>().Should().Be("Grandma");
+
+        (await ReceiptsAsync(share)).Select(r => r["actorKind"]!.GetValue<string>())
+            .Should().Equal(["public_link"], "a share sees its own receipt and nobody else's");
+        (await ReceiptsAsync(guest)).Select(r => r["actorKind"]!.GetValue<string>())
+            .Should().Equal(["guest"], "a guest sees its own receipt and nobody else's");
+
+        await using var conn = new NpgsqlConnection(await GetPostgresConnectionStringAsync());
+        await conn.OpenAsync();
+        await using (var pin = conn.CreateCommand())
+        {
+            pin.CommandText = $"SELECT set_config('app.current_tenant_id', '{Fixture.TenantId}', false);";
+            await pin.ExecuteNonQueryAsync();
+        }
+
+        await using var count = conn.CreateCommand();
+        count.CommandText = $"SELECT count(*) FROM alert_excursion_mutes WHERE alert_excursion_id = '{_excursionId}';";
+        ((long)(await count.ExecuteScalarAsync())!).Should().Be(0,
+            "a receipt mutes nothing, least of all the data owner a guest acts for");
+    }
+
+    [Fact]
+    public async Task AReceiptForAnAlarmThatIsNotOpen_IsNotFound()
+    {
+        var share = await EnableShareAsync("glucose.read", "alerts.read");
+
+        using var response = await share.PostAsync($"/api/v4/alerts/excursions/{Guid.NewGuid()}/seen", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task AShareWithoutAlerts_CannotRecordAReceipt()
+    {
+        var share = await EnableShareAsync("glucose.read");
+
+        using var response = await share.PostAsync($"/api/v4/alerts/excursions/{_excursionId}/seen", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    private async Task<List<JsonObject>> ReceiptsAsync(HttpClient client)
+    {
+        using var response = await client.GetAsync("/api/v4/alerts/active");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        return JsonNode.Parse(body)!.AsArray()
+            .Single(e => e!["id"]!.GetValue<string>() == _excursionId.ToString())!["receipts"]!
+            .AsArray().Select(r => r!.AsObject()).ToList();
+    }
+
+    private async Task<HttpClient> ActivateGuestAsync(string label)
+    {
+        using var link = await _admin.PostAsJsonAsync("/api/v4/guest-links", new
+        {
+            label,
+            scopes = new[] { "glucose.read", "alerts.read" },
+        });
+        var body = await link.Content.ReadAsStringAsync();
+        link.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        var code = JsonNode.Parse(body)!["code"]!.GetValue<string>();
+
+        var guest = Fixture.CreateHttpClient(new HttpClientHandler { UseCookies = true });
+        (await guest.PostAsJsonAsync("/api/v4/guest-links/activate", new { code }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        return guest;
+    }
+
     /// <summary>
     /// Mints the tenant's share link with <paramref name="scopes"/> and returns a client addressing
     /// its host once that host serves glucose.

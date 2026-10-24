@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
+using Nocturne.API.Services.Alerts;
 using Nocturne.Core.Contracts.Platform;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
@@ -27,7 +28,8 @@ namespace Nocturne.API.Controllers.V4.Profiles;
 [EnableRateLimiting(ServiceRegistrationExtensions.NoAccountAlertsRateLimitPolicy)]
 public class ClockFaceAlertsController(
     IClockFaceService clockFaces,
-    INocturneDbContextFactory contexts) : ControllerBase
+    INocturneDbContextFactory contexts,
+    AlertReceiptService receipts) : ControllerBase
 {
     /// <summary>The alarms firing now, or none when the face does not show alerts.</summary>
     [HttpGet]
@@ -53,6 +55,8 @@ public class ClockFaceAlertsController(
             .Where(e => e.EndedAt == null)
             .OrderByDescending(e => e.StartedAt)
             .ToListAsync(ct);
+        var seen = await AlertReceiptService.ReadAsync(
+            db, excursions.Select(e => e.Id).ToList(), Actor(face), ct);
 
         return Ok(excursions.Select(e => new ClockAlertDto
         {
@@ -62,10 +66,33 @@ public class ClockFaceAlertsController(
             ConditionType = e.AlertRule?.ConditionType ?? AlertConditionType.Threshold,
             StartedAt = e.StartedAt,
             Acknowledged = e.AcknowledgedAt is not null,
+            SeenHere = seen[e.Id].Any(),
             SnoozedUntil = e.Instances
                 .Where(i => i.ResolvedAt == null)
                 .Select(i => AlertSnooze.ActiveUntil(i.SnoozedUntil, now))
                 .Max(),
         }).ToArray());
     }
+
+    /// <summary>
+    /// Record that someone at the clock saw an alarm that is firing, for a face whose owner set
+    /// <see cref="ClockSettings.AllowAcknowledge"/>. It acknowledges and mutes nothing; members see
+    /// that the face saw it.
+    /// </summary>
+    [HttpPost("{excursionId:guid}/seen")]
+    [RemoteCommand(Invalidates = [nameof(GetClockAlerts)])]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> MarkClockAlertSeen(Guid id, Guid excursionId)
+    {
+        var ct = HttpContext.RequestAborted;
+        var face = await clockFaces.GetByIdAsync(id, ct);
+        if (face is null || !face.Config.Settings.ShowAlerts || !face.Config.Settings.AllowAcknowledge)
+            return NotFound();
+
+        return await receipts.RecordAsync(excursionId, Actor(face), ct) ? NoContent() : NotFound();
+    }
+
+    private static AlertReceiptActor Actor(ClockFace face) =>
+        new(AlertReceiptActorKind.Clock, face.Id, face.Name);
 }

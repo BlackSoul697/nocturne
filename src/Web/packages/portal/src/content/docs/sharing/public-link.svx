@@ -86,7 +86,9 @@ so older data is never exposed.
   desk, and staff change shift through the day. Turn on public access, switch on
   <em>Blood Glucose</em> and <em>Alerts</em>, and set the window to
   <em>Last 24 hours</em>. When an alarm fires, it shows on the tablet as well as
-  on your own devices.
+  on your own devices. Staff can press <strong>Seen</strong>, and the alarm on
+  your phone then reads "Seen by Public link", though it keeps going on your
+  devices until you acknowledge it.
   Everyone on shift sees the same screen with no logins to hand around, and they
   never see older history. If a device goes missing or the room changes,
   regenerate the link and the old one stops working.

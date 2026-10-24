@@ -170,7 +170,13 @@
     class="fixed inset-0 h-screen w-screen transition-colors duration-500"
   />
 
-  <ClockAlertBand alerts={clockStore.alerts} now={currentTime.getTime()} />
+  <ClockAlertBand
+    alerts={clockStore.alerts}
+    now={currentTime.getTime()}
+    onSeen={clockConfig.settings?.allowAcknowledge
+      ? (excursionId) => clockStore.markSeen(excursionId)
+      : undefined}
+  />
 
   {#if !(clockConfig.settings?.screensaverMode ?? false)}
     <!-- Show time if configured or stale -->

@@ -329,12 +329,21 @@ public class ClockSettings
     public bool ShowAlerts { get; set; }
 
     /// <summary>
+    /// Whether whoever is at the clock can record that they saw a firing alarm. The receipt names
+    /// the face, not a person: anyone holding the clock link can press it. Needs
+    /// <see cref="ShowAlerts"/>.
+    /// </summary>
+    [JsonPropertyName("allowAcknowledge")]
+    public bool AllowAcknowledge { get; set; }
+
+    /// <summary>
     /// Validates against the <see cref="UserDisplayPreferences"/> vocabulary. A face saved before
     /// these settings existed deserialises to the defaults, so only an explicit value can fail.
     /// </summary>
     public string? Validate() =>
         UserDisplayPreferences.Check("settings.glucoseUnits", GlucoseUnits ?? "null", UserDisplayPreferences.AllowedGlucoseUnits)
-        ?? UserDisplayPreferences.Check("settings.timeFormat", TimeFormat ?? "null", UserDisplayPreferences.AllowedTimeFormats);
+        ?? UserDisplayPreferences.Check("settings.timeFormat", TimeFormat ?? "null", UserDisplayPreferences.AllowedTimeFormats)
+        ?? (AllowAcknowledge && !ShowAlerts ? "settings.allowAcknowledge: requires showAlerts" : null);
 }
 
 public class CreateClockFaceRequest
@@ -428,6 +437,9 @@ public class ClockAlertDto
 
     /// <summary>Whether someone has acknowledged it for everyone.</summary>
     public bool Acknowledged { get; set; }
+
+    /// <summary>Whether this clock face has recorded that it was seen.</summary>
+    public bool SeenHere { get; set; }
 
     /// <summary>When the latest snooze on it lapses, or null when it is not snoozed.</summary>
     public DateTime? SnoozedUntil { get; set; }

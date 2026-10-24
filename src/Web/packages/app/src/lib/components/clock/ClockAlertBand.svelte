@@ -2,6 +2,8 @@
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import BellOff from "@lucide/svelte/icons/bell-off";
   import Check from "@lucide/svelte/icons/check";
+  import Eye from "@lucide/svelte/icons/eye";
+  import { Button } from "$lib/components/ui/button";
   import type { ClockAlertDto } from "$lib/api";
   import { severity, severityLabel } from "$lib/components/alerts/severity";
   import { formatTimeSince } from "$lib/components/alerts/alertTime";
@@ -10,9 +12,23 @@
     alerts: ClockAlertDto[];
     /** Reactive clock so the relative time ages while the band is on screen. */
     now: number;
+    /** Records that someone here saw the alarm; absent when the face's owner did not allow it. */
+    onSeen?: (excursionId: string) => Promise<void>;
   }
 
-  let { alerts, now }: Props = $props();
+  let { alerts, now, onSeen }: Props = $props();
+
+  let recording = $state<string | null>(null);
+
+  async function seen(id: string) {
+    if (!onSeen) return;
+    recording = id;
+    try {
+      await onSeen(id);
+    } finally {
+      recording = null;
+    }
+  }
 </script>
 
 {#if alerts.length > 0}
@@ -36,7 +52,22 @@
             {formatTimeSince(alert.startedAt, now)}
           </div>
         </div>
-        {#if alert.acknowledged}
+        {#if onSeen && !alert.seenHere}
+          <Button
+            variant="overlay"
+            size="sm"
+            disabled={recording === alert.id}
+            onclick={() => seen(alert.id ?? "")}
+          >
+            <Eye class="size-4" />
+            Seen
+          </Button>
+        {:else if alert.seenHere}
+          <span class="inline-flex items-center gap-1 text-sm text-white/70">
+            <Eye class="size-4" />
+            Seen here
+          </span>
+        {:else if alert.acknowledged}
           <span class="inline-flex items-center gap-1 text-sm text-white/70">
             <Check class="size-4" />
             Acknowledged

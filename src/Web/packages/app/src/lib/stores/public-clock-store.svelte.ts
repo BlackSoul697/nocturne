@@ -79,6 +79,12 @@ export class PublicClockStore implements ClockGlucoseSource {
     this.alertTimer = null;
   }
 
+  /** Record that someone at the clock saw an alarm, then show the face's answer. */
+  async markSeen(excursionId: string): Promise<void> {
+    await clockFaceAlertsClient().markClockAlertSeen(this.clockId, excursionId);
+    await this.pollAlerts();
+  }
+
   private async pollAlerts(): Promise<void> {
     try {
       this.alerts = (await clockFaceAlertsClient().getClockAlerts(this.clockId)) ?? [];

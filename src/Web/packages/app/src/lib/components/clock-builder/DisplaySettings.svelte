@@ -140,7 +140,20 @@
         <Label>Show firing alerts</Label>
         <Checkbox
           checked={settings.showAlerts ?? false}
-          onCheckedChange={(v: boolean) => updateSetting("showAlerts", !!v)}
+          onCheckedChange={(v: boolean) =>
+            onSettingsChange({
+              ...settings,
+              showAlerts: !!v,
+              allowAcknowledge: v ? settings.allowAcknowledge : false,
+            })}
+        />
+      </div>
+      <div class="flex items-center justify-between">
+        <Label>Let viewers mark alerts as seen</Label>
+        <Checkbox
+          checked={settings.allowAcknowledge ?? false}
+          onCheckedChange={(v: boolean) => updateSetting("allowAcknowledge", !!v)}
+          disabled={!settings.showAlerts}
         />
       </div>
       <div class="flex items-center justify-between">

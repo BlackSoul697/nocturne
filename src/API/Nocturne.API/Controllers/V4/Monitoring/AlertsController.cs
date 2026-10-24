@@ -1,11 +1,12 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Controllers.V4.Base;
+using Nocturne.API.Services.Alerts;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Alerts;
@@ -104,6 +105,8 @@ public class AlertsController : ControllerBase
             : new HashSet<Guid>();
 
         var namesAcknowledger = NamesMembers();
+        var receipts = await AlertReceiptService.ReadAsync(
+            db, excursions.Select(e => e.Id).ToList(), ReceiptsVisibleOnlyFor(), ct);
         var now = DateTime.UtcNow;
         var result = excursions.Select(e => new ActiveExcursionResponse
         {
@@ -116,6 +119,7 @@ public class AlertsController : ControllerBase
             AcknowledgedAt = e.AcknowledgedAt,
             AcknowledgedBy = namesAcknowledger ? e.AcknowledgedBy : null,
             MutedByCaller = mutedByCaller.Contains(e.Id),
+            Receipts = AlertReceiptResponse.From(receipts[e.Id]),
             HysteresisStartedAt = e.HysteresisStartedAt,
             SnoozedUntil = e.Instances
                 .Where(i => i.ResolvedAt == null)
@@ -204,6 +208,8 @@ public class AlertsController : ControllerBase
             .ToListAsync(ct);
 
         var namesAcknowledger = NamesMembers();
+        var receipts = await AlertReceiptService.ReadAsync(
+            db, items.Select(e => e.Id).ToList(), ReceiptsVisibleOnlyFor(), ct);
         var result = new AlertHistoryResponse
         {
             Page = page,
@@ -222,6 +228,7 @@ public class AlertsController : ControllerBase
                 AcknowledgedAt = e.AcknowledgedAt,
                 AcknowledgedBy = namesAcknowledger ? e.AcknowledgedBy : null,
                 IsTest = e.IsTest,
+                Receipts = AlertReceiptResponse.From(receipts[e.Id]),
             }).ToList(),
         };
 
@@ -233,6 +240,42 @@ public class AlertsController : ControllerBase
     /// that an alert was acknowledged, not by whom.
     /// </summary>
     private bool NamesMembers() => !DenyNoAccountViewerAttribute.Refuses(HttpContext);
+
+    /// <summary>
+    /// The actor whose receipts alone the caller may see: a share or guest link sees its own and no
+    /// one else's, a member sees all of them (null).
+    /// </summary>
+    private AlertReceiptActor? ReceiptsVisibleOnlyFor() =>
+        NamesMembers()
+            ? null
+            : AlertReceiptActor.Of(HttpContext) ?? new AlertReceiptActor(AlertReceiptActorKind.PublicLink, Guid.Empty);
+
+    /// <summary>
+    /// Record that the caller saw an alarm that is firing. It changes nothing about the alert: it
+    /// is not an acknowledgement and mutes nothing, for the caller or anyone else, and recording it
+    /// again keeps the first. Members with an account see who recorded one, and when.
+    /// </summary>
+    /// <remarks>
+    /// The one write a public share link may make. <see cref="RequireScopeAttribute"/> admits an
+    /// unauthenticated caller to a read requirement, and the share principal holds
+    /// <see cref="Scope.AlertsRead"/> only when its owner shared alerts. Who recorded it comes from
+    /// the credential (<see cref="AlertReceiptActor.Of"/>), never from the request.
+    /// </remarks>
+    [HttpPost("excursions/{excursionId:guid}/seen")]
+    [RequireScope(Scope.AlertsRead)]
+    [EnableRateLimiting(ServiceRegistrationExtensions.NoAccountAlertsRateLimitPolicy)]
+    [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> MarkSeen(
+        Guid excursionId, [FromServices] AlertReceiptService receipts, CancellationToken ct)
+    {
+        if (AlertReceiptActor.Of(HttpContext) is not { } actor)
+            return Forbid();
+
+        return await receipts.RecordAsync(excursionId, actor, ct) ? NoContent() : NotFound();
+    }
 
     /// <inheritdoc cref="IAlertAcknowledgementService.AcknowledgeAllAsync"/>
     [HttpPost("acknowledge")]
@@ -272,7 +315,8 @@ public class AlertsController : ControllerBase
     [ProducesResponseType(typeof(AcknowledgeExcursionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AcknowledgeExcursionResponse>> AcknowledgeExcursion(
-        Guid excursionId, [FromBody] AcknowledgeRequest request, CancellationToken ct)
+        Guid excursionId, [FromBody] AcknowledgeRequest request,
+        [FromServices] AlertReceiptService receipts, CancellationToken ct)
     {
         var tenantId = _tenantAccessor.TenantId;
 
@@ -294,6 +338,10 @@ public class AlertsController : ControllerBase
             HttpContext.GetAlertAcknowledgementAuthority(),
             broadcast: true,
             ct);
+
+        // Acknowledging is also seeing it, so the receipts list everyone who did either.
+        if (AlertReceiptActor.Of(HttpContext) is { Kind: AlertReceiptActorKind.Member } member)
+            await receipts.RecordAsync(excursionId, member, ct);
 
         return Ok(new AcknowledgeExcursionResponse { Outcome = outcome });
     }
@@ -422,6 +470,33 @@ public class ActiveExcursionResponse
     public DateTime? SnoozedUntil { get; set; }
 
     public List<ActiveInstanceResponse> ActiveInstances { get; set; } = [];
+
+    /// <summary>
+    /// Who has recorded seeing it, oldest first: every viewer for a member, only its own for a share
+    /// or guest link.
+    /// </summary>
+    public List<AlertReceiptResponse> Receipts { get; set; } = [];
+}
+
+/// <summary>One viewer's record that they saw an alarm.</summary>
+public class AlertReceiptResponse
+{
+    public AlertReceiptActorKind ActorKind { get; set; }
+
+    /// <summary>
+    /// The member's name, the guest link's label or the clock face's name; null for the public link.
+    /// </summary>
+    public string? ActorLabel { get; set; }
+
+    public DateTime SeenAt { get; set; }
+
+    internal static List<AlertReceiptResponse> From(IEnumerable<AlertReceipt> receipts) =>
+        receipts.Select(r => new AlertReceiptResponse
+        {
+            ActorKind = r.ActorKind,
+            ActorLabel = r.ActorLabel,
+            SeenAt = r.SeenAt,
+        }).ToList();
 }
 
 public class ActiveInstanceResponse
@@ -470,6 +545,9 @@ public class HistoryExcursionResponse
 
     /// <summary>True when every instance of this excursion was a test fire.</summary>
     public bool IsTest { get; set; }
+
+    /// <inheritdoc cref="ActiveExcursionResponse.Receipts"/>
+    public List<AlertReceiptResponse> Receipts { get; set; } = [];
 }
 
 public class AcknowledgeRequest

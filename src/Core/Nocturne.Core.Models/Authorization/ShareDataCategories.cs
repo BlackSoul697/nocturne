@@ -57,6 +57,8 @@ public static class ShareDataCategories
                 "alert_excursions",
                 "alert_instances",
                 "alert_rules",
+                // A share records and reads back its own "seen"; the API filters it to the caller.
+                "alert_excursion_receipts",
             },
             [Scope.HeartRateRead] = new[] { "heart_rates" },
             [Scope.StepCountRead] = new[] { "step_counts" },
@@ -99,6 +101,7 @@ public static class ShareDataCategories
             ["step_counts"] = "timestamp",
             ["foods"] = null,
             ["alert_rules"] = null,
+            ["alert_excursion_receipts"] = "seen_at",
             ["connector_food_entries"] = "consumed_at",
         };
 

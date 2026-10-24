@@ -94,12 +94,56 @@ public class ClockFaceAlertsIntegrationTests : ApiIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    private async Task<Guid> CreateFaceAsync(bool showAlerts)
+    [Fact]
+    public async Task AFaceAllowedToAcknowledge_RecordsThatItSawTheAlarm()
+    {
+        var faceId = await CreateFaceAsync(showAlerts: true, allowAcknowledge: true);
+        using var viewer = Fixture.CreateHttpClient(new HttpClientHandler());
+
+        (await viewer.PostAsync($"/api/v4/clockfaces/{faceId}/alerts/{_excursionId}/seen", null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var clock = await viewer.GetAsync($"/api/v4/clockfaces/{faceId}/alerts");
+        JsonNode.Parse(await clock.Content.ReadAsStringAsync())!.AsArray().Single()!["seenHere"]!
+            .GetValue<bool>().Should().BeTrue();
+
+        using var member = await _owner.GetAsync("/api/v4/alerts/active");
+        var receipt = JsonNode.Parse(await member.Content.ReadAsStringAsync())!.AsArray()
+            .Single(e => e!["id"]!.GetValue<string>() == _excursionId.ToString())!["receipts"]!
+            .AsArray().Single()!;
+        receipt["actorKind"]!.GetValue<string>().Should().Be("clock");
+        receipt["actorLabel"]!.GetValue<string>().Should().Be("Kitchen");
+    }
+
+    [Fact]
+    public async Task AFaceNotAllowedToAcknowledge_CannotRecordAReceipt()
+    {
+        var faceId = await CreateFaceAsync(showAlerts: true);
+        using var viewer = Fixture.CreateHttpClient(new HttpClientHandler());
+
+        using var response = await viewer.PostAsync($"/api/v4/clockfaces/{faceId}/alerts/{_excursionId}/seen", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task AllowingAcknowledgeWithoutShowingAlerts_IsRefused()
     {
         using var response = await _owner.PostAsJsonAsync("/api/v4/clockfaces", new
         {
             name = "Kitchen",
-            config = new { rows = Array.Empty<object>(), settings = new { showAlerts } },
+            config = new { rows = Array.Empty<object>(), settings = new { allowAcknowledge = true } },
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    private async Task<Guid> CreateFaceAsync(bool showAlerts, bool allowAcknowledge = false)
+    {
+        using var response = await _owner.PostAsJsonAsync("/api/v4/clockfaces", new
+        {
+            name = "Kitchen",
+            config = new { rows = Array.Empty<object>(), settings = new { showAlerts, allowAcknowledge } },
         });
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.Created, body);
