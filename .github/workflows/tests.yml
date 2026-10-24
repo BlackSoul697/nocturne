@@ -641,12 +641,21 @@ jobs:
         env:
           E2E_SKIP_BUILD: "1"
         run: pnpm e2e
+      # A native fault the runtime does not handle is logged by the kernel with the faulting
+      # library and offset ("segfault at ... in libfoo.so"); the OOM killer logs here too.
+      # The container's user owns the crash dumps, which the upload has to read.
+      - name: Collect crash diagnostics
+        if: failure()
+        run: |
+          sudo dmesg --ctime | grep -iE 'segfault|general protection|traps:|oom|killed process' || true
+          if [ -d e2e/crash-dumps ]; then sudo chmod -R a+rX e2e/crash-dumps; fi
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: e2e-artifacts
           path: |
             e2e/docker-compose-logs.txt
+            e2e/crash-dumps/
             e2e/playwright-report/
             e2e/test-results/
           if-no-files-found: ignore
@@ -675,11 +684,19 @@ jobs:
         env:
           E2E_SKIP_BUILD: "1"
         run: node scripts/migration-upgrade.ts
+      # As in the e2e job.
+      - name: Collect crash diagnostics
+        if: failure()
+        run: |
+          sudo dmesg --ctime | grep -iE 'segfault|general protection|traps:|oom|killed process' || true
+          if [ -d e2e/crash-dumps ]; then sudo chmod -R a+rX e2e/crash-dumps; fi
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: migration-upgrade-logs
-          path: e2e/docker-compose-logs.txt
+          path: |
+            e2e/docker-compose-logs.txt
+            e2e/crash-dumps/
           if-no-files-found: ignore
           retention-days: 7
 
