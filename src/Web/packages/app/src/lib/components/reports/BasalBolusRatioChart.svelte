@@ -4,7 +4,6 @@
   import { carbAxisMax as niceCarbAxisMax, carbsOnInsulinScale } from "./carb-axis";
   import PieChart from "@lucide/svelte/icons/chart-pie";
   import { dashClass, patternClass } from "$lib/components/charts/print/chart-print-patterns";
-  import { roundLastSeriesOnly } from "$lib/components/charts/stack-rounding";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
   import type { DailyBasalBolusRatioData, DailyBasalBolusRatioResponse } from "$lib/api";
 
@@ -50,7 +49,7 @@
       <BarChart
         data={chartData}
         x="displayDate"
-        series={roundLastSeriesOnly([
+        series={[
           {
             key: "basal",
             color: "var(--basal)",
@@ -69,7 +68,7 @@
             label: "Automatic bolus (U)",
             props: { class: patternClass("insulin-automatic-bolus") },
           },
-        ])}
+        ]}
         seriesLayout="stack"
         tooltipContext={{ mode: "band" }}
         props={{

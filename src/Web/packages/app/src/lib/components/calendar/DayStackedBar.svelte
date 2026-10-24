@@ -4,7 +4,6 @@
    * Uses layerchart BarChart with vertical stacking.
    */
   import { BarChart } from "layerchart";
-  import { roundLastSeriesOnly } from "$lib/components/charts/stack-rounding";
 
   interface Props {
     /** Percentages for each glucose range */
@@ -39,13 +38,13 @@
   ]);
 
   // Series configuration for stacking (bottom to top: very low to very high)
-  const series = roundLastSeriesOnly([
+  const series = [
     { key: "veryLow", color: "var(--glucose-very-low)" },
     { key: "low", color: "var(--glucose-low)" },
     { key: "inRange", color: "var(--glucose-in-range)" },
     { key: "high", color: "var(--glucose-high)" },
     { key: "veryHigh", color: "var(--glucose-very-high)" },
-  ]);
+  ];
 </script>
 
 <!-- eslint-disable-next-line no-restricted-syntax -- the whole chart is the click target -->
