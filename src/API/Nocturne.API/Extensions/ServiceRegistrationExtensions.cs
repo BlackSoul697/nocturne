@@ -966,6 +966,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<INotificationV2Service, NotificationV2Service>();
         services.AddScoped<INotificationV1Service, NotificationV1Service>();
         services.AddSingleton<LegacyAlarmSnoozeStore>();
+        services.AddSingleton<LegacyNotificationStore>();
         services.AddScoped<IApnsClientFactory, ApnsClientFactory>();
         services.AddHttpClient(
             "dotAPNS",
