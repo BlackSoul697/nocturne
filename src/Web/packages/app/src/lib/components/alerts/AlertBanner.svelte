@@ -12,9 +12,11 @@
   import BellOff from "@lucide/svelte/icons/bell-off";
   import Check from "@lucide/svelte/icons/check";
   import { time } from "$lib/utils/formatting";
-  import { formatTimeSince } from "./alertTime";
-  import { severity, severityLabel } from "./severity";
+  import { formatTimeSince } from "./alertTime.svelte";
+  import { severity } from "./severity";
+  import { severityLabel } from "./severityLabel.svelte";
   import { seenBy } from "./receipts";
+  import { conditionLabel } from "./conditionLabel.svelte";
   import { markSeenOnThisDevice, seenHere } from "./seen-here.svelte";
 
   // Reactive query: reading `.current` subscribes this component, so an
@@ -47,6 +49,7 @@
     )
   );
 
+<<<<<<< HEAD
   function getConditionLabel(conditionType: string | undefined): string {
     switch (conditionType) {
       case "threshold_low":
@@ -64,6 +67,8 @@
     }
   }
 
+=======
+>>>>>>> origin/main
   async function handleSeen(id: string) {
     acknowledgingId = id;
     try {
@@ -128,7 +133,7 @@
             {alert.ruleName ?? "Alert"}
           </span>
           <span class="text-sm text-muted-foreground mx-2">
-            {getConditionLabel(alert.conditionType)}
+            {conditionLabel(alert.conditionType)}
           </span>
           <span class="text-xs text-muted-foreground">
             {formatTimeSince(alert.startedAt)}

@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Clinical.Treatments;
@@ -248,7 +249,7 @@ public class SensorContextEnricherTests
         // One IOB read, the shared reader's window ending at the tick, serves both, and a
         // replay tick is not the live instant.
         _bolusRepository.Verify(r => r.GetAsync(
-            tick.AddHours(-IIobCobReader.InsulinLookbackHours), tick, null, null, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+            tick.AddMilliseconds(-DailyProfileCalculator.ActingMs), tick, null, null, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
             It.IsAny<bool>(), It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
             Times.Once);
         _bolusRepository.VerifyNoOtherCalls();

@@ -9,9 +9,6 @@ namespace Nocturne.Core.Contracts.Treatments;
 /// </summary>
 public interface IIobCobReader
 {
-    /// <summary>Hours of boluses read, and the window a temp basal must reach into: longer than any DIA.</summary>
-    const int InsulinLookbackHours = 8;
-
     /// <summary>Hours of carb intakes read.</summary>
     const int CarbLookbackHours = 6;
 

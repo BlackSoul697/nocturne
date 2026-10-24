@@ -49,6 +49,25 @@ describe("AlertBanner", () => {
 		await expect.element(page.getByRole("button", { name: "Acknowledge" })).toBeVisible();
 	});
 
+	it("labels a threshold alert by what it watches, not its condition type", async () => {
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.readwrite"] };
+		activeAlerts = [{ ...firing, conditionType: AlertConditionType.Threshold }];
+
+		render(AlertBanner);
+
+		await expect.element(page.getByText("Glucose threshold")).toBeVisible();
+		expect(page.getByText("threshold", { exact: true }).elements()).toHaveLength(0);
+	});
+
+	it("labels a leaf alert with the rule builder's name for it", async () => {
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.readwrite"] };
+		activeAlerts = [{ ...firing, conditionType: AlertConditionType.SignalLoss }];
+
+		render(AlertBanner);
+
+		await expect.element(page.getByText("Signal loss")).toBeVisible();
+	});
+
 	it("offers a share or guest link only Seen", async () => {
 		pageState.data = { hasAccount: false, effectivePermissions: ["alerts.read"] };
 		activeAlerts = [firing];

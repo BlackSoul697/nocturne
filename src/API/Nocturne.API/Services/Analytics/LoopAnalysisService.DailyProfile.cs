@@ -106,7 +106,7 @@ internal sealed partial class LoopAnalysisService
             if (entries is null)
                 return null;
             var shifted = mills + (span.Adjustment?.TimeshiftMs ?? 0);
-            return ScheduleResolution.FindRangeAtTime(entries, ScheduleTimeHelper.GetSecondsFromMidnight(shifted, zone));
+            return ScheduleResolution.FindRangeAtTime(entries, ScheduleEntryTime.SecondsOfDay(shifted, zone));
         };
     }
 

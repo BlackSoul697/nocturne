@@ -8,8 +8,8 @@ using Nocturne.Core.Models.Serializers;
 namespace Nocturne.API.Configuration;
 
 /// <summary>
-/// Shared JSON serialization options and modifiers for Nightscout-compatible endpoints.
-/// Used by both NightscoutJsonOutputFormatter and NightscoutJsonFilter.
+/// JSON serialization options and modifiers for Nightscout-compatible endpoints.
+/// <see cref="NightscoutJsonFilter"/> applies them to v1-v3 responses.
 /// </summary>
 public static class NightscoutJsonOptions
 {

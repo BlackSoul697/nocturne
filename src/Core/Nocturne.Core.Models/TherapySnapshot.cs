@@ -137,29 +137,14 @@ public sealed class TherapySnapshot
             sb.Append(entry.Seconds).Append('=').Append(entry.Value).Append(',');
     }
 
-    private int ShiftedSecondsFromMidnight(long timeMills)
-    {
-        var shifted = timeMills + CcpTimeshiftMs;
-        var dto = DateTimeOffset.FromUnixTimeMilliseconds(shifted);
-        if (Timezone is not null)
-            dto = TimeZoneInfo.ConvertTime(dto, Timezone);
-        return (int)dto.TimeOfDay.TotalSeconds;
-    }
+    private int ShiftedSecondsFromMidnight(long timeMills) =>
+        ScheduleEntryTime.SecondsOfDay(timeMills + CcpTimeshiftMs, Timezone);
 
     private static double? LookupAt(IReadOnlyList<TimedValue> sortedEntries, int secondsFromMidnight)
     {
-        if (sortedEntries.Count == 0)
-            return null;
-
-        var result = sortedEntries[0].Value;
-        foreach (var entry in sortedEntries)
-        {
-            if (secondsFromMidnight >= entry.Seconds)
-                result = entry.Value;
-            else
-                break;
-        }
-        return result;
+        return ScheduleEntryTime.TryEntryAt(sortedEntries, secondsFromMidnight, e => e.Seconds, out var entry)
+            ? entry.Value
+            : null;
     }
 
     private double ApplyInverseCcp(double value) =>

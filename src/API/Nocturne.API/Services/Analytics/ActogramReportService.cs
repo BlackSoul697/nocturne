@@ -133,8 +133,8 @@ public sealed class ActogramReportService : IActogramReportService
                 {
                     return session.Stages.Select(stage => new ActogramSleepSpan
                     {
-                        StartMills = new DateTimeOffset(stage.StartTime, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-                        EndMills = new DateTimeOffset(stage.EndTime, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                        StartMills = stage.StartTime.ToMills(),
+                        EndMills = stage.EndTime.ToMills(),
                         State = stage.Stage.ToString().ToLowerInvariant(),
                     });
                 }

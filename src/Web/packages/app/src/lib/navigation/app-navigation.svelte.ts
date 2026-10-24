@@ -96,7 +96,7 @@ export interface NavViewer {
 }
 
 /** Entries a guest link session keeps. */
-const GUEST_NAV: readonly NavItemId[] = ["dashboard", "calendar", "time-spans", "reports", "clock"];
+const GUEST_NAV: readonly NavItemId[] = ["dashboard", "calendar", "time-spans", "reports"];
 
 /** Entries the public share view keeps, before each is held to its own scope. */
 const PUBLIC_SHARE_NAV: readonly NavItemId[] = ["dashboard", "reports"];
@@ -212,7 +212,7 @@ export function buildAppNavigation(viewer: NavViewer): NavItem[] {
       children: [
         { title: "Rules", href: "/alerts", icon: Bell, strict: true },
         { title: "Simulator", href: "/alerts/simulator", icon: PlayCircle },
-        { title: "Do Not Disturb", href: "/alerts/dnd", icon: BellOff },
+        { title: "Do not disturb", href: "/alerts/dnd", icon: BellOff },
         { title: "History", href: "/alerts/history", icon: HistoryIcon },
       ],
     },

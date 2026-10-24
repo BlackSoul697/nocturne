@@ -1,6 +1,6 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { UploaderPlatform, type UploaderApp, type DataSourceInfo } from "$api-clients";
 
 const mocks = vi.hoisted(() => ({
@@ -121,9 +121,7 @@ describe("UploaderSetupView", () => {
     });
   });
 
-  // The key request is held pending: a generated key starts polling from an effect
-  // that reads and writes its own interval state (effect_update_depth_exceeded),
-  // and a failed one re-runs the generating effect without end.
+  // The key request is held pending, so the view stays on its generating state.
   describe("manual setup", () => {
     beforeEach(() => {
       mocks.createGrant.mockReturnValue(new Promise(() => {}));
@@ -160,5 +158,65 @@ describe("UploaderSetupView", () => {
     await expect
       .element(page.getByText("Could not load setup details for AAPS. Try again."))
       .toBeVisible();
+  });
+});
+
+const pollTimers = (spy: { mock: { calls: unknown[][] } }) =>
+  spy.mock.calls.filter((call) => call[1] === 15_000);
+
+describe("UploaderSetupView manual setup key and polling", () => {
+  let setIntervalSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mocks.sources = [];
+    mocks.createGrant.mockReset();
+    setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+  });
+
+  afterEach(() => {
+    setIntervalSpy.mockRestore();
+  });
+
+  it("generates one key and starts polling once", async () => {
+    mocks.createGrant.mockResolvedValue({ token: "noc_created" });
+    renderView(AAPS, MANUAL_SETUP);
+
+    await expect.element(page.getByText("noc_created")).toBeVisible();
+
+    expect(mocks.createGrant).toHaveBeenCalledTimes(1);
+    expect(pollTimers(setIntervalSpy)).toHaveLength(1);
+  });
+
+  it("does not start polling when unmounted while the key is pending", async () => {
+    let resolveKey: (value: { token: string }) => void = () => {};
+    mocks.createGrant.mockReturnValue(
+      new Promise((resolve) => {
+        resolveKey = resolve;
+      })
+    );
+    const screen = render(UploaderSetupView, {
+      props: { app: AAPS, setupResponse: MANUAL_SETUP, onBack: vi.fn(), onConnected: vi.fn() },
+    });
+    await expect.element(page.getByText("Generating API key...")).toBeVisible();
+
+    await screen.unmount();
+    resolveKey({ token: "noc_late" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(pollTimers(setIntervalSpy)).toHaveLength(0);
+  });
+
+  it("shows the error and does not retry when the key request fails", async () => {
+    mocks.createGrant.mockRejectedValue({
+      status: 400,
+      body: { message: "Label already used." },
+    });
+    renderView(AAPS, MANUAL_SETUP);
+
+    await expect.element(page.getByText("Label already used.")).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(mocks.createGrant).toHaveBeenCalledTimes(1);
+    expect(pollTimers(setIntervalSpy)).toHaveLength(0);
   });
 });

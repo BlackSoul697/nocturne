@@ -1157,6 +1157,44 @@ public class StatisticsServiceTests
     }
 
     [Fact]
+    public void CalculatePersonalRangeTime_WithNoZone_AndAFlatSchedule_ComputesTheSplit()
+    {
+        var schedule = new List<TargetRangeEntry>
+        {
+            new() { Time = "06:00", TimeAsSeconds = 6 * 3600, Low = 70, High = 130 },
+        };
+        var at = new DateTime(2026, 1, 1, 3, 0, 0, DateTimeKind.Utc);
+        var entries = new[]
+        {
+            new SensorGlucose { Mgdl = 100, Timestamp = at },
+            new SensorGlucose { Mgdl = 140, Timestamp = at },
+            new SensorGlucose { Mgdl = 100, Timestamp = at.AddMinutes(5) },
+        };
+
+        var result = _statisticsService.CalculatePersonalRangeTime(entries, schedule, null);
+
+        result!.AboveRangePercent.Should().BeApproximately(50, 0.001);
+        result.InRangePercent.Should().BeApproximately(50, 0.001);
+    }
+
+    [Fact]
+    public void CalculatePersonalRangeTime_WithNoZone_AndSeveralEntries_GivesNoPersonalRange()
+    {
+        var schedule = new List<TargetRangeEntry>
+        {
+            new() { Time = "00:00", TimeAsSeconds = 0, Low = 100, High = 180 },
+            new() { Time = "06:00", TimeAsSeconds = 6 * 3600, Low = 80, High = 160 },
+        };
+        var entries = new[]
+        {
+            new SensorGlucose { Mgdl = 170, Timestamp = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc) },
+            new SensorGlucose { Mgdl = 170, Timestamp = new DateTime(2026, 1, 1, 9, 5, 0, DateTimeKind.Utc) },
+        };
+
+        _statisticsService.CalculatePersonalRangeTime(entries, schedule, null).Should().BeNull();
+    }
+
+    [Fact]
     public void CalculatePersonalRangeTime_RespectsTenantTimezone()
     {
         // Arrange — a reading at 02:00 UTC is 12:00 in UTC+10, so it must be evaluated

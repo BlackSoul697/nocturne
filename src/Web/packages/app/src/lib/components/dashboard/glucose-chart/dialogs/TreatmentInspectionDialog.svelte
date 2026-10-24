@@ -13,11 +13,12 @@
   } from "$lib/utils/formatting";
   import { getDataSourceDisplayName } from "$lib/utils/data-source-display";
   import { entrySummary } from "$lib/utils/entry-summary";
-  import type { BolusCalculation } from "$lib/api";
+  import type { BolusCalculation, MealPeriod } from "$lib/api";
   import { CalculationType } from "$lib/api";
   import type { EntryRecord } from "$lib/constants/entry-categories";
   import { ENTRY_CATEGORIES } from "$lib/constants/entry-categories";
   import { getAll as getBolusCalculations } from "$lib/api/generated/bolusCalculations.generated.remote";
+  import { carbMarkerName } from "../meal-period-labels.svelte";
   import { useApsPrediction } from "./aps-prediction.svelte";
   import { inspectionSearchWindow } from "./inspection-window";
   import InspectionChart from "./InspectionChart.svelte";
@@ -33,6 +34,7 @@
     bolusDataSource?: string;
     carbGrams?: number;
     carbLabel?: string;
+    carbMealPeriod?: MealPeriod;
     carbDataSource?: string;
     entry?: EntryRecord | null;
     correlatedRecords?: EntryRecord[];
@@ -58,6 +60,7 @@
     bolusDataSource,
     carbGrams,
     carbLabel,
+    carbMealPeriod,
     carbDataSource,
     entry: _entry,
     correlatedRecords,
@@ -77,6 +80,7 @@
   }: Props = $props();
 
   const bolusSourceName = $derived(getDataSourceDisplayName(bolusDataSource));
+  const carbName = $derived(carbMarkerName({ label: carbLabel, mealPeriod: carbMealPeriod }));
   const carbSourceName = $derived(getDataSourceDisplayName(carbDataSource));
   // Show a single "Source" row if both come from the same source, otherwise per-treatment sources
   const unifiedSourceName = $derived(
@@ -103,7 +107,7 @@
     }
     if (carbGrams != null) {
       let carbText = `${formatCarbDisplay(carbGrams)}g carbs`;
-      if (carbLabel) carbText += ` (${carbLabel})`;
+      if (carbName) carbText += ` (${carbName})`;
       parts.push(carbText);
     }
     return parts.join(" + ");
@@ -168,7 +172,7 @@
         {/if}
         {#if carbGrams != null}
           <Badge variant={ENTRY_CATEGORIES.carbs.badge}>
-            {formatCarbDisplay(carbGrams)}g{carbLabel ? ` ${carbLabel}` : " carbs"}
+            {formatCarbDisplay(carbGrams)}g{carbName ? ` ${carbName}` : " carbs"}
           </Badge>
         {/if}
       </Dialog.Title>

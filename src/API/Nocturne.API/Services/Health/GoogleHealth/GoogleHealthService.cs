@@ -367,6 +367,12 @@ public sealed class GoogleHealthService(
 
     public string ConnectorName => GoogleHealthConnectorService.ConnectorName;
 
+    async Task<IReadOnlyList<ConnectorRecordStats>> IConnectorDataPurge.DescribeAsync(
+        DateTime? since, DateTime last24Hours, CancellationToken ct) =>
+        await writer.DescribeSleepAsync(since, last24Hours, ct) is { } sleep
+            ? [new(nameof(SyncDataType.Sleep), sleep.Count, sleep.CountLast24Hours, sleep.Latest, sleep.Oldest)]
+            : [];
+
     /// <remarks>
     /// The caller holds the tenant's sync gate (<see cref="GoogleHealthPurgeGuard"/>), so this does
     /// not take it. Heart rate, steps and body weight carry the data source id and go with the

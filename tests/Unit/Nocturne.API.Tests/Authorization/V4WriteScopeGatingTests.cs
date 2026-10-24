@@ -126,17 +126,6 @@ public class V4WriteScopeGatingTests
         public const string PerRecordGuard = "per-record scope enforced in the handler";
 
         /// <summary>
-        /// Mints a capability rather than storing an observation, and the vocabulary that should
-        /// govern it is split: the permission atoms are <c>sharing.manage</c>/<c>sharing.guest</c>
-        /// while the OAuth scope is <c>sharing.readwrite</c>, which no seed role maps to and
-        /// <see cref="Scope.Normalize"/> keeps only for a client that was granted it
-        /// directly. Requiring either would strip the capability from every non-owner role, so it
-        /// stays ungated until the vocabulary is unified. NOT presentation state — the capability
-        /// this mints serves patient glucose to an anonymous caller.
-        /// </summary>
-        public const string SplitSharingVocabulary = "sharing capability, vocabulary split between atom and scope";
-
-        /// <summary>
         /// Deliberately <c>[AllowAnonymous]</c>. There is no credential to scope, so a scope gate
         /// cannot apply; whether the endpoint should be anonymous at all is the anonymous-endpoint
         /// audit's question, not this taxonomy's.
@@ -220,7 +209,6 @@ public class V4WriteScopeGatingTests
             // caller's categories, asserted by AlertReplayReadScopeTests.
             ["AlertReplayController"] = NotDataCategory.ComputesAndReturns,
 
-            ["ClockFacesController"] = NotDataCategory.SplitSharingVocabulary,
             ["CoachMarkController"] = NotDataCategory.PresentationState,
             ["UserPreferencesController"] = NotDataCategory.PresentationState,
 
@@ -407,6 +395,9 @@ public class V4WriteScopeGatingTests
             // The actions accept either member-personal capability scope; device.notify is the one
             // asserted, and neither is satisfiable by a read-only credential.
             ["ClientDevicesController"] = Scope.DeviceNotify,
+
+            // See the ClockFacesController remarks.
+            ["ClockFacesController"] = Scope.SharingManage,
         };
 
     /// <summary>
