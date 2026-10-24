@@ -174,6 +174,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<TempBasal>>(),
+                It.IsAny<DateTime>(),
                 It.IsAny<long>(),
                 It.IsAny<TimeZoneInfo?>(),
                 It.IsAny<IEnumerable<BasalInjection>?>(),
@@ -1230,6 +1231,43 @@ public partial class StatisticsControllerTests
     }
 
     [Fact]
+    public async Task GetBasalAnalysis_ReadsTempBasalsFromADayBeforeTheWindow_AndCountsOnlyTheTimeInsideIt()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime? readFrom = null;
+        _tempBasalRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<DateTime?, DateTime?, string?, string?, int, int, bool, CancellationToken>(
+                (from, _, _, _, _, _, _, _) => readFrom = from)
+            .ReturnsAsync(new List<TempBasal>
+            {
+                new()
+                {
+                    StartTimestamp = start.AddMinutes(-30),
+                    EndTimestamp = start.AddMinutes(90),
+                    Rate = 2.0,
+                    Origin = TempBasalOrigin.Manual,
+                    ScheduledRate = 1.0,
+                },
+            });
+        _basalRateResolverMock
+            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Func<long, double>)(_ => 1.0));
+
+        var result = await CreateController(statisticsService: new StatisticsService())
+            .GetBasalAnalysis(start, start.AddDays(1));
+
+        readFrom.Should().Be(start.AddHours(-24));
+        var payload = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<BasalAnalysisResponse>().Subject;
+        payload.Stats.TotalDelivered.Should().Be(3.0);
+    }
+
+    [Fact]
     public async Task GetBasalAnalysis_ForwardsTheRequestTokenToEveryFetch()
     {
         SetupHistoryPastTheOldLimits();
@@ -1441,6 +1479,90 @@ public partial class StatisticsControllerTests
         _basalSegmentsMock.Verify(
             s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    private void SetupTempBasals(params TempBasal[] tempBasals) =>
+        _tempBasalRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tempBasals.ToList());
+
+    [Fact]
+    public async Task GetMultiPeriodStatistics_WithOnlyATempBeforeTheWindow_FallsBackToProfileBasal()
+    {
+        var start = DefaultNow.UtcDateTime.AddHours(-24);
+        SetupMultiPeriodWithProfile(
+            [new BasalSegment(Mills(start), Mills(start.AddDays(1)), 1.0, 1.0, "Default")]);
+        SetupTempBasals(new TempBasal
+        {
+            StartTimestamp = start.AddHours(-6),
+            EndTimestamp = start.AddHours(-2),
+            Rate = 1.5,
+            Origin = TempBasalOrigin.Manual,
+        });
+
+        var delivery = await MultiPeriodLastDayDelivery();
+
+        delivery.TotalBasal.Should().Be(24);
+    }
+
+    [Fact]
+    public async Task GetMultiPeriodStatistics_TempStartedBeforeThePeriod_CountsOnlyTheTimeInsideIt()
+    {
+        var start = DefaultNow.UtcDateTime.AddHours(-24);
+        SetupMultiPeriodWithProfile([]);
+        SetupTempBasals(new TempBasal
+        {
+            StartTimestamp = start.AddMinutes(-30),
+            EndTimestamp = start.AddMinutes(90),
+            Rate = 2.0,
+            Origin = TempBasalOrigin.Manual,
+        });
+
+        var delivery = await MultiPeriodLastDayDelivery();
+
+        delivery.TotalBasal.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetDailyBasalBolusRatios_TempStartedBeforeTheWindow_CountsOnlyTheTimeInsideItOnTheFirstDay()
+    {
+        var start = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+        SetupEmptyTreatments();
+        SetupTempBasals(new TempBasal
+        {
+            StartTimestamp = start.AddMinutes(-30),
+            EndTimestamp = start.AddMinutes(90),
+            Rate = 2.0,
+            Origin = TempBasalOrigin.Manual,
+        });
+
+        var result = await CreateController(statisticsService: new StatisticsService())
+            .GetDailyBasalBolusRatios(start, start.AddDays(1));
+
+        var payload = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<DailyBasalBolusRatioResponse>().Subject;
+        payload.DailyData.Select(d => (d.Date, d.Basal)).Should().Equal(("2026-03-02", 3.0));
+    }
+
+    [Fact]
+    public async Task GetBasalAnalysis_BuildsTheScheduleResolverFromTheTempBasalReadStart()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupEmptyTreatments();
+        _basalRateResolverMock
+            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Func<long, double>)(_ => 1.0));
+
+        await CreateController(statisticsService: new StatisticsService())
+            .GetBasalAnalysis(start, start.AddDays(1));
+
+        _basalRateResolverMock.Verify(
+            r => r.BuildResolverAsync(Mills(start.AddHours(-24)), Mills(start.AddDays(1)), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private void SetupMultiPeriodWithProfile(BasalSegment[] segments)
@@ -2818,7 +2940,7 @@ public partial class StatisticsControllerTests
         StatisticsService stats)
     {
         var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var d in stats.CalculateDailyBasalBolusRatios(manualBoluses, [], [], Mills(end.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), tz, injections).DailyData)
+        foreach (var d in stats.CalculateDailyBasalBolusRatios(manualBoluses, [], [], start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), Mills(end.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), tz, injections).DailyData)
         {
             if (!string.IsNullOrEmpty(d.Date)) dailyBasalMap[d.Date] = d.Basal;
         }

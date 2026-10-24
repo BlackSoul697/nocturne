@@ -914,6 +914,7 @@ public class TddCalculationTests
             boluses,
             algorithmBoluses,
             tempBasals,
+            StartDate,
             Mills(EndDate),
             TimeZoneInfo.Utc
         );
@@ -952,6 +953,7 @@ public class TddCalculationTests
             boluses,
             Array.Empty<Bolus>(),
             tempBasals,
+            StartDate,
             Mills(EndDate),
             TimeZoneInfo.Utc);
 
@@ -989,6 +991,7 @@ public class TddCalculationTests
             Array.Empty<Bolus>(),
             Array.Empty<Bolus>(),
             tempBasals,
+            StartDate,
             Mills(EndDate),
             TimeZoneInfo.Utc);
 
@@ -1040,7 +1043,8 @@ public class TddCalculationTests
             Array.Empty<Bolus>(),
             Array.Empty<Bolus>(),
             tempBasals,
-            Mills(EndDate),
+            StartDate,
+            Mills(StartDate.AddDays(2)),
             TimeZoneInfo.Utc);
 
         result.DaysWithData.Should().Be(2);

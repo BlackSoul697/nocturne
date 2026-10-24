@@ -144,7 +144,7 @@ public class StatisticsServiceOneRuleTests
         var tempBasals = new[] { TempBasalAt(1.0, start.AddDays(1).AddHours(8), start.AddDays(1).AddHours(9)) };
         var boluses = new[] { new Bolus { Insulin = 2.0, Timestamp = start.AddDays(4).AddHours(12) } };
 
-        var ratios = _sut.CalculateDailyBasalBolusRatios(boluses, [], tempBasals, Mills(end), TimeZoneInfo.Utc);
+        var ratios = _sut.CalculateDailyBasalBolusRatios(boluses, [], tempBasals, start, Mills(end), TimeZoneInfo.Utc);
         var hourly = _sut.CalculateHourlyInsulinDelivery(tempBasals, boluses, [], start, end, Mills(end), TimeZoneInfo.Utc);
         var delivery = _sut.CalculateInsulinDeliveryStatistics(boluses, [], tempBasals, [], start, end, Mills(end));
 

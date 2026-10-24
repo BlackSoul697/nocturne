@@ -2223,6 +2223,18 @@ public partial class StatisticsService : IStatisticsService
     private static readonly TimeSpan MaxOpenTempDuration = TimeSpan.FromHours(24);
 
     /// <summary>
+    /// Where to start reading temp basals for a window starting at <paramref name="windowStart"/>:
+    /// <see cref="MaxOpenTempDuration"/> before it, so an open temp, or a pump-set one (no pump
+    /// accepts longer), still running at the window's start is in the input. A closed segment longer
+    /// than that which starts before this point is not read. A start-ordered read from here is a
+    /// range scan on the start index.
+    /// </summary>
+    public static DateTime TempBasalReadStart(DateTime windowStart) =>
+        windowStart <= DateTime.MinValue + MaxOpenTempDuration
+            ? DateTime.MinValue
+            : windowStart - MaxOpenTempDuration;
+
+    /// <summary>
     /// Temp basals as delivered: each piece of a record during which it set the pump's rate, as a
     /// copy with the piece's start and end, in start order. Every reader of basal delivery reads
     /// temp basals through this.
@@ -2311,6 +2323,33 @@ public partial class StatisticsService : IStatisticsService
         return [.. result.OrderBy(tb => tb.StartMills)];
     }
 
+    /// <summary>
+    /// The part of each delivered piece (<see cref="ClipOverlappingTempBasals"/>) that lies inside
+    /// the window from <paramref name="startDate"/> to <paramref name="untilMills"/>. Every figure
+    /// computed over a window reads temp basals through this, so a temp that straddles either edge
+    /// counts only the time it ran inside.
+    /// </summary>
+    /// <remarks>
+    /// A reader fetches from <see cref="TempBasalReadStart"/>, so a temp that began before the window
+    /// is in the input.
+    /// </remarks>
+    public static List<TempBasal> DeliveredWithin(
+        IEnumerable<TempBasal> tempBasals, DateTime startDate, long untilMills)
+    {
+        var startMills = new DateTimeOffset(startDate.AsUtc()).ToUnixTimeMilliseconds();
+        var result = new List<TempBasal>();
+        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        {
+            var start = Math.Max(tb.StartMills, startMills);
+            var end = Math.Min(tb.EndMills!.Value, untilMills);
+            if (end <= start)
+                continue;
+            result.Add(start == tb.StartMills && end == tb.EndMills ? tb : tb.WithSpan(start, end));
+        }
+
+        return result;
+    }
+
     private static long OpenEndBound(List<(string Key, List<TempBasal> Temps)> rankedStreams, int rank, long startMills)
     {
         var bound = startMills + (long)MaxOpenTempDuration.TotalMilliseconds;
@@ -2368,7 +2407,7 @@ public partial class StatisticsService : IStatisticsService
         var scheduledBasalInsulin = 0.0;
         var additionalBasalInsulin = 0.0;
         var tempBasalCount = 0;
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } insulin || insulin <= 0)
                 continue;
@@ -2440,6 +2479,7 @@ public partial class StatisticsService : IStatisticsService
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        DateTime startDate,
         long untilMills,
         TimeZoneInfo userTimeZone,
         IEnumerable<BasalInjection>? basalInjections = null,
@@ -2469,7 +2509,7 @@ public partial class StatisticsService : IStatisticsService
             Accumulate(bolus.Mills, 0, bolus.Insulin, 0);
         }
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } basalInsulin || basalInsulin <= 0)
                 continue;
@@ -2581,7 +2621,7 @@ public partial class StatisticsService : IStatisticsService
         TimeZoneInfo? userTimeZone = null
     )
     {
-        var tempBasalList = ClipOverlappingTempBasals(tempBasals, untilMills);
+        var tempBasalList = DeliveredWithin(tempBasals, startDate, untilMills);
         var dayCount = WindowDays(startDate, endDate);
 
         var allRates = new List<double>();
@@ -2704,7 +2744,7 @@ public partial class StatisticsService : IStatisticsService
         var basalDays = new HashSet<DateOnly>();
         var bolusDays = new HashSet<DateOnly>();
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (tb.Rate is not { } rate)
                 continue;
