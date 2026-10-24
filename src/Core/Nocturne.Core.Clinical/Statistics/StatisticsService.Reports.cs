@@ -152,7 +152,7 @@ public partial class StatisticsService
         var algorithm = algorithmBoluses.ToList();
 
         var dailyBasalBolus = CalculateDailyBasalBolusRatios(
-            manual, algorithm, tempBasals, untilMills, timeZone, basalInjections);
+            manual, algorithm, tempBasals, startUtc, untilMills, timeZone, basalInjections);
         var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var d in dailyBasalBolus.DailyData)
         {

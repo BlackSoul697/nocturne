@@ -36,6 +36,7 @@ public class BadRequestOnInvalidInputPipelineTests : IClassFixture<GoldenFileWeb
                     It.IsAny<IEnumerable<Bolus>>(),
                     It.IsAny<IEnumerable<Bolus>>(),
                     It.IsAny<IEnumerable<TempBasal>>(),
+                    It.IsAny<DateTime>(),
                     It.IsAny<long>(),
                     It.IsAny<TimeZoneInfo?>(),
                     It.IsAny<IEnumerable<BasalInjection>?>(),

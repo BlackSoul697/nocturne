@@ -141,7 +141,7 @@ public class StatisticsController : ControllerBase
     {
         var manualTask    = _bolusRepository.GetAsync(from, to, null, null, int.MaxValue, descending: false, kind: BolusKind.Manual, ct: ct);
         var algorithmTask = _bolusRepository.GetAsync(from, to, null, null, int.MaxValue, descending: false, kind: BolusKind.Algorithm, ct: ct);
-        var tempBasalTask = _tempBasalRepository.GetAsync(from, to, null, null, int.MaxValue, descending: false, ct: ct);
+        var tempBasalTask = FetchTempBasalsAsync(from, to, ct);
         var injectionTask = _basalInjectionRepository.GetAsync(from, to, null, null, int.MaxValue, 0, false, ct);
 
         await Task.WhenAll([manualTask, algorithmTask, tempBasalTask, injectionTask, .. alongside]);
@@ -153,6 +153,15 @@ public class StatisticsController : ControllerBase
             (await injectionTask).ToList());
     }
 
+    /// <remarks>
+    /// Reads from <see cref="StatisticsService.TempBasalReadStart"/>, not the window start: the
+    /// repository windows on a temp's start, and one begun before the window can still be running in
+    /// it. <see cref="StatisticsService.DeliveredWithin"/> cuts each to the window.
+    /// </remarks>
+    private Task<IEnumerable<TempBasal>> FetchTempBasalsAsync(DateTime from, DateTime to, CancellationToken ct) =>
+        _tempBasalRepository.GetAsync(
+            StatisticsService.TempBasalReadStart(from), to, null, null, int.MaxValue, descending: false, ct: ct);
+
     private long UntilMills(DateTime endUtc) =>
         StatisticsService.UntilMills(endUtc, _timeProvider.GetUtcNow());
 
@@ -161,10 +170,14 @@ public class StatisticsController : ControllerBase
     /// temp's start, for records that have none. Legacy-sourced temps arrive with a null rate and
     /// <see cref="IStatisticsService.CalculateBasalAnalysis"/> can only classify a temp as high or
     /// low against it. Scheduled-origin records are the profile baseline itself and are skipped.
+    /// The schedule is read from <see cref="StatisticsService.TempBasalReadStart"/>, since the temps
+    /// begin that far before the window.
     /// </summary>
     private async Task FillMissingScheduledRatesAsync(
-        IList<TempBasal> tempBasals, long startMills, long endMills, CancellationToken ct)
+        IList<TempBasal> tempBasals, DateTime startUtc, DateTime endUtc, CancellationToken ct)
     {
+        var startMills = new DateTimeOffset(StatisticsService.TempBasalReadStart(startUtc), TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var endMills = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, ct);
         foreach (var tb in tempBasals)
         {
@@ -191,7 +204,9 @@ public class StatisticsController : ControllerBase
         CancellationToken ct,
         IReadOnlyList<BasalSegment>? profileSegments = null)
     {
-        if (tempBasals.Count > 0 || recordedBasal is { Count: > 0 }) return;
+        if (recordedBasal is { Count: > 0 }
+            || StatisticsService.DeliveredWithin(tempBasals, startUtc, UntilMills(endUtc)).Count > 0)
+            return;
 
         foreach (var seg in profileSegments ?? await ReadProfileBasalSegmentsAsync(startUtc, endUtc, ct))
         {
@@ -786,10 +801,11 @@ public class StatisticsController : ControllerBase
         {
             var startDate = now.AddDays(-days);
             var endDate = now;
+            var tempBasalReadStart = StatisticsService.TempBasalReadStart(startDate);
 
             var filteredBoluses  = insulin.ManualBoluses.Where(b => b.Timestamp >= startDate).ToList();
             var algorithmBoluses = insulin.AlgorithmBoluses.Where(b => b.Timestamp >= startDate).ToList();
-            var tempBasals       = insulin.TempBasals.Where(t => t.StartTimestamp >= startDate).ToList();
+            var tempBasals       = insulin.TempBasals.Where(t => t.StartTimestamp >= tempBasalReadStart).ToList();
             var basalInjections  = insulin.BasalInjections.Where(i => i.Timestamp >= startDate).ToList();
             var filteredEntries  = (await _canonicalGlucose.SelectAsync(allGlucose.Where(g => g.Timestamp >= startDate).ToList(), cancellationToken)).ToList();
             var filteredCarbs    = allCarbs.Where(c => c.Timestamp >= startDate).ToList();
@@ -901,6 +917,7 @@ public class StatisticsController : ControllerBase
             boluses,
             algorithmBoluses,
             tempBasals,
+            startDt,
             UntilMills(endDt),
             tz,
             basalInjections,
@@ -986,15 +1003,12 @@ public class StatisticsController : ControllerBase
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
-        var startMs = new DateTimeOffset(startDt, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var endMs   = new DateTimeOffset(endDt,   TimeSpan.Zero).ToUnixTimeMilliseconds();
-
         var carbTask = _carbIntakeRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
 
         var (boluses, algorithmBoluses, tempBasals, basalInjections) =
             await FetchInsulinRecordsAsync(startDt, endDt, cancellationToken, carbTask);
         var carbs  = await carbTask;
-        await FillMissingScheduledRatesAsync(tempBasals, startMs, endMs, cancellationToken);
+        await FillMissingScheduledRatesAsync(tempBasals, startDt, endDt, cancellationToken);
 
         var result = _statisticsService.CalculateInsulinDeliveryStatistics(
             boluses,
@@ -1033,11 +1047,9 @@ public class StatisticsController : ControllerBase
         var endUtc = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
         // Uncapped for the reason given on FetchInsulinRecordsAsync.
-        var tempBasals = (await _tempBasalRepository.GetAsync((DateTime?)startUtc, (DateTime?)endUtc, null, null, int.MaxValue, descending: false, ct: cancellationToken)).ToList();
+        var tempBasals = (await FetchTempBasalsAsync(startUtc, endUtc, cancellationToken)).ToList();
 
-        var startMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var endMs   = new DateTimeOffset(endUtc,   TimeSpan.Zero).ToUnixTimeMilliseconds();
-        await FillMissingScheduledRatesAsync(tempBasals, startMs, endMs, cancellationToken);
+        await FillMissingScheduledRatesAsync(tempBasals, startUtc, endUtc, cancellationToken);
 
         await AddScheduledBasalFallbackAsync(tempBasals, startUtc, endUtc, recordedBasal: null, cancellationToken);
 
