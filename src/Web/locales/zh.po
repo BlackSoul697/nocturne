@@ -4231,6 +4231,7 @@ msgstr ""
 msgid "Meal"
 msgstr ""
 
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 msgid "Snack"
 msgstr ""
@@ -14492,7 +14493,7 @@ msgstr ""
 msgid "<0/> {0}U{1}"
 msgstr ""
 
-#. 0: formatCarbDisplay(carbGrams); 1: carbLabel ? ` ${carbLabel}` \\: " carbs"
+#. 0: formatCarbDisplay(carbGrams); 1: carbName ? ` ${carbName}` \\: " carbs"
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "{0}g{1}"
 msgstr ""
@@ -22088,6 +22089,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/MarkRegistrationHarness.test.svelte
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
 msgid "Lunch"
 msgstr ""
 
@@ -31834,4 +31836,16 @@ msgstr ""
 
 #: src/routes/(authenticated)/clock/+page.svelte
 msgid "Your clock displays"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Breakfast"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Dinner"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Late night"
 msgstr ""
