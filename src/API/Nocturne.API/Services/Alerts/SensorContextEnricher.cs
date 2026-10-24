@@ -396,17 +396,10 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
         if (!string.IsNullOrEmpty(tenantTimeZoneId))
             atLocal = TimeZoneInfo.ConvertTimeFromUtc(atUtc, TimeZoneHelper.GetTimeZoneInfoFromId(tenantTimeZoneId));
 
-        var sortedEntries = schedule.Entries.OrderBy(e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time)).ToList();
         var localTime = TimeOnly.FromDateTime(atLocal);
         var secondsFromMidnight = (localTime.Hour * 3600) + (localTime.Minute * 60) + localTime.Second;
-        var active = sortedEntries[0];
-        foreach (var entry in sortedEntries)
-        {
-            if (secondsFromMidnight >= ScheduleEntryTime.SecondsOf(entry.TimeAsSeconds, entry.Time))
-                active = entry;
-            else
-                break;
-        }
+        ScheduleEntryTime.TryEntryAt(
+            schedule.Entries, secondsFromMidnight, e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time), out var active);
 
         return GlucoseBucketResolver.Compute(
             glucoseMgdl,

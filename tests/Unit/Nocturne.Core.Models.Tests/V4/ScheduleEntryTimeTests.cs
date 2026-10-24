@@ -48,4 +48,61 @@ public class ScheduleEntryTimeTests
     {
         ScheduleEntryTime.SecondsOf(3600, "06:00").Should().Be(3600);
     }
+
+    private static ScheduleEntry At(int seconds, double value) =>
+        new() { Time = "00:00", TimeAsSeconds = seconds, Value = value };
+
+    private static ScheduleEntry? EntryAt(IEnumerable<ScheduleEntry> entries, int seconds) =>
+        ScheduleEntryTime.TryEntryAt(
+            entries, seconds, e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time), out var entry)
+            ? entry
+            : null;
+
+    [Fact]
+    public void EmptyEntries_ReturnsNull() => EntryAt([], 3600).Should().BeNull();
+
+    [Fact]
+    public void UnorderedEntries_ReturnTheLastStartedAtOrBeforeTheTime()
+    {
+        var entries = new[] { At(43200, 3), At(0, 1), At(21600, 2) };
+
+        EntryAt(entries, 30000)!.Value.Should().Be(2);
+        EntryAt(entries, 21600)!.Value.Should().Be(2);
+        EntryAt(entries, 86399)!.Value.Should().Be(3);
+    }
+
+    [Fact]
+    public void TimeBeforeEveryEntry_ReturnsTheEarliestEntry()
+    {
+        var entries = new[] { At(43200, 3), At(21600, 2) };
+
+        EntryAt(entries, 100)!.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void EntriesStartingTogether_ReturnTheLastListed()
+    {
+        var entries = new[] { At(0, 1), At(0, 2) };
+
+        EntryAt(entries, 10)!.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void EarliestEntriesStartingTogether_ReturnTheFirstListed()
+    {
+        var entries = new[] { At(100, 1), At(100, 2) };
+
+        EntryAt(entries, 50)!.Value.Should().Be(1);
+    }
+
+    [Fact]
+    public void ValueTypeEntries_AreResolved()
+    {
+        var entries = new[] { (Seconds: 43200, Value: 3.0), (Seconds: 0, Value: 1.0) };
+
+        ScheduleEntryTime.TryEntryAt(entries, 50000, e => e.Seconds, out var entry).Should().BeTrue();
+        entry.Value.Should().Be(3.0);
+        ScheduleEntryTime.TryEntryAt(Array.Empty<(int Seconds, double Value)>(), 50000, e => e.Seconds, out _)
+            .Should().BeFalse();
+    }
 }
