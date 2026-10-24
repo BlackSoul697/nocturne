@@ -1849,10 +1849,7 @@ internal class MigrationJob
             OutputMode = MongoDB.Bson.IO.JsonOutputMode.RelaxedExtendedJson
         };
         var json = doc.ToJson(jsonWriterSettings);
-        var status = System.Text.Json.JsonSerializer.Deserialize<DeviceStatus>(json, new System.Text.Json.JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var status = System.Text.Json.JsonSerializer.Deserialize<DeviceStatus>(json, JsonDefaults.CaseInsensitive);
 
         if (status == null)
             return;

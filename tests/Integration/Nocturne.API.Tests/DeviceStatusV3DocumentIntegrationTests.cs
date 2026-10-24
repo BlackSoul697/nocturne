@@ -153,7 +153,7 @@ public class DeviceStatusV3DocumentIntegrationTests : ApiIntegrationTestBase
             document["_id"]!.GetValue<string>().Should().Be(identifier);
             document["date"]!.GetValue<long>().Should().Be(millis);
             document["created_at"]!.GetValue<string>().Should().NotStartWith("1999");
-            document["createdAt"]!.GetValue<string>().Should().NotStartWith("1999");
+            document["createdAt"]!.GetValue<string>().Should().Be("1999-01-01T00:00:00.000Z");
             document["srvModified"]!.GetValue<long>().Should().NotBe(7);
             document["isValid"].Should().BeNull();
             document["vendorNote"]!.GetValue<string>().Should().Be("kept");
