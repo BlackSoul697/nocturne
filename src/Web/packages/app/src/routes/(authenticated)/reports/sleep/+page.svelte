@@ -17,7 +17,7 @@
     type ActogramRowContext,
   } from "$lib/components/actogram";
   import { MS_PER_HOUR, HOURS_PER_ROW, type ActogramPoint } from "$lib/components/actogram/actogram";
-  import { getTrends } from "$api/generated/sleepReports.generated.remote";
+  import { getSleepTrends } from "$api/reports.remote";
   import { useActogramReport } from "$lib/hooks/actogram-report.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { resolve } from "$app/paths";
@@ -68,9 +68,8 @@
   // padded window for double-plot context.
   const trendsResource = contextResource(
     () =>
-      getTrends({
-        from: new Date(reportsParams.dateRangeMillis.from).toISOString(),
-        to: new Date(reportsParams.dateRangeMillis.to).toISOString(),
+      getSleepTrends({
+        ...reportsParams.dateRangeInput,
         source: sourceFilter === "all" ? undefined : sourceFilter,
       }),
     { errorTitle: "Error Loading Sleep Report" }
