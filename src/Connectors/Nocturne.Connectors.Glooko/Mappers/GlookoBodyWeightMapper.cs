@@ -81,7 +81,7 @@ public class GlookoBodyWeightMapper(string connectorSource, GlookoTimeMapper tim
     {
         var rawTimestamp = _timeMapper.GetRawGlookoDate(timestamp ?? string.Empty, null);
         var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
-        var mills = new DateTimeOffset(correctedTimestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var mills = correctedTimestamp.ToMills();
 
         // Stable upsert key: a deterministic GUID derived from the Glooko guid (raw-timestamp hash fallback).
         // Carried in Id so the publisher's get-by-id round-trips to the entity PK and re-syncs update in place.

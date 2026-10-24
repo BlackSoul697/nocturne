@@ -122,7 +122,7 @@ public static class BasalCalculator
                 var localBoundary = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified)
                     .AddSeconds(entry.Seconds);
                 var boundaryUtc = LocalToUtcAcrossDst(localBoundary, tz);
-                var boundary = new DateTimeOffset(boundaryUtc, TimeSpan.Zero).ToUnixTimeMilliseconds()
+                var boundary = boundaryUtc.ToMills()
                     - timeshiftMs;
                 if (boundary <= fromMills) continue;
                 if (boundary >= toMills) continue;

@@ -102,8 +102,8 @@ public sealed class GoogleHealthReadingWriter(
                                     .SetProperty(record => EF.Property<bool>(record, "DeletedByUser"), false), ct), ct);
                         break;
                     case "weight":
-                        var firstMills = new DateTimeOffset(DateTime.SpecifyKind(run.FromTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
-                        var lastMills = new DateTimeOffset(DateTime.SpecifyKind(run.ToTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+                        var firstMills = run.FromTime.ToMills();
+                        var lastMills = run.ToTime.ToMills();
                         await ReconcileRecordsAsync(db.BodyWeights.Where(record => record.TenantId == run.TenantId &&
                                 record.DataSource == Source && record.DeletedAt == null &&
                                 record.Mills >= firstMills && record.Mills < lastMills &&

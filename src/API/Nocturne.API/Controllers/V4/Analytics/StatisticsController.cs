@@ -176,8 +176,8 @@ public class StatisticsController : ControllerBase
     private async Task FillMissingScheduledRatesAsync(
         IList<TempBasal> tempBasals, DateTime startUtc, DateTime endUtc, CancellationToken ct)
     {
-        var startMills = new DateTimeOffset(StatisticsService.TempBasalReadStart(startUtc), TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var endMills = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var startMills = StatisticsService.TempBasalReadStart(startUtc).ToMills();
+        var endMills = endUtc.ToMills();
         var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, ct);
         foreach (var tb in tempBasals)
         {
@@ -230,8 +230,8 @@ public class StatisticsController : ControllerBase
     {
         if (!await _therapySettingsResolver.HasDataAsync(ct)) return [];
 
-        var fromMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var toMs = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var fromMs = startUtc.ToMills();
+        var toMs = endUtc.ToMills();
         return await _basalSegments.GetSegmentsAsync(fromMs, toMs, ct).ToListAsync(ct);
     }
 

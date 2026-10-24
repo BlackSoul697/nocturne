@@ -129,7 +129,7 @@ internal sealed class TherapyTimelineResolver : ITherapyTimelineResolver
         ];
 
         return starts
-            .Select(t => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)).ToUnixTimeMilliseconds())
+            .Select(t => t.ToMills())
             .Where(t => t > fromMills && t < toMills)
             .Distinct()
             .Order()

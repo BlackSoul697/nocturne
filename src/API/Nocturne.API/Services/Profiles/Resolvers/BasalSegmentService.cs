@@ -163,7 +163,7 @@ internal sealed class BasalSegmentService : IBasalSegmentService
         {
             // No schedule existed at fromMills: up to the first one, the newest is read, as
             // ProfileVersionCache.ActiveAt reads it for IBasalRateResolver.
-            var firstStartMs = new DateTimeOffset(schedules[0].Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            var firstStartMs = (schedules[0].Timestamp).ToMills();
             var leadingEnd = Math.Min(firstStartMs, toMills);
             if (leadingEnd > sliceStart)
             {
@@ -178,7 +178,7 @@ internal sealed class BasalSegmentService : IBasalSegmentService
         // Walk later versions: each one whose Timestamp falls inside (sliceStart, toMills) starts a new slice.
         for (int i = Math.Max(0, initialIdx + 1); i < schedules.Count; i++)
         {
-            var versionStartMs = new DateTimeOffset(schedules[i].Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            var versionStartMs = schedules[i].Timestamp.ToMills();
             if (versionStartMs <= sliceStart) continue;
             if (versionStartMs >= toMills) break;
 

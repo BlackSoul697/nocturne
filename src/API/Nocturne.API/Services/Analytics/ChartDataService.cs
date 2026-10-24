@@ -321,7 +321,7 @@ public class ChartDataService : IChartDataService
         if (latestPump is not null)
         {
             var contact = UploaderTimestamp.ParseUtcDateTime(latestPump.Clock) is { } clock
-                ? new DateTimeOffset(DateTime.SpecifyKind(clock, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
+                ? clock.ToMills()
                 : latestPump.Mills;
             if (latest is null || contact > latest)
                 latest = contact;
@@ -393,20 +393,14 @@ public class ChartDataService : IChartDataService
             .Where(i => i.ExpectedEndAt.HasValue)
             .Where(i =>
             {
-                var expectedMills = new DateTimeOffset(
-                    i.ExpectedEndAt!.Value,
-                    TimeSpan.Zero
-                ).ToUnixTimeMilliseconds();
+                var expectedMills = i.ExpectedEndAt!.Value.ToMills();
                 return expectedMills >= startTime && expectedMills <= endTime;
             })
             .Select(i =>
             {
                 var def = defsList.FirstOrDefault(d => d.Id == i.DefinitionId);
                 var category = def?.Category ?? TrackerCategory.Custom;
-                var expectedMills = new DateTimeOffset(
-                    i.ExpectedEndAt!.Value,
-                    TimeSpan.Zero
-                ).ToUnixTimeMilliseconds();
+                var expectedMills = i.ExpectedEndAt!.Value.ToMills();
 
                 return new TrackerMarkerDto
                 {
