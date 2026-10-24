@@ -633,6 +633,33 @@ public class PropertiesServiceTests
     }
 
     [Fact]
+    public async Task GetAllPropertiesAsync_BasalEntriesCarryingOnlyTime_ResolveAsTheSameEntriesWithTimeAsSeconds()
+    {
+        var hour = DateTimeOffset.UtcNow.Hour;
+        var upcoming = $"{(hour + 1) % 24:00}:00";
+        var current = $"{hour:00}:00";
+
+        List<TimeValue> Schedule(bool withSeconds) =>
+        [
+            new() { Time = upcoming, Value = 9.0, TimeAsSeconds = withSeconds ? ((hour + 1) % 24) * 3600 : null },
+            new() { Time = current, Value = 5.0, TimeAsSeconds = withSeconds ? hour * 3600 : null },
+        ];
+
+        async Task<double> CurrentBasal(List<TimeValue> schedule)
+        {
+            _mockDDataService
+                .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(CreateTestDDataWithBasalProfile(schedule));
+            var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+            var basal = (Dictionary<string, object>)result["basal"];
+            return Convert.ToDouble(((Dictionary<string, object>)basal["current"])["basal"]);
+        }
+
+        Assert.Equal(5.0, await CurrentBasal(Schedule(withSeconds: true)));
+        Assert.Equal(5.0, await CurrentBasal(Schedule(withSeconds: false)));
+    }
+
+    [Fact]
     public async Task GetAllPropertiesAsync_WithTempBasal_ReturnsBasalPropertiesWithTempMarker()
     {
         // Arrange
@@ -868,12 +895,11 @@ public class PropertiesServiceTests
         };
     }
 
-    private DData CreateTestDDataWithBasalProfile()
+    private DData CreateTestDDataWithBasalProfile(List<TimeValue>? schedule = null)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        // Ensure TimeAsSeconds is calculated for basal schedule
-        var basalSchedule = new List<TimeValue>
+        var basalSchedule = schedule ?? new List<TimeValue>
         {
             new TimeValue
             {
