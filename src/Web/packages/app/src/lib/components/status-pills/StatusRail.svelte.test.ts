@@ -58,24 +58,18 @@ const SENSOR_INSTANCE = {
 };
 
 const DESKTOP = "status-pills";
+const MOBILE = "status-pills-mobile";
 // The pref writes through to localStorage, which every later test file's store reads at load.
 const RAIL_STORAGE_KEY = "nocturne-dashboard-rail";
-const MOBILE = "status-pills-mobile";
 
-/** The pill labels a rail shows, in the order it shows them. */
-function railLabels(testId: string): string[] {
+const { Cob, Basal, Iob, Loop, Reservoir, Trackers } = RailItemId;
+
+/** The rail items a rail renders, in the order it renders them. */
+function railItems(testId: string): string[] {
   const rail = page.getByTestId(testId).element();
-  return [...rail.querySelectorAll("span.text-xs")].map(
-    (label) => label.textContent?.trim() ?? ""
+  return [...rail.querySelectorAll("[data-rail-item]")].map(
+    (item) => item.getAttribute("data-rail-item") ?? ""
   );
-}
-
-function hasLabel(labels: string[], name: string): boolean {
-  return labels.some((label) => label.startsWith(name));
-}
-
-function indexOfLabel(labels: string[], name: string): number {
-  return labels.findIndex((label) => label.startsWith(name));
 }
 
 describe("StatusRail", () => {
@@ -95,79 +89,70 @@ describe("StatusRail", () => {
     store.trackerDefinitions = [];
   });
 
-  it("shows the stored items in the stored order", async () => {
-    dashboardRail.hydrate([RailItemId.Reservoir, RailItemId.Iob, RailItemId.Cob]);
+  it("shows the ordered items first and the rest after them in default order", async () => {
+    dashboardRail.hydrate({ order: [Reservoir, Iob] });
     render(CurrentBGDisplay);
 
     await expect.element(page.getByTestId(DESKTOP).getByText("Reservoir")).toBeVisible();
-    const labels = railLabels(DESKTOP);
-    expect(indexOfLabel(labels, "Reservoir")).toBeLessThan(indexOfLabel(labels, "IOB"));
-    expect(indexOfLabel(labels, "IOB")).toBeLessThan(indexOfLabel(labels, "COB"));
+    expect(railItems(DESKTOP)).toEqual([Reservoir, Iob, Cob, Basal, Loop, Trackers]);
   });
 
   it("does not show an item the user hid", async () => {
-    dashboardRail.hydrate([RailItemId.Cob, RailItemId.Iob]);
+    dashboardRail.hydrate({ hidden: [Basal, Loop, Trackers] });
     render(CurrentBGDisplay);
 
     await expect.element(page.getByTestId(DESKTOP).getByText("COB")).toBeVisible();
-    const labels = railLabels(DESKTOP);
-    expect(hasLabel(labels, "Basal")).toBe(false);
-    expect(hasLabel(labels, "Loop")).toBe(false);
-    expect(hasLabel(labels, "Reservoir")).toBe(false);
+    expect(railItems(DESKTOP)).toEqual([Cob, Iob, Reservoir]);
     expect(page.getByRole("button", { name: /Sensor/ }).elements()).toHaveLength(0);
   });
 
-  it("shows the default with trackers when nothing is stored and the tenant shows tracker pills", async () => {
-    render(CurrentBGDisplay);
-
-    await expect.element(page.getByTestId(DESKTOP).getByText("Reservoir")).toBeVisible();
-    const labels = railLabels(DESKTOP);
-    for (const name of ["COB", "Basal", "IOB", "Loop", "Reservoir"]) {
-      expect(hasLabel(labels, name), name).toBe(true);
-    }
-    await expect
-      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Sensor/ }))
-      .toBeVisible();
-  });
-
-  it("leaves trackers out of the default when the tenant hides tracker pills", async () => {
-    settings.features.trackerPills.enabled = false;
-    render(CurrentBGDisplay);
-
-    await expect.element(page.getByTestId(DESKTOP).getByText("Reservoir")).toBeVisible();
-    expect(page.getByRole("button", { name: /Sensor/ }).elements()).toHaveLength(0);
-  });
-
-  it("shows trackers a user stored even when the tenant hides tracker pills", async () => {
-    settings.features.trackerPills.enabled = false;
-    dashboardRail.hydrate([RailItemId.Trackers]);
+  it("shows every item, trackers included, for the default preference", async () => {
     render(CurrentBGDisplay);
 
     await expect
       .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Sensor/ }))
       .toBeVisible();
+    expect(railItems(DESKTOP)).toEqual([Cob, Basal, Iob, Loop, Reservoir, Trackers]);
+  });
+
+  it("hides trackers while the tenant turns tracker pills off, even where the user placed them", async () => {
+    settings.features.trackerPills.enabled = false;
+    dashboardRail.hydrate({ order: [Trackers, Cob] });
+    render(CurrentBGDisplay);
+
+    await expect.element(page.getByTestId(DESKTOP).getByText("COB")).toBeVisible();
+    expect(railItems(DESKTOP)).toEqual([Cob, Basal, Iob, Loop, Reservoir]);
+    expect(page.getByRole("button", { name: /Sensor/ }).elements()).toHaveLength(0);
   });
 
   it("keeps the reservoir out while the pump reports none", async () => {
     store.currentReservoir = null;
-    dashboardRail.hydrate([RailItemId.Reservoir, RailItemId.Cob]);
     render(CurrentBGDisplay);
 
     await expect.element(page.getByTestId(DESKTOP).getByText("COB")).toBeVisible();
-    expect(hasLabel(railLabels(DESKTOP), "Reservoir")).toBe(false);
+    expect(railItems(DESKTOP)).not.toContain(Reservoir);
   });
 
   it("shows the same rail, trackers included, in the mobile layout", async () => {
     await page.viewport(400, 900);
-    dashboardRail.hydrate([RailItemId.Trackers, RailItemId.Loop, RailItemId.Cob]);
+    dashboardRail.hydrate({ order: [Trackers, Loop, Cob], hidden: [Basal, Iob, Reservoir] });
     render(CurrentBGDisplay);
 
     const mobile = page.getByTestId(MOBILE);
     await expect.element(mobile.getByRole("button", { name: /Sensor/ })).toBeVisible();
     await expect.element(page.getByTestId(DESKTOP)).not.toBeVisible();
-    const labels = railLabels(MOBILE);
-    expect(indexOfLabel(labels, "Loop")).toBeLessThan(indexOfLabel(labels, "COB"));
-    expect(hasLabel(labels, "IOB")).toBe(false);
+    expect(railItems(MOBILE)).toEqual([Trackers, Loop, Cob]);
+  });
+
+  it("leaves out the mobile rail while none of its items has anything to show", async () => {
+    await page.viewport(400, 900);
+    store.trackerInstances = [];
+    store.currentReservoir = null;
+    dashboardRail.hydrate({ hidden: [Cob, Basal, Iob, Loop] });
+    render(CurrentBGDisplay);
+
+    await expect.element(page.getByText("123")).toBeInTheDocument();
+    expect(page.getByTestId(MOBILE).elements()).toHaveLength(0);
   });
 
   it("hides the mobile layout at desktop width", async () => {

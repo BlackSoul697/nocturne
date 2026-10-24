@@ -10,6 +10,7 @@
   import LoopPill from "./LoopPill.svelte";
   import ReservoirPill from "./ReservoirPill.svelte";
   import TrackerPillBar from "./TrackerPillBar.svelte";
+  import { visibleTrackerInstances } from "./tracker-pill-visibility";
 
   interface Props {
     /** The rail items to show, in order. */
@@ -25,6 +26,8 @@
     ) => void;
     /** Shown ahead of the items, inside the same wrapping row. */
     leading?: Snippet;
+    /** Render nothing, margin included, while no item has anything to show. */
+    hideWhenEmpty?: boolean;
     class?: string;
     testid?: string;
   }
@@ -34,11 +37,31 @@
     rowsKey,
     onTrackerComplete,
     leading,
+    hideWhenEmpty = false,
     class: className,
     testid,
   }: Props = $props();
 
   const realtimeStore = getRealtimeStore();
+
+  const hasTrackerPills = $derived(
+    visibleTrackerInstances(
+      realtimeStore.trackerInstances,
+      realtimeStore.trackerDefinitions,
+      realtimeStore.now
+    ).length > 0
+  );
+
+  /** Many pumps and pods report no numeric reservoir (e.g. Omnipod above 50 U). */
+  const renderable = $derived(
+    items.filter((item) =>
+      item === RailItemId.Reservoir
+        ? realtimeStore.currentReservoir !== null
+        : item === RailItemId.Trackers
+          ? hasTrackerPills
+          : true
+    )
+  );
 
   // The pills arrive after the page paints and can wrap onto more rows than the one the row
   // starts with, so the rows last rendered under this key are held until they do. Until then
@@ -58,11 +81,14 @@
   let reservedPillRows = $state(browser ? storedPillRows() : 1);
   let pillsEl = $state<HTMLElement>();
 
-  function renderedPillRows(el: HTMLElement): number {
-    const children = [...el.children].flatMap((child) =>
-      getComputedStyle(child).display === "contents" ? [...child.children] : [child]
+  function laidOutChildren(el: Element): Element[] {
+    return [...el.children].flatMap((child) =>
+      getComputedStyle(child).display === "contents" ? laidOutChildren(child) : [child]
     );
-    const centres = children
+  }
+
+  function renderedPillRows(el: HTMLElement): number {
+    const centres = laidOutChildren(el)
       .map((child) => child.getBoundingClientRect())
       .filter((rect) => rect.height > 0)
       .map((rect) => Math.round(rect.top + rect.height / 2));
@@ -89,41 +115,40 @@
   });
 </script>
 
-<div
-  class={cn(
-    "min-h-[calc(var(--pill-rows)*2.75rem+(var(--pill-rows)-1)*0.25rem)] min-w-0",
-    className
-  )}
-  style:--pill-rows={reservedPillRows}
-  data-testid={testid}
->
-  <div bind:this={pillsEl} class="flex flex-wrap items-center gap-x-2 gap-y-1">
-    {@render leading?.()}
-    {#each items as item (item)}
-      {#if item === RailItemId.Cob}
-        <COBPill data={realtimeStore.pillsData.cob} />
-      {:else if item === RailItemId.Basal}
-        <BasalPill data={realtimeStore.pillsData.basal} />
-      {:else if item === RailItemId.Iob}
-        <IOBPill data={realtimeStore.pillsData.iob} />
-      {:else if item === RailItemId.Loop}
-        <LoopPill data={realtimeStore.pillsData.loop} />
-      {:else if item === RailItemId.Reservoir}
-        <!-- Many pumps and pods report no numeric reservoir (e.g. Omnipod above 50 U). -->
-        {#if realtimeStore.currentReservoir !== null}
-          <ReservoirPill reservoir={realtimeStore.currentReservoir} />
-        {/if}
-      {:else if item === RailItemId.Trackers}
-        {#if realtimeStore.trackerInstances.length > 0}
-          <TrackerPillBar
-            instances={realtimeStore.trackerInstances}
-            definitions={realtimeStore.trackerDefinitions}
-            now={realtimeStore.now}
-            onComplete={onTrackerComplete}
-            class="contents"
-          />
-        {/if}
-      {/if}
-    {/each}
+{#if !hideWhenEmpty || renderable.length > 0}
+  <div
+    class={cn(
+      "min-h-[calc(var(--pill-rows)*2.75rem+(var(--pill-rows)-1)*0.25rem)] min-w-0",
+      className
+    )}
+    style:--pill-rows={reservedPillRows}
+    data-testid={testid}
+  >
+    <div bind:this={pillsEl} class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {@render leading?.()}
+      {#each renderable as item (item)}
+        <div class="contents" data-rail-item={item}>
+          {#if item === RailItemId.Cob}
+            <COBPill data={realtimeStore.pillsData.cob} />
+          {:else if item === RailItemId.Basal}
+            <BasalPill data={realtimeStore.pillsData.basal} />
+          {:else if item === RailItemId.Iob}
+            <IOBPill data={realtimeStore.pillsData.iob} />
+          {:else if item === RailItemId.Loop}
+            <LoopPill data={realtimeStore.pillsData.loop} />
+          {:else if item === RailItemId.Reservoir && realtimeStore.currentReservoir !== null}
+            <ReservoirPill reservoir={realtimeStore.currentReservoir} />
+          {:else if item === RailItemId.Trackers}
+            <TrackerPillBar
+              instances={realtimeStore.trackerInstances}
+              definitions={realtimeStore.trackerDefinitions}
+              now={realtimeStore.now}
+              onComplete={onTrackerComplete}
+              class="contents"
+            />
+          {/if}
+        </div>
+      {/each}
+    </div>
   </div>
-</div>
+{/if}

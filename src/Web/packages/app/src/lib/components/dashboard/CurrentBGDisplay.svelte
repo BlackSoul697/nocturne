@@ -31,7 +31,7 @@
   const realtimeStore = getRealtimeStore();
   const uiSettingsQuery = getUiSettings();
 
-  // The tenant's tracker pill switch decides whether the default rail carries trackers.
+  // Trackers show only while the tenant's tracker pill switch is on.
   const trackerPillsEnabled = $derived(
     uiSettingsQuery.current?.features?.trackerPills?.enabled ?? true
   );
@@ -173,15 +173,14 @@
   </div>
 </div>
 
-{#if railItems.length > 0}
-  <StatusRail
-    items={railItems}
-    rowsKey={mobileRowsKey}
-    onTrackerComplete={handleTrackerComplete}
-    class="mt-2 @md:hidden"
-    testid="status-pills-mobile"
-  />
-{/if}
+<StatusRail
+  items={railItems}
+  rowsKey={mobileRowsKey}
+  onTrackerComplete={handleTrackerComplete}
+  hideWhenEmpty
+  class="mt-2 @md:hidden"
+  testid="status-pills-mobile"
+/>
 
 {#if trackerCompletionDialog.component}
   <trackerCompletionDialog.component

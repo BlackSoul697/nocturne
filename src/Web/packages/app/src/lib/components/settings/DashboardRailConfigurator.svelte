@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import {
     Card,
     CardContent,
@@ -9,8 +10,15 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
-  import { RailItemId } from "$lib/api/generated/nocturne-api-client";
-  import { RAIL_ITEM_IDS } from "$lib/components/status-pills/rail";
+  import {
+    RailItemId,
+    type DashboardRailPreference,
+  } from "$lib/api/generated/nocturne-api-client";
+  import {
+    RAIL_ITEM_IDS,
+    isRailItemHidden,
+    railOrder,
+  } from "$lib/components/status-pills/rail";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import ArrowUp from "@lucide/svelte/icons/arrow-up";
   import GripVertical from "@lucide/svelte/icons/grip-vertical";
@@ -19,14 +27,14 @@
   import { DragReorder, moveItem } from "./drag-reorder.svelte";
 
   interface Props {
-    /** The rail the dashboard shows now, in order. */
-    value: readonly RailItemId[];
-    /** The rail a reset goes back to. */
-    defaultItems: readonly RailItemId[];
-    onchange?: (items: RailItemId[]) => void;
+    /** The user's arrangement of the rail; an empty object is the default. */
+    value: DashboardRailPreference;
+    /** The tenant's tracker pill switch. While it is off, no user sees trackers. */
+    trackerPillsEnabled: boolean;
+    onchange?: (preference: DashboardRailPreference) => void;
   }
 
-  let { value, defaultItems, onchange }: Props = $props();
+  let { value, trackerPillsEnabled, onchange }: Props = $props();
 
   const LABELS: Record<RailItemId, string> = {
     [RailItemId.Cob]: "Carbs on board (COB)",
@@ -37,23 +45,47 @@
     [RailItemId.Trackers]: "Trackers",
   };
 
-  const shown = $derived(value.filter((id) => RAIL_ITEM_IDS.includes(id)));
-  const hidden = $derived(RAIL_ITEM_IDS.filter((id) => !shown.includes(id)));
+  const order = $derived(railOrder(value));
+  const hidden = $derived(RAIL_ITEM_IDS.filter((id) => isRailItemHidden(value, id)));
   const isDefault = $derived(
-    shown.length === defaultItems.length && shown.every((id, i) => id === defaultItems[i])
+    hidden.length === 0 && order.every((id, i) => id === RAIL_ITEM_IDS[i])
+  );
+  const nothingShown = $derived(
+    order.every(
+      (id) =>
+        hidden.includes(id) || (id === RailItemId.Trackers && !trackerPillsEnabled)
+    )
   );
 
-  const drag = new DragReorder<RailItemId>(
-    () => shown,
-    (items) => onchange?.(items)
-  );
+  let listEl = $state<HTMLElement>();
 
-  function setShown(id: RailItemId, show: boolean) {
-    onchange?.(show ? [...shown, id] : shown.filter((item) => item !== id));
+  function write(nextOrder: RailItemId[], nextHidden: RailItemId[]) {
+    onchange?.({ order: nextOrder, hidden: nextHidden });
   }
 
-  function move(index: number, to: number) {
-    onchange?.(moveItem(shown, index, to));
+  const drag = new DragReorder<RailItemId>(
+    () => order,
+    (items) => write(items, hidden)
+  );
+
+  /** Put focus back on a control of a row once the list has re-rendered. */
+  async function refocus(id: RailItemId, control: string, fallback?: string) {
+    await tick();
+    const row = listEl?.querySelector(`[data-rail-item="${id}"]`);
+    const target = row?.querySelector<HTMLElement>(`[data-control="${control}"]`);
+    const usable = target && !target.hasAttribute("disabled") ? target : null;
+    (usable ?? row?.querySelector<HTMLElement>(`[data-control="${fallback}"]`))?.focus();
+  }
+
+  function move(id: RailItemId, index: number, to: number) {
+    write(moveItem(order, index, to), hidden);
+    const control = to < index ? "up" : "down";
+    void refocus(id, control, control === "up" ? "down" : "up");
+  }
+
+  function setShown(id: RailItemId, show: boolean) {
+    write(order, show ? hidden.filter((item) => item !== id) : [...hidden, id]);
+    void refocus(id, "show");
   }
 </script>
 
@@ -68,11 +100,13 @@
     </CardDescription>
   </CardHeader>
   <CardContent class="space-y-4">
-    <div class="space-y-2" role="list" aria-label="Shown pills">
-      {#each shown as id, index (id)}
+    <div bind:this={listEl} class="space-y-2" role="list" aria-label="Status pills">
+      {#each order as id, index (id)}
+        {@const unavailable = id === RailItemId.Trackers && !trackerPillsEnabled}
+        {@const shown = !hidden.includes(id)}
         <div
-          class="flex items-center gap-2 rounded-lg border bg-card p-3 transition-all
-          {drag.dragOverIndex === index ? 'border-primary bg-accent' : 'border-border'}
+          class="flex items-center gap-2 rounded-lg border p-3 transition-all
+          {drag.dragOverIndex === index ? 'border-primary bg-accent' : 'border-border bg-card'}
           {drag.draggedIndex === index ? 'opacity-50' : ''}"
           draggable="true"
           ondragstart={(e) => drag.start(e, index)}
@@ -82,18 +116,31 @@
           ondragend={() => drag.end()}
           role="listitem"
           data-rail-item={id}
+          data-shown={shown && !unavailable}
         >
           <GripVertical class="h-4 w-4 cursor-grab text-muted-foreground" />
           <Badge variant="outline" class="h-6 min-w-6 tabular-nums">
             {index + 1}
           </Badge>
-          <span class="flex-1 min-w-0 text-sm font-medium">{LABELS[id]}</span>
+          <div class="flex-1 min-w-0">
+            <div
+              class="text-sm font-medium {shown && !unavailable ? '' : 'text-muted-foreground'}"
+            >
+              {LABELS[id]}
+            </div>
+            {#if unavailable}
+              <p class="text-xs text-muted-foreground">
+                The owner turned off tracker pills.
+              </p>
+            {/if}
+          </div>
           <Button
             variant="ghost-muted"
             size="icon-sm"
             aria-label={`Move ${LABELS[id]} up`}
+            data-control="up"
             disabled={index === 0}
-            onclick={() => move(index, index - 1)}
+            onclick={() => move(id, index, index - 1)}
           >
             <ArrowUp class="h-4 w-4" />
           </Button>
@@ -101,44 +148,28 @@
             variant="ghost-muted"
             size="icon-sm"
             aria-label={`Move ${LABELS[id]} down`}
-            disabled={index === shown.length - 1}
-            onclick={() => move(index, index + 1)}
+            data-control="down"
+            disabled={index === order.length - 1}
+            onclick={() => move(id, index, index + 1)}
           >
             <ArrowDown class="h-4 w-4" />
           </Button>
-          <Switch
-            checked={true}
-            aria-label={`Show ${LABELS[id]}`}
-            onCheckedChange={(checked: boolean) => setShown(id, checked)}
-          />
-        </div>
-      {/each}
-
-      {#if shown.length === 0}
-        <p class="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-          No pills show on the dashboard.
-        </p>
-      {/if}
-    </div>
-
-    {#if hidden.length > 0}
-      <div class="space-y-2" role="list" aria-label="Hidden pills">
-        <span class="text-sm font-medium text-muted-foreground">Hidden</span>
-        {#each hidden as id (id)}
-          <div
-            class="flex items-center gap-2 rounded-lg border border-dashed p-3"
-            role="listitem"
-            data-rail-item={id}
-          >
-            <span class="flex-1 min-w-0 text-sm text-muted-foreground">{LABELS[id]}</span>
+          {#if !unavailable}
             <Switch
-              checked={false}
+              checked={shown}
               aria-label={`Show ${LABELS[id]}`}
+              data-control="show"
               onCheckedChange={(checked: boolean) => setShown(id, checked)}
             />
-          </div>
-        {/each}
-      </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+
+    {#if nothingShown}
+      <p class="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+        No pills show on the dashboard.
+      </p>
     {/if}
 
     <div class="flex items-center justify-between gap-2">
@@ -149,7 +180,7 @@
         variant="outline"
         size="sm"
         disabled={isDefault}
-        onclick={() => onchange?.([...defaultItems])}
+        onclick={() => onchange?.({})}
       >
         <RotateCcw class="h-4 w-4" />
         Reset to default

@@ -29,11 +29,11 @@ import { setMode, mode, userPrefersMode } from "mode-watcher";
 import supportedLocales from "../../../../../supportedLocales.json";
 import {
   WidgetId,
-  type RailItemId,
+  type DashboardRailPreference,
   type UserDisplayPreferences,
 } from "../api/generated/nocturne-api-client";
 import { DEFAULT_TOP_WIDGETS } from "../components/dashboard/top-widget-ids";
-import { knownRailItems } from "../components/status-pills/rail";
+import { parseRailPreference } from "../components/status-pills/rail";
 import { weekStartName } from "../components/calendar/calendar-date";
 import { resolveCookieDomain } from "../utils/tenant-host";
 import { isRecord } from "../utils/type-guards";
@@ -241,8 +241,6 @@ const widgetListPref: PrefParser<WidgetId[]> = (raw) =>
     ? raw.flatMap((id) => WIDGET_IDS.find((known) => known === id) ?? [])
     : undefined;
 
-const railListPref: PrefParser<RailItemId[]> = (raw) =>
-  Array.isArray(raw) ? knownRailItems(raw) : undefined;
 
 function parseJson(json: string): unknown {
   try {
@@ -489,14 +487,14 @@ export const dashboardTopWidgets = new SyncedPref<WidgetId[]>(
 );
 
 /**
- * The ordered status pills of the dashboard rail. Null until the user arranges them, so the
- * default follows the tenant's tracker pill switch (see `effectiveRail`).
+ * How the user arranged the dashboard status rail; an empty object is the default rail (see
+ * `effectiveRail`).
  */
-export const dashboardRail = new SyncedPref<RailItemId[] | null>(
+export const dashboardRail = new SyncedPref<DashboardRailPreference>(
   "nocturne-dashboard-rail",
-  null,
+  {},
   (p) => p.dashboardRail,
-  railListPref
+  parseRailPreference
 );
 
 // ==========================================
@@ -843,7 +841,7 @@ export function collectPreferences(): UserDisplayPreferences {
     nightModeSchedule: nightModeSchedule.stored,
     calendarShowTirPercent: calendarShowTirPercent.stored,
     dashboardTopWidgets: dashboardTopWidgets.stored,
-    dashboardRail: dashboardRail.stored ?? undefined,
+    dashboardRail: dashboardRail.stored,
     prediction: {
       enabled: predictionEnabled.stored,
       minutes: predictionMinutes.stored,
