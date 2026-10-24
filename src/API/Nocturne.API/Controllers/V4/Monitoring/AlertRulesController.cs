@@ -254,9 +254,9 @@ public class AlertRulesController : ControllerBase
             || !sameBody
             || rule.AutoResolveEnabled != request.AutoResolveEnabled
             || !sameAutoResolve;
-        var snoozeChanged = !ConditionTreeEquality.Same(
-            SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration)?.GetRawText(),
-            SmartSnoozeConfig.StoredConditions(trees.ClientConfiguration)?.GetRawText());
+        var snoozeChanged = !SmartSnoozeConfig.SameConditions(
+            SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration),
+            SmartSnoozeConfig.StoredConditions(trees.ClientConfiguration));
 
         rule.Name = request.Name;
         rule.Description = request.Description;
