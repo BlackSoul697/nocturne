@@ -151,6 +151,7 @@ public class UserDisplayPreferences
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
         CalendarShowTirPercent = incoming.CalendarShowTirPercent ?? CalendarShowTirPercent;
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
+        DashboardRail = incoming.DashboardRail ?? DashboardRail;
         // Replace the whole color selection: an empty object resets every metric to automatic.
         YearOverviewColors = incoming.YearOverviewColors ?? YearOverviewColors;
 
@@ -185,9 +186,10 @@ public class UserDisplayPreferences
     /// carried whole and carry no such guarantee: a field added inside either is disclosed on
     /// the next build. Their contents are pinned by a test instead.
     /// <para>
-    /// <see cref="DashboardTopWidgets"/> is withheld: the widgets an owner pins say what they
-    /// treat and track. <see cref="NightModeSchedule"/> is withheld: it reports when the owner
-    /// sleeps, and when a viewer's own screen dims is the viewer's setting.
+    /// <see cref="DashboardTopWidgets"/> and <see cref="DashboardRail"/> are withheld: the widgets
+    /// and status pills an owner picks say what they treat and track.
+    /// <see cref="NightModeSchedule"/> is withheld: it reports when the owner sleeps, and when a
+    /// viewer's own screen dims is the viewer's setting.
     /// </para>
     /// </summary>
     public UserDisplayPreferences ToPresentationOnly() => new()
@@ -268,6 +270,25 @@ public class UserDisplayPreferences
     /// <summary>Ordered widget IDs shown in the dashboard top-widget grid.</summary>
     [JsonPropertyName("dashboardTopWidgets")]
     public List<WidgetId>? DashboardTopWidgets { get; set; }
+
+    /// <summary>
+    /// Ordered status pills shown in the dashboard rail beside the current glucose. Null means the
+    /// default rail; an item absent from a stored list is hidden.
+    /// </summary>
+    [JsonPropertyName("dashboardRail")]
+    public List<RailItemId>? DashboardRail { get; set; }
+}
+
+/// <summary>An item the dashboard status rail can show.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RailItemId
+{
+    Cob,
+    Basal,
+    Iob,
+    Loop,
+    Reservoir,
+    Trackers,
 }
 
 /// <summary>
