@@ -493,11 +493,8 @@ public class StatisticsController : ControllerBase
             AveragedStats = _statisticsService.CalculateAveragedStats(entries, clock.Zone).ToList(),
             HourlyBandThresholds = _statisticsService.HourlyBandThresholds,
             ContributingDevices = _statisticsService.CalculateContributingDevices(rawGlucose, devices).ToList(),
-            // A failed lookup leaves the personal range out, as a failure inside it always has; an
-            // unset zone evaluates the schedule on UTC, as it did before the zone was resolved here.
-            PersonalRange = clock.Reason == TimeZoneUnavailableReason.LookupFailed
-                ? null
-                : await CalculatePersonalRangeAsync(entries, clock.Zone ?? TimeZoneInfo.Utc, cancellationToken),
+            PersonalRange = await CalculatePersonalRangeAsync(entries, clock.Zone, cancellationToken),
+            TimeZoneUnavailableReason = clock.Reason,
         };
         return Ok(result);
     }
@@ -576,7 +573,7 @@ public class StatisticsController : ControllerBase
     /// </summary>
     private async Task<PersonalRangeTimeInRange?> CalculatePersonalRangeAsync(
         List<SensorGlucose> entries,
-        TimeZoneInfo tenantTimeZone,
+        TimeZoneInfo? tenantTimeZone,
         CancellationToken ct
     )
     {

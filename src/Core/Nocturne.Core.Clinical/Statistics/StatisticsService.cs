@@ -1468,10 +1468,14 @@ public partial class StatisticsService : IStatisticsService
     public PersonalRangeTimeInRange? CalculatePersonalRangeTime(
         IEnumerable<SensorGlucose> entries,
         List<TargetRangeEntry> scheduleEntries,
-        TimeZoneInfo tenantTimeZone
+        TimeZoneInfo? tenantTimeZone
     )
     {
         if (scheduleEntries.Count == 0)
+            return null;
+
+        var isFlat = scheduleEntries.Count == 1;
+        if (tenantTimeZone is null && !isFlat)
             return null;
 
         // The active entry is a pure function of local minute-of-day (entry times are HH:mm),
@@ -1480,8 +1484,9 @@ public partial class StatisticsService : IStatisticsService
 
         (double Low, double High) RangeAt(SensorGlucose reading)
         {
-            var minute =
-                ScheduleTimeHelper.GetSecondsFromMidnight(reading.Mills, tenantTimeZone) / 60;
+            var minute = isFlat
+                ? 0
+                : ScheduleTimeHelper.GetSecondsFromMidnight(reading.Mills, tenantTimeZone!) / 60;
             return rangeByMinute[minute] ??= ScheduleResolution
                 .FindRangeAtTime(scheduleEntries, minute * 60)!
                 .Value;
