@@ -41,6 +41,10 @@ internal sealed record SmartSnoozeConfig(
     /// <inheritdoc cref="DefaultMaxCount"/>
     public const int DefaultExtendMinutes = 10;
 
+    /// <summary><paramref name="conditions"/> as the one node the sweep evaluates.</summary>
+    public static ConditionNode ConditionTree(IReadOnlyList<ConditionNode> conditions) =>
+        new("composite", Composite: new CompositeCondition("and", conditions.ToList()));
+
     public static SmartSnoozeConfig Default { get; } =
         new(false, DefaultExtendMinutes, DefaultMaxCount, null);
 

@@ -442,9 +442,7 @@ public class AlertSweepService : BackgroundService
     {
         var engine = tenantServices.GetRequiredService<IAlertEvaluationEngine>();
 
-        var node = new ConditionNode(
-            "composite",
-            Composite: new CompositeCondition("and", conditions.ToList()));
+        var node = SmartSnoozeConfig.ConditionTree(conditions);
 
         try
         {

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Alerts;
 using Nocturne.Core.Contracts.Alerts;
@@ -32,6 +33,8 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
     private const string Body = """{"direction":"below","value":70}""";
     private const string EditedBody = """{"direction":"below","value":60}""";
     private const string Resolve = """{"type":"threshold","threshold":{"direction":"above","value":80}}""";
+    private const string Sustained = """{"type":"sustained","sustained":{"minutes":5,"child":{"type":"threshold","threshold":{"direction":"above","value":90}}}}""";
+    private const string Rising = """{"type":"threshold","threshold":{"direction":"above","value":120}}""";
 
     public sealed class Database : IAsyncLifetime
     {
@@ -92,7 +95,8 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
             .AddInterceptors(new TenantConnectionInterceptor(), failure)
             .Options) { TenantId = tenant };
 
-    private async Task<(AlertRulesController Controller, Guid Tenant, Guid Rule, Failure Failure)> CreateAsync()
+    private async Task<(AlertRulesController Controller, Guid Tenant, Guid Rule, Failure Failure)> CreateAsync(
+        string clientConfiguration = "{}")
     {
         var tenant = Guid.NewGuid();
         await using (var conn = new NpgsqlConnection(database.MigratorConnectionString))
@@ -119,7 +123,7 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
                 Name = "Low",
                 ConditionType = AlertConditionType.Threshold,
                 ConditionParams = Body,
-                ClientConfiguration = "{}",
+                ClientConfiguration = clientConfiguration,
                 Severity = AlertRuleSeverity.Warning,
                 IsEnabled = true,
                 AutoResolveEnabled = true,
@@ -156,7 +160,7 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
             Mock.Of<IRuleScopeClassifier>(),
             validator.Object,
             Mock.Of<ISecretEncryptionService>(),
-            new AlertRuleRearm(new AlertRuleEvaluationGate(), Mock.Of<IAlertTrackerRepository>()),
+            new AlertRuleRearm(new AlertRuleEvaluationGate()),
             new AlertRuleRetirement(Mock.Of<IExcursionTracker>(), Mock.Of<IExcursionResolutionHandler>()),
             Mock.Of<ILogger<AlertRulesController>>());
         return (controller, tenant, rule, failure);
@@ -253,6 +257,39 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
         var act = () => controller.UpdateRule(rule, EditedConditions(), CancellationToken.None);
 
         await act.Should().ThrowAsync<Exception>();
+        (await StoredAsync(tenant, rule)).Should().Be((70, true, true));
+    }
+
+    private static string Snooze(params string[] conditions) =>
+        """{"snooze":{"smartSnooze":true,"conditions":[""" + string.Join(",", conditions) + "]}}";
+
+    [NativeFact]
+    public async Task An_edit_of_the_snooze_conditions_alone_prunes_their_timers_and_keeps_the_hold()
+    {
+        var (controller, tenant, rule, _) = await CreateAsync(Snooze(Sustained));
+        await using (var seed = Context(tenant, new Failure()))
+        {
+            foreach (var path in new[] { "threshold", "snooze[0].sustained", "snooze[1].sustained" })
+            {
+                seed.AlertConditionTimers.Add(new AlertConditionTimerEntity
+                {
+                    TenantId = tenant,
+                    AlertRuleId = rule,
+                    ConditionPath = path,
+                    FirstTrueAt = DateTime.UtcNow,
+                });
+            }
+            await seed.SaveChangesAsync();
+        }
+        var request = EditedConditions();
+        request.ConditionParams = JsonSerializer.Deserialize<JsonElement>(Body);
+        request.ClientConfiguration = JsonSerializer.Deserialize<JsonElement>(Snooze(Rising, Sustained));
+
+        await controller.UpdateRule(rule, request, CancellationToken.None);
+
+        await using var db = Context(tenant, new Failure());
+        (await db.AlertConditionTimers.AsNoTracking().Select(t => t.ConditionPath).ToListAsync())
+            .Should().BeEquivalentTo("threshold", "snooze[1].sustained");
         (await StoredAsync(tenant, rule)).Should().Be((70, true, true));
     }
 }

@@ -52,11 +52,9 @@ internal static class EngineTestHarness
     /// <summary>Builds a <see cref="RustBackedAlertEngine"/> over the corpus's in-memory fakes.</summary>
     public static RustBackedAlertEngine BuildRustEngine(
         ManualTimeProvider time,
-        IConditionTimerStore timerStore,
         IAlertTrackerRepository trackerRepo)
     {
         return new RustBackedAlertEngine(
-            timerStore,
             trackerRepo,
             new AlertRuleEvaluationGate(),
             new AlertEngineErrors(new TestMeterFactory(), time),
@@ -96,7 +94,6 @@ internal static class EngineTestHarness
         ScenarioRule rule,
         AlertEngineEvaluation evaluation,
         InMemoryTrackerRepository trackerRepo,
-        RecordingTimerStore timerStore,
         CancellationToken ct)
     {
         if (evaluation.Skipped)
@@ -127,7 +124,7 @@ internal static class EngineTestHarness
                     AwaitingRearm = state.AwaitingRearm ? true : null,
                 },
             AutoResolved = evaluation.AutoResolved ? true : null,
-            TimerOps = timerStore.DrainOps() is { Count: > 0 } ops ? ops : null,
+            TimerOps = trackerRepo.Timers.DrainOps() is { Count: > 0 } ops ? ops : null,
         };
     }
 }

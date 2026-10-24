@@ -93,6 +93,8 @@ public class ExcursionTrackerConcurrencyTests
 
         public List<AlertExcursion> Excursions { get; } = [];
 
+        public IConditionTimerStore Timers { get; } = new RecordingTimerStore();
+
         /// <summary>Whether every participant was inside the state read at the same moment.</summary>
         public bool Overlapped { get; private set; }
 

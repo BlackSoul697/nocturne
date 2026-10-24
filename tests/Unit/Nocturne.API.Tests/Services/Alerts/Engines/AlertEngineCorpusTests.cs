@@ -55,10 +55,9 @@ public class AlertEngineCorpusTests
         var snapshots = scenario.Rules.Select(EngineTestHarness.ToSnapshot).ToList();
 
         var time = new ManualTimeProvider();
-        var timerStore = new RecordingTimerStore();
         var trackerRepo = new InMemoryTrackerRepository(rules);
 
-        var engine = EngineTestHarness.BuildRustEngine(time, timerStore, trackerRepo);
+        var engine = EngineTestHarness.BuildRustEngine(time, trackerRepo);
 
         var options = new AlertEngineOptions { IncludeLeafValues = true };
         var expectedTicks = new List<ExpectedTick>(scenario.Ticks.Count);
@@ -83,7 +82,7 @@ public class AlertEngineCorpusTests
                     evaluation = new AlertEngineEvaluation { Skipped = true };
                 }
                 ruleResults.Add(await EngineTestHarness.ToExpectedResultAsync(
-                    scenarioRule, evaluation, trackerRepo, timerStore, ct));
+                    scenarioRule, evaluation, trackerRepo, ct));
             }
 
             expectedTicks.Add(new ExpectedTick { At = at, Rules = ruleResults });

@@ -334,6 +334,8 @@ internal sealed class RecordingTrackerRepository(params AlertRule[] rules) : IAl
 
     public int WritesOutsideTransaction { get; private set; }
 
+    public IConditionTimerStore Timers { get; } = new RecordingTimerStore();
+
     public Task<AlertTrackerState?> GetTrackerStateAsync(Guid alertRuleId, CancellationToken ct = default) =>
         Task.FromResult(States.GetValueOrDefault(alertRuleId));
 

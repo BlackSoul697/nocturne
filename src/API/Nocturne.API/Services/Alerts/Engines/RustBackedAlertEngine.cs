@@ -10,18 +10,18 @@ namespace Nocturne.API.Services.Alerts.Engines;
 /// <summary>
 /// <see cref="IAlertEvaluationEngine"/> implementation backed by the Rust engine
 /// (crates/nocturne-alerts-core) over the nocturne_alerts FFI. The engine is stateless
-/// between calls: this adapter reads the rule's persisted state (sustained timers via
-/// <see cref="IConditionTimerStore"/>, tracker state via <see cref="IAlertTrackerRepository"/>),
-/// threads it through the envelope, and persists what the engine decided, the tracker through
-/// <see cref="ExcursionTransitionWriter"/>. DB rows stay identical to managed mode, so either
-/// engine can pick up where the other left off.
+/// between calls: this adapter reads the rule's persisted state (sustained timers and tracker state
+/// via <see cref="IAlertTrackerRepository"/>) and threads it through the envelope. A rule
+/// evaluation and an auto-resolve pass persist their tracker decision and timer deltas together
+/// through <see cref="ExcursionTransitionWriter"/>, which drops both when the rule changed since it
+/// was read. <see cref="EvaluateNodeAsync(Guid, ConditionNode, SensorContext, string, CancellationToken)"/>
+/// makes no tracker decision and writes its timer deltas directly, with no lock and no such check.
 /// </summary>
 /// <remarks>
 /// Excursion identity: the FFI tracker uses opaque ordinals and this host owns the GUIDs, so
 /// only "has an active excursion" crosses the boundary (<see cref="RustEnvelopeMapper.BuildTracker"/>).
 /// </remarks>
 internal sealed class RustBackedAlertEngine(
-    IConditionTimerStore timerStore,
     IAlertTrackerRepository trackerRepository,
     AlertRuleEvaluationGate gate,
     AlertEngineErrors errors,
@@ -37,20 +37,14 @@ internal sealed class RustBackedAlertEngine(
         AlertEngineOptions options,
         CancellationToken ct)
     {
-        // This adapter owns the tracker-state read-modify-write itself (the managed tracker's
-        // own lease never covers it), so it takes the same per-rule lease.
         using var lease = await gate.AcquireAsync(rule.Id, ct);
 
-        // The snapshot doesn't carry ConfirmationReadings/HysteresisMinutes; the managed
-        // tracker loads the rule row per evaluation, so mirror that here.
+        // The snapshot does not carry ConfirmationReadings/HysteresisMinutes.
         var ruleRow = await trackerRepository.GetRuleAsync(rule.Id, ct);
         if (ruleRow is null)
         {
-            // Managed parity (ExcursionTracker.ProcessEvaluationAsync with a missing rule):
-            // the root condition still evaluates (mutating sustained timers), the tracker
-            // no-ops with a None transition, and auto-resolve never fires (no state).
             logger.LogWarning("Alert rule {AlertRuleId} not found; skipping evaluation", rule.Id);
-            var nodeOnly = await EvaluateRuleNodeWithoutTrackerAsync(rule, context, ct);
+            var nodeOnly = EvaluateRuleNodeWithoutTracker(rule, context);
             return new AlertEngineEvaluation
             {
                 ConditionMet = nodeOnly,
@@ -59,7 +53,7 @@ internal sealed class RustBackedAlertEngine(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var timers = RustEnvelopeMapper.BuildTimers(await timerStore.GetAllForRuleAsync(rule.Id, ct));
+        var timers = RustEnvelopeMapper.BuildTimers(await trackerRepository.Timers.GetAllForRuleAsync(rule.Id, ct));
         var trackerState = await trackerRepository.GetTrackerStateAsync(rule.Id, ct);
 
         var (response, result) = errors.Track("evaluate", () =>
@@ -87,9 +81,6 @@ internal sealed class RustBackedAlertEngine(
             return new AlertEngineEvaluation { Skipped = true };
         }
 
-        // Timer deltas apply in the order the engine executed them.
-        await ApplyTimerOpsAsync(rule.Id, result.TimerOps, ct);
-
         var decision = new TrackerDecision(
             RustEnvelopeMapper.TransitionFromWire(result.Transition!.Value),
             result.CloseReason is { } reason ? RustEnvelopeMapper.CloseReasonFromWire(reason) : null,
@@ -98,7 +89,7 @@ internal sealed class RustBackedAlertEngine(
         // since the snapshot was loaded.
         var (transition, autoResolveTransition) = await ExcursionTransitionWriter.ApplyAsync(
             trackerRepository, logger, rule.Id, trackerState, decision, AlertRuleConditions.Of(ruleRow), now, ct,
-            result.AutoResolved);
+            result.AutoResolved, result.TimerOps);
 
         return new AlertEngineEvaluation
         {
@@ -134,32 +125,31 @@ internal sealed class RustBackedAlertEngine(
             return none;
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var timers = await timerStore.GetAllForRuleAsync(rule.Id, ct);
+        var timers = await trackerRepository.Timers.GetAllForRuleAsync(rule.Id, ct);
         var outcome = RustAuxiliaryEvaluation.AutoResolve(
             errors, rule, context, now, timers, state, logger);
-        if (outcome.Node is { } node)
-            await ApplyTimerOpsAsync(rule.Id, node.TimerOps, ct);
-        if (outcome.Close is not { } close)
-            return none;
 
+        var decision = outcome.Close ?? new TrackerDecision(ExcursionTransitionType.None, null, null);
         var (transition, _) = await ExcursionTransitionWriter.ApplyAsync(
-            trackerRepository, logger, rule.Id, state, close, AlertRuleConditions.Of(rule), now, ct);
+            trackerRepository, logger, rule.Id, state, decision, AlertRuleConditions.Of(rule), now, ct,
+            timerOps: outcome.Node?.TimerOps);
         return transition;
     }
 
     /// <summary>
-    /// Root-eval-only fallback for a rule whose row vanished mid-evaluation: evaluates the
-    /// condition tree (timers still mutate) without touching the tracker.
+    /// Evaluates the condition tree of a rule whose row is gone, without touching the tracker or
+    /// persisting timer deltas: the rule's timers were deleted with it, and a timer row written
+    /// for it would have no rule to belong to.
     /// </summary>
-    private Task<bool> EvaluateRuleNodeWithoutTrackerAsync(
-        AlertRuleSnapshot rule,
-        SensorContext context,
-        CancellationToken ct)
+    private bool EvaluateRuleNodeWithoutTracker(AlertRuleSnapshot rule, SensorContext context)
     {
         var wire = Conditions.AlertConditionTypeNames.ToWireString(rule.ConditionType);
         var node = RustEnvelopeMapper.ParseNode(
             RustEnvelopeMapper.WrapPayload(wire, rule.ConditionParams));
-        return EvaluateNodeAsync(rule.Id, node, wire, context, ct);
+        var response = RustAuxiliaryEvaluation.EvaluateNode(
+            errors, rule.Id, node, wire, context, timeProvider.GetUtcNow().UtcDateTime,
+            new Dictionary<string, DateTime>());
+        return response.Value!.Value;
     }
 
     /// <summary>
@@ -171,19 +161,8 @@ internal sealed class RustBackedAlertEngine(
     {
         var response = RustAuxiliaryEvaluation.EvaluateNode(
             errors, ruleId, node, pathRoot, context,
-            timeProvider.GetUtcNow().UtcDateTime, await timerStore.GetAllForRuleAsync(ruleId, ct));
-        await ApplyTimerOpsAsync(ruleId, response.TimerOps, ct);
+            timeProvider.GetUtcNow().UtcDateTime, await trackerRepository.Timers.GetAllForRuleAsync(ruleId, ct));
+        await ExcursionTransitionWriter.ApplyTimerOpsAsync(trackerRepository.Timers, ruleId, response.TimerOps, ct);
         return response.Value!.Value;
-    }
-
-    private async Task ApplyTimerOpsAsync(Guid ruleId, IReadOnlyList<RustTimerOp>? ops, CancellationToken ct)
-    {
-        foreach (var op in ops ?? [])
-        {
-            if (op.Op == RustTimerOpKind.Set)
-                await timerStore.SetFirstTrueAsync(ruleId, op.Path, op.At!.Value, ct);
-            else
-                await timerStore.ClearAsync(ruleId, op.Path, ct);
-        }
     }
 }

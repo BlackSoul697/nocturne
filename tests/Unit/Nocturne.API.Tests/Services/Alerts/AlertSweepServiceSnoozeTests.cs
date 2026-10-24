@@ -110,8 +110,8 @@ public class AlertSweepServiceSnoozeTests
         services.AddSingleton(_repository.Object);
         services.AddSingleton(_canonical.Object);
         services.AddSingleton(enricher.Object);
-        services.AddSingleton<IConditionTimerStore, InMemoryConditionTimerStore>();
-        services.AddSingleton(Mock.Of<Nocturne.Core.Contracts.Repositories.IAlertTrackerRepository>());
+        services.AddSingleton<Nocturne.Core.Contracts.Repositories.IAlertTrackerRepository>(
+            new InMemoryTrackerRepository([]));
         services.AddSingleton<AlertRuleEvaluationGate>();
         services.AddScoped<ExcursionTracker>();
         services.AddScoped<ITenantAccessor, TenantAccessorStub>();

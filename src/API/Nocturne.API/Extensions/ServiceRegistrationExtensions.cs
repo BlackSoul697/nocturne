@@ -983,9 +983,6 @@ public static class ServiceRegistrationExtensions
                     new PinnedConnector(OutboundAddressPolicy.PubliclyRoutable).ConnectAsync,
             });
 
-        // Sustained-condition timer store
-        services.AddScoped<IConditionTimerStore, ConditionTimerRepository>();
-
         // The excursion tracker's per-rule serialisation gate is a singleton: the sweep and the
         // per-reading path evaluate the same rule from different scopes.
         services.AddSingleton<AlertRuleEvaluationGate>();

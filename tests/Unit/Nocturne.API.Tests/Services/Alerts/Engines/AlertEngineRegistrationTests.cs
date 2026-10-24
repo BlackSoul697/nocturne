@@ -25,7 +25,6 @@ public class AlertEngineRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton(Mock.Of<IConditionTimerStore>());
         services.AddSingleton(Mock.Of<IAlertTrackerRepository>());
         services.AddSingleton<AlertRuleEvaluationGate>();
         services.AddAlertEvaluationEngine(nativeProbe);

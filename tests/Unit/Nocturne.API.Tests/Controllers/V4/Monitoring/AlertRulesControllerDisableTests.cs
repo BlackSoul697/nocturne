@@ -90,7 +90,7 @@ public class AlertRulesControllerDisableTests
             Mock.Of<IRuleScopeClassifier>(),
             validator.Object,
             Mock.Of<ISecretEncryptionService>(),
-            new AlertRuleRearm(new AlertRuleEvaluationGate(), new AlertTrackerRepository(db.AsFactory())),
+            new AlertRuleRearm(new AlertRuleEvaluationGate()),
             new AlertRuleRetirement(tracker.Object, handler.Object),
             Mock.Of<ILogger<AlertRulesController>>());
 

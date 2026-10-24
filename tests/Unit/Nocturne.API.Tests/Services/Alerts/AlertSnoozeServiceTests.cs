@@ -207,7 +207,7 @@ public class AlertSnoozeServiceTests
         };
         var time = new ManualTimeProvider();
         time.SetUtcNow(Now);
-        var engine = EngineTestHarness.BuildRustEngine(time, new RecordingTimerStore(), new InMemoryTrackerRepository([]));
+        var engine = EngineTestHarness.BuildRustEngine(time, new InMemoryTrackerRepository([]));
         var escalation = JsonSerializer.Deserialize<ConditionNode>(
             $$$"""{"type":"alert_state","alert_state":{"alert_id":"{{{seeded.RuleId}}}","state":"unacknowledged","for_minutes":15}}""",
             ConditionJson.Options)!;

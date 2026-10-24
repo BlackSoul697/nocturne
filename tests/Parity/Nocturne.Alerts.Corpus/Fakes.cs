@@ -20,16 +20,12 @@ public sealed class ManualTimeProvider : TimeProvider
 /// <summary>
 /// In-memory <see cref="IConditionTimerStore"/> that records every mutation so the
 /// expected snapshot can assert sustained-timer set/clear deltas (the state the host
-/// persists between evaluations). Read behaviour matches the engine-internal
-/// InMemoryConditionTimerStore exactly.
+/// persists between evaluations).
 /// </summary>
 public sealed class RecordingTimerStore : IConditionTimerStore
 {
     private readonly Dictionary<(Guid RuleId, string Path), DateTime> _store = new();
     private readonly List<ExpectedTimerOp> _log = new();
-
-    public Task<DateTime?> GetFirstTrueAsync(Guid ruleId, string path, CancellationToken ct) =>
-        Task.FromResult(_store.TryGetValue((ruleId, path), out var v) ? v : (DateTime?)null);
 
     public Task<IReadOnlyDictionary<string, DateTime>> GetAllForRuleAsync(Guid ruleId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<string, DateTime>>(
@@ -51,17 +47,6 @@ public sealed class RecordingTimerStore : IConditionTimerStore
         if (_store.Remove((ruleId, path)))
         {
             _log.Add(new ExpectedTimerOp("clear", path, null));
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task ClearAllForRuleAsync(Guid ruleId, CancellationToken ct)
-    {
-        var toRemove = _store.Keys.Where(k => k.RuleId == ruleId).ToList();
-        foreach (var k in toRemove)
-        {
-            _store.Remove(k);
-            _log.Add(new ExpectedTimerOp("clear", k.Path, null));
         }
         return Task.CompletedTask;
     }
@@ -103,6 +88,10 @@ public sealed class InMemoryTrackerRepository : IAlertTrackerRepository
     {
         _rules = rules.ToDictionary(r => r.Id);
     }
+
+    public RecordingTimerStore Timers { get; } = new();
+
+    IConditionTimerStore IAlertTrackerRepository.Timers => Timers;
 
     public Task<AlertTrackerState?> GetTrackerStateAsync(Guid alertRuleId, CancellationToken ct = default) =>
         Task.FromResult(_states.TryGetValue(alertRuleId, out var s) ? s : null);

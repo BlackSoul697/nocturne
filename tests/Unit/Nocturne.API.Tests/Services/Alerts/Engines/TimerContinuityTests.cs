@@ -47,28 +47,27 @@ public class TimerContinuityTests
     {
         var rule = BuildSustainedRule();
         var time = new ManualTimeProvider();
-        var timerStore = new RecordingTimerStore();
         var trackerRepo = new InMemoryTrackerRepository([rule]);
         var snapshot = ToSnapshot(rule);
 
-        var before = EngineTestHarness.BuildRustEngine(time, timerStore, trackerRepo);
+        var before = EngineTestHarness.BuildRustEngine(time, trackerRepo);
         time.SetUtcNow(T0);
         var first = await before.EvaluateRuleAsync(snapshot, LowGlucoseContext(T0), AlertEngineOptions.Default, CancellationToken.None);
         first.ConditionMet.Should().BeFalse("the window starts on the first true tick");
-        timerStore.DrainOps().Should().ContainSingle(op => op.Op == "set" && op.Path == "sustained" && op.At == T0);
+        trackerRepo.Timers.DrainOps().Should().ContainSingle(op => op.Op == "set" && op.Path == "sustained" && op.At == T0);
 
-        var after = EngineTestHarness.BuildRustEngine(time, timerStore, trackerRepo);
+        var after = EngineTestHarness.BuildRustEngine(time, trackerRepo);
         time.SetUtcNow(T0.AddMinutes(5));
         var mid = await after.EvaluateRuleAsync(snapshot, LowGlucoseContext(T0.AddMinutes(5)), AlertEngineOptions.Default, CancellationToken.None);
         mid.ConditionMet.Should().BeFalse("only 5 of 10 sustained minutes have elapsed since the stored first-true");
-        timerStore.DrainOps().Should().BeEmpty("an in-flight window must not be re-set or cleared");
+        trackerRepo.Timers.DrainOps().Should().BeEmpty("an in-flight window must not be re-set or cleared");
 
         time.SetUtcNow(T0.AddMinutes(10));
         var done = await after.EvaluateRuleAsync(snapshot, LowGlucoseContext(T0.AddMinutes(10)), AlertEngineOptions.Default, CancellationToken.None);
         done.ConditionMet.Should().BeTrue("10 sustained minutes elapsed since the stored first-true");
         done.Transition.Type.Should().Be(ExcursionTransitionType.ExcursionOpened);
-        (await timerStore.GetFirstTrueAsync(RuleId, "sustained", CancellationToken.None))
-            .Should().Be(T0, "the first-true instant the first instance recorded must survive untouched");
+        (await trackerRepo.Timers.GetAllForRuleAsync(RuleId, CancellationToken.None))
+            .Should().Contain("sustained", T0, "the first-true instant the first instance recorded must survive untouched");
     }
 
     [NativeFact]
@@ -78,9 +77,8 @@ public class TimerContinuityTests
         // persist (rule_id, path) timers exactly like the rule-body path.
         var rule = BuildSustainedRule();
         var time = new ManualTimeProvider();
-        var timerStore = new RecordingTimerStore();
         var trackerRepo = new InMemoryTrackerRepository([rule]);
-        var rust = EngineTestHarness.BuildRustEngine(time, timerStore, trackerRepo);
+        var rust = EngineTestHarness.BuildRustEngine(time, trackerRepo);
 
         var node = JsonSerializer.Deserialize<ConditionNode>(
             """{"type":"sustained","sustained":{"minutes":10,"child":{"type":"threshold","threshold":{"direction":"below","value":70}}}}""",
@@ -89,8 +87,8 @@ public class TimerContinuityTests
         time.SetUtcNow(T0);
         var first = await rust.EvaluateNodeAsync(RuleId, node, LowGlucoseContext(T0), "snooze", CancellationToken.None);
         first.Should().BeFalse("the window starts on the first true tick");
-        (await timerStore.GetFirstTrueAsync(RuleId, "snooze", CancellationToken.None))
-            .Should().Be(T0, "aux-scope timers key under the path root, not the rule body");
+        (await trackerRepo.Timers.GetAllForRuleAsync(RuleId, CancellationToken.None))
+            .Should().Contain("snooze", T0, "aux-scope timers key under the path root, not the rule body");
 
         time.SetUtcNow(T0.AddMinutes(10));
         var done = await rust.EvaluateNodeAsync(RuleId, node, LowGlucoseContext(T0.AddMinutes(10)), "snooze", CancellationToken.None);
