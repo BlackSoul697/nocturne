@@ -31831,3 +31831,7 @@ msgstr "State active"
 #: src/lib/components/alerts/conditionLabel.svelte.ts
 msgid "Sleep session"
 msgstr "Sleep session"
+
+#: src/routes/(authenticated)/clock/+page.svelte
+msgid "Your clock displays"
+msgstr "Your clock displays"
