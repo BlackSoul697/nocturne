@@ -57,7 +57,6 @@ public class StaleRuleDecisionSeamTests
     {
         var time = new ManualTimeProvider();
         time.SetUtcNow(T0);
-        var timers = new RecordingTimerStore();
         var store = new InMemoryTrackerRepository([rule]);
         var excursion = await store.CreateExcursionAsync(RuleId, T0.AddMinutes(-5));
         await store.UpsertTrackerStateAsync(new AlertTrackerState
@@ -74,7 +73,7 @@ public class StaleRuleDecisionSeamTests
             if (await store.GetTrackerStateAsync(RuleId) is { AwaitingRearm: true } held)
                 held.AwaitingRearm = false;
         });
-        return new Fixture(EngineTestHarness.BuildRustEngine(time, timers, repository), store, excursion.Id);
+        return new Fixture(EngineTestHarness.BuildRustEngine(time, repository), store, excursion.Id);
     }
 
     [NativeFact]
@@ -193,9 +192,8 @@ public class StaleRuleDecisionSeamTests
         rule.AutoResolveEnabled = false;
         var time = new ManualTimeProvider();
         time.SetUtcNow(T0);
-        var timers = new RecordingTimerStore();
         var store = new InMemoryTrackerRepository([rule]);
-        var engine = EngineTestHarness.BuildRustEngine(time, timers, store);
+        var engine = EngineTestHarness.BuildRustEngine(time, store);
 
         var evaluation = await engine.EvaluateRuleAsync(
             Snapshot(rule), Glucose(60), AlertEngineOptions.Default, CancellationToken.None);
@@ -219,6 +217,8 @@ public class StaleRuleDecisionSeamTests
     private sealed class EditAtLockRepository(InMemoryTrackerRepository inner, Func<Task> edit) : IAlertTrackerRepository
     {
         private Func<Task>? _edit = edit;
+
+        public IConditionTimerStore Timers => inner.Timers;
 
         public async Task LockRuleAsync(Guid alertRuleId, CancellationToken ct = default)
         {

@@ -368,13 +368,12 @@ public class AlertSweepServiceWallClockTests
 
             Rules = snapshots;
             TrackerRepo = new InMemoryTrackerRepository([rule, .. otherRules]);
-            var timerStore = new RecordingTimerStore();
 
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddSingleton<TimeProvider>(Time);
 
-            services.AddSingleton<IAlertEvaluationEngine>(EngineTestHarness.BuildRustEngine(Time, timerStore, TrackerRepo));
+            services.AddSingleton<IAlertEvaluationEngine>(EngineTestHarness.BuildRustEngine(Time, TrackerRepo));
 
             var repository = new Mock<IAlertRepository>();
             repository

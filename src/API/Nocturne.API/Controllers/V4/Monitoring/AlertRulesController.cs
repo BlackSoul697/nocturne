@@ -259,6 +259,9 @@ public class AlertRulesController : ControllerBase
             || !sameBody
             || rule.AutoResolveEnabled != request.AutoResolveEnabled
             || !sameAutoResolve;
+        var snoozeChanged = !ConditionTreeEquality.Same(
+            SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration)?.GetRawText(),
+            SmartSnoozeConfig.StoredConditions(trees.ClientConfiguration)?.GetRawText());
 
         rule.Name = request.Name;
         rule.Description = request.Description;
@@ -299,6 +302,8 @@ public class AlertRulesController : ControllerBase
         // clear the hold.
         if (conditionsChanged)
             await _rearm.SaveAndClearAsync(unit, id, ct);
+        else if (snoozeChanged)
+            await _rearm.SaveAndPruneAsync(unit, id, ct);
         else
             await db.SaveChangesAsync(ct);
         if (wasEnabled && !request.IsEnabled)

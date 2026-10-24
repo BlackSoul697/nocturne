@@ -45,9 +45,8 @@ public class AutoResolveSeamTests
     {
         var time = new ManualTimeProvider();
         time.SetUtcNow(T0);
-        var timers = new RecordingTimerStore();
         var repository = new InMemoryTrackerRepository([rule]);
-        return (EngineTestHarness.BuildRustEngine(time, timers, repository), repository);
+        return (EngineTestHarness.BuildRustEngine(time, repository), repository);
     }
 
     [NativeFact]

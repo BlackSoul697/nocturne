@@ -1,3 +1,4 @@
+using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Models;
@@ -6,8 +7,8 @@ using Nocturne.Core.Models.Alerts;
 namespace Nocturne.API.Services.Alerts;
 
 /// <summary>
-/// Persists a <see cref="TrackerDecision"/>, whichever engine made it: the excursion rows its
-/// transition implies and the rule's tracker state, in one transaction
+/// Persists a <see cref="TrackerDecision"/>: the excursion rows its transition implies, the rule's
+/// tracker state and the sustained-timer deltas of the evaluation that made it, in one transaction
 /// (<see cref="IAlertTrackerRepository.ExecuteInTransactionAsync{T}"/>). The host owns
 /// excursion ids, so the decision's "has an excursion" becomes the prior excursion's id, or
 /// the id of the one this write opens.
@@ -15,8 +16,9 @@ namespace Nocturne.API.Services.Alerts;
 internal static class ExcursionTransitionWriter
 {
     /// <summary>
-    /// Writes <paramref name="decision"/> against the rule's <paramref name="prior"/> state. A
-    /// decision that changes no row opens no transaction (<see cref="Changes"/>).
+    /// Writes <paramref name="decision"/> against the rule's <paramref name="prior"/> state, and the
+    /// <paramref name="timerOps"/> the same evaluation produced. A decision that changes no row and
+    /// carries no timer op opens no transaction (<see cref="Changes"/>).
     /// </summary>
     /// <remarks>
     /// <paramref name="autoResolved"/> means the same evaluation's auto-resolve pass closed
@@ -30,6 +32,10 @@ internal static class ExcursionTransitionWriter
     /// decision is stale: nothing is written and the transition is
     /// <see cref="ExcursionTransitionType.None"/>. That process has already made and acted on the
     /// transition this one would have.
+    /// </para>
+    /// <para>
+    /// A dropped decision drops its <paramref name="timerOps"/> too. They were made against the same
+    /// tree, and a rule edit prunes timers to its new tree under this lock (<see cref="AlertRuleRearm"/>).
     /// </para>
     /// <para>
     /// A decision made against <paramref name="decidedAgainst"/> is stale too once the rule, read
@@ -52,14 +58,15 @@ internal static class ExcursionTransitionWriter
         AlertRuleConditions? decidedAgainst,
         DateTime now,
         CancellationToken ct,
-        bool autoResolved = false)
+        bool autoResolved = false,
+        IReadOnlyList<RustTimerOp>? timerOps = null)
     {
-        if (!Changes(prior, decision, autoResolved))
+        if (!Changes(prior, decision, autoResolved) && timerOps is not { Count: > 0 })
             return (Unwritten(prior, decision), null);
 
         var written = await repository.ExecuteInTransactionAsync(
             (tx, token) => WriteAsync(
-                tx, logger, ruleId, prior, decision, decidedAgainst, now, autoResolved, token),
+                tx, logger, ruleId, prior, decision, decidedAgainst, now, autoResolved, timerOps, token),
             LandedAsync,
             ct);
         return (written.Transition, written.AutoResolve);
@@ -160,6 +167,7 @@ internal static class ExcursionTransitionWriter
         AlertRuleConditions? decidedAgainst,
         DateTime now,
         bool autoResolved,
+        IReadOnlyList<RustTimerOp>? timerOps,
         CancellationToken ct)
     {
         await repository.LockRuleAsync(ruleId, ct);
@@ -177,6 +185,8 @@ internal static class ExcursionTransitionWriter
                 ruleId);
             return new Written(new ExcursionTransition(ExcursionTransitionType.None), null, null, now);
         }
+
+        await ApplyTimerOpsAsync(repository.Timers, ruleId, timerOps, ct);
 
         var priorId = prior?.ActiveExcursionId;
         Guid? activeId = priorId;
@@ -246,6 +256,19 @@ internal static class ExcursionTransitionWriter
         }
 
         return new Written(transition, autoResolve, state, now);
+    }
+
+    /// <summary>Applies timer deltas in the order the engine executed them.</summary>
+    public static async Task ApplyTimerOpsAsync(
+        IConditionTimerStore timers, Guid ruleId, IReadOnlyList<RustTimerOp>? ops, CancellationToken ct)
+    {
+        foreach (var op in ops ?? [])
+        {
+            if (op.Op == RustTimerOpKind.Set)
+                await timers.SetFirstTrueAsync(ruleId, op.Path, op.At!.Value, ct);
+            else
+                await timers.ClearAsync(ruleId, op.Path, ct);
+        }
     }
 
     private static async Task CloseAsync(
