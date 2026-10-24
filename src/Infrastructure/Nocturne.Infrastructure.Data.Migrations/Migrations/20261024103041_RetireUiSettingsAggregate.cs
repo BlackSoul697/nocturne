@@ -33,6 +33,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     section text;
                     part jsonb;
                     alarms jsonb;
+                    target text;
                     stamp bigint := (extract(epoch FROM now()) * 1000)::bigint;
                 BEGIN
                     FOR t IN SELECT id FROM tenants LOOP
@@ -61,22 +62,29 @@ namespace Nocturne.Infrastructure.Data.Migrations
                                             SELECT 1 FROM settings
                                             WHERE tenant_id = t.id AND key = 'ui:settings:notifications:alarms'
                                               AND is_active AND value IS NOT NULL AND btrim(value, E' \t\r\n') <> 'null') THEN
-                                            INSERT INTO settings (id, tenant_id, key, value, mills, srv_created, srv_modified, is_active, notes, app)
-                                            VALUES (gen_random_uuid(), t.id, 'ui:settings:notifications:alarms', alarms::text,
-                                                    stamp, now(), now(), true, 'xDrip+-style alarm profiles configuration', 'nocturne-api')
-                                            ON CONFLICT (tenant_id, key) DO UPDATE
-                                            SET value = EXCLUDED.value, mills = EXCLUDED.mills, srv_modified = EXCLUDED.srv_modified, is_active = true;
+                                            UPDATE settings
+                                            SET value = alarms::text, mills = stamp, srv_modified = now(), is_active = true
+                                            WHERE tenant_id = t.id AND key = 'ui:settings:notifications:alarms';
+                                            IF NOT FOUND THEN
+                                                INSERT INTO settings (id, tenant_id, key, value, mills, srv_created, srv_modified, is_active, notes, app)
+                                                VALUES (gen_random_uuid(), t.id, 'ui:settings:notifications:alarms', alarms::text,
+                                                        stamp, now(), now(), true, 'xDrip+-style alarm profiles configuration', 'nocturne-api');
+                                            END IF;
                                         END IF;
                                         part := part - 'alarmConfiguration';
                                     ELSIF section = 'services' THEN
                                         part := part - 'availableServices';
                                     END IF;
 
-                                    INSERT INTO settings (id, tenant_id, key, value, mills, srv_created, srv_modified, is_active, notes, app)
-                                    VALUES (gen_random_uuid(), t.id, 'ui:settings:' || lower(section), part::text,
-                                            stamp, now(), now(), true, 'UI settings section: ' || section, 'nocturne-api')
-                                    ON CONFLICT (tenant_id, key) DO UPDATE
-                                    SET value = EXCLUDED.value, mills = EXCLUDED.mills, srv_modified = EXCLUDED.srv_modified, is_active = true;
+                                    target := 'ui:settings:' || lower(section);
+                                    UPDATE settings
+                                    SET value = part::text, mills = stamp, srv_modified = now(), is_active = true
+                                    WHERE tenant_id = t.id AND key = target;
+                                    IF NOT FOUND THEN
+                                        INSERT INTO settings (id, tenant_id, key, value, mills, srv_created, srv_modified, is_active, notes, app)
+                                        VALUES (gen_random_uuid(), t.id, target, part::text,
+                                                stamp, now(), now(), true, 'UI settings section: ' || section, 'nocturne-api');
+                                    END IF;
                                 END LOOP;
                             END IF;
 
