@@ -31,6 +31,7 @@
   } from "$api";
   import ChannelsSection from "$lib/components/alerts/ChannelsSection.svelte";
   import { findChannelMeta } from "$lib/components/alerts/channelMeta";
+  import { channelLabel as channelKindLabel } from "$lib/components/alerts/channelText.svelte";
   import { toChannelDef, toChannelRequest, type ChannelDef } from "$lib/components/alerts/types";
   import { getNotificationPermission, requestNotificationPermission } from "$lib/audio/alarm-sounds";
   import { listenForAlertNotifications } from "$lib/stores/alert-notifications.svelte";
@@ -93,7 +94,8 @@
 
   function channelLabel(type: ChannelType | undefined): string {
     if (type === ChannelType.InApp) return "This device";
-    return findChannelMeta(type)?.label ?? String(type);
+    const meta = findChannelMeta(type);
+    return meta ? channelKindLabel(meta.type) : String(type);
   }
 
   async function run(action: () => Promise<void>, fallback: string) {
