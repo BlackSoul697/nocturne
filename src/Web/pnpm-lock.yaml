@@ -277,9 +277,6 @@ importers:
       '@chat-adapter/discord':
         specifier: 4.29.0
         version: 4.29.0(zod@4.4.3)
-      '@chat-adapter/messenger':
-        specifier: 4.29.0
-        version: 4.29.0(zod@4.4.3)
       '@chat-adapter/slack':
         specifier: 4.29.0
         version: 4.29.0(zod@4.4.3)
@@ -955,10 +952,6 @@ packages:
 
   '@chat-adapter/discord@4.29.0':
     resolution: {integrity: sha512-C6pDVKn7s0PhvgeqldYxoShWXJzthwtlo+sCesqenh56M03eHsioinqxeJttmtK8y1ZD8/qiP2lAZufDwuEQhA==}
-    engines: {node: '>=20'}
-
-  '@chat-adapter/messenger@4.29.0':
-    resolution: {integrity: sha512-qTXlOo3OV4TcTPhRQVq0UBREZ7ae3HImSrfRE+Bj8T2TIV9dhB2eifPqtSt3CbLJUxJflX16j6s1T7Eb8OBxGw==}
     engines: {node: '>=20'}
 
   '@chat-adapter/shared@4.29.0':
@@ -6824,15 +6817,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-      - zod
-
-  '@chat-adapter/messenger@4.29.0(zod@4.4.3)':
-    dependencies:
-      '@chat-adapter/shared': 4.29.0(zod@4.4.3)
-      chat: 4.29.0(zod@4.4.3)
-    transitivePeerDependencies:
-      - ai
-      - supports-color
       - zod
 
   '@chat-adapter/shared@4.29.0(zod@4.4.3)':
