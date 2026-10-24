@@ -276,6 +276,23 @@ public sealed class GoogleHealthReadingWriter(
         });
     }
 
+    public async Task<GoogleHealthSleepStats?> DescribeSleepAsync(DateTime? since, DateTime last24Hours, CancellationToken ct)
+    {
+        await using var db = await contexts.CreateAsync(ct);
+        var sessions = db.SleepSessions.AsNoTracking().Where(session =>
+            session.Source == SleepSource.Google.ToString() && session.SourceApp == SourceApp);
+        if (since is { } from)
+            sessions = sessions.Where(session => session.StartTime >= from);
+        return await sessions
+            .GroupBy(_ => 1)
+            .Select(g => new GoogleHealthSleepStats(
+                g.LongCount(),
+                g.Count(session => session.StartTime >= last24Hours),
+                g.Max(session => session.StartTime),
+                g.Min(session => session.StartTime)))
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<int> DeleteSleepAsync(bool allowReimport, IAuditContext auditContext, CancellationToken ct)
     {
         await using var db = await contexts.CreateAsync(ct);

@@ -109,6 +109,8 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
     {
         var purge = new Mock<IConnectorDataPurge>();
         purge.SetupGet(p => p.ConnectorName).Returns(GoogleHealthConnectorService.ConnectorName);
+        purge.Setup(p => p.DescribeAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         purge.Setup(p => p.PurgeAsync(It.IsAny<bool>(), It.IsAny<IAuditContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, long> { ["Sleep"] = 1 });
         return purge;
@@ -575,7 +577,7 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteDataSourceData_GoogleHealth_PurgesItsRecordsThoughDiscoveryCannotSeeThem()
+    public async Task DeleteDataSourceData_GoogleHealth_PurgesItsRecordsAndSleepThroughItsPurge()
     {
         SeedHealthRecords(GoogleHealthDataSourceId);
         var sleep = GoogleHealthSleepPurge();
@@ -583,7 +585,7 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
         await using (var ctx = NewContext())
         {
             var service = CreateService(ctx, [sleep.Object], GoogleHealthGuard(InMemoryGoogleHealthCoordinator.Create()));
-            (await service.GetActiveDataSourcesAsync()).Should().NotContain(s => s.DeviceId == GoogleHealthDataSourceId);
+            (await service.GetActiveDataSourcesAsync()).Should().Contain(s => s.DeviceId == GoogleHealthDataSourceId);
 
             var result = await service.DeleteDataSourceDataAsync(GoogleHealthDataSourceId);
 
