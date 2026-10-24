@@ -395,9 +395,10 @@ public class NocturneApiClient : INocturneApiClient, IAsyncDisposable
 
     private void ConfigureAlarmHubHandlers(HubConnection connection)
     {
-        connection.On<JsonElement>("alarm", payload => RaiseAlarm(payload, urgent: false, cleared: false));
-        connection.On<JsonElement>("urgent_alarm", payload => RaiseAlarm(payload, urgent: true, cleared: false));
-        connection.On<JsonElement>("clear_alarm", payload => RaiseAlarm(payload, urgent: false, cleared: true));
+        foreach (var (eventName, kind) in AlarmHubEvents.Kinds)
+        {
+            connection.On<JsonElement>(eventName, payload => RaiseAlarm(payload, kind.Urgent, kind.Cleared));
+        }
     }
 
     private void RaiseDataUpdated(string dataType) =>
