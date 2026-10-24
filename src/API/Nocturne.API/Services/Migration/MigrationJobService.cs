@@ -48,6 +48,12 @@ public interface IMigrationJobService
 
     /// <summary>Lists the calling tenant's migration sources. Source URLs frequently identify a person, so sources are never listed cross-tenant.</summary>
     Task<IReadOnlyList<MigrationSourceDto>> GetSourcesAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>Reads a Nightscout instance's display units and current profile's units and timezone.</summary>
+    /// <exception cref="MigrationSourceException">The instance could not be read.</exception>
+    /// <exception cref="System.Text.Json.JsonException">The instance answered with something other than JSON.</exception>
+    Task<NightscoutDisplaySettings> ReadDisplaySettingsAsync(
+        string nightscoutUrl, string? apiSecret, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -300,16 +306,7 @@ public class MigrationJobService : IMigrationJobService
             };
         }
 
-        using var scope = _serviceProvider.CreateScope();
-        var httpClientFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
-        var httpClient = httpClientFactory.CreateClient(HttpClientName);
-        httpClient.BaseAddress = baseAddress;
-
-        // Add API secret header if provided (Nightscout expects the SHA1 hash)
-        if (!string.IsNullOrEmpty(request.NightscoutApiSecret))
-        {
-            httpClient.DefaultRequestHeaders.Add("api-secret", MigrationJob.HashApiSecret(request.NightscoutApiSecret));
-        }
+        var httpClient = CreateSourceClient(baseAddress, request.NightscoutApiSecret);
 
         try
         {
@@ -334,6 +331,31 @@ public class MigrationJobService : IMigrationJobService
                 ErrorMessage = ex.Message,
             };
         }
+    }
+
+    public async Task<NightscoutDisplaySettings> ReadDisplaySettingsAsync(
+        string nightscoutUrl, string? apiSecret, CancellationToken ct = default)
+    {
+        if (!NightscoutBaseUri.TryFor(nightscoutUrl, out var baseAddress))
+            throw new MigrationSourceException(NightscoutBaseUri.InvalidUrlMessage, MigrationFailureCause.Unreachable);
+
+        var httpClient = CreateSourceClient(baseAddress, apiSecret);
+        var status = await MigrationJob.ReadFromSourceAsync(
+            httpClient, "api/v1/status.json", "status", ct, NightscoutRead.ImportProbe);
+        var profiles = await MigrationJob.ReadFromSourceAsync(httpClient, "api/v1/profile.json", "profile", ct);
+        return NightscoutDisplaySettings.Parse(status, profiles);
+    }
+
+    private HttpClient CreateSourceClient(Uri baseAddress, string? apiSecret)
+    {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName);
+        httpClient.BaseAddress = baseAddress;
+
+        // Nightscout expects the SHA1 hash of the secret.
+        if (!string.IsNullOrEmpty(apiSecret))
+            httpClient.DefaultRequestHeaders.Add("api-secret", MigrationJob.HashApiSecret(apiSecret));
+
+        return httpClient;
     }
 
     private async Task<TestMigrationConnectionResult> TestMongoConnectionAsync(
@@ -957,7 +979,7 @@ internal class MigrationJob
             : failure.Message;
 
     /// <summary>Marks a collection finished-and-failed, keeping whatever it managed to import.</summary>
-    private void RecordCollectionFailure(string collectionName, string reason) =>
+    internal void RecordCollectionFailure(string collectionName, string reason) =>
         _collectionProgress[collectionName] = Progress(collectionName) with
         {
             IsComplete = true,
@@ -965,7 +987,7 @@ internal class MigrationJob
         };
 
     /// <summary>Marks a collection passed over rather than attempted. See <see cref="CollectionProgress.SkippedReason"/>.</summary>
-    private void RecordCollectionSkipped(string collectionName, string reason) =>
+    internal void RecordCollectionSkipped(string collectionName, string reason) =>
         _collectionProgress[collectionName] = Progress(collectionName) with
         {
             IsComplete = true,
@@ -1171,13 +1193,12 @@ internal class MigrationJob
         }
     }
 
-    private void UpdateCollectionProgress(
+    internal void UpdateCollectionProgress(
         string collectionName, long totalDocuments, long migrated, long failed, bool isComplete,
         DecompositionTally tally = default)
     {
-        _collectionProgress[collectionName] = new CollectionProgress
+        _collectionProgress[collectionName] = Progress(collectionName) with
         {
-            CollectionName = collectionName,
             TotalDocuments = totalDocuments,
             DocumentsMigrated = migrated,
             DocumentsFailed = failed,
@@ -1190,7 +1211,7 @@ internal class MigrationJob
     }
 
     /// <summary>What a collection's decompositions stored and passed over; see <see cref="DecompositionResult"/>.</summary>
-    private readonly record struct DecompositionTally(
+    internal readonly record struct DecompositionTally(
         long RecordsStored, long RecordsSkippedDeleted, long DocumentsSkippedDeleted, long DocumentsSkippedUnsupported)
     {
         public long DocumentsSkipped => DocumentsSkippedDeleted + DocumentsSkippedUnsupported;
@@ -1244,7 +1265,7 @@ internal class MigrationJob
 
     /// <summary>Entries page on the numeric <c>date</c> field, which mirrors mills exactly.</summary>
     private static readonly PageCursor s_dateCursor = new(
-        to => $"&find[date][$lte]={new DateTimeOffset(to, TimeSpan.Zero).ToUnixTimeMilliseconds()}",
+        to => $"&find[date][$lte]={to.ToMills()}",
         page =>
         {
             var dated = page.Where(d => d.Mills > 0).ToList();
@@ -1834,9 +1855,8 @@ internal class MigrationJob
 
             await dbContext.SaveChangesAsync(ct);
 
-            _collectionProgress[collectionName] = new CollectionProgress
+            _collectionProgress[collectionName] = Progress(collectionName) with
             {
-                CollectionName = collectionName,
                 TotalDocuments = totalDocs,
                 DocumentsMigrated = totalMigrated,
                 DocumentsFailed = totalFailed,
@@ -1892,10 +1912,7 @@ internal class MigrationJob
             OutputMode = MongoDB.Bson.IO.JsonOutputMode.RelaxedExtendedJson
         };
         var json = doc.ToJson(jsonWriterSettings);
-        var status = System.Text.Json.JsonSerializer.Deserialize<DeviceStatus>(json, new System.Text.Json.JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var status = System.Text.Json.JsonSerializer.Deserialize<DeviceStatus>(json, JsonDefaults.CaseInsensitive);
 
         if (status == null)
             return;

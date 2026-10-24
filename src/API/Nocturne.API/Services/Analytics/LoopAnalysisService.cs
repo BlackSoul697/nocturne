@@ -2,6 +2,7 @@ using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Profiles.Resolvers;
 using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
@@ -29,6 +30,7 @@ internal sealed partial class LoopAnalysisService(
     ICarbIntakeRepository carbIntakeRepository,
     ITempBasalRepository tempBasalRepository,
     IApsSnapshotRepository apsSnapshotRepository,
+    IPumpSnapshotRepository pumpSnapshotRepository,
     IStateSpanRepository stateSpanRepository,
     IPatientDeviceRepository patientDeviceRepository,
     ITargetRangeScheduleRepository targetRangeScheduleRepository,
@@ -123,8 +125,9 @@ internal sealed partial class LoopAnalysisService(
 
     /// <summary>The reads the Daily profile and Loop health pages share, issued together.</summary>
     /// <remarks>
-    /// Boluses and temp basals are read from <see cref="DailyProfileCalculator.ActingMs"/> before the
-    /// window so IOB and COB at its start see the doses still acting, and temp basals to
+    /// Boluses are read from <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB
+    /// and COB at its start see the doses still acting. Temp basals are read from
+    /// <see cref="StatisticsService.TempBasalReadStart"/>, which reaches further back, and to
     /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
     /// is bounded by the record that closes it.
     /// </remarks>
@@ -149,7 +152,7 @@ internal sealed partial class LoopAnalysisService(
         var glucoseTask = glucoseRepository.GetForAnalyticsAsync(fromUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
         var bolusTask = bolusRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
         var tempBasalTask = tempBasalRepository.GetAsync(
-            lookbackUtc, ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), null, null, int.MaxValue, descending: false, ct: ct);
+            StatisticsService.TempBasalReadStart(fromUtc), ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), null, null, int.MaxValue, descending: false, ct: ct);
         var spanTask = stateSpanRepository.GetByCategories(MaskCategories, fromUtc, toUtc, ct);
         var deviceTask = patientDeviceRepository.GetByDateRangeAsync(fromUtc, toUtc, ct);
         await Task.WhenAll(glucoseTask, bolusTask, tempBasalTask, spanTask, deviceTask);
@@ -187,7 +190,7 @@ internal sealed partial class LoopAnalysisService(
         var to = window.To;
         var hasTherapy = await therapySettingsResolver.HasDataAsync(ct);
         var tickStart = from - from % TickMs;
-        var timeline = await therapyTimelineResolver.BuildAsync(tickStart, to + 1, ct: ct);
+        var timeline = await therapyTimelineResolver.BuildAsync(tickStart - DailyProfileCalculator.ActingMs, to + 1, ct: ct);
 
         var scheduled = hasTherapy
             ? NetInsulinAboveSchedule.ScheduledBaseline(
@@ -245,7 +248,7 @@ internal sealed partial class LoopAnalysisService(
     /// whatever it carries.
     /// </summary>
     private static List<long> SnapshotMills(IEnumerable<DateTime> storedAt) =>
-        [.. storedAt.Select(t => ToMills(DateTime.SpecifyKind(t, DateTimeKind.Utc)))];
+        [.. storedAt.Select(t => t.ToMills())];
 
     /// <summary><see cref="MaskSources"/> over <paramref name="common"/>'s spans, devices and profiles.</summary>
     private static LoopAnalysisMaskSources Sources(
@@ -309,13 +312,11 @@ internal sealed partial class LoopAnalysisService(
 
     private static DateTime ToUtc(long mills) => DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime;
 
-    private static long ToMills(DateTime utc) => new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-
     private readonly record struct Window(long From, long To)
     {
         public static Window Of(DateTime from, DateTime to) =>
             to > from
-                ? new(ToMills(from), ToMills(to))
+                ? new(from.ToMills(), to.ToMills())
                 : throw new ArgumentOutOfRangeException(nameof(to), "A Loop Analysis range must end after it starts.");
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;

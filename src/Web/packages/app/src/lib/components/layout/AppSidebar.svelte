@@ -7,20 +7,17 @@
   import SidebarGlucoseWidget from "./SidebarGlucoseWidget.svelte";
   import SidebarNotifications from "./SidebarNotifications.svelte";
   import SidebarDndToggle from "$lib/components/alerts/SidebarDndToggle.svelte";
+  import SetupOpenCount from "$lib/components/setup-hub/SetupOpenCount.svelte";
   import UserMenu from "./UserMenu.svelte";
   import LanguageSelector from "$lib/components/LanguageSelector.svelte";
   import { updateLanguagePreference } from "$api/user-preferences.remote";
   import { hasLanguagePreference } from "$lib/stores/appearance-store.svelte";
-  import { getMyTenants } from "$lib/api/generated/myTenants.generated.remote";
-  import { retainQuery } from "$lib/api/retain-query.svelte";
-  import { whenIdle } from "$lib/utils/when-idle";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import Shield from "@lucide/svelte/icons/shield";
   import Eye from "@lucide/svelte/icons/eye";
   import { buildAppNavigation, type NavItem, type NavLink } from "$lib/navigation/app-navigation.svelte";
   import {
     goToTenant,
-    resolveTenantSwitcher,
     type TenantSwitcherTarget,
   } from "$lib/utils/tenant-host";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
@@ -40,6 +37,8 @@
     baseDomain?: string | null;
     /** Whether this host serves the cross-tenant dashboard rather than one tenant (from layout data) */
     tenantless?: boolean;
+    /** The tenants the current member can move between (from layout data) */
+    tenantTargets?: TenantSwitcherTarget[];
   }
 
   const {
@@ -50,6 +49,7 @@
     currentSlug = null,
     baseDomain = null,
     tenantless = false,
+    tenantTargets = [],
   }: Props = $props();
 
   const sidebar = Sidebar.useSidebar();
@@ -65,10 +65,6 @@
   $effect(() => {
     langPrefKnown = hasLanguagePreference();
   });
-
-  // Tenant switcher state
-  let tenantTargets = $state<TenantSwitcherTarget[]>([]);
-  let totalTenantCount = $state(0);
 
   /**
    * Platform-admin "access" mode: the session is a short-lived platform-access grant on a
@@ -90,13 +86,6 @@
   // Available tenants for the subdomain switcher. The switcher is valued by slug, so a host that
   // names no tenant needs a sentinel; a slug can never be one, having no underscores.
   const TENANTLESS = "__self__";
-  // Read once the page is idle: the list decides whether the switcher and the Tenants nav item
-  // render.
-  let idle = $state(false);
-  $effect(() => whenIdle(() => (idle = true)));
-  const isMember = $derived(user !== null && !isGuestSession);
-  const myTenantsQuery = $derived(idle && isMember ? getMyTenants() : null);
-  retainQuery(() => myTenantsQuery);
 
   function handleTenantChange(value: string | undefined) {
     if (!value || !baseDomain || value === TENANTLESS || value === currentSlug) {
@@ -112,18 +101,6 @@
       : target.slug;
   }
 
-  // Use $effect (not onMount) so this also runs when `user` becomes available
-  // after client-side login navigation.
-  $effect(() => {
-    if (!user || isGuestSession) return;
-    const tenants = myTenantsQuery?.current;
-    if (tenants === undefined) return;
-
-    const switcher = resolveTenantSwitcher(tenants);
-    totalTenantCount = switcher.totalCount;
-    tenantTargets = switcher.targets;
-  });
-
   // A platform-access grant views a tenant the operator is not a member of, so the host's slug
   // can name a tenant the list does not carry.
   const viewedTenantLabel = $derived.by(() => {
@@ -138,7 +115,7 @@
       isGuestSession,
       isPlatformAdmin,
       grantedScopes: page.data.effectivePermissions ?? [],
-      tenantCount: totalTenantCount,
+      tenantCount: tenantTargets.length,
       tenantless,
     }),
   );
@@ -222,7 +199,7 @@
       <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Eye class="h-3 w-3 shrink-0" />
         <span
-          >Viewing <span class="font-medium text-foreground">{currentSlug}</span> — you
+          >Viewing <span class="font-medium text-foreground">{currentSlug}</span>: you
           are not a member</span
         >
       </p>
@@ -236,7 +213,7 @@
 
   <!-- The switcher needs a host to navigate to, so unlike the Tenants nav item it stays gated
        on baseDomain. -->
-  {#if baseDomain && totalTenantCount > 1 && tenantTargets.length > 0 && !isGuestSession}
+  {#if baseDomain && tenantTargets.length > 1 && !isGuestSession}
     <div class="border-b px-3 py-2 group-data-[collapsible=icon]:hidden">
       <p
         class="mb-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1.5"
@@ -310,6 +287,9 @@
                           >
                             <child.icon class="h-4 w-4" />
                             <span>{child.title}</span>
+                            {#if child.href === "/setup"}
+                              <SetupOpenCount />
+                            {/if}
                           </Sidebar.MenuSubButton>
                         {/if}
                       </Sidebar.MenuSubItem>

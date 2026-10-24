@@ -68,7 +68,7 @@ public class ChildScopeGuardTests
         "src/API/Nocturne.API/Services/Health/GoogleHealth/GoogleHealthWorker.cs: GoogleHealthWorker.ProcessRequestsAsync",
         "src/API/Nocturne.API/Services/Health/GoogleHealth/GoogleHealthWorker.cs: GoogleHealthWorker.SyncTenantAsync",
         "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthGrantHolders.cs: PostgresGoogleHealthGrantHolders.AdoptAsync",
-        "src/API/Nocturne.API/Services/Migration/MigrationStartupService.cs: MigrationStartupService.StartAsync",
+        "src/API/Nocturne.API/Services/Migration/MigrationStartupService.cs: MigrationStartupService.NotifyIfPendingAsync",
         "src/API/Nocturne.API/Services/Monitoring/TrackerAlertRuleBackfillService.cs: TrackerAlertRuleBackfillService.ExecuteAsync",
         "src/API/Nocturne.API/Services/Notifications/NotificationResolutionService.cs: NotificationResolutionService.EvaluateAllTenantsAsync",
 
@@ -89,18 +89,13 @@ public class ChildScopeGuardTests
         "src/API/Nocturne.API/Services/Connectors/ConnectorCursorResetJobService.cs: ConnectorCursorResetJobService.FindRecordAsync",
         "src/API/Nocturne.API/Services/Connectors/ConnectorCursorResetJobService.cs: ConnectorCursorResetJobService.StartResetAsync",
         "src/API/Nocturne.API/Services/Connectors/ConnectorCursorResetJobService.cs: ConnectorResetJob.PersistSnapshotAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.LockAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.NotifyAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.OpenRequestListenerAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.ReadRequestsAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.ReadCursorsAsync",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.TenantScope",
-        "src/API/Nocturne.API/Services/Health/GoogleHealth/PostgresGoogleHealthCoordinatorStore.cs: PostgresGoogleHealthCoordinatorStore.WriteCursorAsync",
+        "src/API/Nocturne.API/Services/Health/GoogleHealth/GoogleHealthCoordinator.cs: GoogleHealthCoordinator.PendingTenantsAsync",
+        "src/API/Nocturne.API/Services/Health/GoogleHealth/GoogleHealthCoordinator.cs: GoogleHealthCoordinator.ReadAsync",
+        "src/API/Nocturne.API/Services/Health/GoogleHealth/GoogleHealthCoordinator.cs: GoogleHealthCoordinator.WriteAsync",
         "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJob.PersistSnapshotAsync",
         "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJobService.FindRunAsync",
         "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJobService.GetHistoryAsync",
         "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJobService.GetSourcesAsync",
-        "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJobService.TestApiConnectionAsync",
 
         // Work a request starts that returns nothing it read. It writes as the system, and the caller
         // reads what it wrote back under the caller's own policies. Read as the caller, a sync or an

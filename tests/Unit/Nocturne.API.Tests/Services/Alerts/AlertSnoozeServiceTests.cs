@@ -1,11 +1,14 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Services.Realtime;
+using Nocturne.API.Tests.Services.Alerts.Engines;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -187,7 +190,7 @@ public class AlertSnoozeServiceTests
     /// Escalation is a separate rule over <c>alert_state</c>; a snooze silences only the snoozed
     /// instance, so an escalation keyed on "unacknowledged" still sees the parent as such.
     /// </summary>
-    [Fact]
+    [NativeFact]
     public async Task Snoozed_alert_still_reads_as_firing_and_unacknowledged_to_escalation_rules()
     {
         var seeded = await SeedAsync();
@@ -202,10 +205,19 @@ public class AlertSnoozeServiceTests
             LastReadingAt = Now,
             ActiveAlerts = activeAlerts,
         };
+        var time = new ManualTimeProvider();
+        time.SetUtcNow(Now);
+        var escalation =
+            $$$"""[{"type":"alert_state","alert_state":{"alert_id":"{{{seeded.RuleId}}}","state":"unacknowledged","for_minutes":15}}]""";
+        var watcher = new AlertRule
+        {
+            Id = Guid.NewGuid(),
+            ClientConfiguration = $$$"""{"snooze":{"smartSnooze":true,"conditions":{{{escalation}}}}}""",
+        };
+        var engine = EngineTestHarness.BuildRustEngine(time, new InMemoryTrackerRepository([watcher]));
 
-        var unacknowledged = await new AlertStateEvaluator(_time).EvaluateAsync(
-            $"{{\"alert_id\":\"{seeded.RuleId}\",\"state\":\"unacknowledged\",\"for_minutes\":15}}",
-            context, CancellationToken.None);
+        var unacknowledged = await engine.EvaluateSnoozeAsync(
+            watcher.Id, JsonDocument.Parse(escalation).RootElement, context, CancellationToken.None);
 
         unacknowledged.Should().BeTrue();
     }

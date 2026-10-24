@@ -59,8 +59,8 @@
     }
 
     new Notification("Nocturne Test", {
-      body: "This is a test notification from Nocturne. Alarms will appear like this!",
-      icon: "/images/logo-128.png",
+      body: "This is a test notification from Nocturne. Alarms will appear like this.",
+      icon: "/favicon.png",
       tag: "test-notification",
     });
   }

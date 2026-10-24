@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -322,18 +323,18 @@ public class ChartDataServiceTests
                 },
             };
 
-            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+            var result = ChartDataService.BuildCarbMarkers(carbs, TimeZoneInfo.Utc);
 
             result.Should().HaveCount(1);
             result[0].Carbs.Should().Be(30.0);
-            result[0].Label.Should().NotBeNullOrEmpty();
+            result[0].MealPeriod.Should().NotBeNull();
             result[0].Time.Should().Be(TestMills);
             result[0].TreatmentId.Should().Be("treat-1");
             result[0].IsOffset.Should().BeFalse();
         }
 
         [Fact]
-        public void WithoutFoodType_UsesMealName()
+        public void WithoutFoodType_CarriesMealPeriod()
         {
             // 12:00 UTC = Lunch time
             var noonUtcMills = DateTimeOffset
@@ -349,10 +350,32 @@ public class ChartDataServiceTests
                 },
             };
 
-            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+            var result = ChartDataService.BuildCarbMarkers(carbs, TimeZoneInfo.Utc);
 
             result.Should().HaveCount(1);
-            result[0].Label.Should().Be("Lunch");
+            result[0].MealPeriod.Should().Be(MealPeriod.Lunch);
+            result[0].Label.Should().BeNull();
+        }
+
+        [Fact]
+        public void WithoutAZone_LeavesTheMealPeriodOut()
+        {
+            var noonUtcMills = DateTimeOffset
+                .Parse("2023-11-15T12:00:00Z")
+                .ToUnixTimeMilliseconds();
+            var carbs = new List<CarbIntake>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    Carbs = 20.0,
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(noonUtcMills).UtcDateTime,
+                },
+            };
+
+            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+
+            result.Should().ContainSingle().Which.MealPeriod.Should().BeNull();
         }
 
         [Fact]
@@ -673,80 +696,52 @@ public class ChartDataServiceTests
 
     #endregion
 
-    #region GetMealNameForTime Tests
+    #region GetMealPeriod Tests
 
-    public class GetMealNameForTimeTests
+    public class GetMealPeriodTests
     {
+        private static long MillsAtUtcHour(int hourUtc) =>
+            new DateTimeOffset(2023, 11, 15, hourUtc, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
         [Theory]
-        [InlineData(5, "Breakfast")]
-        [InlineData(10, "Breakfast")]
-        [InlineData(11, "Lunch")]
-        [InlineData(14, "Lunch")]
-        [InlineData(15, "Snack")]
-        [InlineData(16, "Snack")]
-        [InlineData(17, "Dinner")]
-        [InlineData(20, "Dinner")]
-        [InlineData(21, "Late Night")]
-        [InlineData(23, "Late Night")]
-        [InlineData(0, "Late Night")]
-        [InlineData(4, "Late Night")]
-        public void UtcTimeBuckets(int hourUtc, string expected)
+        [InlineData(5, MealPeriod.Breakfast)]
+        [InlineData(10, MealPeriod.Breakfast)]
+        [InlineData(11, MealPeriod.Lunch)]
+        [InlineData(14, MealPeriod.Lunch)]
+        [InlineData(15, MealPeriod.Snack)]
+        [InlineData(16, MealPeriod.Snack)]
+        [InlineData(17, MealPeriod.Dinner)]
+        [InlineData(20, MealPeriod.Dinner)]
+        [InlineData(21, MealPeriod.LateNight)]
+        [InlineData(23, MealPeriod.LateNight)]
+        [InlineData(0, MealPeriod.LateNight)]
+        [InlineData(4, MealPeriod.LateNight)]
+        public void UtcZoneBuckets(int hourUtc, MealPeriod expected)
         {
-            // Build a mills value for 2023-11-15 at the specified UTC hour
-            var dto = new DateTimeOffset(2023, 11, 15, hourUtc, 30, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, null);
-
-            result.Should().Be(expected);
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(hourUtc), TimeZoneInfo.Utc)
+                .Should().Be(expected);
         }
 
         [Fact]
-        public void NullTimezone_FallsBackToUtc()
+        public void NoZone_GivesNoPeriod()
         {
-            // 12:00 UTC = Lunch
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, null);
-
-            result.Should().Be("Lunch");
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(12), null).Should().BeNull();
         }
 
         [Fact]
-        public void TimezoneConversion_NewYork()
+        public void ZoneConversion_NewYork_LateNight()
         {
-            // 6:00 UTC in America/New_York (UTC-5 in November) = 1:00 AM local = "Late Night"
-            var dto = new DateTimeOffset(2023, 11, 15, 6, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
+            var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            var result = ChartDataService.GetMealNameForTime(mills, "America/New_York");
-
-            result.Should().Be("Late Night");
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(6), zone).Should().Be(MealPeriod.LateNight);
         }
 
         [Fact]
-        public void TimezoneConversion_NewYork_Breakfast()
+        public void ZoneConversion_NewYork_Breakfast()
         {
-            // 12:00 UTC in America/New_York (UTC-5) = 7:00 AM local = "Breakfast"
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
+            var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            var result = ChartDataService.GetMealNameForTime(mills, "America/New_York");
-
-            result.Should().Be("Breakfast");
-        }
-
-        [Fact]
-        public void InvalidTimezone_FallsBackToUtc()
-        {
-            // 12:00 UTC = Lunch (falls back to UTC on invalid tz)
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, "Invalid/Timezone");
-
-            result.Should().Be("Lunch");
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(12), zone).Should().Be(MealPeriod.Breakfast);
         }
     }
 
@@ -1723,7 +1718,7 @@ public class ChartDataServiceTests
 
             var series = await Service(repository.Object, TimeProvider.System).GetBasalSeriesAsync(Start, End);
 
-            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - ChartDataService.BufferMs).UtcDateTime);
+            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - DailyProfileCalculator.ActingMs).UtcDateTime);
             series.Should().ContainSingle();
             series[0].Timestamp.Should().Be(Start);
             series[0].Rate.Should().BeApproximately(0.4, 0.001);
@@ -1788,6 +1783,65 @@ public class ChartDataServiceTests
                 basalRate ?? Mock.Of<IBasalRateResolver>(),
                 timeProvider,
                 NullLogger<ChartDataService>.Instance);
+        }
+    }
+
+    #endregion
+
+    #region GetBasalDeliverySpansAsync Tests
+
+    public class GetBasalDeliverySpansAsyncTests
+    {
+        private const long Start = TestMills;
+        private const long End = TestMills + 60 * 60 * 1000;
+        private const long Minute = 60 * 1000;
+
+        private static TempBasal Span(long startMills, long endMills, TempBasalOrigin origin, double rate) => new()
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(startMills).UtcDateTime,
+            EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(endMills).UtcDateTime,
+            Rate = rate,
+            Origin = origin,
+        };
+
+        [Fact]
+        public async Task ReadsFromBufferAndReturnsEveryOriginWithSuspendedAtZero()
+        {
+            var rows = new[]
+            {
+                Span(Start - 20 * Minute, Start + 10 * Minute, TempBasalOrigin.Manual, 0.4),
+                Span(Start + 10 * Minute, Start + 20 * Minute, TempBasalOrigin.Suspended, 0.9),
+                Span(Start + 20 * Minute, Start + 30 * Minute, TempBasalOrigin.Inferred, 1.1),
+                Span(Start - 5 * 60 * Minute, Start - 4 * 60 * Minute, TempBasalOrigin.Algorithm, 2.0),
+            };
+            var repository = new Mock<ITempBasalRepository>();
+            DateTime? requestedFrom = null;
+            repository
+                .Setup(r => r.GetAsync(
+                    It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .Callback<DateTime?, DateTime?, string?, string?, int, int, bool, CancellationToken>(
+                    (from, _, _, _, _, _, _, _) => requestedFrom = from)
+                .ReturnsAsync(rows);
+
+            var service = new ChartDataService(
+                [],
+                Mock.Of<IChartDataAssembler>(),
+                new BasalSeriesBuilder(Mock.Of<ITherapySettingsResolver>(), Mock.Of<IBasalSegmentService>(), NullLogger<BasalSeriesBuilder>.Instance),
+                repository.Object,
+                Mock.Of<ITherapySettingsResolver>(),
+                Mock.Of<IBasalRateResolver>(),
+                new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(End)),
+                NullLogger<ChartDataService>.Instance);
+
+            var spans = await service.GetBasalDeliverySpansAsync(Start, End);
+
+            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - DailyProfileCalculator.ActingMs).UtcDateTime);
+            spans.Select(s => (s.Origin, s.Rate)).Should().Equal(
+                (BasalDeliveryOrigin.Manual, 0.4),
+                (BasalDeliveryOrigin.Suspended, 0.0),
+                (BasalDeliveryOrigin.Inferred, 1.1));
+            spans[0].StartMills.Should().Be(Start - 20 * Minute);
         }
     }
 

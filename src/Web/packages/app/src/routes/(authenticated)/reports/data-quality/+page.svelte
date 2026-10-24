@@ -14,6 +14,7 @@
 		triggerDetection as triggerCompressionLowDetection
 	} from '$api/generated/compressionLows.generated.remote';
 	import { getRejectedUploads } from '$api/generated/rejectedUploads.generated.remote';
+	import { reportDescription } from '$lib/navigation/report-navigation.svelte';
 	import { contextResource } from '$lib/hooks/resource-context.svelte';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Clock from '@lucide/svelte/icons/clock';
@@ -76,10 +77,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Data Quality - Nocturne</title>
-</svelte:head>
-
 {#if suggestionsResource.current}
 	<div class="@container space-y-6">
 		<div class="flex items-center gap-3">
@@ -111,7 +108,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="font-medium text-foreground">Compression Lows</div>
 							<div class="text-sm text-muted-foreground">
-								Falsely low readings from sleeping on sensor
+								{reportDescription("/reports/data-quality/compression-lows")}
 							</div>
 							<div class="mt-1 text-sm text-muted-foreground tabular-nums">
 								{acceptedCount} events{#if pendingCount > 0} · {pendingCount} pending{/if}
@@ -128,7 +125,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="font-medium text-foreground">Signal Integrity</div>
 							<div class="text-sm text-muted-foreground">
-								Windows where readings oscillate in a way that is unlikely to be physiologic
+								{reportDescription("/reports/data-quality/sensor-integrity")}
 							</div>
 						</div>
 						<ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform group-hover/link:translate-x-0.5" aria-hidden="true" />
@@ -142,7 +139,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="font-medium text-foreground">CGM Comparison</div>
 							<div class="text-sm text-muted-foreground">
-								How far apart two sensors run over the same window
+								{reportDescription("/reports/data-quality/cgm-comparison")}
 							</div>
 						</div>
 						<ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform group-hover/link:translate-x-0.5" aria-hidden="true" />
@@ -157,7 +154,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="font-medium text-foreground">Rejected Uploads</div>
 							<div class="text-sm text-muted-foreground">
-								Records an uploader sent that Nocturne could not store
+								{reportDescription("/reports/data-quality/rejected-uploads")}
 							</div>
 							<div class="mt-1 text-sm text-muted-foreground tabular-nums">
 								{rejectedCount} records

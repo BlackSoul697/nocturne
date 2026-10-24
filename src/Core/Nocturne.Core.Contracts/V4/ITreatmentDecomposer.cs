@@ -63,12 +63,6 @@ public interface ITreatmentDecomposer
     Task<int> DeleteFromSourceAsync(string source, IReadOnlySet<string> legacyIds, CancellationToken ct = default);
 
     /// <summary>
-    /// Deletes the profile rows of every Profile Switch <paramref name="source"/> wrote. Call it
-    /// before the switches' spans are deleted: the spans are how the rows are found.
-    /// </summary>
-    Task DeleteProfileSwitchSnapshotsFromSourceAsync(string source, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>
     /// The legacy ids of <paramref name="source"/>'s live records, including the state spans its
     /// Profile Switches, overrides and temporary targets were stored as, whose event time falls in
     /// [<paramref name="from"/>, <paramref name="to"/>], each with that event time.

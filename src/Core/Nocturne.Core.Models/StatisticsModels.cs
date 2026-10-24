@@ -207,6 +207,9 @@ public class GlycemicThresholds
 
 public class TimeInRangeMetrics
 {
+    /// <summary>The band edges the percentages, durations and episodes were measured against.</summary>
+    public GlycemicThresholds? Thresholds { get; set; }
+
     /// <summary>
     /// Percentages of time in each range
     /// </summary>
@@ -225,9 +228,14 @@ public class TimeInRangeMetrics
     public TimeInRangeDetailedStats RangeStats { get; set; } = new();
 
     /// <summary>
-    /// Average minutes per day in target, below-range and above-range zones
+    /// Average minutes per covered day in target, below-range and above-range zones
     /// </summary>
     public AverageDailyMinutes AverageDailyMinutes { get; set; } = new();
+
+    /// <summary>
+    /// Episodes per covered day
+    /// </summary>
+    public AverageDailyEpisodes AverageDailyEpisodes { get; set; } = new();
 }
 
 /// <summary>
@@ -252,7 +260,11 @@ public class TimeInRangeDetailedStats
 }
 
 /// <summary>
-/// Time in range percentages
+/// Time in range percentages: the minutes a zone covers over the minutes the readings cover, from
+/// the same minutes that back <see cref="TimeInRangeDurations"/>, so the two agree whatever mix of
+/// sensor cadences the period holds. A count of readings would weigh a one-minute sensor's
+/// reading as much as a five-minute one's. The four outer zones and the time between them sum to
+/// 100; <see cref="Target"/> is that time only when the target range starts where low ends.
 /// </summary>
 public class TimeInRangePercentages
 {
@@ -339,8 +351,7 @@ public class ExtendedTimeInRangePercentages
 /// Time in range durations (in minutes), measured from the gaps between the readings themselves
 /// rather than assuming a cadence, so a one-minute sensor and a five-minute one both report the
 /// time they actually covered. A gap the sensor did not cover counts as one extra median gap.
-/// <see cref="TimeInRangePercentages"/> counts readings while these sum time, so the two diverge
-/// on a series with gaps or a cadence that varies.
+/// <see cref="TimeInRangePercentages"/> is these over the covered minutes.
 /// </summary>
 public class TimeInRangeDurations
 {
@@ -387,9 +398,10 @@ public class TimeInRangeDurations
 }
 
 /// <summary>
-/// Average minutes per day in each zone, derived from <see cref="TimeInRangePercentages"/> rather
-/// than the recorded durations. Percentages sum to 100, so target, low and high account for a whole
-/// day even when the underlying data has gaps.
+/// Average minutes per day in each zone: the zone minutes of <see cref="TimeInRangeDurations"/>
+/// over the days the readings cover, which is the time they stand for over twenty-four hours.
+/// A gap the sensor did not cover adds no days, and a period with no covered time reports zero.
+/// <see cref="AverageDailyEpisodes"/> divides by the same days.
 /// </summary>
 public class AverageDailyMinutes
 {
@@ -447,6 +459,25 @@ public class TimeInRangeEpisodes
     /// counted the same way as <see cref="AboveRange"/>.
     /// </summary>
     public int BelowRange { get; set; }
+}
+
+/// <summary>
+/// <see cref="TimeInRangeEpisodes"/> per covered day, on the days <see cref="AverageDailyMinutes"/>
+/// divides by.
+/// </summary>
+public class AverageDailyEpisodes
+{
+    public double VeryLow { get; set; }
+
+    public double Low { get; set; }
+
+    public double High { get; set; }
+
+    public double VeryHigh { get; set; }
+
+    public double AboveRange { get; set; }
+
+    public double BelowRange { get; set; }
 }
 
 public class DistributionDataPoint
@@ -1458,9 +1489,18 @@ public class ReportAnalysisResult
     /// <summary>
     /// Time in the tenant's personal target range schedule, alongside the clinical-consensus
     /// TIR in <see cref="Analysis"/>. Null when the tenant has no target range schedule
-    /// configured or the window has no readings.
+    /// configured, the window has no readings, or the tenant has no usable timezone and the schedule
+    /// has several entries.
     /// </summary>
     public PersonalRangeTimeInRange? PersonalRange { get; set; }
+
+    /// <summary>
+    /// Why the tenant's timezone was unavailable. Without a zone, <see cref="AveragedStats"/> groups
+    /// readings by their own UTC offset, day-bounded figures in <see cref="Analysis"/> use UTC days,
+    /// and <see cref="PersonalRange"/> is null unless the target schedule has one entry. Null when a
+    /// zone was applied.
+    /// </summary>
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
@@ -1496,8 +1536,8 @@ public sealed class ContributingDevice
     /// <summary>The registered <see cref="PatientDevice"/> id, or <c>null</c> for the unattributed bucket.</summary>
     public Guid? PatientDeviceId { get; set; }
 
-    /// <summary>Display name of the device, or "Unattributed" for readings with no <see cref="PatientDeviceId"/>.</summary>
-    public string Name { get; set; } = string.Empty;
+    /// <summary>Display name of the device, or <c>null</c> for the unattributed bucket.</summary>
+    public string? Name { get; set; }
 
     /// <summary>Number of readings attributed to this device within the requested window.</summary>
     public int ReadingCount { get; set; }
@@ -1604,6 +1644,11 @@ public class InsulinDeliveryStatistics
     /// Total carbohydrates consumed in grams
     /// </summary>
     public double TotalCarbs { get; set; }
+
+    /// <summary>
+    /// Grams of carbohydrate per day: <see cref="TotalCarbs"/> over <see cref="WindowDays"/>
+    /// </summary>
+    public double CarbsPerDay { get; set; }
 
     /// <summary>
     /// Number of manually initiated boluses in the period. Algorithm-delivered boluses
@@ -1888,7 +1933,7 @@ public class BasalStats
     public int Count { get; set; }
 
     /// <summary>
-    /// Average basal rate in U/hr
+    /// Time-weighted average basal rate in U/hr
     /// </summary>
     public double AvgRate { get; set; }
 
@@ -2082,6 +2127,9 @@ public class SiteChangeImpactAnalysis
     /// <summary>Summary statistics comparing before vs after</summary>
     public SiteChangeImpactSummary Summary { get; set; } = new();
 
+    /// <summary>The consensus band edges the chart draws its target range between.</summary>
+    public required GlycemicThresholds Thresholds { get; set; }
+
     /// <summary>Hours analyzed before site change</summary>
     public int HoursBeforeChange { get; set; }
 
@@ -2189,7 +2237,7 @@ public class AidDetectionContext
     /// <summary>APS loop cycles within the segment window (for OS AID strategies)</summary>
     public IReadOnlyList<V4.ApsLoopCycle> LoopCycles { get; set; } = [];
 
-    /// <summary>Temp basals within the segment window (for TBR-based strategies)</summary>
+    /// <summary>Every temp basal read for the report, not only those in the segment (for TBR-based strategies)</summary>
     public IReadOnlyList<V4.TempBasal> TempBasals { get; set; } = [];
 }
 

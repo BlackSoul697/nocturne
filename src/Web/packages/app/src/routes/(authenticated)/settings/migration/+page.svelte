@@ -205,7 +205,7 @@
       case MigrationJobState.Failed:
         return { variant: "destructive", label: "Failed" };
       case MigrationJobState.Cancelled:
-        return { variant: "outline", label: "Cancelled" };
+        return { variant: "outline", label: "Canceled" };
       case MigrationJobState.Interrupted:
         return { variant: "destructive", label: "Interrupted" };
       default:
@@ -429,7 +429,7 @@
                     connectionTestResult = {
                       success: result.isSuccess || false,
                       message: result.isSuccess
-                        ? `Connected successfully! Found ${result.entryCount ?? 0} entries and ${result.treatmentCount ?? 0} treatments.`
+                        ? `Connected. Found ${result.entryCount ?? 0} entries and ${result.treatmentCount ?? 0} treatments.`
                         : result.errorMessage || "Connection failed",
                       entryCount: result.entryCount ?? undefined,
                       treatmentCount: result.treatmentCount ?? undefined,

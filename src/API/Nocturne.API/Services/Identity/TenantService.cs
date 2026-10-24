@@ -10,6 +10,7 @@ using Nocturne.API.Services.Docs;
 using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Entities;
@@ -23,7 +24,7 @@ namespace Nocturne.API.Services.Identity;
 /// <see cref="ITenantRoleService"/> default role seeding, and per-tenant <see cref="IMemoryCache"/> caching.
 /// </summary>
 /// <remarks>
-/// Slugs must match a <c>[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]</c> pattern and cannot be reserved words.
+/// Slugs must match a <c>[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]</c> pattern and cannot be reserved words.
 /// Tenant lookups by slug are cached with a short TTL to reduce database round-trips on every request.
 /// </remarks>
 /// <seealso cref="ITenantService"/>
@@ -64,7 +65,7 @@ public partial class TenantService : ITenantService
         "nightscout", "cgm", "patient", "clinic", "provider",
     ];
 
-    [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$")]
+    [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$")]
     private static partial Regex SlugPattern();
 
     /// <summary>
@@ -258,6 +259,50 @@ public partial class TenantService : ITenantService
         return new TenantSettingsDto(tenant.AllowPublicDocs);
     }
 
+    public async Task<PatientRelationship?> GetPatientRelationshipAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var context = await _factory.CreatePlatformAsync(ct);
+        var tenant = await context.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => new { t.PatientRelationship })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException($"Tenant {id} not found");
+
+        return tenant.PatientRelationship;
+    }
+
+    public async Task SetPatientRelationshipAsync(
+        Guid id, PatientRelationship relationship, CancellationToken ct = default)
+    {
+        await using var context = await _factory.CreatePlatformAsync(ct);
+        var tenant = await context.Tenants.FindAsync([id], ct)
+            ?? throw new KeyNotFoundException($"Tenant {id} not found");
+
+        tenant.PatientRelationship = relationship;
+        await context.SaveChangesAsync(ct);
+    }
+
+    public async Task<string?> GetDefaultGlucoseUnitsAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var context = await _factory.CreatePlatformAsync(ct);
+        return await context.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => t.DefaultGlucoseUnits)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task SetDefaultGlucoseUnitsAsync(Guid id, string units, CancellationToken ct = default)
+    {
+        await using var context = await _factory.CreatePlatformAsync(ct);
+        var tenant = await context.Tenants.FindAsync([id], ct)
+            ?? throw new KeyNotFoundException($"Tenant {id} not found");
+
+        tenant.DefaultGlucoseUnits = units;
+        await context.SaveChangesAsync(ct);
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await using var context = await _factory.CreatePlatformAsync(ct);
@@ -358,14 +403,22 @@ public partial class TenantService : ITenantService
         return new MemberRemovalResult(true);
     }
 
-    public async Task<List<TenantDto>> GetTenantsForSubjectAsync(
-        Guid subjectId, CancellationToken ct = default)
+    public Task<List<TenantDto>> GetTenantsForSubjectAsync(
+        Guid subjectId, CancellationToken ct = default) =>
+        QueryTenantsForSubjectAsync(subjectId, reachableOnly: false, ct);
+
+    public Task<List<TenantDto>> GetReachableTenantsForSubjectAsync(
+        Guid subjectId, CancellationToken ct = default) =>
+        QueryTenantsForSubjectAsync(subjectId, reachableOnly: true, ct);
+
+    private async Task<List<TenantDto>> QueryTenantsForSubjectAsync(
+        Guid subjectId, bool reachableOnly, CancellationToken ct)
     {
         // Genuinely cross-tenant: the answer is the set of tenants this person belongs to, which
         // no single tenant pin can express. The subject pin gives reach over their own rows only.
         await using var context = await _factory.CreateForSubjectAsync(subjectId, ct);
         return await context.TenantMembers.AsNoTracking()
-            .Where(tm => tm.SubjectId == subjectId)
+            .Where(tm => tm.SubjectId == subjectId && (!reachableOnly || tm.Tenant!.IsActive))
             .OrderByDescending(tm => tm.MemberRoles.Any(mr => mr.TenantRole!.Slug == RoleSeeds.Owner))
             .ThenBy(tm => tm.SysCreatedAt)
             .ThenBy(tm => tm.Tenant!.Slug)
@@ -380,7 +433,7 @@ public partial class TenantService : ITenantService
         var normalized = slug.ToLowerInvariant().Trim();
 
         if (!SlugPattern().IsMatch(normalized))
-            return new SlugValidationResult(false, "Slug must be 3-64 characters, alphanumeric and hyphens only, no leading/trailing hyphens");
+            return new SlugValidationResult(false, "Slug must be 3-63 characters, alphanumeric and hyphens only, no leading/trailing hyphens");
 
         if (ReservedSlugs.Contains(normalized))
             return new SlugValidationResult(false, "This name is reserved");

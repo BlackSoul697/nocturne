@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Text.Json;
+using Nocturne.API.Configuration;
 using Nocturne.API.Helpers;
 using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.V4;
@@ -38,6 +39,13 @@ public class DeviceStatusProjectionService
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    private static readonly FrozenSet<string> TypedPropertyNames = NightscoutJsonOptions
+        .Create()
+        .GetTypeInfo(typeof(DeviceStatus))
+        .Properties
+        .Select(property => property.Name)
+        .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public DeviceStatusProjectionService(
         IDeviceStatusGroupRepository groupRepo,
@@ -344,7 +352,7 @@ public class DeviceStatusProjectionService
                     g.Aps is { } aps ? FindOverrideForTimestamp(overrides, aps.Timestamp) : null,
                     g.Extras,
                     _logger);
-                status.SrvModified = new DateTimeOffset(g.ModifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds();
+                status.SrvModified = g.ModifiedAt.ToMills();
                 return status;
             })
             .ToList();
@@ -417,14 +425,14 @@ public class DeviceStatusProjectionService
     private static DeviceStatus NewStatus(
         string id, DateTime timestamp, DateTime createdAt, DateTime modifiedAt, int? utcOffset, string? device)
     {
-        var mills = new DateTimeOffset(timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var mills = timestamp.ToMills();
         return new DeviceStatus
         {
             Id = id,
             Mills = mills,
             Date = mills,
-            SrvModified = new DateTimeOffset(modifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-            SrvCreated = new DateTimeOffset(createdAt, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            SrvModified = modifiedAt.ToMills(),
+            SrvCreated = createdAt.ToMills(),
             // Nightscout clients place a status on the timeline by created_at, so it is the event
             // time; the server clock is srvCreated.
             CreatedAt = timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -592,16 +600,14 @@ public class DeviceStatusProjectionService
                 case "mmtune":
                     ds.MmTune = DeserializeValue<OpenApsMmTune>(value, logger);
                     break;
-                // The record reports the server clock (see ProjectFromSnapshots); a client-supplied
-                // value must neither override it nor re-emit as an extra.
-                case "srvCreated":
-                case "srvModified":
-                    break;
                 // An NS v3 uploader sends its own identifier and it is stored verbatim.
                 // DeviceStatus has no member to absorb it, so re-emitting it would put a
                 // client-supplied value where every reader takes the record's identity from —
                 // including the id of its delete event (see StorageDeleteEvent).
                 case "identifier":
+                    break;
+                // The typed value always wins, and a second key of the same name would serialize twice.
+                case var typed when TypedPropertyNames.Contains(typed):
                     break;
                 default:
                     // Unknown keys go into ExtensionData

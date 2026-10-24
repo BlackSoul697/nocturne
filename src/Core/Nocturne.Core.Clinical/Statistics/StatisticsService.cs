@@ -19,7 +19,7 @@ namespace Nocturne.Core.Clinical.Statistics;
 /// <seealso cref="IStatisticsService"/>
 /// <seealso cref="Entry"/>
 /// <seealso cref="Treatment"/>
-public class StatisticsService : IStatisticsService
+public partial class StatisticsService : IStatisticsService
 {
     /// <summary>
     /// The low end of the 20-600 mg/dL range the Kovatchev risk scale is constructed over, where
@@ -529,7 +529,8 @@ public class StatisticsService : IStatisticsService
     public DataSufficiencyAssessment AssessDataSufficiency(
         IEnumerable<SensorGlucose> entries,
         int days = 14,
-        int expectedReadingsPerDay = 288 // 5-minute intervals = 288/day
+        int expectedReadingsPerDay = 288, // 5-minute intervals = 288/day
+        TimeZoneInfo? timeZone = null
     )
     {
         var entriesList = entries.ToList();
@@ -550,13 +551,12 @@ public class StatisticsService : IStatisticsService
             };
         }
 
-        // Group by date to count days with data
-        var entriesByDate = entriesList
+        var dayZone = timeZone ?? TimeZoneInfo.Utc;
+        var daysWithData = entriesList
             .Where(e => e.Mills > 0)
-            .GroupBy(e => DateTimeOffset.FromUnixTimeMilliseconds(e.Mills).Date)
-            .ToList();
-
-        var daysWithData = entriesByDate.Count;
+            .Select(e => LocalSlotBinning.LocalDay(e.Mills, dayZone))
+            .Distinct()
+            .Count();
         var actualReadings = entriesList.Count;
         var completeness = expectedTotal > 0 ? (double)actualReadings / expectedTotal * 100 : 0;
         var avgPerDay = daysWithData > 0 ? (double)actualReadings / daysWithData : 0;
@@ -707,13 +707,13 @@ public class StatisticsService : IStatisticsService
         var clinicalAssessment = AssessAgainstTargets(baseAnalytics, population);
 
         // Assess data sufficiency
-        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays);
+        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays, timeZone: timeZone);
 
         // Calculate treatment summary if data available
         TreatmentSummary? treatmentSummary = null;
         if (bolusesList.Any() || carbIntakesList.Any())
         {
-            treatmentSummary = CalculateTreatmentSummary(bolusesList, carbIntakesList);
+            treatmentSummary = CalculateTreatmentSummary(bolusesList, carbIntakesList, dayCount: windowDays);
         }
 
         // Propagate reliability from base analytics to GMI
@@ -1265,17 +1265,19 @@ public class StatisticsService : IStatisticsService
     /// A fresh copy of <see cref="Consensus"/>. The model is mutable and the instance is shared by
     /// every tenant, so it never leaves the service itself.
     /// </summary>
-    private static GlycemicThresholds CopyOfConsensus() =>
+    private static GlycemicThresholds CopyOfConsensus() => CopyOf(Consensus);
+
+    private static GlycemicThresholds CopyOf(GlycemicThresholds source) =>
         new()
         {
-            VeryLow = Consensus.VeryLow,
-            Low = Consensus.Low,
-            TargetBottom = Consensus.TargetBottom,
-            TargetTop = Consensus.TargetTop,
-            TightTargetBottom = Consensus.TightTargetBottom,
-            TightTargetTop = Consensus.TightTargetTop,
-            High = Consensus.High,
-            VeryHigh = Consensus.VeryHigh,
+            VeryLow = source.VeryLow,
+            Low = source.Low,
+            TargetBottom = source.TargetBottom,
+            TargetTop = source.TargetTop,
+            TightTargetBottom = source.TightTargetBottom,
+            TightTargetTop = source.TightTargetTop,
+            High = source.High,
+            VeryHigh = source.VeryHigh,
         };
 
     /// <summary>The widest UTC offset any zone uses; a recorded offset beyond it is treated as none.</summary>
@@ -1301,6 +1303,15 @@ public class StatisticsService : IStatisticsService
     public TimeInRangeMetrics CalculateTimeInRange(
         IEnumerable<SensorGlucose> entries,
         GlycemicThresholds? thresholds = null
+    ) => TimeInRangeOverCoverage(entries, thresholds).Metrics;
+
+    /// <summary>
+    /// <see cref="CalculateTimeInRange"/> with the minutes the readings cover, the denominator of
+    /// its percentages, for a caller that combines several windows.
+    /// </summary>
+    private (TimeInRangeMetrics Metrics, double CoveredMinutes) TimeInRangeOverCoverage(
+        IEnumerable<SensorGlucose> entries,
+        GlycemicThresholds? thresholds = null
     )
     {
         thresholds ??= new GlycemicThresholds();
@@ -1318,23 +1329,23 @@ public class StatisticsService : IStatisticsService
 
         if (totalReadings == 0)
         {
-            return new TimeInRangeMetrics
+            return (new TimeInRangeMetrics
             {
+                Thresholds = CopyOf(thresholds),
                 Percentages = new TimeInRangePercentages(),
                 Durations = new TimeInRangeDurations(),
                 Episodes = new TimeInRangeEpisodes(),
                 RangeStats = new TimeInRangeDetailedStats(),
                 AverageDailyMinutes = new AverageDailyMinutes(),
-            };
+                AverageDailyEpisodes = new AverageDailyEpisodes(),
+            }, 0);
         }
 
         // The target and tight-target bands overlap each other, and overlap the excluding zones
         // whenever Low and TargetBottom are configured apart, so they are counted alongside the
         // scale rather than read off it.
         var zones = GlucoseStatistics.ExcludingZones(thresholds);
-        var zoneCounts = new int[zones.ZoneCount];
         var zoneMinutes = new double[zones.ZoneCount];
-        int targetCount = 0, tightTargetCount = 0;
         double targetMinutes = 0, tightTargetMinutes = 0;
         var (instantMinutes, _) = GlucoseCadence.ReadingMinutes(instants);
         for (var i = 0; i < totalReadings; i++)
@@ -1342,36 +1353,12 @@ public class StatisticsService : IStatisticsService
             var v = glucoseValues[i];
             var minutes = instantMinutes[i];
 
-            var zone = zones.Classify(v);
-            zoneCounts[zone]++;
-            zoneMinutes[zone] += minutes;
+            zoneMinutes[zones.Classify(v)] += minutes;
             if (v >= thresholds.TargetBottom && v <= thresholds.TargetTop)
-            {
-                targetCount++;
                 targetMinutes += minutes;
-            }
             if (v >= thresholds.TightTargetBottom && v <= thresholds.TightTargetTop)
-            {
-                tightTargetCount++;
                 tightTargetMinutes += minutes;
-            }
         }
-
-        var veryLowCount = zoneCounts[(int)ExcludingZone.VeryLow];
-        var lowCount = zoneCounts[(int)ExcludingZone.Low];
-        var highCount = zoneCounts[(int)ExcludingZone.High];
-        var veryHighCount = zoneCounts[(int)ExcludingZone.VeryHigh];
-
-        // Calculate percentages
-        var percentages = new TimeInRangePercentages
-        {
-            VeryLow = (double)veryLowCount / totalReadings * 100,
-            Low = (double)lowCount / totalReadings * 100,
-            Target = (double)targetCount / totalReadings * 100,
-            TightTarget = (double)tightTargetCount / totalReadings * 100,
-            High = (double)highCount / totalReadings * 100,
-            VeryHigh = (double)veryHighCount / totalReadings * 100,
-        };
 
         var durations = new TimeInRangeDurations
         {
@@ -1388,21 +1375,37 @@ public class StatisticsService : IStatisticsService
         };
 
         var episodes = CalculateEpisodes(entriesList, thresholds);
+        var coveredMinutes = instantMinutes.Sum();
+        var coveredDays = coveredMinutes / 1440.0;
+
+        var percentages = new TimeInRangePercentages
+        {
+            VeryLow = GlucoseCadence.PercentOfCovered(durations.VeryLow, coveredMinutes),
+            Low = GlucoseCadence.PercentOfCovered(durations.Low, coveredMinutes),
+            Target = GlucoseCadence.PercentOfCovered(durations.Target, coveredMinutes),
+            TightTarget = GlucoseCadence.PercentOfCovered(durations.TightTarget, coveredMinutes),
+            High = GlucoseCadence.PercentOfCovered(durations.High, coveredMinutes),
+            VeryHigh = GlucoseCadence.PercentOfCovered(durations.VeryHigh, coveredMinutes),
+        };
 
         // Calculate per-range detailed statistics
         var rangeZones = RangeStatZones(thresholds);
-        var lowValues = new List<double>(veryLowCount + lowCount);
-        var targetValues = new List<double>(targetCount);
-        var highValues = new List<double>(highCount + veryHighCount);
-        foreach (var v in glucoseValues)
+        var lowValues = new List<double>();
+        var targetValues = new List<double>();
+        var highValues = new List<double>();
+        double lowMinutes = 0, highMinutes = 0;
+        for (var i = 0; i < totalReadings; i++)
         {
+            var v = glucoseValues[i];
             switch ((RangeStatZone)rangeZones.Classify(v))
             {
                 case RangeStatZone.Low:
                     lowValues.Add(v);
+                    lowMinutes += instantMinutes[i];
                     break;
                 case RangeStatZone.High:
                     highValues.Add(v);
+                    highMinutes += instantMinutes[i];
                     break;
             }
 
@@ -1411,64 +1414,103 @@ public class StatisticsService : IStatisticsService
 
         var rangeStats = new TimeInRangeDetailedStats
         {
-            Low = CalculateRangeMetrics("Low", lowValues, totalReadings),
-            Target = CalculateRangeMetrics("In Range", targetValues, totalReadings),
-            High = CalculateRangeMetrics("High", highValues, totalReadings),
+            Low = CalculateRangeMetrics("Low", lowValues, lowMinutes, coveredMinutes),
+            Target = CalculateRangeMetrics("In Range", targetValues, targetMinutes, coveredMinutes),
+            High = CalculateRangeMetrics("High", highValues, highMinutes, coveredMinutes),
         };
 
-        return new TimeInRangeMetrics
+        return (new TimeInRangeMetrics
         {
+            Thresholds = CopyOf(thresholds),
             Percentages = percentages,
             Durations = durations,
             Episodes = episodes,
             RangeStats = rangeStats,
-            AverageDailyMinutes = AverageDailyMinutesFrom(percentages),
+            AverageDailyMinutes = AverageDailyMinutesFrom(durations, coveredDays),
+            AverageDailyEpisodes = AverageDailyEpisodesFrom(episodes, coveredDays),
+        }, coveredMinutes);
+    }
+
+    private static AverageDailyEpisodes AverageDailyEpisodesFrom(
+        TimeInRangeEpisodes episodes,
+        double coveredDays
+    )
+    {
+        double PerDay(int count) => coveredDays > 0 ? count / coveredDays : 0;
+
+        return new AverageDailyEpisodes
+        {
+            VeryLow = PerDay(episodes.VeryLow),
+            Low = PerDay(episodes.Low),
+            High = PerDay(episodes.High),
+            VeryHigh = PerDay(episodes.VeryHigh),
+            AboveRange = PerDay(episodes.AboveRange),
+            BelowRange = PerDay(episodes.BelowRange),
         };
     }
 
-    /// <summary>
-    /// The average minutes per day in each zone, from the percentages rather than the recorded
-    /// durations. Percentages sum to 100, so the three zones account for a whole day even when the
-    /// data has gaps; <see cref="TimeInRangeDurations"/> would not.
-    /// </summary>
-    private static AverageDailyMinutes AverageDailyMinutesFrom(TimeInRangePercentages percentages) =>
-        new()
+    private static AverageDailyMinutes AverageDailyMinutesFrom(
+        TimeInRangeDurations durations,
+        double coveredDays
+    )
+    {
+        double PerDay(double minutes) => coveredDays > 0 ? minutes / coveredDays : 0;
+
+        return new AverageDailyMinutes
         {
-            Target = percentages.Target / 100.0 * 1440.0,
-            Low = (percentages.VeryLow + percentages.Low) / 100.0 * 1440.0,
-            High = (percentages.High + percentages.VeryHigh) / 100.0 * 1440.0,
+            Target = PerDay(durations.Target),
+            Low = PerDay(durations.BelowRange),
+            High = PerDay(durations.AboveRange),
         };
+    }
 
     /// <inheritdoc/>
     public PersonalRangeTimeInRange? CalculatePersonalRangeTime(
         IEnumerable<SensorGlucose> entries,
         List<TargetRangeEntry> scheduleEntries,
-        TimeZoneInfo tenantTimeZone
+        TimeZoneInfo? tenantTimeZone
     )
     {
         if (scheduleEntries.Count == 0)
+            return null;
+
+        var isFlat = scheduleEntries.Count == 1;
+        if (tenantTimeZone is null && !isFlat)
             return null;
 
         // The active entry is a pure function of local minute-of-day (entry times are HH:mm),
         // so each of the at-most-1440 minutes is resolved once instead of per reading.
         var rangeByMinute = new (double Low, double High)?[1440];
 
-        int below = 0, within = 0, above = 0;
-        foreach (var entry in entries)
+        (double Low, double High) RangeAt(SensorGlucose reading)
         {
-            var value = entry.Mgdl;
-            if (!IsPlausibleReading(value))
-                continue;
-
-            var minute =
-                ScheduleTimeHelper.GetSecondsFromMidnight(entry.Mills, tenantTimeZone) / 60;
-            var range = rangeByMinute[minute] ??= ScheduleResolution
+            var minute = isFlat
+                ? 0
+                : ScheduleEntryTime.SecondsOfDay(reading.Mills, tenantTimeZone) / 60;
+            return rangeByMinute[minute] ??= ScheduleResolution
                 .FindRangeAtTime(scheduleEntries, minute * 60)!
                 .Value;
+        }
 
-            if (value < range.Low) below++;
-            else if (value > range.High) above++;
-            else within++;
+        var readings = GlucoseCadence.Instants(
+            InTimeOrder(entries.Where(IsPlausibleReading)),
+            reading => RangeAt(reading) switch
+            {
+                var range when reading.Mgdl < range.Low => RangeSide.Below,
+                var range when reading.Mgdl > range.High => RangeSide.Above,
+                _ => RangeSide.Within,
+            });
+        var (readingMinutes, _) = GlucoseCadence.ReadingMinutes(readings);
+
+        double below = 0, within = 0, above = 0;
+        for (var i = 0; i < readings.Count; i++)
+        {
+            var reading = readings[i];
+            var range = RangeAt(reading);
+
+            if (reading.Mgdl < range.Low) below += readingMinutes[i];
+            else if (reading.Mgdl > range.High) above += readingMinutes[i];
+            else within += readingMinutes[i];
         }
 
         var total = below + within + above;
@@ -1477,9 +1519,9 @@ public class StatisticsService : IStatisticsService
 
         return new PersonalRangeTimeInRange
         {
-            BelowRangePercent = (double)below / total * 100,
-            InRangePercent = (double)within / total * 100,
-            AboveRangePercent = (double)above / total * 100,
+            BelowRangePercent = GlucoseCadence.PercentOfCovered(below, total),
+            InRangePercent = GlucoseCadence.PercentOfCovered(within, total),
+            AboveRangePercent = GlucoseCadence.PercentOfCovered(above, total),
             Entries = scheduleEntries,
         };
     }
@@ -1490,7 +1532,8 @@ public class StatisticsService : IStatisticsService
     private PeriodMetrics CalculateRangeMetrics(
         string rangeName,
         List<double> values,
-        int totalReadings
+        double rangeMinutes,
+        double coveredMinutes
     )
     {
         if (values.Count == 0)
@@ -1509,7 +1552,7 @@ public class StatisticsService : IStatisticsService
             Mean = Math.Round(mean, 1),
             Median = Math.Round(median, 1),
             StandardDeviation = Math.Round(stdDev, 1),
-            TimeInRange = Math.Round((double)values.Count / totalReadings * 100, 1),
+            TimeInRange = Math.Round(GlucoseCadence.PercentOfCovered(rangeMinutes, coveredMinutes), 1),
             Min = values.Min(),
             Max = values.Max(),
         };
@@ -2141,6 +2184,7 @@ public class StatisticsService : IStatisticsService
             TotalBasal = 0,
             TotalInsulin = Math.Round(totalBolus * 100) / 100,
             TotalCarbs = Math.Round(totalCarbs * 10) / 10,
+            CarbsPerDay = Math.Round(totalCarbs / dayCount * 10) / 10,
             ManualBolusCount = manualCount,
             AutomaticBolusCount = automaticList.Count,
             BasalCount = 0,
@@ -2198,6 +2242,18 @@ public class StatisticsService : IStatisticsService
     /// See <see cref="ClipOverlappingTempBasals"/>.
     /// </summary>
     private static readonly TimeSpan MaxOpenTempDuration = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// Where to start reading temp basals for a window starting at <paramref name="windowStart"/>:
+    /// <see cref="MaxOpenTempDuration"/> before it, so an open temp, or a pump-set one (no pump
+    /// accepts longer), still running at the window's start is in the input. A closed segment longer
+    /// than that which starts before this point is not read. A start-ordered read from here is a
+    /// range scan on the start index.
+    /// </summary>
+    public static DateTime TempBasalReadStart(DateTime windowStart) =>
+        windowStart <= DateTime.MinValue + MaxOpenTempDuration
+            ? DateTime.MinValue
+            : windowStart - MaxOpenTempDuration;
 
     /// <summary>
     /// Temp basals as delivered: each piece of a record during which it set the pump's rate, as a
@@ -2288,6 +2344,33 @@ public class StatisticsService : IStatisticsService
         return [.. result.OrderBy(tb => tb.StartMills)];
     }
 
+    /// <summary>
+    /// The part of each delivered piece (<see cref="ClipOverlappingTempBasals"/>) that lies inside
+    /// the window from <paramref name="startDate"/> to <paramref name="untilMills"/>. Every figure
+    /// computed over a window reads temp basals through this, so a temp that straddles either edge
+    /// counts only the time it ran inside.
+    /// </summary>
+    /// <remarks>
+    /// A reader fetches from <see cref="TempBasalReadStart"/>, so a temp that began before the window
+    /// is in the input.
+    /// </remarks>
+    public static List<TempBasal> DeliveredWithin(
+        IEnumerable<TempBasal> tempBasals, DateTime startDate, long untilMills)
+    {
+        var startMills = startDate.ToMills();
+        var result = new List<TempBasal>();
+        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        {
+            var start = Math.Max(tb.StartMills, startMills);
+            var end = Math.Min(tb.EndMills!.Value, untilMills);
+            if (end <= start)
+                continue;
+            result.Add(start == tb.StartMills && end == tb.EndMills ? tb : tb.WithSpan(start, end));
+        }
+
+        return result;
+    }
+
     private static long OpenEndBound(List<(string Key, List<TempBasal> Temps)> rankedStreams, int rank, long startMills)
     {
         var bound = startMills + (long)MaxOpenTempDuration.TotalMilliseconds;
@@ -2317,7 +2400,7 @@ public class StatisticsService : IStatisticsService
     /// The insulin (U) a delivered temp basal from <see cref="ClipOverlappingTempBasals"/> gave.
     /// Null when the rate is unknown.
     /// </summary>
-    internal static double? GetTempBasalInsulin(TempBasal delivered) =>
+    public static double? GetTempBasalInsulin(TempBasal delivered) =>
         delivered.Rate * ((delivered.EndMills!.Value - delivered.StartMills) / (1000.0 * 60 * 60));
 
     /// <summary>
@@ -2345,7 +2428,7 @@ public class StatisticsService : IStatisticsService
         var scheduledBasalInsulin = 0.0;
         var additionalBasalInsulin = 0.0;
         var tempBasalCount = 0;
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } insulin || insulin <= 0)
                 continue;
@@ -2417,6 +2500,7 @@ public class StatisticsService : IStatisticsService
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        DateTime startDate,
         long untilMills,
         TimeZoneInfo userTimeZone,
         IEnumerable<BasalInjection>? basalInjections = null,
@@ -2446,7 +2530,7 @@ public class StatisticsService : IStatisticsService
             Accumulate(bolus.Mills, 0, bolus.Insulin, 0);
         }
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } basalInsulin || basalInsulin <= 0)
                 continue;
@@ -2547,7 +2631,8 @@ public class StatisticsService : IStatisticsService
     /// with each <paramref name="userTimeZone"/>-local hour-of-day bucket: a TempBasal that runs
     /// 13:55–14:25 local contributes 5 minutes to bucket 13 and 25 minutes to bucket 14. When
     /// <paramref name="userTimeZone"/> is null there is no local hour to bucket on, so the hourly
-    /// percentiles are empty and every other figure is unaffected.
+    /// percentiles are empty and every other figure is unaffected. <see cref="BasalStats.AvgRate"/>
+    /// weights each delivered piece by the time it ran.
     /// </summary>
     public BasalAnalysisResponse CalculateBasalAnalysis(
         IEnumerable<TempBasal> tempBasals,
@@ -2557,11 +2642,13 @@ public class StatisticsService : IStatisticsService
         TimeZoneInfo? userTimeZone = null
     )
     {
-        var tempBasalList = ClipOverlappingTempBasals(tempBasals, untilMills);
+        var tempBasalList = DeliveredWithin(tempBasals, startDate, untilMills);
         var dayCount = WindowDays(startDate, endDate);
 
         var allRates = new List<double>();
         double totalDelivered = 0;
+        double rateTimeMs = 0;
+        long totalDurationMs = 0;
         int tempBasalCount = 0;
         int highTempCount = 0;
         int lowTempCount = 0;
@@ -2577,6 +2664,9 @@ public class StatisticsService : IStatisticsService
                 continue;
             allRates.Add(rate);
             totalDelivered += GetTempBasalInsulin(tb) ?? 0;
+            var durationMs = tb.EndMills!.Value - tb.StartMills;
+            rateTimeMs += rate * durationMs;
+            totalDurationMs += durationMs;
 
             if (userTimeZone is not null)
                 DistributeAcrossHourOfDay(tb.StartMills, tb.EndMills!.Value, rate, userTimeZone, hourlyRates);
@@ -2600,7 +2690,7 @@ public class StatisticsService : IStatisticsService
         var basalStats = new BasalStats
         {
             Count = tempBasalList.Count,
-            AvgRate = allRates.Count > 0 ? Math.Round(allRates.Average() * 100) / 100 : 0,
+            AvgRate = totalDurationMs > 0 ? Math.Round(rateTimeMs / totalDurationMs * 100) / 100 : 0,
             MinRate = allRates.Count > 0 ? Math.Round(allRates.Min() * 100) / 100 : 0,
             MaxRate = allRates.Count > 0 ? Math.Round(allRates.Max() * 100) / 100 : 0,
             TotalDelivered = Math.Round(totalDelivered * 100) / 100,
@@ -2675,7 +2765,7 @@ public class StatisticsService : IStatisticsService
         var basalDays = new HashSet<DateOnly>();
         var bolusDays = new HashSet<DateOnly>();
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
+        foreach (var tb in DeliveredWithin(tempBasals, startDate, untilMills))
         {
             if (tb.Rate is not { } rate)
                 continue;
@@ -3027,7 +3117,7 @@ public class StatisticsService : IStatisticsService
                     TimeOfAnalysis = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 },
                 BasicStats = new BasicGlucoseStats(),
-                TimeInRange = new TimeInRangeMetrics(),
+                TimeInRange = new TimeInRangeMetrics { Thresholds = CopyOf(config.Thresholds) },
                 DataQuality = new DataQuality(),
             };
         }
@@ -3229,6 +3319,7 @@ public class StatisticsService : IStatisticsService
     {
         var result = new SiteChangeImpactAnalysis
         {
+            Thresholds = CopyOfConsensus(),
             HoursBeforeChange = hoursBeforeChange,
             HoursAfterChange = hoursAfterChange,
             BucketSizeMinutes = bucketSizeMinutes,

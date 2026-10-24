@@ -335,6 +335,14 @@ class SyncedPref<T> implements SyncedEntry {
     persistLocal(this._key, value);
   }
 
+  /**
+   * Show a value this device has no stored choice for, without storing it: a default the viewer
+   * inherits, which their own later choice replaces. Browser-only, like {@link hydrate}.
+   */
+  showDefault(value: T): void {
+    if (localStorage.getItem(this._key) === null) this._value = value;
+  }
+
   /** Hydrate from a preference payload, leaving the current value alone when unset. */
   hydrateFrom(prefs: UserDisplayPreferences): void {
     const value = this._read(prefs);
@@ -922,6 +930,17 @@ export function reconcilePreferences(serverPrefs: UserDisplayPreferences | null 
 }
 
 /**
+ * Shows the tenant's default glucose units to a member with no units stored anywhere: not on the
+ * server (reconciled first) and not on this device. Nothing is written, so the default is never
+ * mistaken for the member's own choice and seeded back as one.
+ */
+export function showTenantDefaultUnits(units: string | null | undefined): void {
+  if (!browser) return;
+  const parsed = oneOfPref(GLUCOSE_UNITS)(units);
+  if (parsed) glucoseUnits.showDefault(parsed);
+}
+
+/**
  * Draw a share as its owner draws it: the owner's presentation, and the default for every field
  * the owner left unset, never the viewer's own preferences, which the base-domain cookie still
  * carries onto the share host. Nothing is stored, so the owner's values never become the viewer's.
@@ -1188,7 +1207,7 @@ export function regionFormatLabel(tag: RegionFormat): string {
 
   const sample = REGION_SAMPLE_DATE.toLocaleDateString(tag);
   const weekStart = weekStartName(tag, preferredLanguage.current);
-  return `${name} — ${sample}, weeks start ${weekStart}`;
+  return `${name}: ${sample}, weeks start ${weekStart}`;
 }
 
 /**

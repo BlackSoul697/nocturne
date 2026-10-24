@@ -119,6 +119,7 @@ public class DataOverviewService : IDataOverviewService
             AvailableDataSources = allDataSources
                 .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
+            Thresholds = _statisticsService.HourlyBandThresholds,
             TimeZoneUnavailableReason = clock.Reason,
         };
     }
@@ -890,10 +891,10 @@ public class DataOverviewService : IDataOverviewService
             var max = await timestampQuery.MaxAsync(cancellationToken);
             return (
                 min.HasValue
-                    ? new DateTimeOffset(min.Value, TimeSpan.Zero).ToUnixTimeMilliseconds()
+                    ? min.Value.ToMills()
                     : null,
                 max.HasValue
-                    ? new DateTimeOffset(max.Value, TimeSpan.Zero).ToUnixTimeMilliseconds()
+                    ? max.Value.ToMills()
                     : null
             );
         }

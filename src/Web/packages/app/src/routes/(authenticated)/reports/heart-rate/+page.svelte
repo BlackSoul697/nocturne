@@ -66,14 +66,6 @@
   const bpmMax = $derived(Math.min(220, maxBpm + 10));
 </script>
 
-<svelte:head>
-  <title>Heart Rate - Nocturne Reports</title>
-  <meta
-    name="description"
-    content="Heart rate actogram with glucose overlay"
-  />
-</svelte:head>
-
 <div class="@container space-y-6">
   <div class="print:hidden">
     <p class="text-muted-foreground">

@@ -97,14 +97,6 @@
   );
 </script>
 
-<svelte:head>
-  <title>Battery Report - Nocturne</title>
-  <meta
-    name="description"
-    content="Device battery statistics and charge cycle history"
-  />
-</svelte:head>
-
 {#if batteryResource.current}
 <div class="@container space-y-6">
   <div class="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between print:hidden">

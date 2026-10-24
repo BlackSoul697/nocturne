@@ -110,14 +110,6 @@
   const dayCount = $derived(insulinResource.date.dayCount);
 </script>
 
-<svelte:head>
-  <title>Insulin Delivery Report - Nocturne Reports</title>
-  <meta
-    name="description"
-    content="Analyze your insulin delivery patterns including basal/bolus ratios and TDD trends"
-  />
-</svelte:head>
-
 {#if insulinResource.current}
 <div class="@container space-y-8">
   <div class="space-y-4">

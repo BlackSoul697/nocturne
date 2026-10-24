@@ -1,4 +1,5 @@
 using System.Globalization;
+using Nocturne.Core.Models;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
@@ -65,6 +66,26 @@ public static class LocalSlotBinning
     }
 
     public static DateOnly LocalDay(long mills, TimeZoneInfo tz) => DateOnly.FromDateTime(LocalTime(mills, tz));
+
+    /// <summary>
+    /// The first and last local day in <paramref name="tz"/> of the instants <paramref name="from"/> and
+    /// <paramref name="to"/>, which are read as UTC.
+    /// </summary>
+    public static (DateOnly First, DateOnly Last) LocalDaySpan(DateTime from, DateTime to, TimeZoneInfo tz) =>
+        (LocalDay(from.ToMills(), tz), LocalDay(to.ToMills(), tz));
+
+    /// <summary>
+    /// Every local day in <paramref name="tz"/> from the day of <paramref name="from"/> through the day of
+    /// <paramref name="to"/>, inclusive, oldest first. Empty when <paramref name="to"/> falls on an earlier day.
+    /// </summary>
+    public static IReadOnlyList<DateOnly> LocalDays(DateTime from, DateTime to, TimeZoneInfo tz)
+    {
+        var (first, last) = LocalDaySpan(from, to, tz);
+        var days = new List<DateOnly>();
+        for (var day = first; day <= last; day = day.AddDays(1))
+            days.Add(day);
+        return days;
+    }
 
     /// <summary>
     /// The local days <paramref name="from"/> to <paramref name="to"/> (exclusive) touch, whole: day

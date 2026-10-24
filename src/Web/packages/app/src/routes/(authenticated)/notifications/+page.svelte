@@ -67,7 +67,7 @@
     [CompletionReason.Refilled]: "Refilled",
     [CompletionReason.Attended]: "Attended",
     [CompletionReason.Rescheduled]: "Rescheduled",
-    [CompletionReason.Cancelled]: "Cancelled",
+    [CompletionReason.Cancelled]: "Canceled",
     [CompletionReason.Missed]: "Missed",
   };
 
@@ -248,7 +248,7 @@
                 autoplay="once"
                 class="mx-auto mb-3 size-48"
               />
-              <p>All caught up! No active tracker alerts.</p>
+              <p>No active tracker alerts.</p>
             </div>
           {:else}
             <div class="space-y-3">
