@@ -110,26 +110,9 @@ public class ReadEndpointScopeEnforcementTests
 
         /// <summary>Every caller may ask; the action drops or refuses the parts the caller's scopes do not read.</summary>
         public const string CallerNarrowedAnswer = "answer narrowed to the caller's read scopes in the action";
-
-        /// <summary>The controller carries <c>[Authorize(Roles = "platform_admin")]</c>.</summary>
-        public const string PlatformAdminRole = "platform-admin role, not a data scope";
-
-        /// <summary>The controller carries <c>[RequireInstanceKeyAuth]</c>.</summary>
-        public const string InstanceKey = "instance-key service credential, not a data scope";
     }
 
-    private static readonly IReadOnlyDictionary<string, string> V4ExemptControllers =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["AccessRequestController"] = V4Reason.PlatformAdminRole,
-            ["ConnectorAdminController"] = V4Reason.PlatformAdminRole,
-            ["DemoAdminController"] = V4Reason.PlatformAdminRole,
-            ["OidcProviderAdminController"] = V4Reason.PlatformAdminRole,
-            ["PlatformSettingsController"] = V4Reason.PlatformAdminRole,
-            ["TenantController"] = V4Reason.PlatformAdminRole,
-            ["TenantDirectGrantController"] = V4Reason.PlatformAdminRole,
-            ["ChatIdentityDirectoryController"] = V4Reason.InstanceKey,
-        };
+    private static IReadOnlyDictionary<string, string> V4ExemptControllers => V4ScopeGuardExemptions.Controllers;
 
     private static readonly IReadOnlyDictionary<string, string> V4ExemptReadActions =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -332,15 +315,8 @@ public class ReadEndpointScopeEnforcementTests
                 .Single(t => t.Name == name && IsV4(t))
                 .GetCustomAttributes(inherit: true);
 
-            var holds = reason switch
-            {
-                V4Reason.PlatformAdminRole => attributes.OfType<AuthorizeAttribute>()
-                    .Any(a => a.Roles?.Contains("platform_admin", StringComparison.Ordinal) == true),
-                V4Reason.InstanceKey => attributes.Any(a => a.GetType().Name == "RequireInstanceKeyAuthAttribute"),
-                _ => false,
-            };
-
-            holds.Should().BeTrue($"{name} claims '{reason}' but does not carry it");
+            V4ScopeGuardExemptions.Carries(attributes, reason)
+                .Should().BeTrue($"{name} claims '{reason}' but does not carry it");
         }
     }
 

@@ -64,6 +64,13 @@ public interface ITenantService
     /// </summary>
     Task<List<TenantDto>> GetTenantsForSubjectAsync(Guid subjectId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Returns the tenants the specified subject can go to: those of
+    /// <see cref="GetTenantsForSubjectAsync"/> that are active, in the same order. An inactive
+    /// tenant's host answers 403 on every path, so it is never somewhere to send anyone.
+    /// </summary>
+    Task<List<TenantDto>> GetReachableTenantsForSubjectAsync(Guid subjectId, CancellationToken ct = default);
+
     /// <summary>Checks whether a slug is valid and available for use.</summary>
     Task<SlugValidationResult> ValidateSlugAsync(string slug, CancellationToken ct = default);
 

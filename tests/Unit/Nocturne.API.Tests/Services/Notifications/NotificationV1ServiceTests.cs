@@ -20,6 +20,7 @@ public class NotificationV1ServiceTests
     private readonly Mock<ISignalRBroadcastService> _mockSignalRBroadcastService;
     private readonly Mock<IPushoverService> _mockPushoverService;
     private readonly LegacyAlarmSnoozeStore _snoozes = new(TimeProvider.System);
+    private readonly LegacyNotificationStore _notifications = new(TimeProvider.System);
     private static readonly Guid TenantA = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static readonly Guid TenantB = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private readonly NotificationV1Service _service;
@@ -40,6 +41,7 @@ public class NotificationV1ServiceTests
             _mockSignalRBroadcastService.Object,
             Mock.Of<ITenantAccessor>(a => a.TenantId == tenantId),
             _snoozes,
+            _notifications,
             pushover
         );
 
@@ -141,6 +143,102 @@ public class NotificationV1ServiceTests
         Assert.True(firstResult.Success);
         Assert.False(secondResult.Success);
         Assert.Contains("already been snoozed", secondResult.Message);
+    }
+
+    [Fact]
+    public async Task ProcessPushoverCallbackAsync_ReceiptRegisteredInAnotherRequest_AcknowledgesItsAlarm()
+    {
+        CreateService(TenantA).RegisterPushoverReceipt("receipt-1", 1, "default");
+        var callback = new PushoverCallbackRequest
+        {
+            Receipt = "receipt-1",
+            Status = 1,
+            AcknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
+
+        var result = await CreateService(TenantA).ProcessPushoverCallbackAsync(callback, CancellationToken.None);
+
+        Assert.True(result.Success);
+        var snoozeAgain = await CreateService(TenantA).AckNotificationAsync(
+            new NotificationAckRequest { Level = 1, Group = "default" },
+            CancellationToken.None
+        );
+        Assert.False(snoozeAgain.Success);
+        Assert.Equal(0, CreateService(TenantA).GetActivePushoverReceiptCount());
+    }
+
+    [Fact]
+    public async Task ProcessPushoverCallbackAsync_ReceiptOfAnotherTenant_LeavesAlarmAndReceiptAlone()
+    {
+        CreateService(TenantA).RegisterPushoverReceipt("receipt-1", 1, "default");
+        var callback = new PushoverCallbackRequest
+        {
+            Receipt = "receipt-1",
+            Status = 1,
+            AcknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
+
+        await CreateService(TenantB).ProcessPushoverCallbackAsync(callback, CancellationToken.None);
+
+        var snooze = await CreateService(TenantA).AckNotificationAsync(
+            new NotificationAckRequest { Level = 1, Group = "default" },
+            CancellationToken.None
+        );
+        Assert.True(snooze.Success);
+        Assert.Equal(1, CreateService(TenantA).GetActivePushoverReceiptCount());
+    }
+
+    [Fact]
+    public async Task GetAdminNotifiesAsync_NotificationAddedInAnotherRequest_IsStillThere()
+    {
+        _mockAuthorizationService
+            .Setup(a => a.CheckPermissionAsync("admin", "*:*:admin"))
+            .ReturnsAsync(true);
+        await CreateService(TenantA).AddAdminNotificationAsync(
+            new AdminNotification { Title = "t", Message = "kept across requests" },
+            CancellationToken.None
+        );
+
+        var result = await CreateService(TenantA).GetAdminNotifiesAsync("admin", CancellationToken.None);
+
+        Assert.Equal("kept across requests", Assert.Single(result.Message.Notifies).Message);
+    }
+
+    [Fact]
+    public async Task GetAdminNotifiesAsync_NotificationOfAnotherTenant_IsNotCountedOrShown()
+    {
+        _mockAuthorizationService
+            .Setup(a => a.CheckPermissionAsync("admin", "*:*:admin"))
+            .ReturnsAsync(true);
+        await CreateService(TenantA).AddAdminNotificationAsync(
+            new AdminNotification { Title = "t", Message = "tenant a only" },
+            CancellationToken.None
+        );
+
+        var result = await CreateService(TenantB).GetAdminNotifiesAsync("admin", CancellationToken.None);
+
+        Assert.Empty(result.Message.Notifies);
+        Assert.Equal(0, result.Message.NotifyCount);
+    }
+
+    [Fact]
+    public async Task ClearAllAdminNotificationsAsync_ClearsOnlyTheCallersTenant()
+    {
+        await CreateService(TenantA).AddAdminNotificationAsync(
+            new AdminNotification { Title = "t", Message = "a" },
+            CancellationToken.None
+        );
+        await CreateService(TenantB).AddAdminNotificationAsync(
+            new AdminNotification { Title = "t", Message = "b" },
+            CancellationToken.None
+        );
+
+        await CreateService(TenantA).ClearAllAdminNotificationsAsync(CancellationToken.None);
+
+        var a = await CreateService(TenantA).GetAdminNotifiesAsync(null, CancellationToken.None);
+        var b = await CreateService(TenantB).GetAdminNotifiesAsync(null, CancellationToken.None);
+        Assert.Equal(0, a.Message.NotifyCount);
+        Assert.Equal(1, b.Message.NotifyCount);
     }
 
     [Fact]
@@ -306,8 +404,8 @@ public class NotificationV1ServiceTests
     public void GetActivePushoverReceiptCount_ReturnsCorrectCount()
     {
         // Arrange
-        _service.RegisterPushoverReceipt("receipt1", 1, "group1", "title1", "message1");
-        _service.RegisterPushoverReceipt("receipt2", 2, "group2", "title2", "message2");
+        _service.RegisterPushoverReceipt("receipt1", 1, "group1");
+        _service.RegisterPushoverReceipt("receipt2", 2, "group2");
 
         // Act
         var count = _service.GetActivePushoverReceiptCount();
@@ -323,13 +421,11 @@ public class NotificationV1ServiceTests
         var receipt = "test-receipt-456";
         var level = 2;
         var group = "urgent";
-        var title = "Urgent Alert";
-        var message = "This is urgent";
 
         var initialCount = _service.GetActivePushoverReceiptCount();
 
         // Act
-        _service.RegisterPushoverReceipt(receipt, level, group, title, message);
+        _service.RegisterPushoverReceipt(receipt, level, group);
 
         // Assert
         var newCount = _service.GetActivePushoverReceiptCount();
@@ -343,26 +439,11 @@ public class NotificationV1ServiceTests
         var initialCount = _service.GetActivePushoverReceiptCount();
 
         // Act
-        _service.RegisterPushoverReceipt("", 1, "group", "title", "message");
+        _service.RegisterPushoverReceipt("", 1, "group");
 
         // Assert
         var newCount = _service.GetActivePushoverReceiptCount();
         Assert.Equal(initialCount, newCount);
-    }
-
-    [Fact]
-    public void CleanExpiredPushoverReceipts_RemovesExpiredReceipts()
-    {
-        // Arrange
-        // Register a receipt that would be considered expired
-        _service.RegisterPushoverReceipt("expired-receipt", 1, "group", "title", "message");
-        var initialCount = _service.GetActivePushoverReceiptCount();
-
-        // Act
-        _service.CleanExpiredPushoverReceipts(); // Assert
-        // Since we can't easily mock time, we just verify the method doesn't throw
-        // In a real implementation, you might use IDateTimeProvider for better testability
-        Assert.True(true); // Method completed without exception
     }
 
     [Fact]

@@ -403,14 +403,22 @@ public partial class TenantService : ITenantService
         return new MemberRemovalResult(true);
     }
 
-    public async Task<List<TenantDto>> GetTenantsForSubjectAsync(
-        Guid subjectId, CancellationToken ct = default)
+    public Task<List<TenantDto>> GetTenantsForSubjectAsync(
+        Guid subjectId, CancellationToken ct = default) =>
+        QueryTenantsForSubjectAsync(subjectId, reachableOnly: false, ct);
+
+    public Task<List<TenantDto>> GetReachableTenantsForSubjectAsync(
+        Guid subjectId, CancellationToken ct = default) =>
+        QueryTenantsForSubjectAsync(subjectId, reachableOnly: true, ct);
+
+    private async Task<List<TenantDto>> QueryTenantsForSubjectAsync(
+        Guid subjectId, bool reachableOnly, CancellationToken ct)
     {
         // Genuinely cross-tenant: the answer is the set of tenants this person belongs to, which
         // no single tenant pin can express. The subject pin gives reach over their own rows only.
         await using var context = await _factory.CreateForSubjectAsync(subjectId, ct);
         return await context.TenantMembers.AsNoTracking()
-            .Where(tm => tm.SubjectId == subjectId)
+            .Where(tm => tm.SubjectId == subjectId && (!reachableOnly || tm.Tenant!.IsActive))
             .OrderByDescending(tm => tm.MemberRoles.Any(mr => mr.TenantRole!.Slug == RoleSeeds.Owner))
             .ThenBy(tm => tm.SysCreatedAt)
             .ThenBy(tm => tm.Tenant!.Slug)

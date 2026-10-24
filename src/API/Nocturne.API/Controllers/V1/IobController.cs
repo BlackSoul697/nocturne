@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.API.Services.Analytics;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
@@ -176,21 +177,22 @@ public class IobController : ControllerBase
             var endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var calculationStartTime = startTime ?? (endTime - (hours * 60 * 60 * 1000));
 
-            // Query boluses and temp basals covering the full calculation window plus 8h DIA before it
-            var fetchFromMills = calculationStartTime - 8 * 60 * 60 * 1000L;
-            var fetchFrom = DateTimeOffset.FromUnixTimeMilliseconds(fetchFromMills).UtcDateTime;
-            var boluses = (await _bolusRepository.GetAsync(
-                from: fetchFrom, to: null, device: null, source: null,
-                limit: 2000, offset: 0, descending: false, ct: cancellationToken
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: fetchFrom, to: null, device: null, source: null,
-                limit: ChartDataService.TempBasalQueryLimit, offset: 0, descending: false, ct: cancellationToken
-            )).ToList();
-
             var totalIntervals = (hours * 60) / intervalMinutes;
             var intervalMs = intervalMinutes * 60 * 1000L;
             var lastSlot = calculationStartTime + (totalIntervals - 1) * intervalMs;
+
+            var fetchFromMills = calculationStartTime - DailyProfileCalculator.ActingMs;
+            var fetchFrom = DateTimeOffset.FromUnixTimeMilliseconds(fetchFromMills).UtcDateTime;
+            var fetchTo = DateTimeOffset.FromUnixTimeMilliseconds(lastSlot).UtcDateTime;
+            var boluses = (await _bolusRepository.GetAsync(
+                from: fetchFrom, to: fetchTo, device: null, source: null,
+                limit: 2000, offset: 0, descending: false, ct: cancellationToken
+            )).ToList();
+            var tempBasals = (await _tempBasalRepository.GetAsync(
+                from: fetchFrom, to: fetchTo, device: null, source: null,
+                limit: ChartDataService.TempBasalQueryLimit, offset: 0, descending: false, ct: cancellationToken
+            )).ToList();
+
             var timeline = await _therapyTimelineResolver.BuildAsync(fetchFromMills, lastSlot + 1, ct: cancellationToken);
             var deviceFrom = DateTimeOffset.FromUnixTimeMilliseconds(calculationStartTime - DeviceReportedValues.RecencyThresholdMs).UtcDateTime;
             var deviceTo = DateTimeOffset.FromUnixTimeMilliseconds(lastSlot + DeviceReportedValues.FutureSkewToleranceMs).UtcDateTime;

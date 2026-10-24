@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -56,16 +55,10 @@ public class V4WriteScopeGatingTests
     /// </summary>
     private static class NotDataCategory
     {
-        /// <summary>Platform operator surface; the class carries [Authorize(Roles = "platform_admin")].</summary>
-        public const string PlatformAdminRole = "platform-admin role, not a data scope";
-
         /// <summary>
         /// Superuser-only surface; [RequireSuperuser] on the class or on every write action.
         /// </summary>
         public const string SuperuserAttribute = "superuser attribute, not a data scope";
-
-        /// <summary>Service-to-service surface; the class carries [RequireInstanceKeyAuth].</summary>
-        public const string InstanceKey = "instance-key service credential, not a data scope";
 
         /// <summary>Registered only when the API runs in Development.</summary>
         public const string DevelopmentOnly = "dev-only controller, absent outside Development";
@@ -133,17 +126,6 @@ public class V4WriteScopeGatingTests
         public const string PerRecordGuard = "per-record scope enforced in the handler";
 
         /// <summary>
-        /// Mints a capability rather than storing an observation, and the vocabulary that should
-        /// govern it is split: the permission atoms are <c>sharing.manage</c>/<c>sharing.guest</c>
-        /// while the OAuth scope is <c>sharing.readwrite</c>, which no seed role maps to and
-        /// <see cref="Scope.Normalize"/> keeps only for a client that was granted it
-        /// directly. Requiring either would strip the capability from every non-owner role, so it
-        /// stays ungated until the vocabulary is unified. NOT presentation state — the capability
-        /// this mints serves patient glucose to an anonymous caller.
-        /// </summary>
-        public const string SplitSharingVocabulary = "sharing capability, vocabulary split between atom and scope";
-
-        /// <summary>
         /// Deliberately <c>[AllowAnonymous]</c>. There is no credential to scope, so a scope gate
         /// cannot apply; whether the endpoint should be anonymous at all is the anonymous-endpoint
         /// audit's question, not this taxonomy's.
@@ -177,16 +159,9 @@ public class V4WriteScopeGatingTests
     /// decides which of these it is.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> GateExemptControllers =
-        new Dictionary<string, string>(StringComparer.Ordinal)
+        new Dictionary<string, string>(V4ScopeGuardExemptions.Controllers, StringComparer.Ordinal)
         {
-            ["AccessRequestController"] = NotDataCategory.PlatformAdminRole,
-            ["ConnectorAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["DemoAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["OidcProviderAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["PlatformSettingsController"] = NotDataCategory.PlatformAdminRole,
-            ["SubjectAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["TenantController"] = NotDataCategory.PlatformAdminRole,
-            ["TenantDirectGrantController"] = NotDataCategory.PlatformAdminRole,
+            ["SubjectAdminController"] = V4ScopeGuardExemptions.PlatformAdminRole,
 
             ["DeduplicationController"] = NotDataCategory.SuperuserAttribute,
             ["MigrationController"] = NotDataCategory.SuperuserAttribute,
@@ -196,8 +171,6 @@ public class V4WriteScopeGatingTests
             ["CompatibilityController"] = NotDataCategory.SuperuserAttribute,
             ["ServicesController"] = NotDataCategory.TenantSettingsScope,
             ["RejectedUploadsController"] = NotDataCategory.TenantSettingsScope,
-
-            ["ChatIdentityDirectoryController"] = NotDataCategory.InstanceKey,
 
             ["DevAdminController"] = NotDataCategory.DevelopmentOnly,
             ["DevAuthController"] = NotDataCategory.DevelopmentOnly,
@@ -236,7 +209,6 @@ public class V4WriteScopeGatingTests
             // caller's categories, asserted by AlertReplayReadScopeTests.
             ["AlertReplayController"] = NotDataCategory.ComputesAndReturns,
 
-            ["ClockFacesController"] = NotDataCategory.SplitSharingVocabulary,
             ["CoachMarkController"] = NotDataCategory.PresentationState,
             ["UserPreferencesController"] = NotDataCategory.PresentationState,
 
@@ -430,6 +402,9 @@ public class V4WriteScopeGatingTests
             // setup_hub_items and the tenant's strip dismissal are the owner's onboarding state, not
             // a data category; the hub is owner-only like the onboarding answers it follows on from.
             ["SetupHubController"] = Scope.FullAccess,
+
+            // See the ClockFacesController remarks.
+            ["ClockFacesController"] = Scope.SharingManage,
         };
 
     /// <summary>
@@ -805,15 +780,12 @@ public class V4WriteScopeGatingTests
 
             var holds = reason switch
             {
-                NotDataCategory.PlatformAdminRole => attributes
-                    .OfType<AuthorizeAttribute>()
-                    .Any(a => a.Roles?.Contains("platform_admin", StringComparison.Ordinal) == true),
+                _ when V4ScopeGuardExemptions.Controllers.ContainsKey(name) =>
+                    V4ScopeGuardExemptions.Carries(attributes, reason),
                 NotDataCategory.SuperuserAttribute => CarriesAttribute(controller, "RequireSuperuserAttribute"),
                 NotDataCategory.TenantSettingsScope => GovernsEveryWrite(controller,
                     a => a is RequireScopeAttribute scope
                          && scope.Scopes.Contains(Scope.TenantSettings, StringComparer.Ordinal)),
-                NotDataCategory.InstanceKey => attributes
-                    .Any(a => a.GetType().Name == "RequireInstanceKeyAuthAttribute"),
                 NotDataCategory.DevelopmentOnly => controller.Namespace == V4Namespace + ".DevOnly",
                 _ => true,
             };

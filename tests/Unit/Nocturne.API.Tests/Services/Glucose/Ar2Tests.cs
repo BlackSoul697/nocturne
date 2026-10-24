@@ -9,6 +9,7 @@ using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Legacy;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -134,7 +135,9 @@ public class Ar2Tests
             Mock.Of<ILogger<PropertiesService>>(),
             TestIobCobReader.Empty(),
             _ar2Service,
-            Mock.Of<IDeviceAgeService>()
+            Mock.Of<IDeviceAgeService>(),
+            Mock.Of<ITherapySettingsResolver>(),
+            TimeProvider.System
         );
 
         var properties = await service.GetPropertiesAsync(new[] { "bgnow", "delta", "ar2" });

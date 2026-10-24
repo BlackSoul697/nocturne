@@ -1,4 +1,7 @@
+using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Caching;
+using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -29,14 +32,14 @@ public sealed class IobCobReader(
     public async Task<IobCobInputs> ReadInputsAsync(long at, CancellationToken ct = default)
     {
         var to = DateTimeOffset.FromUnixTimeMilliseconds(at).UtcDateTime;
-        var insulinFrom = to.AddHours(-IIobCobReader.InsulinLookbackHours);
+        var insulinFrom = to.AddMilliseconds(-DailyProfileCalculator.ActingMs);
 
         var boluses = await bolusRepository.GetAsync(
             from: insulinFrom, to: to, device: null, source: null,
             limit: Limit, offset: 0, descending: false, ct: ct);
         var tempBasals = await tempBasalRepository.GetAsync(
-            from: insulinFrom, to: to, device: null, source: null,
-            limit: Limit, offset: 0, descending: false, ct: ct);
+            from: StatisticsService.TempBasalReadStart(insulinFrom), to: to, device: null, source: null,
+            limit: ChartDataService.TempBasalQueryLimit, offset: 0, descending: false, ct: ct);
         var carbIntakes = await carbIntakeRepository.GetAsync(
             from: to.AddHours(-IIobCobReader.CarbLookbackHours), to: to, device: null, source: null,
             limit: Limit, offset: 0, descending: false, ct: ct);

@@ -444,8 +444,16 @@ public partial class StatisticsControllerTests
         usedTz.Should().BeNull();
     }
 
-    [Fact]
-    public async Task GetRangeAnalytics_WhenTheTimezoneLookupFails_LeavesThePersonalRangeEmptyAndWarns()
+    private static List<TargetRangeEntry> FlatSchedule() =>
+        [new() { Time = "00:00", TimeAsSeconds = 0, Low = 80, High = 160 }];
+
+    private static List<TargetRangeEntry> DayNightSchedule() =>
+    [
+        new() { Time = "00:00", TimeAsSeconds = 0, Low = 100, High = 180 },
+        new() { Time = "06:00", TimeAsSeconds = 6 * 3600, Low = 80, High = 160 },
+    ];
+
+    private async Task<ReportAnalysisResult> RangeAnalyticsWith(List<TargetRangeEntry> schedule, string? timezone)
     {
         SetupGlucose(new List<SensorGlucose>());
         SetupEmptyTreatments();
@@ -455,10 +463,83 @@ public partial class StatisticsControllerTests
             .ReturnsAsync("Default");
         _targetRangeScheduleRepoMock
             .Setup(r => r.GetActiveAtAsync("Default", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TargetRangeSchedule
-            {
-                Entries = [new() { Time = "00:00", TimeAsSeconds = 0, Low = 80, High = 160 }],
-            });
+            .ReturnsAsync(new TargetRangeSchedule { Entries = schedule });
+        _therapySettingsResolverMock
+            .Setup(r => r.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(timezone);
+
+        var result = await CreateController().GetRangeAnalytics(
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
+
+        return result.Result.Should().BeOfType<OkObjectResult>().Subject.Value
+            .Should().BeOfType<ReportAnalysisResult>().Subject;
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_WithAZone_CarriesNoUnavailableReason()
+    {
+        var schedule = DayNightSchedule();
+        var range = new PersonalRangeTimeInRange { InRangePercent = 42, Entries = schedule };
+        var stockholm = TimeZoneHelper.GetTimeZoneInfoFromId("Europe/Stockholm");
+        _statsServiceMock
+            .Setup(s => s.CalculatePersonalRangeTime(It.IsAny<IEnumerable<SensorGlucose>>(), schedule, stockholm))
+            .Returns(range);
+
+        var payload = await RangeAnalyticsWith(schedule, "Europe/Stockholm");
+
+        payload.PersonalRange.Should().BeSameAs(range);
+        payload.TimeZoneUnavailableReason.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null, TimeZoneUnavailableReason.NotConfigured)]
+    [InlineData("Invalid/Timezone", TimeZoneUnavailableReason.Unrecognised)]
+    public async Task GetRangeAnalytics_WithoutAZone_PassesNoZoneToThePersonalRangeAndSaysWhy(
+        string? timezone, TimeZoneUnavailableReason reason)
+    {
+        var schedule = DayNightSchedule();
+
+        var payload = await RangeAnalyticsWith(schedule, timezone);
+
+        payload.TimeZoneUnavailableReason.Should().Be(reason);
+        _statsServiceMock.Verify(
+            s => s.CalculatePersonalRangeTime(It.IsAny<IEnumerable<SensorGlucose>>(), schedule, null),
+            Times.Once);
+        _statsServiceMock.Verify(
+            s => s.CalculatePersonalRangeTime(
+                It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<List<TargetRangeEntry>>(), It.IsNotNull<TimeZoneInfo>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_WithoutAZone_AndAFlatSchedule_ComputesThePersonalRange()
+    {
+        var schedule = FlatSchedule();
+        var range = new PersonalRangeTimeInRange { InRangePercent = 42, Entries = schedule };
+        _statsServiceMock
+            .Setup(s => s.CalculatePersonalRangeTime(It.IsAny<IEnumerable<SensorGlucose>>(), schedule, null))
+            .Returns(range);
+
+        var payload = await RangeAnalyticsWith(schedule, null);
+
+        payload.PersonalRange.Should().BeSameAs(range);
+        payload.TimeZoneUnavailableReason.Should().Be(TimeZoneUnavailableReason.NotConfigured);
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_WhenTheTimezoneLookupFails_PassesNoZoneAndWarns()
+    {
+        var schedule = FlatSchedule();
+        SetupGlucose(new List<SensorGlucose>());
+        SetupEmptyTreatments();
+        SetupAnalysis();
+        _activeProfileResolverMock
+            .Setup(r => r.GetActiveProfileNameAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Default");
+        _targetRangeScheduleRepoMock
+            .Setup(r => r.GetActiveAtAsync("Default", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TargetRangeSchedule { Entries = schedule });
         _therapySettingsResolverMock
             .Setup(r => r.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("db down"));
@@ -469,11 +550,10 @@ public partial class StatisticsControllerTests
 
         var payload = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value
             .Should().BeOfType<ReportAnalysisResult>().Subject;
-        payload.PersonalRange.Should().BeNull();
+        payload.TimeZoneUnavailableReason.Should().Be(TimeZoneUnavailableReason.LookupFailed);
         _statsServiceMock.Verify(
-            s => s.CalculatePersonalRangeTime(
-                It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<List<TargetRangeEntry>>(), It.IsAny<TimeZoneInfo>()),
-            Times.Never);
+            s => s.CalculatePersonalRangeTime(It.IsAny<IEnumerable<SensorGlucose>>(), schedule, null),
+            Times.Once);
         _clockLoggerMock.Verify(
             l => l.Log(
                 LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(),

@@ -36,9 +36,9 @@ public sealed class TherapySnapshot
     public const int DefaultPeakMinutes = 75;
     public const double DefaultCarbsPerHour = 30.0;
 
-    private readonly IReadOnlyList<ScheduleEntry>? _sensitivityEntries;
-    private readonly IReadOnlyList<ScheduleEntry>? _carbRatioEntries;
-    private readonly IReadOnlyList<ScheduleEntry>? _basalEntries;
+    private readonly IReadOnlyList<TimedValue>? _sensitivityEntries;
+    private readonly IReadOnlyList<TimedValue>? _carbRatioEntries;
+    private readonly IReadOnlyList<TimedValue>? _basalEntries;
 
     public TherapySnapshot(
         double dia,
@@ -58,10 +58,18 @@ public sealed class TherapySnapshot
         Timezone = timezone;
         CcpPercentage = ccpPercentage;
         CcpTimeshiftMs = ccpTimeshiftMs;
-        _sensitivityEntries = sensitivityEntries?.OrderBy(e => e.TimeAsSeconds ?? 0).ToList();
-        _carbRatioEntries = carbRatioEntries?.OrderBy(e => e.TimeAsSeconds ?? 0).ToList();
-        _basalEntries = basalEntries?.OrderBy(e => e.TimeAsSeconds ?? 0).ToList();
+        _sensitivityEntries = Sorted(sensitivityEntries);
+        _carbRatioEntries = Sorted(carbRatioEntries);
+        _basalEntries = Sorted(basalEntries);
     }
+
+    private readonly record struct TimedValue(int Seconds, double Value);
+
+    private static List<TimedValue>? Sorted(IEnumerable<ScheduleEntry>? entries) =>
+        entries?
+            .Select(e => new TimedValue(ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time), e.Value))
+            .OrderBy(e => e.Seconds)
+            .ToList();
 
     /// <summary>Duration of Insulin Action (hours).</summary>
     public double Dia { get; }
@@ -116,7 +124,7 @@ public sealed class TherapySnapshot
         AppendEntries(sb, 'b', _basalEntries);
     }
 
-    private static void AppendEntries(StringBuilder sb, char schedule, IReadOnlyList<ScheduleEntry>? entries)
+    private static void AppendEntries(StringBuilder sb, char schedule, IReadOnlyList<TimedValue>? entries)
     {
         sb.Append('|').Append(schedule);
         if (entries is null)
@@ -126,32 +134,17 @@ public sealed class TherapySnapshot
         }
 
         foreach (var entry in entries)
-            sb.Append(entry.TimeAsSeconds ?? 0).Append('=').Append(entry.Value).Append(',');
+            sb.Append(entry.Seconds).Append('=').Append(entry.Value).Append(',');
     }
 
-    private int ShiftedSecondsFromMidnight(long timeMills)
-    {
-        var shifted = timeMills + CcpTimeshiftMs;
-        var dto = DateTimeOffset.FromUnixTimeMilliseconds(shifted);
-        if (Timezone is not null)
-            dto = TimeZoneInfo.ConvertTime(dto, Timezone);
-        return (int)dto.TimeOfDay.TotalSeconds;
-    }
+    private int ShiftedSecondsFromMidnight(long timeMills) =>
+        ScheduleEntryTime.SecondsOfDay(timeMills + CcpTimeshiftMs, Timezone);
 
-    private static double? LookupAt(IReadOnlyList<ScheduleEntry> sortedEntries, int secondsFromMidnight)
+    private static double? LookupAt(IReadOnlyList<TimedValue> sortedEntries, int secondsFromMidnight)
     {
-        if (sortedEntries.Count == 0)
-            return null;
-
-        var result = sortedEntries[0].Value;
-        foreach (var entry in sortedEntries)
-        {
-            if (secondsFromMidnight >= (entry.TimeAsSeconds ?? 0))
-                result = entry.Value;
-            else
-                break;
-        }
-        return result;
+        return ScheduleEntryTime.TryEntryAt(sortedEntries, secondsFromMidnight, e => e.Seconds, out var entry)
+            ? entry.Value
+            : null;
     }
 
     private double ApplyInverseCcp(double value) =>

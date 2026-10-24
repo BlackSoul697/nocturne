@@ -176,8 +176,8 @@ public class StatisticsController : ControllerBase
     private async Task FillMissingScheduledRatesAsync(
         IList<TempBasal> tempBasals, DateTime startUtc, DateTime endUtc, CancellationToken ct)
     {
-        var startMills = new DateTimeOffset(StatisticsService.TempBasalReadStart(startUtc), TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var endMills = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var startMills = StatisticsService.TempBasalReadStart(startUtc).ToMills();
+        var endMills = endUtc.ToMills();
         var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, ct);
         foreach (var tb in tempBasals)
         {
@@ -230,8 +230,8 @@ public class StatisticsController : ControllerBase
     {
         if (!await _therapySettingsResolver.HasDataAsync(ct)) return [];
 
-        var fromMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var toMs = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var fromMs = startUtc.ToMills();
+        var toMs = endUtc.ToMills();
         return await _basalSegments.GetSegmentsAsync(fromMs, toMs, ct).ToListAsync(ct);
     }
 
@@ -493,11 +493,8 @@ public class StatisticsController : ControllerBase
             AveragedStats = _statisticsService.CalculateAveragedStats(entries, clock.Zone).ToList(),
             HourlyBandThresholds = _statisticsService.HourlyBandThresholds,
             ContributingDevices = _statisticsService.CalculateContributingDevices(rawGlucose, devices).ToList(),
-            // A failed lookup leaves the personal range out, as a failure inside it always has; an
-            // unset zone evaluates the schedule on UTC, as it did before the zone was resolved here.
-            PersonalRange = clock.Reason == TimeZoneUnavailableReason.LookupFailed
-                ? null
-                : await CalculatePersonalRangeAsync(entries, clock.Zone ?? TimeZoneInfo.Utc, cancellationToken),
+            PersonalRange = await CalculatePersonalRangeAsync(entries, clock.Zone, cancellationToken),
+            TimeZoneUnavailableReason = clock.Reason,
         };
         return Ok(result);
     }
@@ -576,7 +573,7 @@ public class StatisticsController : ControllerBase
     /// </summary>
     private async Task<PersonalRangeTimeInRange?> CalculatePersonalRangeAsync(
         List<SensorGlucose> entries,
-        TimeZoneInfo tenantTimeZone,
+        TimeZoneInfo? tenantTimeZone,
         CancellationToken ct
     )
     {
@@ -648,18 +645,22 @@ public class StatisticsController : ControllerBase
     /// Assess data sufficiency for a valid clinical report
     /// </summary>
     /// <param name="request">Request containing entries and optional period settings</param>
-    /// <returns>Data sufficiency assessment</returns>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Data sufficiency assessment, counting days with data on the tenant's local calendar (UTC when it has no zone)</returns>
     [HttpPost("data-sufficiency")]
     [EnableRateLimiting(ServiceRegistrationExtensions.StatisticsComputeRateLimitPolicy)]
     [RequireScope(Scope.ReportsRead)]
-    public ActionResult<DataSufficiencyAssessment> AssessDataSufficiency(
-        [FromBody] DataSufficiencyRequest request
+    public async Task<ActionResult<DataSufficiencyAssessment>> AssessDataSufficiency(
+        [FromBody] DataSufficiencyRequest request,
+        CancellationToken cancellationToken = default
     )
     {
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         var result = _statisticsService.AssessDataSufficiency(
             request.Entries,
             request.Days,
-            request.ExpectedReadingsPerDay
+            request.ExpectedReadingsPerDay,
+            clock.Zone
         );
         return Ok(result);
     }

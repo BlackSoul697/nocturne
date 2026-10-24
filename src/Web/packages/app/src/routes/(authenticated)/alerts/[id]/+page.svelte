@@ -49,7 +49,8 @@
   import AutoResolveSection from "$lib/components/alerts/AutoResolveSection.svelte";
   import ChannelsSection from "$lib/components/alerts/ChannelsSection.svelte";
   import ReplayPanel from "$lib/components/alerts/ReplayPanel.svelte";
-  import { severity, severityLabel } from "$lib/components/alerts/severity";
+  import { severity } from "$lib/components/alerts/severity";
+  import { severityLabel } from "$lib/components/alerts/severityLabel.svelte";
   import {
     parseRule,
     ensureCompositeRoot,
@@ -418,7 +419,7 @@
               />
               <div class="space-y-0.5">
                 <Label class="cursor-pointer" for="rule-allow-dnd">
-                  Allow through Do Not Disturb
+                  Allow through Do not disturb
                 </Label>
                 <p class="text-xs text-muted-foreground">
                   Critical-severity rules implicitly bypass DND regardless of

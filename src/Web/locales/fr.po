@@ -395,6 +395,7 @@ msgstr ""
 #~ msgid "Failed to save alarm configuration"
 #~ msgstr ""
 
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/settings/DataSourceRow.svelte
 msgid "Just now"
 msgstr ""
@@ -449,7 +450,7 @@ msgid "Unnamed {0}"
 msgstr ""
 
 #: src/lib/components/account/SecurityCredentialCard.svelte
-#: src/lib/components/alerts/AlertHistoryCard.svelte
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/connectors/ConnectorSetup.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
@@ -661,6 +662,7 @@ msgstr ""
 
 #: src/lib/components/actogram/Actogram.svelte
 #: src/lib/components/actogram/ActogramRow.svelte
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/engine/point-inspection.svelte.ts
 #: src/lib/components/entries/BGCheckSection.svelte
@@ -1097,22 +1099,18 @@ msgstr ""
 msgid "Full Admin Access"
 msgstr ""
 
-#: src/lib/components/alerts/AlertHistoryCard.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 msgid "Threshold"
 msgstr ""
 
-#: src/lib/components/alerts/AlertHistoryCard.svelte
-msgid "Rate of Change"
-msgstr ""
+#~ msgid "Rate of Change"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertHistoryCard.svelte
-msgid "Signal Loss"
-msgstr ""
+#~ msgid "Signal Loss"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertHistoryCard.svelte
-msgid "Composite"
-msgstr ""
+#~ msgid "Composite"
+#~ msgstr ""
 
 #: src/lib/components/alerts/AlertHistoryCard.svelte
 msgid "<0/> Alert History"
@@ -1186,29 +1184,24 @@ msgstr ""
 msgid "Next"
 msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
-msgid "Low Glucose"
-msgstr ""
+#~ msgid "Low Glucose"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
-msgid "High Glucose"
-msgstr ""
+#~ msgid "High Glucose"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
-msgid "Rapid Change"
-msgstr ""
+#~ msgid "Rapid Change"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
-msgid "Signal Lost"
-msgstr ""
+#~ msgid "Signal Lost"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
-msgid "Composite Alert"
-msgstr ""
+#~ msgid "Composite Alert"
+#~ msgstr ""
 
-#: src/lib/components/alerts/AlertBanner.svelte
 #: src/lib/components/alerts/AlertBanner.svelte
 #: src/lib/components/alerts/FiringToast.svelte
+#: src/lib/components/alerts/conditionLabel.svelte.ts
 #: src/lib/components/clock/ClockAlertBand.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
@@ -1349,7 +1342,7 @@ msgstr ""
 msgid "Normal"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
+#: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
@@ -1460,6 +1453,7 @@ msgstr ""
 msgid "Restore"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/audit/AuditMutationsTable.svelte
 #: src/lib/components/audit/AuditReadsTable.svelte
 #: src/lib/components/meals/MealsTable.svelte
@@ -3430,6 +3424,7 @@ msgstr ""
 msgid "Insulins"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/constants/scope-labels.svelte.ts
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -3568,6 +3563,7 @@ msgstr ""
 msgid "Bolus"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/food/FoodFields.svelte
@@ -4241,6 +4237,7 @@ msgstr ""
 msgid "Meal"
 msgstr ""
 
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 msgid "Snack"
 msgstr ""
@@ -4715,6 +4712,7 @@ msgstr ""
 msgid "No meals match the current filters."
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/meals/MealsTable.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
 #: src/lib/components/treatments/edit-dialog/BolusFormFields.svelte
@@ -5607,6 +5605,7 @@ msgstr ""
 msgid "Target"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
 #: src/lib/components/reports/ApsStateCard.svelte
 msgid "Sensitivity"
@@ -6936,6 +6935,8 @@ msgstr ""
 msgid "App"
 msgstr ""
 
+#: src/lib/components/alerts/channelText.svelte.ts
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
@@ -7393,7 +7394,7 @@ msgstr ""
 msgid "{0} old · Started {1} <0/>"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
+#: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/tracker-notification-editor.svelte
@@ -7401,7 +7402,7 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
-#: ../portal/src/lib/components/features/AlarmsDemo.svelte
+#: src/lib/components/alerts/severityLabel.svelte.ts
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/tracker-notification-editor.svelte
@@ -7473,6 +7474,7 @@ msgstr ""
 msgid "Cannula"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/status-pills/ReservoirPill.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
@@ -8869,9 +8871,8 @@ msgstr ""
 #~ msgid "Reports - Nocturne"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/+page.svelte
-msgid "Comprehensive diabetes management analytics and insights"
-msgstr ""
+#~ msgid "Comprehensive diabetes management analytics and insights"
+#~ msgstr ""
 
 #~ msgid "Unable to load reports"
 #~ msgstr "Impossible de charger les rapports"
@@ -10075,7 +10076,6 @@ msgid "Year Overview"
 msgstr ""
 
 #: src/lib/components/reports/year-overview/YearOverviewFilters.svelte
-#: src/lib/navigation/report-navigation.svelte.ts
 msgid "Multi-year heatmap of all your data"
 msgstr ""
 
@@ -10945,9 +10945,8 @@ msgstr ""
 #~ msgid "Ambulatory Glucose Profile - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/agp/+page.svelte
-msgid "Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
-msgstr ""
+#~ msgid "Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
+#~ msgstr ""
 
 #~ msgid "<0/> Ambulatory Glucose Profile"
 #~ msgstr ""
@@ -11105,9 +11104,8 @@ msgstr ""
 #~ msgid "Basal Rate Analysis - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
-msgid "Analyze your basal insulin delivery patterns with percentile visualization"
-msgstr ""
+#~ msgid "Analyze your basal insulin delivery patterns with percentile visualization"
+#~ msgstr ""
 
 #~ msgid "<0/> Basal Rate Analysis"
 #~ msgstr ""
@@ -11238,7 +11236,6 @@ msgstr ""
 #~ msgid "Battery Report - Nocturne"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/battery/+page.svelte
 #: src/routes/(authenticated)/reports/battery/+page.svelte
 msgid "Device battery statistics and charge cycle history"
 msgstr ""
@@ -11374,9 +11371,8 @@ msgstr ""
 msgid "Compression Lows"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/data-quality/+page.svelte
-msgid "Falsely low readings from sleeping on sensor"
-msgstr ""
+#~ msgid "Falsely low readings from sleeping on sensor"
+#~ msgstr ""
 
 #~ msgid "{0} pending"
 #~ msgstr ""
@@ -11486,9 +11482,8 @@ msgstr ""
 #~ msgid "Executive Summary - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "High-level overview of your diabetes management metrics"
-msgstr ""
+#~ msgid "High-level overview of your diabetes management metrics"
+#~ msgstr ""
 
 #~ msgid "Overall Assessment"
 #~ msgstr ""
@@ -11754,9 +11749,8 @@ msgstr ""
 #~ msgid "Insulin Delivery Report - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "Analyze your insulin delivery patterns including basal/bolus ratios and TDD trends"
-msgstr ""
+#~ msgid "Analyze your insulin delivery patterns including basal/bolus ratios and TDD trends"
+#~ msgstr ""
 
 #~ msgid "<0/> Insulin Delivery Report"
 #~ msgstr ""
@@ -11902,9 +11896,8 @@ msgstr ""
 #~ msgid "Heart Rate - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/heart-rate/+page.svelte
-msgid "Heart rate actogram with glucose overlay"
-msgstr ""
+#~ msgid "Heart rate actogram with glucose overlay"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/heart-rate/+page.svelte
 msgid "Daily heart rate patterns with glucose overlay"
@@ -11939,9 +11932,8 @@ msgstr ""
 #~ msgid "Insulin Dosing Profile - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/idp/+page.svelte
-msgid "Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"
-msgstr ""
+#~ msgid "Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"
+#~ msgstr ""
 
 #~ msgid "<0/> Insulin Dosing Profile"
 #~ msgstr ""
@@ -12071,9 +12063,8 @@ msgstr ""
 #~ msgid "Sleep & Overnight - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/sleep/+page.svelte
-msgid "Sleep pattern actogram with glucose overlay"
-msgstr ""
+#~ msgid "Sleep pattern actogram with glucose overlay"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Sleep & Overnight"
@@ -12111,9 +12102,8 @@ msgstr ""
 #~ msgid "Site Change Impact - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
-msgid "Analyze how pump site changes affect your glucose control"
-msgstr ""
+#~ msgid "Analyze how pump site changes affect your glucose control"
+#~ msgstr ""
 
 #~ msgid "<0/> Site Change Impact"
 #~ msgstr ""
@@ -12186,9 +12176,8 @@ msgstr ""
 #~ msgid "Step Count - Nocturne Reports"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/steps/+page.svelte
-msgid "Step count actogram with glucose overlay"
-msgstr ""
+#~ msgid "Step count actogram with glucose overlay"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/steps/+page.svelte
 msgid "Daily step patterns with glucose overlay"
@@ -12245,9 +12234,8 @@ msgstr ""
 #~ msgid "Treatment Log - Nocturne"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/treatments/+page.svelte
-msgid "View and manage your diabetes treatments, insulin doses, and carb entries"
-msgstr ""
+#~ msgid "View and manage your diabetes treatments, insulin doses, and carb entries"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "Search"
@@ -12376,9 +12364,8 @@ msgstr ""
 #~ msgid "Year Overview - Nocturne"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/year-overview/+page.svelte
-msgid "Multi-year heatmap overview of all your diabetes data"
-msgstr ""
+#~ msgid "Multi-year heatmap overview of all your diabetes data"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 msgid "Loading data overview..."
@@ -14518,7 +14505,7 @@ msgstr ""
 msgid "<0/> {0}U{1}"
 msgstr ""
 
-#. 0: formatCarbDisplay(carbGrams); 1: carbLabel ? ` ${carbLabel}` \\: " carbs"
+#. 0: formatCarbDisplay(carbGrams); 1: carbName ? ` ${carbName}` \\: " carbs"
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "{0}g{1}"
 msgstr ""
@@ -15077,17 +15064,13 @@ msgstr ""
 msgid "No events would have fired in this window."
 msgstr ""
 
-#. 0: rule.severity ?? 'warning'
+#. 0: severityLabel(rule.severity ?? 'warning')
 #: src/lib/components/alerts/AlertRuleRow.svelte
 msgid "Severity: {0}"
 msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-#: src/lib/components/ui/dropdown-menu/nested-in-popover.test.svelte
-#: src/lib/navigation/app-navigation.svelte.ts
-msgid "Do Not Disturb"
-msgstr ""
+#~ msgid "Do Not Disturb"
+#~ msgstr ""
 
 #: src/lib/components/alerts/DndPanel.svelte
 #: src/lib/components/tenants/TenantsOverview.svelte
@@ -15148,9 +15131,8 @@ msgstr ""
 #~ msgid "Rules that decide when, how, and where you're notified."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "<0/> Do Not Disturb"
-msgstr ""
+#~ msgid "<0/> Do Not Disturb"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/+page.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -15229,9 +15211,8 @@ msgstr ""
 msgid "Failed to save DND settings"
 msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "Do Not Disturb · Alerts · Nocturne"
-msgstr ""
+#~ msgid "Do Not Disturb · Alerts · Nocturne"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
@@ -15248,9 +15229,8 @@ msgstr ""
 msgid "Toggle DND on right now, optionally with an automatic expiry."
 msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "Do Not Disturb is currently"
-msgstr ""
+#~ msgid "Do Not Disturb is currently"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 msgid "Auto-expire (optional)"
@@ -15321,9 +15301,8 @@ msgstr ""
 #~ msgid "Why this alert exists, what it should trigger"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/[id]/+page.svelte
-msgid "Allow through Do Not Disturb"
-msgstr ""
+#~ msgid "Allow through Do Not Disturb"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Critical-severity rules implicitly bypass DND regardless of this flag."
@@ -15496,9 +15475,8 @@ msgstr ""
 #~ msgid "Scheduled DND active"
 #~ msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Toggle Do Not Disturb"
-msgstr ""
+#~ msgid "Toggle Do Not Disturb"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/navigation/app-navigation.svelte.ts
@@ -15790,8 +15768,9 @@ msgstr ""
 #~ msgid "{0}u insulin"
 #~ msgstr ""
 
-#~ msgid "Email"
-#~ msgstr ""
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Email"
+msgstr ""
 
 #~ msgid "{0} ago"
 #~ msgstr ""
@@ -16421,11 +16400,13 @@ msgid "{0}s ago"
 msgstr ""
 
 #. 0: minutes
+#. 0: diffMin
 #. 0: minutes
 #. 0: diffMins
 #. 0: mins
 #. 0: diffMins
 #: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/lib/components/layout/NotificationItem.svelte
 #: src/lib/components/status-pills/LoopPill.svelte
@@ -16779,9 +16760,11 @@ msgstr ""
 msgid "Screensaver mode (bouncing)"
 msgstr ""
 
+#. 0: Math.floor(diffHr / 24)
 #. 0: diffDays
 #. 0: days
 #. 0: diffDays
+#: src/lib/components/alerts/alertTime.svelte.ts
 #: src/lib/components/layout/NotificationItem.svelte
 #: src/lib/components/status-pills/LoopPill.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
@@ -17904,7 +17887,6 @@ msgstr ""
 msgid "Signal Integrity"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/data-quality/+page.svelte
 #: src/routes/(authenticated)/reports/data-quality/sensor-integrity/+page.svelte
 msgid "Windows where readings oscillate in a way that is unlikely to be physiologic"
 msgstr ""
@@ -21012,6 +20994,7 @@ msgid "standardised summary for your care team"
 msgstr ""
 
 #: ../portal/src/lib/components/features/ReportsDemo.svelte
+#: src/lib/components/alerts/factText.svelte.ts
 msgid "Pump battery"
 msgstr ""
 
@@ -21201,9 +21184,8 @@ msgstr ""
 #~ msgid "I've written down my recovery codes"
 #~ msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Scheduled Do Not Disturb window configured"
-msgstr ""
+#~ msgid "Scheduled Do Not Disturb window configured"
+#~ msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 msgid "sleep session is"
@@ -21510,9 +21492,8 @@ msgstr ""
 #~ msgid "We've opened a pre-filled GitHub issue form in a new tab as a fallback. You can paste your screenshots there manually. Your entries are kept here if you'd like to try again."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "You do not have permission to change Do Not Disturb. Contact your tenant administrator for access."
-msgstr ""
+#~ msgid "You do not have permission to change Do Not Disturb. Contact your tenant administrator for access."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Failed to save the alert rule. Please try again."
@@ -21604,9 +21585,8 @@ msgstr ""
 msgid "CGM Comparison"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/data-quality/+page.svelte
-msgid "How far apart two sensors run over the same window"
-msgstr ""
+#~ msgid "How far apart two sensors run over the same window"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/day-in-review/+page.svelte
 msgid "<0/> Back to Previous View"
@@ -22115,6 +22095,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/MarkRegistrationHarness.test.svelte
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
 msgid "Lunch"
 msgstr ""
 
@@ -24086,6 +24067,7 @@ msgstr ""
 msgid "<0/> Failed to load changelog"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/status-pills/BasalPill.svelte
 msgid "Temp basal"
 msgstr ""
@@ -24205,17 +24187,15 @@ msgstr ""
 msgid "Executive Summary"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "All your important numbers in one place"
-msgstr ""
+#~ msgid "All your important numbers in one place"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Glucose Profile (AGP)"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Your typical day's glucose pattern"
-msgstr ""
+#~ msgid "Your typical day's glucose pattern"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Time spent in each glucose zone"
@@ -24242,37 +24222,32 @@ msgstr ""
 msgid "Day-by-Day View"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Review each day individually"
-msgstr ""
+#~ msgid "Review each day individually"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Day in Review"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Detailed breakdown of a single day"
-msgstr ""
+#~ msgid "Detailed breakdown of a single day"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Week to Week"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Compare patterns across days"
-msgstr ""
+#~ msgid "Compare patterns across days"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Comparison"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Diff two date ranges side-by-side"
-msgstr ""
+#~ msgid "Diff two date ranges side-by-side"
+#~ msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Find your best and worst hours"
-msgstr ""
+#~ msgid "Find your best and worst hours"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Lifestyle Impact"
@@ -24282,17 +24257,14 @@ msgstr ""
 msgid "How food, exercise & sleep affect you"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Daily step patterns and activity levels"
-msgstr ""
+#~ msgid "Daily step patterns and activity levels"
+#~ msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Heart rate patterns and resting estimates"
-msgstr ""
+#~ msgid "Heart rate patterns and resting estimates"
+#~ msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Understand your overnight patterns"
-msgstr ""
+#~ msgid "Understand your overnight patterns"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Meal Analysis"
@@ -24318,9 +24290,8 @@ msgstr ""
 msgid "Is your treatment working?"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Your insulin and carb history"
-msgstr ""
+#~ msgid "Your insulin and carb history"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Basal Rate Analysis"
@@ -24330,25 +24301,22 @@ msgstr ""
 msgid "Basal Analysis"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "How your basal rates vary"
-msgstr ""
+#~ msgid "How your basal rates vary"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Insulin Delivery"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Basal vs bolus breakdown"
-msgstr ""
+#~ msgid "Basal vs bolus breakdown"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Site Change Impact"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "How site changes affect control"
-msgstr ""
+#~ msgid "How site changes affect control"
+#~ msgstr ""
 
 #~ msgid "Standardised insulin and glucose summary"
 #~ msgstr ""
@@ -24755,9 +24723,8 @@ msgstr ""
 msgid "Error Loading Hourly Patterns"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/hourly-stats/+page.svelte
-msgid "Which hours of the day spend the most and least time in the glucose target range"
-msgstr ""
+#~ msgid "Which hours of the day spend the most and least time in the glucose target range"
+#~ msgstr ""
 
 #~ msgid "Hourly Patterns - Nocturne Reports"
 #~ msgstr ""
@@ -26447,9 +26414,8 @@ msgstr ""
 msgid "Scheduled, on now"
 msgstr ""
 
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Scheduled Do Not Disturb window is on now"
-msgstr ""
+#~ msgid "Scheduled Do Not Disturb window is on now"
+#~ msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
@@ -26719,9 +26685,8 @@ msgstr ""
 msgid "Portion <0/>"
 msgstr ""
 
-#: src/lib/components/alerts/DndNoticeStrip.svelte
-msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
-msgstr ""
+#~ msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
+#~ msgstr ""
 
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
 msgid "Fill in the configuration form. Set a strong password for each PostgreSQL role and a unique <0/> (minimum 32 characters). Use the generator below for each secret field."
@@ -26796,7 +26761,7 @@ msgstr ""
 msgid "Rejected Uploads"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/data-quality/+page.svelte
+#: src/lib/navigation/report-navigation.svelte.ts
 msgid "Records an uploader sent that Nocturne could not store"
 msgstr ""
 
@@ -27736,41 +27701,36 @@ msgstr ""
 msgid "Daily profile"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Glucose, insulin and carbs at each time of day"
-msgstr ""
+#~ msgid "Glucose, insulin and carbs at each time of day"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Meals and events"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Glucose and insulin before and after each event"
-msgstr ""
+#~ msgid "Glucose and insulin before and after each event"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Prediction accuracy"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "The loop's predictions compared with the readings that followed"
-msgstr ""
+#~ msgid "The loop's predictions compared with the readings that followed"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Loop health"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "How much of the time the loop was closed"
-msgstr ""
+#~ msgid "How much of the time the loop was closed"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Settings evidence"
 msgstr ""
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Your profile settings compared with your data"
-msgstr ""
+#~ msgid "Your profile settings compared with your data"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/ReportsLayoutHarness.test.svelte
 msgid "Report body"
@@ -28189,6 +28149,7 @@ msgstr ""
 msgid "U per hour"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/reports/loop-analysis/DailyProfileBody.svelte
 #: src/lib/components/reports/loop-analysis/EventResponseBody.svelte
 msgid "Insulin on board"
@@ -28207,6 +28168,7 @@ msgstr ""
 msgid "Mostly calculated from doses"
 msgstr ""
 
+#: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/reports/loop-analysis/DailyProfileBody.svelte
 #: src/lib/components/reports/loop-analysis/EventResponseBody.svelte
 msgid "Carbs on board"
@@ -30057,9 +30019,8 @@ msgstr ""
 msgid "Cannot load the daily profile"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/daily-profile/+page.svelte
-msgid "Glucose, basal, loop corrections, IOB and COB at each time of day."
-msgstr ""
+#~ msgid "Glucose, basal, loop corrections, IOB and COB at each time of day."
+#~ msgstr ""
 
 #~ msgid "Daily profile - Loop Analysis - Nocturne Reports"
 #~ msgstr ""
@@ -30068,9 +30029,8 @@ msgstr ""
 msgid "Cannot load the loop health"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/loop-health/+page.svelte
-msgid "How much of the time the loop was closed, why it stopped and how frequently it reached its limits."
-msgstr ""
+#~ msgid "How much of the time the loop was closed, why it stopped and how frequently it reached its limits."
+#~ msgstr ""
 
 #~ msgid "Loop health - Loop Analysis - Nocturne Reports"
 #~ msgstr ""
@@ -30079,9 +30039,8 @@ msgstr ""
 msgid "Cannot load the meals and events"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/meals-and-events/+page.svelte
-msgid "Glucose and insulin before and after meals, corrections and other events."
-msgstr ""
+#~ msgid "Glucose and insulin before and after meals, corrections and other events."
+#~ msgstr ""
 
 #~ msgid "Meals and events - Loop Analysis - Nocturne Reports"
 #~ msgstr ""
@@ -30090,9 +30049,8 @@ msgstr ""
 msgid "Cannot load the prediction accuracy"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/prediction-accuracy/+page.svelte
-msgid "The glucose predictions of the loop compared with the glucose readings that followed them."
-msgstr ""
+#~ msgid "The glucose predictions of the loop compared with the glucose readings that followed them."
+#~ msgstr ""
 
 #~ msgid "Prediction accuracy - Loop Analysis - Nocturne Reports"
 #~ msgstr ""
@@ -30101,9 +30059,8 @@ msgstr ""
 msgid "Cannot load the settings evidence"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/settings-evidence/+page.svelte
-msgid "Your profile settings compared with what your data shows."
-msgstr ""
+#~ msgid "Your profile settings compared with what your data shows."
+#~ msgstr ""
 
 #~ msgid "Settings evidence - Loop Analysis - Nocturne Reports"
 #~ msgstr ""
@@ -30623,14 +30580,11 @@ msgstr ""
 msgid "{0} not linked. Connect it in Connectors & Apps to enable delivery."
 msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-msgid "Could not load Do Not Disturb."
-msgstr ""
+#~ msgid "Could not load Do Not Disturb."
+#~ msgstr ""
 
-#: src/lib/components/alerts/DndPanel.svelte
-#: src/lib/components/alerts/SidebarDndToggle.svelte
-msgid "Could not change Do Not Disturb. Try again."
-msgstr ""
+#~ msgid "Could not change Do Not Disturb. Try again."
+#~ msgstr ""
 
 #: src/lib/components/alerts/ReplayView.svelte
 msgid "No events yet. The playhead is at the start of the window."
@@ -31655,4 +31609,578 @@ msgstr ""
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 msgid "<0>What this shows:</0> This report takes the median of your glucose readings across all your site changes, with the 25th to 75th and 10th to 90th percentile bands, to reveal patterns in how your glucose control changes as your infusion site ages."
+msgstr ""
+
+#: ../portal/src/lib/components/docs/Video.svelte
+msgid "Video Play"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/Video.svelte
+msgid "Video Complete"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/Video.svelte
+msgid "Transcript"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Time in range, average glucose and data completeness"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Your typical day of glucose, with percentile bands and time in range"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Multi-year heatmap of your diabetes data"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Your glucose readings, one day at a time"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Glucose and treatments for one day"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Compare your glucose patterns from week to week"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Compare two date ranges side by side"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Which hours of the day spend the most and least time in range"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Step count patterns with a glucose overlay"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Heart rate patterns with a glucose overlay"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Sleep patterns with a glucose overlay"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "View and edit your insulin doses and carb entries"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Basal insulin delivery by time of day, with percentile bands"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Basal and bolus split, and total daily dose trends"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "How pump site changes affect your glucose"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Glucose, basal, loop corrections, IOB and COB at each time of day"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Glucose and insulin before and after meals, corrections and other events"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "The loop's glucose predictions compared with the readings that followed"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "How long the loop was closed, why it stopped and when it hit its limits"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Your profile settings compared with what your data shows"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Glucose drops during sleep that can come from pressure on the sensor"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Days and windows where the sensor signal was unreliable"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Two CGM devices compared against each other"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Sleep stages and overnight glucose for one night"
+msgstr ""
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Your glucose summary for the chosen period and every report you can open"
+msgstr ""
+
+#: src/lib/components/meals/MealBolusDialog.svelte
+msgid "This meal has no link to an insulin record. You cannot add insulin here."
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Glucose threshold"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Rate of change"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Signal loss"
+msgstr ""
+
+#: src/lib/components/alerts/conditionLabel.svelte.ts
+msgid "Combined conditions"
+msgstr ""
+
+#: src/lib/components/alerts/conditionLabel.svelte.ts
+msgid "Inverted condition"
+msgstr ""
+
+#: src/lib/components/alerts/conditionLabel.svelte.ts
+msgid "Sustained condition"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Sensor stale"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Predicted glucose"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Glucose trend"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Time of day"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Site age"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Sensor age"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Tracker age"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Other rule state"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Loop has stopped"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Loop not enacting"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump suspended"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Phone battery"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Override active"
+msgstr ""
+
+#: src/lib/components/alerts/DndPanel.svelte
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+#: src/lib/components/alerts/factText.svelte.ts
+#: src/lib/components/ui/dropdown-menu/nested-in-popover.test.svelte
+#: src/lib/navigation/app-navigation.svelte.ts
+msgid "Do not disturb"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Glucose bucket"
+msgstr ""
+
+#~ msgid "Time since last carbs"
+#~ msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Time since last bolus"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Day of week"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump mode"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "State active"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Sleep session"
+msgstr ""
+
+#: src/routes/(authenticated)/clock/+page.svelte
+msgid "Your clock displays"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Breakfast"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Dinner"
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
+msgid "Late night"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Time since last carb"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Current CGM reading vs. a threshold"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Current reading falls in selected buckets (very-low … very-high)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "AAPS or oref forecast crossing a threshold"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Glucose rising or falling faster than a rate"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Coarse direction bucket (rising fast, falling, …)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "No CGM reading for N minutes"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Units of insulin still active"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Active temp basal rate or % of scheduled"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Autosens ratio (AAPS / Trio only)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Grams of carbs still being absorbed"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Minutes elapsed since the last recorded carb entry"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Minutes elapsed since the last recorded bolus"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump reservoir level (units)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Hours since last infusion site change"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Days since CGM sensor start"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Time since a tracker's start (Duration) or scheduled time (Event), negative before the event. A tracker with no active instance never matches"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump battery percent"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Uploader phone battery percent"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "No APS cycle for N minutes"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "No enacted cycle for N minutes (closed loop)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "No CGM data received for N minutes"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump suspension state"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "An override profile is active"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Tenant DND state (manual or scheduled)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Pump operational mode (automatic, manual, boost, …)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Generic state span (override, sleep, exercise, …)"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "A recorded sleep session is in progress"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Current local time falls in a window"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Current local day matches selected weekdays"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Reference another alert rule's state"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "Behavior"
+msgstr ""
+
+#: src/lib/components/alerts/factText.svelte.ts
+msgid "State spans"
+msgstr ""
+
+#: src/lib/components/alerts/DndNoticeStrip.svelte
+msgid "Do not disturb is on. Only critical rules and rules allowed through Do not disturb will fire."
+msgstr ""
+
+#: src/lib/components/alerts/DndPanel.svelte
+msgid "Could not load Do not disturb."
+msgstr ""
+
+#: src/lib/components/alerts/DndPanel.svelte
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Could not change Do not disturb. Try again."
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Scheduled Do not disturb window is on now"
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Scheduled Do not disturb window configured"
+msgstr ""
+
+#: src/lib/components/alerts/SidebarDndToggle.svelte
+msgid "Toggle Do not disturb"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In-app"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Webhook"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Discord DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Discord channel"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Slack DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Slack channel"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Telegram DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Telegram group"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "WhatsApp DM"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Show alerts in the Nocturne notification center"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "POST to a custom URL"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Discord identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Discord channel the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Slack identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Slack channel the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via the linked Telegram identity"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Post to a Telegram group the Nocturne bot has joined"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Direct message via WhatsApp Business"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Send alerts to an email address via Resend"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Send an actuation intent to a registered device by kind"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Webhook URL"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Channel ID"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Chat ID"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Phone (E.164)"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Email address"
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Discord account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In Discord, turn on Settings → Advanced → Developer Mode, then right-click the channel and choose Copy Channel ID."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Slack account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "In Slack, open the channel, choose View channel details, and copy the ID at the bottom."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Sent to the Telegram account you linked."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Add the bot to the group, then use its chat ID (a negative number) or the group's @username."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "Include the + and country code. Without the +, WhatsApp prepends the sending business number's country code."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A channel ID is 17-20 digits."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A channel ID starts with C, G or D."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A group chat ID is a negative number, or an @username."
+msgstr ""
+
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "A phone number starts with + and a country code, digits only."
+msgstr ""
+
+#. 0: channelDestinationLabel(meta.type) ?? channelLabel(meta.type)
+#: src/lib/components/alerts/channelText.svelte.ts
+msgid "{0} is required."
+msgstr ""
+
+#. 0: diffHr; 1: diffMin % 60
+#: src/lib/components/alerts/alertTime.svelte.ts
+msgid "{0}h {1}m ago"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "Do not disturb · Alerts · Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "<0/> Do not disturb"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "Do not disturb is currently"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "You do not have permission to change Do not disturb. Contact your tenant administrator for access."
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/[id]/+page.svelte
+msgid "Allow through Do not disturb"
 msgstr ""

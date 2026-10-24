@@ -71,6 +71,7 @@ const pageData: HarnessProps["data"] = {
   isShareHost: false,
   canViewRealtimeData: false,
   showBackupSignInPrompt: false,
+  tenantTargets: [],
   isDemo: false,
   isGuestSession: false,
   isPlatformAdmin: false,

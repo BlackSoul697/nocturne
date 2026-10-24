@@ -164,8 +164,8 @@ public static class TimeZoneHelper
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocalDateTime, userTimeZone);
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(endLocalDateTime, userTimeZone);
 
-        var windowStart = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var windowEnd = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var windowStart = startUtc.ToMills();
+        var windowEnd = endUtc.ToMills();
 
         return (windowStart, windowEnd);
     }

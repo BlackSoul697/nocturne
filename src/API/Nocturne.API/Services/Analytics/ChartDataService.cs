@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Nocturne.API.Helpers;
 using Nocturne.API.Services.ChartData;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
@@ -18,7 +19,7 @@ namespace Nocturne.API.Services.Analytics;
 /// DTO via <see cref="IChartDataAssembler"/>.
 /// </summary>
 /// <remarks>
-/// A fixed 8-hour buffer is prepended to <see cref="ChartDataContext.StartTime"/> so that IOB/COB
+/// A buffer of <see cref="DailyProfileCalculator.ActingMs"/> is prepended to <see cref="ChartDataContext.StartTime"/> so that IOB/COB
 /// calculations have enough treatment history to be accurate at the start of the requested window.
 /// </remarks>
 /// <seealso cref="IChartDataService"/>
@@ -28,7 +29,6 @@ namespace Nocturne.API.Services.Analytics;
 public class ChartDataService : IChartDataService
 {
     internal const int TempBasalQueryLimit = 131072;
-    internal const long BufferMs = 8L * 60 * 60 * 1000;
 
     private readonly IEnumerable<IChartDataStage> _pipeline;
     private readonly IChartDataAssembler _assembler;
@@ -85,7 +85,7 @@ public class ChartDataService : IChartDataService
             StartTime = startTime,
             EndTime = endTime,
             IntervalMinutes = intervalMinutes,
-            BufferStartTime = startTime - BufferMs,
+            BufferStartTime = startTime - DailyProfileCalculator.ActingMs,
             IncludeHealthSeries = includeHealthSeries,
         };
 
@@ -134,7 +134,7 @@ public class ChartDataService : IChartDataService
     )
     {
         var tempBasals = (await _tempBasalRepository.GetAsync(
-            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime - BufferMs).UtcDateTime,
+            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime - DailyProfileCalculator.ActingMs).UtcDateTime,
             to: DateTimeOffset.FromUnixTimeMilliseconds(endTime).UtcDateTime,
             device: null,
             source: null,
@@ -204,7 +204,7 @@ public class ChartDataService : IChartDataService
 
     internal static List<CarbMarkerDto> BuildCarbMarkers(
         List<CarbIntake> carbIntakes,
-        string? timezone
+        TimeZoneInfo? zone
     )
     {
         var sorted = carbIntakes.Where(c => c.Carbs > 0).OrderBy(c => c.Mills).ToList();
@@ -214,7 +214,7 @@ public class ChartDataService : IChartDataService
             {
                 Time = c.Mills,
                 Carbs = c.Carbs,
-                Label = GetMealNameForTime(c.Mills, timezone),
+                MealPeriod = GetMealPeriod(c.Mills, zone),
                 TreatmentId = c.LegacyId ?? c.Id.ToString(),
                 IsOffset = false,
                 DataSource = c.DataSource ?? c.Device,
@@ -321,7 +321,7 @@ public class ChartDataService : IChartDataService
         if (latestPump is not null)
         {
             var contact = UploaderTimestamp.ParseUtcDateTime(latestPump.Clock) is { } clock
-                ? new DateTimeOffset(DateTime.SpecifyKind(clock, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
+                ? clock.ToMills()
                 : latestPump.Mills;
             if (latest is null || contact > latest)
                 latest = contact;
@@ -393,20 +393,14 @@ public class ChartDataService : IChartDataService
             .Where(i => i.ExpectedEndAt.HasValue)
             .Where(i =>
             {
-                var expectedMills = new DateTimeOffset(
-                    i.ExpectedEndAt!.Value,
-                    TimeSpan.Zero
-                ).ToUnixTimeMilliseconds();
+                var expectedMills = i.ExpectedEndAt!.Value.ToMills();
                 return expectedMills >= startTime && expectedMills <= endTime;
             })
             .Select(i =>
             {
                 var def = defsList.FirstOrDefault(d => d.Id == i.DefinitionId);
                 var category = def?.Category ?? TrackerCategory.Custom;
-                var expectedMills = new DateTimeOffset(
-                    i.ExpectedEndAt!.Value,
-                    TimeSpan.Zero
-                ).ToUnixTimeMilliseconds();
+                var expectedMills = i.ExpectedEndAt!.Value.ToMills();
 
                 return new TrackerMarkerDto
                 {
@@ -461,18 +455,19 @@ public class ChartDataService : IChartDataService
         return (rate, origin);
     }
 
-    internal static string GetMealNameForTime(long mills, string? timezone)
+    internal static MealPeriod? GetMealPeriod(long mills, TimeZoneInfo? zone)
     {
-        var time = DateTimeOffset.FromUnixTimeMilliseconds(mills);
-        if (!string.IsNullOrEmpty(timezone))
-            time = TimeZoneInfo.ConvertTime(time, TimeZoneHelper.GetTimeZoneInfoFromId(timezone));
+        if (zone is null)
+            return null;
+
+        var time = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(mills), zone);
         return time.Hour switch
         {
-            >= 5 and < 11 => "Breakfast",
-            >= 11 and < 15 => "Lunch",
-            >= 15 and < 17 => "Snack",
-            >= 17 and < 21 => "Dinner",
-            _ => "Late Night",
+            >= 5 and < 11 => MealPeriod.Breakfast,
+            >= 11 and < 15 => MealPeriod.Lunch,
+            >= 15 and < 17 => MealPeriod.Snack,
+            >= 17 and < 21 => MealPeriod.Dinner,
+            _ => MealPeriod.LateNight,
         };
     }
 

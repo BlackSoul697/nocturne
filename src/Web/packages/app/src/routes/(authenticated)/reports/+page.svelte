@@ -115,13 +115,6 @@
   } as const;
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Comprehensive diabetes management analytics and insights"
-  />
-</svelte:head>
-
 {#if isLoading && !reportsResource.current}
   <div class="mx-auto max-w-6xl px-3 py-6 @md:px-6"><ReportsSkeleton /></div>
 {:else if reportsResource.error}

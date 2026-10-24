@@ -1233,7 +1233,7 @@ internal class MigrationJob
 
     /// <summary>Entries page on the numeric <c>date</c> field, which mirrors mills exactly.</summary>
     private static readonly PageCursor s_dateCursor = new(
-        to => $"&find[date][$lte]={new DateTimeOffset(to, TimeSpan.Zero).ToUnixTimeMilliseconds()}",
+        to => $"&find[date][$lte]={to.ToMills()}",
         page =>
         {
             var dated = page.Where(d => d.Mills > 0).ToList();

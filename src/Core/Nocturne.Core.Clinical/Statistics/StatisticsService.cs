@@ -529,7 +529,8 @@ public partial class StatisticsService : IStatisticsService
     public DataSufficiencyAssessment AssessDataSufficiency(
         IEnumerable<SensorGlucose> entries,
         int days = 14,
-        int expectedReadingsPerDay = 288 // 5-minute intervals = 288/day
+        int expectedReadingsPerDay = 288, // 5-minute intervals = 288/day
+        TimeZoneInfo? timeZone = null
     )
     {
         var entriesList = entries.ToList();
@@ -550,13 +551,12 @@ public partial class StatisticsService : IStatisticsService
             };
         }
 
-        // Group by date to count days with data
-        var entriesByDate = entriesList
+        var dayZone = timeZone ?? TimeZoneInfo.Utc;
+        var daysWithData = entriesList
             .Where(e => e.Mills > 0)
-            .GroupBy(e => DateTimeOffset.FromUnixTimeMilliseconds(e.Mills).Date)
-            .ToList();
-
-        var daysWithData = entriesByDate.Count;
+            .Select(e => LocalSlotBinning.LocalDay(e.Mills, dayZone))
+            .Distinct()
+            .Count();
         var actualReadings = entriesList.Count;
         var completeness = expectedTotal > 0 ? (double)actualReadings / expectedTotal * 100 : 0;
         var avgPerDay = daysWithData > 0 ? (double)actualReadings / daysWithData : 0;
@@ -707,7 +707,7 @@ public partial class StatisticsService : IStatisticsService
         var clinicalAssessment = AssessAgainstTargets(baseAnalytics, population);
 
         // Assess data sufficiency
-        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays);
+        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays, timeZone: timeZone);
 
         // Calculate treatment summary if data available
         TreatmentSummary? treatmentSummary = null;
@@ -1468,10 +1468,14 @@ public partial class StatisticsService : IStatisticsService
     public PersonalRangeTimeInRange? CalculatePersonalRangeTime(
         IEnumerable<SensorGlucose> entries,
         List<TargetRangeEntry> scheduleEntries,
-        TimeZoneInfo tenantTimeZone
+        TimeZoneInfo? tenantTimeZone
     )
     {
         if (scheduleEntries.Count == 0)
+            return null;
+
+        var isFlat = scheduleEntries.Count == 1;
+        if (tenantTimeZone is null && !isFlat)
             return null;
 
         // The active entry is a pure function of local minute-of-day (entry times are HH:mm),
@@ -1480,8 +1484,9 @@ public partial class StatisticsService : IStatisticsService
 
         (double Low, double High) RangeAt(SensorGlucose reading)
         {
-            var minute =
-                ScheduleTimeHelper.GetSecondsFromMidnight(reading.Mills, tenantTimeZone) / 60;
+            var minute = isFlat
+                ? 0
+                : ScheduleEntryTime.SecondsOfDay(reading.Mills, tenantTimeZone) / 60;
             return rangeByMinute[minute] ??= ScheduleResolution
                 .FindRangeAtTime(scheduleEntries, minute * 60)!
                 .Value;
@@ -2352,7 +2357,7 @@ public partial class StatisticsService : IStatisticsService
     public static List<TempBasal> DeliveredWithin(
         IEnumerable<TempBasal> tempBasals, DateTime startDate, long untilMills)
     {
-        var startMills = new DateTimeOffset(startDate.AsUtc()).ToUnixTimeMilliseconds();
+        var startMills = startDate.ToMills();
         var result = new List<TempBasal>();
         foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
         {
@@ -2395,7 +2400,7 @@ public partial class StatisticsService : IStatisticsService
     /// The insulin (U) a delivered temp basal from <see cref="ClipOverlappingTempBasals"/> gave.
     /// Null when the rate is unknown.
     /// </summary>
-    internal static double? GetTempBasalInsulin(TempBasal delivered) =>
+    public static double? GetTempBasalInsulin(TempBasal delivered) =>
         delivered.Rate * ((delivered.EndMills!.Value - delivered.StartMills) / (1000.0 * 60 * 60));
 
     /// <summary>

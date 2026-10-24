@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Nocturne.Core.Contracts.Notifications;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -10,24 +9,19 @@ namespace Nocturne.API.Services.Notifications;
 /// <summary>
 /// In-memory alarm and admin-notification service with 1:1 legacy JavaScript compatibility.
 /// Implements functionality from <c>notifications.js</c> and <c>adminnotifies.js</c>. Alarm snoozes
-/// live in <see cref="LegacyAlarmSnoozeStore"/>. Also bridges legacy Pushover receipt polling.
+/// live in <see cref="LegacyAlarmSnoozeStore"/>, Pushover receipts and admin notifications in
+/// <see cref="LegacyNotificationStore"/>. Also bridges legacy Pushover receipt polling.
 /// </summary>
 /// <seealso cref="INotificationV1Service"/>
-public class NotificationV1Service : INotificationV1Service, IDisposable
+public class NotificationV1Service : INotificationV1Service
 {
     private readonly ILogger<NotificationV1Service> _logger;
     private readonly IAuthorizationService _authorizationService;
     private readonly ISignalRBroadcastService _signalRBroadcastService;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly LegacyAlarmSnoozeStore _snoozes;
-    private readonly ConcurrentDictionary<string, AdminNotification> _adminNotifications = new();
-    private readonly ConcurrentDictionary<string, PushoverReceipt> _pushoverReceipts = new();
+    private readonly LegacyNotificationStore _notifications;
     private readonly IPushoverService? _pushoverService;
-
-    private const int ADMIN_NOTIFICATION_CLEANUP_THRESHOLD_MS = 9 * 60 * 60 * 1000; // 9 hours - matches legacy test expectations
-    private const int MAX_RECEIPTS_CACHE_SIZE = 5000; // Prevent unbounded growth
-
-    private bool _disposed = false;
 
     public NotificationV1Service(
         ILogger<NotificationV1Service> logger,
@@ -35,6 +29,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
         ISignalRBroadcastService signalRBroadcastService,
         ITenantAccessor tenantAccessor,
         LegacyAlarmSnoozeStore snoozes,
+        LegacyNotificationStore notifications,
         IPushoverService? pushoverService = null
     )
     {
@@ -43,21 +38,8 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
         _signalRBroadcastService = signalRBroadcastService;
         _tenantAccessor = tenantAccessor;
         _snoozes = snoozes;
+        _notifications = notifications;
         _pushoverService = pushoverService;
-    }
-
-    /// <summary>
-    /// Pushover receipt tracking for mapping receipts to alarms
-    /// Enables proper acknowledgment when Pushover callbacks are received
-    /// </summary>
-    private class PushoverReceipt
-    {
-        public string Receipt { get; set; } = string.Empty;
-        public int Level { get; set; }
-        public string Group { get; set; } = "default";
-        public long CreatedAt { get; set; }
-        public string NotificationTitle { get; set; } = string.Empty;
-        public string NotificationMessage { get; set; } = string.Empty;
     }
 
     public async Task<NotificationAckResponse> AckNotificationAsync(
@@ -201,7 +183,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                 );
 
                 // Find the corresponding alarm from the receipt mapping
-                if (_pushoverReceipts.TryGetValue(request.Receipt, out var receiptInfo))
+                if (_notifications.TryGetReceipt(_tenantAccessor.TenantId, request.Receipt, out var receiptInfo))
                 {
                     _logger.LogDebug(
                         "Found alarm mapping for receipt {Receipt}: level {Level}, group {Group}",
@@ -225,7 +207,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                     if (ackResult.Success)
                     {
                         // Clean up the receipt mapping as it's no longer needed
-                        _pushoverReceipts.TryRemove(request.Receipt, out _);
+                        _notifications.RemoveReceipt(_tenantAccessor.TenantId, request.Receipt);
 
                         _logger.LogInformation(
                             "Successfully acknowledged alarm via Pushover - level: {Level}, group: {Group}",
@@ -267,7 +249,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                 );
 
                 // Clean up expired receipt mapping
-                _pushoverReceipts.TryRemove(request.Receipt, out _);
+                _notifications.RemoveReceipt(_tenantAccessor.TenantId, request.Receipt);
 
                 return new NotificationAckResponse
                 {
@@ -314,10 +296,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                 subjectId ?? "anonymous"
             );
 
-            // Clean up old notifications first (implements legacy adminnotifies.clean() behavior)
-            await CleanAdminNotificationsAsync(cancellationToken);
-
-            var notifications = _adminNotifications.Values.ToList();
+            var notifications = _notifications.ListAdminNotifications(_tenantAccessor.TenantId);
 
             // Check if user has admin permissions (implements legacy authorization check)
             var isAdmin = false;
@@ -393,36 +372,12 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                 ? "None"
                 : notification.Message;
 
-            // Find existing notification with same message
-            var existingNotification = _adminNotifications.Values.FirstOrDefault(n =>
-                n.Message == notification.Message
+            var count = _notifications.AddAdminNotification(_tenantAccessor.TenantId, notification);
+            _logger.LogDebug(
+                "Recorded admin notification: {Message}, count: {Count}",
+                notification.Message,
+                count
             );
-
-            if (existingNotification != null)
-            {
-                // Update existing notification
-                existingNotification.Count += 1;
-                existingNotification.LastRecorded = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-                _logger.LogDebug(
-                    "Updated existing admin notification: {Message}, count: {Count}",
-                    notification.Message,
-                    existingNotification.Count
-                );
-            }
-            else
-            {
-                // Add new notification using message as key
-                notification.Count = 1;
-                // Use provided LastRecorded or current time if not provided
-                if (notification.LastRecorded == 0)
-                {
-                    notification.LastRecorded = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                }
-                _adminNotifications.TryAdd(notification.Message, notification);
-
-                _logger.LogDebug("Added new admin notification: {Message}", notification.Message);
-            }
 
             return Task.FromResult(
                 new NotificationAckResponse
@@ -447,44 +402,12 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
         }
     }
 
-    public Task CleanAdminNotificationsAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var currentTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var notifications = _adminNotifications.ToList();
-
-            // Remove notifications older than 9 hours unless persistent (matches legacy test expectations)
-            var toRemove = notifications
-                .Where(kvp =>
-                    !kvp.Value.Persistent
-                    && (currentTime - kvp.Value.LastRecorded)
-                        >= ADMIN_NOTIFICATION_CLEANUP_THRESHOLD_MS
-                )
-                .ToList();
-
-            foreach (var kvp in toRemove)
-            {
-                _adminNotifications.TryRemove(kvp.Key, out _);
-                _logger.LogDebug("Cleaned old admin notification: {Message}", kvp.Value.Message);
-            }
-
-            _logger.LogDebug("Cleaned {Count} old admin notifications", toRemove.Count);
-            return Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cleaning admin notifications");
-            return Task.CompletedTask;
-        }
-    }
-
     public Task ClearAllAdminNotificationsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             // Clear all notifications
-            _adminNotifications.Clear();
+            _notifications.ClearAdminNotifications(_tenantAccessor.TenantId);
 
             _logger.LogInformation("Cleared all admin notifications");
             return Task.CompletedTask;
@@ -503,15 +426,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
     /// <param name="receipt">Pushover receipt ID</param>
     /// <param name="level">Alarm level</param>
     /// <param name="group">Alarm group</param>
-    /// <param name="title">Notification title</param>
-    /// <param name="message">Notification message</param>
-    public void RegisterPushoverReceipt(
-        string receipt,
-        int level,
-        string group,
-        string title,
-        string message
-    )
+    public void RegisterPushoverReceipt(string receipt, int level, string group)
     {
         if (string.IsNullOrEmpty(receipt))
         {
@@ -519,17 +434,7 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
             return;
         }
 
-        var receiptInfo = new PushoverReceipt
-        {
-            Receipt = receipt,
-            Level = level,
-            Group = group,
-            CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            NotificationTitle = title ?? string.Empty,
-            NotificationMessage = message ?? string.Empty,
-        };
-
-        _pushoverReceipts.TryAdd(receipt, receiptInfo);
+        _notifications.RegisterReceipt(_tenantAccessor.TenantId, receipt, level, group);
 
         _logger.LogDebug(
             "Registered Pushover receipt {Receipt} for alarm level {Level}, group {Group}",
@@ -540,46 +445,12 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
     }
 
     /// <summary>
-    /// Cleans up expired Pushover receipts (older than 24 hours)
-    /// Pushover receipts expire after 24 hours, so we can safely remove them
-    /// </summary>
-    public void CleanExpiredPushoverReceipts()
-    {
-        try
-        {
-            var currentTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var expiredReceipts = _pushoverReceipts
-                .Where(kvp => currentTime - kvp.Value.CreatedAt > 24 * 60 * 60 * 1000) // 24 hours
-                .Select(kvp => kvp.Key)
-                .ToList();
-
-            foreach (var receipt in expiredReceipts)
-            {
-                _pushoverReceipts.TryRemove(receipt, out _);
-                _logger.LogDebug("Removed expired Pushover receipt: {Receipt}", receipt);
-            }
-
-            if (expiredReceipts.Count > 0)
-            {
-                _logger.LogDebug(
-                    "Cleaned up {Count} expired Pushover receipts",
-                    expiredReceipts.Count
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cleaning expired Pushover receipts");
-        }
-    }
-
-    /// <summary>
     /// Gets the count of active Pushover receipts for monitoring/debugging
     /// </summary>
     /// <returns>Number of active Pushover receipts</returns>
     public int GetActivePushoverReceiptCount()
     {
-        return _pushoverReceipts.Count;
+        return _notifications.CountActiveReceipts(_tenantAccessor.TenantId);
     }
 
     /// <summary>
@@ -686,25 +557,5 @@ public class NotificationV1Service : INotificationV1Service, IDisposable
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
         }
-    }
-
-    /// <summary>
-    /// Dispose resources
-    /// </summary>
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        try
-        {
-            _pushoverReceipts.Clear();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error disposing NotificationV1Service");
-        }
-
-        _disposed = true;
     }
 }

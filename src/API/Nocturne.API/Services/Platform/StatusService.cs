@@ -603,7 +603,7 @@ public class StatusService : IStatusService
             Name = basicStatus.Name ?? "Nocturne",
             Version = basicStatus.Version ?? AppVersion.Current,
             ServerTime = serverTime,
-            SrvDate = new DateTimeOffset(serverTime).ToUnixTimeMilliseconds(),
+            SrvDate = serverTime.ToMills(),
             ApiEnabled = basicStatus.ApiEnabled,
             CareportalEnabled = basicStatus.CareportalEnabled ?? false,
             Head = basicStatus.Head ?? "unknown",
