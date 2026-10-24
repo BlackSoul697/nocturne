@@ -32,7 +32,9 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 /// <para>
 /// Every write action requires <see cref="Scope.AlertsReadWrite"/>: a rule decides whether a
 /// low-glucose alert reaches anyone, and the class-level <c>[Authorize]</c> alone is satisfied by
-/// read-only credentials such as a guest-link session, which holds <c>alerts.read</c>.
+/// read-only credentials such as a guest-link session, which holds <c>alerts.read</c>. Both rule
+/// reads require <see cref="Scope.AlertsRead"/>, because a rule names its delivery channels' phone
+/// numbers and webhook targets.
 /// </para>
 /// <para>
 /// The runtime evaluation pipeline that operates on these rules is documented in
@@ -90,6 +92,7 @@ public class AlertRulesController : ControllerBase
     /// List all alert rules for the current tenant with their flat channel list.
     /// </summary>
     [HttpGet]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<AlertRuleResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<AlertRuleResponse>>> GetRules(CancellationToken ct)
@@ -109,6 +112,7 @@ public class AlertRulesController : ControllerBase
     /// Get a single alert rule with its flat channel list.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(AlertRuleResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

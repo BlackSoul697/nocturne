@@ -55,6 +55,9 @@
   const acknowledgesForEveryone = $derived(
     satisfiesScope(page.data.effectivePermissions ?? [], "alerts.readwrite")
   );
+  const canOpenRule = $derived(
+    satisfiesScope(page.data.effectivePermissions ?? [], "alerts.read")
+  );
 
   // The layout drives one shared poll of this query; react to whatever it
   // returns rather than running a second timer at a different cadence.
@@ -228,7 +231,7 @@
                   Mute for me
                 {/if}
               </Button>
-              {#if a.alertRuleId}
+              {#if a.alertRuleId && canOpenRule}
                 <Button
                   type="button"
                   variant="ghost"
