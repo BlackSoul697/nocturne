@@ -204,7 +204,7 @@ public class ChartDataService : IChartDataService
 
     internal static List<CarbMarkerDto> BuildCarbMarkers(
         List<CarbIntake> carbIntakes,
-        string? timezone
+        TimeZoneInfo? zone
     )
     {
         var sorted = carbIntakes.Where(c => c.Carbs > 0).OrderBy(c => c.Mills).ToList();
@@ -214,7 +214,7 @@ public class ChartDataService : IChartDataService
             {
                 Time = c.Mills,
                 Carbs = c.Carbs,
-                Label = GetMealNameForTime(c.Mills, timezone),
+                Label = GetMealNameForTime(c.Mills, zone),
                 TreatmentId = c.LegacyId ?? c.Id.ToString(),
                 IsOffset = false,
                 DataSource = c.DataSource ?? c.Device,
@@ -455,11 +455,12 @@ public class ChartDataService : IChartDataService
         return (rate, origin);
     }
 
-    internal static string GetMealNameForTime(long mills, string? timezone)
+    internal static string? GetMealNameForTime(long mills, TimeZoneInfo? zone)
     {
-        var time = DateTimeOffset.FromUnixTimeMilliseconds(mills);
-        if (!string.IsNullOrEmpty(timezone))
-            time = TimeZoneInfo.ConvertTime(time, TimeZoneHelper.GetTimeZoneInfoFromId(timezone));
+        if (zone is null)
+            return null;
+
+        var time = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(mills), zone);
         return time.Hour switch
         {
             >= 5 and < 11 => "Breakfast",

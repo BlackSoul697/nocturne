@@ -323,7 +323,7 @@ public class ChartDataServiceTests
                 },
             };
 
-            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+            var result = ChartDataService.BuildCarbMarkers(carbs, TimeZoneInfo.Utc);
 
             result.Should().HaveCount(1);
             result[0].Carbs.Should().Be(30.0);
@@ -350,10 +350,31 @@ public class ChartDataServiceTests
                 },
             };
 
-            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+            var result = ChartDataService.BuildCarbMarkers(carbs, TimeZoneInfo.Utc);
 
             result.Should().HaveCount(1);
             result[0].Label.Should().Be("Lunch");
+        }
+
+        [Fact]
+        public void WithoutAZone_LeavesTheMealNameOut()
+        {
+            var noonUtcMills = DateTimeOffset
+                .Parse("2023-11-15T12:00:00Z")
+                .ToUnixTimeMilliseconds();
+            var carbs = new List<CarbIntake>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    Carbs = 20.0,
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(noonUtcMills).UtcDateTime,
+                },
+            };
+
+            var result = ChartDataService.BuildCarbMarkers(carbs, null);
+
+            result.Should().ContainSingle().Which.Label.Should().BeNull();
         }
 
         [Fact]
@@ -678,6 +699,9 @@ public class ChartDataServiceTests
 
     public class GetMealNameForTimeTests
     {
+        private static long MillsAtUtcHour(int hourUtc) =>
+            new DateTimeOffset(2023, 11, 15, hourUtc, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
         [Theory]
         [InlineData(5, "Breakfast")]
         [InlineData(10, "Breakfast")]
@@ -691,63 +715,32 @@ public class ChartDataServiceTests
         [InlineData(23, "Late Night")]
         [InlineData(0, "Late Night")]
         [InlineData(4, "Late Night")]
-        public void UtcTimeBuckets(int hourUtc, string expected)
+        public void UtcZoneBuckets(int hourUtc, string expected)
         {
-            // Build a mills value for 2023-11-15 at the specified UTC hour
-            var dto = new DateTimeOffset(2023, 11, 15, hourUtc, 30, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, null);
-
-            result.Should().Be(expected);
+            ChartDataService.GetMealNameForTime(MillsAtUtcHour(hourUtc), TimeZoneInfo.Utc)
+                .Should().Be(expected);
         }
 
         [Fact]
-        public void NullTimezone_FallsBackToUtc()
+        public void NoZone_GivesNoName()
         {
-            // 12:00 UTC = Lunch
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, null);
-
-            result.Should().Be("Lunch");
+            ChartDataService.GetMealNameForTime(MillsAtUtcHour(12), null).Should().BeNull();
         }
 
         [Fact]
-        public void TimezoneConversion_NewYork()
+        public void ZoneConversion_NewYork_LateNight()
         {
-            // 6:00 UTC in America/New_York (UTC-5 in November) = 1:00 AM local = "Late Night"
-            var dto = new DateTimeOffset(2023, 11, 15, 6, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
+            var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            var result = ChartDataService.GetMealNameForTime(mills, "America/New_York");
-
-            result.Should().Be("Late Night");
+            ChartDataService.GetMealNameForTime(MillsAtUtcHour(6), zone).Should().Be("Late Night");
         }
 
         [Fact]
-        public void TimezoneConversion_NewYork_Breakfast()
+        public void ZoneConversion_NewYork_Breakfast()
         {
-            // 12:00 UTC in America/New_York (UTC-5) = 7:00 AM local = "Breakfast"
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
+            var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            var result = ChartDataService.GetMealNameForTime(mills, "America/New_York");
-
-            result.Should().Be("Breakfast");
-        }
-
-        [Fact]
-        public void InvalidTimezone_FallsBackToUtc()
-        {
-            // 12:00 UTC = Lunch (falls back to UTC on invalid tz)
-            var dto = new DateTimeOffset(2023, 11, 15, 12, 0, 0, TimeSpan.Zero);
-            var mills = dto.ToUnixTimeMilliseconds();
-
-            var result = ChartDataService.GetMealNameForTime(mills, "Invalid/Timezone");
-
-            result.Should().Be("Lunch");
+            ChartDataService.GetMealNameForTime(MillsAtUtcHour(12), zone).Should().Be("Breakfast");
         }
     }
 

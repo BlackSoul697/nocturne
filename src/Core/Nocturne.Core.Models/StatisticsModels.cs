@@ -1489,9 +1489,18 @@ public class ReportAnalysisResult
     /// <summary>
     /// Time in the tenant's personal target range schedule, alongside the clinical-consensus
     /// TIR in <see cref="Analysis"/>. Null when the tenant has no target range schedule
-    /// configured or the window has no readings.
+    /// configured, the window has no readings, or the tenant has no usable timezone and the schedule
+    /// has several entries.
     /// </summary>
     public PersonalRangeTimeInRange? PersonalRange { get; set; }
+
+    /// <summary>
+    /// Why the tenant's timezone was unavailable. Without a zone, <see cref="AveragedStats"/> groups
+    /// readings by their own UTC offset, day-bounded figures in <see cref="Analysis"/> use UTC days,
+    /// and <see cref="PersonalRange"/> is null unless the target schedule has one entry. Null when a
+    /// zone was applied.
+    /// </summary>
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>

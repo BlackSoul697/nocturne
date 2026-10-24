@@ -197,12 +197,16 @@ public interface IStatisticsService
     /// </summary>
     /// <param name="entries"><see cref="SensorGlucose"/> entries.</param>
     /// <param name="scheduleEntries">The tenant's target range schedule entries.</param>
-    /// <param name="tenantTimeZone">The tenant's local timezone.</param>
-    /// <returns>The three-way split, or null when there are no valid readings or no schedule entries.</returns>
+    /// <param name="tenantTimeZone">The tenant's local timezone, or null when it has no usable one.</param>
+    /// <returns>
+    /// The three-way split, or null when there are no valid readings or no schedule entries, or when
+    /// <paramref name="tenantTimeZone"/> is null and the schedule has several entries. A single-entry
+    /// schedule applies at every time of day, so it needs no zone.
+    /// </returns>
     PersonalRangeTimeInRange? CalculatePersonalRangeTime(
         IEnumerable<SensorGlucose> entries,
         List<TargetRangeEntry> scheduleEntries,
-        TimeZoneInfo tenantTimeZone
+        TimeZoneInfo? tenantTimeZone
     );
 
     // Glucose Distribution
