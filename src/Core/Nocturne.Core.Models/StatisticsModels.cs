@@ -225,9 +225,14 @@ public class TimeInRangeMetrics
     public TimeInRangeDetailedStats RangeStats { get; set; } = new();
 
     /// <summary>
-    /// Average minutes per day in target, below-range and above-range zones
+    /// Average minutes per covered day in target, below-range and above-range zones
     /// </summary>
     public AverageDailyMinutes AverageDailyMinutes { get; set; } = new();
+
+    /// <summary>
+    /// Episodes per covered day
+    /// </summary>
+    public AverageDailyEpisodes AverageDailyEpisodes { get; set; } = new();
 }
 
 /// <summary>
@@ -387,9 +392,10 @@ public class TimeInRangeDurations
 }
 
 /// <summary>
-/// Average minutes per day in each zone, derived from <see cref="TimeInRangePercentages"/> rather
-/// than the recorded durations. Percentages sum to 100, so target, low and high account for a whole
-/// day even when the underlying data has gaps.
+/// Average minutes per day in each zone: the zone minutes of <see cref="TimeInRangeDurations"/>
+/// over the days the readings cover, which is the time they stand for over twenty-four hours.
+/// A gap the sensor did not cover adds no days, and a period with no covered time reports zero.
+/// <see cref="AverageDailyEpisodes"/> divides by the same days.
 /// </summary>
 public class AverageDailyMinutes
 {
@@ -447,6 +453,25 @@ public class TimeInRangeEpisodes
     /// counted the same way as <see cref="AboveRange"/>.
     /// </summary>
     public int BelowRange { get; set; }
+}
+
+/// <summary>
+/// <see cref="TimeInRangeEpisodes"/> per covered day, on the days <see cref="AverageDailyMinutes"/>
+/// divides by.
+/// </summary>
+public class AverageDailyEpisodes
+{
+    public double VeryLow { get; set; }
+
+    public double Low { get; set; }
+
+    public double High { get; set; }
+
+    public double VeryHigh { get; set; }
+
+    public double AboveRange { get; set; }
+
+    public double BelowRange { get; set; }
 }
 
 public class DistributionDataPoint

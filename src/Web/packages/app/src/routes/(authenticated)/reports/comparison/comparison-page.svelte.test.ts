@@ -31,12 +31,12 @@ vi.mock("$lib/components/reports/TIRStackedChart.svelte", () =>
 
 import ComparisonPage from "./+page.svelte";
 
-function analysis(minutes: number, events: number): ExtendedGlucoseAnalytics {
+function analysis(lowMinutesPerDay: number, lowEventsPerDay: number): ExtendedGlucoseAnalytics {
   return {
     basicStats: { count: 20 },
     timeInRange: {
-      durations: { belowRange: minutes, aboveRange: 60 },
-      episodes: { belowRange: events, aboveRange: 2 },
+      averageDailyMinutes: { low: lowMinutesPerDay, high: 60 },
+      averageDailyEpisodes: { belowRange: lowEventsPerDay, aboveRange: 2 },
     },
   };
 }
@@ -51,37 +51,46 @@ async function cells(label: string) {
 describe("hypo comparison rows", () => {
   beforeEach(() => {
     periodA = analysis(0, 0);
-    periodB = analysis(30, 1);
+    periodB = analysis(30, 1.5);
   });
 
-  it("shows hours, integer events and a positive change from a measured zero", async () => {
+  it("shows per-day time and events and a positive change from a measured zero", async () => {
     render(ComparisonPage);
-    const duration = await cells("Hypo Duration");
-    expect(duration.slice(1, 3)).toEqual(["0.0 h", "0.5 h"]);
-    expect(duration[4]).toBe("+0.5 h");
-    const events = await cells("Hypo Events");
-    expect(events.slice(1, 3)).toEqual(["0", "1"]);
-    expect(events[4]).toBe("+1");
-    expect((await cells("Hyper Duration"))[4]).toBe("±0 h");
-    expect((await cells("Hyper Events"))[4]).toBe("±0");
+    const duration = await cells("Hypo Time / Day");
+    expect(duration.slice(1, 3)).toEqual(["0m", "30m"]);
+    expect(duration[4]).toBe("+30m");
+    const events = await cells("Hypo Events / Day");
+    expect(events.slice(1, 3)).toEqual(["0.00", "1.50"]);
+    expect(events[4]).toBe("+1.50");
+    expect((await cells("Hyper Time / Day"))[4]).toBe("±0m");
+    expect((await cells("Hyper Events / Day"))[4]).toBe("±0");
+  });
+
+  it("shows a low rate that one decimal would round to zero", async () => {
+    periodA = analysis(0, 0.03);
+    periodB = analysis(0, 0.04);
+    render(ComparisonPage);
+    const events = await cells("Hypo Events / Day");
+    expect(events.slice(1, 3)).toEqual(["0.03", "0.04"]);
+    expect(events[4]).toBe("+0.01");
   });
 
   it("shows a negative change when the second period has fewer lows", async () => {
     periodA = analysis(90, 3);
     render(ComparisonPage);
-    expect((await cells("Hypo Duration"))[4]).toBe("−1.0 h");
-    expect((await cells("Hypo Events"))[4]).toBe("−2");
+    expect((await cells("Hypo Time / Day"))[4]).toBe("−1h");
+    expect((await cells("Hypo Events / Day"))[4]).toBe("−1.50");
   });
 
   it("shows no data instead of comparing a missing period against zero", async () => {
     periodA = { basicStats: { count: 0 } };
     periodB = analysis(0, 0);
     render(ComparisonPage);
-    const duration = await cells("Hypo Duration");
-    expect(duration.slice(1, 3)).toEqual(["No data", "0.0 h"]);
+    const duration = await cells("Hypo Time / Day");
+    expect(duration.slice(1, 3)).toEqual(["No data", "0m"]);
     expect(duration[4]).toBe("—");
-    const events = await cells("Hypo Events");
-    expect(events.slice(1, 3)).toEqual(["No data", "0"]);
+    const events = await cells("Hypo Events / Day");
+    expect(events.slice(1, 3)).toEqual(["No data", "0.00"]);
     expect(events[4]).toBe("—");
   });
 });
