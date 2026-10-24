@@ -16,7 +16,7 @@ describe("InsulinActionTimeNote", () => {
     const note = page.getByTestId("action-time");
     await expect.element(note).toHaveTextContent(/action time of Fiasp, 3\.5 hours/);
     await expect.element(note).toHaveTextContent(/in place of the value in your profile/);
-    await expect.element(note).toHaveTextContent(/doesn't change your pump or AID app/);
+    await expect.element(note).toHaveTextContent(/does not change your pump or AID app/);
   });
 
   it("says an externally managed profile's time still wins over a picked insulin", async () => {

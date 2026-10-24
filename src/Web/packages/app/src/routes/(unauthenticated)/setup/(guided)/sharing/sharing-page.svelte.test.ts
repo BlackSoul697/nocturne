@@ -97,7 +97,7 @@ describe("sharing guided page", () => {
   it("asks who else should see the patient's data, with a card per kind of person", async () => {
     render(SharingPage);
 
-    await expect.element(page.getByRole("heading", { name: "Who else should see Sam's data?" })).toBeVisible();
+    await expect.element(page.getByRole("heading", { name: "Who else can see Sam's data?" })).toBeVisible();
     for (const id of ["family", "temporary", "public", "just-me"])
       await expect.element(card(id)).toHaveAttribute("aria-pressed", "false");
     expect(document.querySelector('[data-testid^="sharing-flow-"]')).toBeNull();

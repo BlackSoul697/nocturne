@@ -280,7 +280,7 @@ describe("therapy settings, synced from an app", () => {
   it("explains a mismatch is fixed in the app, since edits here would be overwritten", async () => {
     render(TherapyPage);
 
-    await page.getByRole("button", { name: "Something doesn't match" }).click();
+    await page.getByRole("button", { name: "Something does not match" }).click();
 
     await expect
       .element(page.getByTestId("therapy-mismatch"))
@@ -292,11 +292,11 @@ describe("therapy settings, synced from an app", () => {
     reviewState = reviewOf(TherapySource.Synced);
     render(TherapyPage);
 
-    await page.getByRole("button", { name: "Something doesn't match" }).click();
+    await page.getByRole("button", { name: "Something does not match" }).click();
 
     await expect
       .element(page.getByTestId("therapy-mismatch"))
-      .toHaveTextContent("If no app sends your settings to Nocturne, you can find them on the profile page and change the target range there. Basal rates, carb ratios and insulin sensitivity can't be changed in Nocturne yet.");
+      .toHaveTextContent("If no app sends your settings to Nocturne, you can find them on the profile page and change the target range there. Basal rates, carb ratios and insulin sensitivity cannot be changed in Nocturne yet.");
     await expect
       .element(page.getByTestId("therapy-mismatch").getByRole("link", { name: "profile page" }))
       .toHaveAttribute("href", "/(authenticated)/settings/profile");
@@ -326,10 +326,10 @@ describe("therapy settings, imported from Nightscout", () => {
       );
     await expect.element(page.getByRole("button", { name: "This matches my app" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Something doesn't match" }).click();
+    await page.getByRole("button", { name: "Something does not match" }).click();
     await expect
       .element(page.getByTestId("therapy-mismatch"))
-      .toHaveTextContent("If no app sends Sam's settings to Nocturne, you can find them on the profile page and change the target range there. Basal rates, carb ratios and insulin sensitivity can't be changed in Nocturne yet.");
+      .toHaveTextContent("If no app sends Sam's settings to Nocturne, you can find them on the profile page and change the target range there. Basal rates, carb ratios and insulin sensitivity cannot be changed in Nocturne yet.");
   });
 });
 

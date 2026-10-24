@@ -238,7 +238,7 @@ describe("DeviceSetupItem", () => {
     const note = page.getByTestId("action-time");
     await expect.element(note).toHaveTextContent(/action time of Fiasp \(Faster Aspart\), 3\.5 hours/);
     await expect.element(note).toHaveTextContent(/in place of the value in Sam's profile/);
-    await expect.element(note).toHaveTextContent(/doesn't change Sam's pump or AID app/);
+    await expect.element(note).toHaveTextContent(/does not change Sam's pump or AID app/);
     await expect.element(note.getByRole("link", { name: "patient settings" })).toBeVisible();
   });
 
@@ -246,7 +246,7 @@ describe("DeviceSetupItem", () => {
     remote.setup = guessed();
     render(DeviceSetupItem);
 
-    await page.getByRole("switch", { name: "You don't take insulin" }).click();
+    await page.getByRole("switch", { name: "You do not take insulin" }).click();
     await vi.waitFor(() => expect(remote.setTakesNoInsulin).toHaveBeenCalledWith({ takesNoInsulin: true }));
   });
 
@@ -254,7 +254,7 @@ describe("DeviceSetupItem", () => {
     remote.setup = guessed({ insulins: [{ id: "i1", formulationId: "novorapid" }] });
     render(DeviceSetupItem);
 
-    await expect.element(page.getByRole("switch", { name: "You don't take insulin" })).toBeDisabled();
+    await expect.element(page.getByRole("switch", { name: "You do not take insulin" })).toBeDisabled();
   });
 
   it("offers trackers with typical wear times, toggling only the ones it added", async () => {

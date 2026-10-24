@@ -36,9 +36,9 @@
       {#if voice.kind === "self"}
         Get your data <em class="not-italic text-primary">flowing.</em>
       {:else if voice.kind === "named"}
-        Let's get {voice.name}'s data <em class="not-italic text-primary">flowing.</em>
+        Get {voice.name}'s data <em class="not-italic text-primary">flowing.</em>
       {:else}
-        Let's get the data <em class="not-italic text-primary">flowing.</em>
+        Get the data <em class="not-italic text-primary">flowing.</em>
       {/if}
     {:else if voice.kind === "self"}
       Bring your <em class="not-italic text-primary">history</em> across.
@@ -51,19 +51,19 @@
 
   <p class="hidden lg:block text-sm leading-relaxed text-muted-foreground">
     {#if path === "fresh"}
-      A few short steps. Skip anything you're not ready for; you can change
+      A few short steps. Skip anything you are not ready for. You can change
       every choice in Settings afterwards.
     {:else if voice.kind === "self"}
-      We'll connect to your Nightscout site and copy your history across. Your
-      Nightscout site isn't changed, and your uploaders keep sending to it
+      We will connect to your Nightscout site and copy your history across. Your
+      Nightscout site is not changed, and your uploaders keep sending to it
       until you choose to move them.
     {:else if voice.kind === "named"}
-      We'll connect to the Nightscout site and copy {voice.name}'s history
-      across. The site isn't changed, and its uploaders keep sending to it until
+      We will connect to the Nightscout site and copy {voice.name}'s history
+      across. The site is not changed, and its uploaders keep sending to it until
       you choose to move them.
     {:else}
-      We'll connect to the Nightscout site and copy its history across. The
-      site isn't changed, and its uploaders keep sending to it until you choose
+      We will connect to the Nightscout site and copy its history across. The
+      site is not changed, and its uploaders keep sending to it until you choose
       to move them.
     {/if}
   </p>

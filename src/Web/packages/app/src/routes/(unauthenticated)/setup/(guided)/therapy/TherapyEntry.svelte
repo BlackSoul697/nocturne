@@ -72,7 +72,7 @@
       await onsaved();
     } catch (err) {
       if (errorStatus(err) === 409) await onconflict();
-      else error = describeSubmitError(err, "We couldn't save these settings.");
+      else error = describeSubmitError(err, "We could not save these settings.");
     } finally {
       saving = false;
     }
@@ -148,7 +148,7 @@
 
   <ScheduleView
     title="Carb ratios"
-    description="Grams of carbohydrate one unit of insulin covers."
+    description="Grams of carb one unit of insulin covers."
     unit="g/U"
     icon={Droplet}
     iconClass="text-success"

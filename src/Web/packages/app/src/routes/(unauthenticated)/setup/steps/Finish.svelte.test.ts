@@ -31,7 +31,7 @@ describe("Finish", () => {
     renderFinish("fresh");
 
     await expect
-      .element(page.getByText(/haven't connected a data source yet/))
+      .element(page.getByText(/have not connected a data source yet/))
       .toBeVisible();
     await expect.element(page.getByText(/CGM is connected/)).not.toBeInTheDocument();
     await expect.element(page.getByText(/target range/)).not.toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("Finish", () => {
   });
 
   it.each([
-    [null, /hasn't been imported yet/],
+    [null, /has not been imported yet/],
     ["failed", /some or all of the history is missing/],
     ["running", /may still be\s+running/],
     ["partial", /not all of it/],

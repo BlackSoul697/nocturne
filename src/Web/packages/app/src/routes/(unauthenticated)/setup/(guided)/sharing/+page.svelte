@@ -67,7 +67,7 @@
       }
       await goto(resolve("/setup"));
     } catch (err) {
-      error = describeSubmitError(err, "We couldn't save that.");
+      error = describeSubmitError(err, "We could not save that.");
     } finally {
       keeping = false;
     }

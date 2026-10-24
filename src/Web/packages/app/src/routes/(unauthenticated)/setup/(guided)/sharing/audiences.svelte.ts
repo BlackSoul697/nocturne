@@ -21,10 +21,10 @@ export interface SharingAudience {
 
 export function sharingQuestion(voice: PatientVoice): string {
   return voice.kind === "self"
-    ? "Who else should see your data?"
+    ? "Who else can see your data?"
     : voice.kind === "named"
-      ? `Who else should see ${voice.name}'s data?`
-      : "Who else should see this data?";
+      ? `Who else can see ${voice.name}'s data?`
+      : "Who else can see this data?";
 }
 
 /** Built per call, so the copy is translated in the locale current at the call. */
@@ -47,10 +47,10 @@ export function sharingAudiences(voice: PatientVoice): SharingAudience[] {
       title: "A school, clinic or someone temporary",
       description:
         voice.kind === "self"
-          ? "A code that lets a teacher, nurse or doctor see your data without an account. It can't change anything, and it stops working on its own."
+          ? "A code that lets a teacher, nurse or doctor see your data without an account. It cannot change anything, and it stops working on its own."
           : voice.kind === "named"
-            ? `A code that lets a teacher, nurse or doctor see ${voice.name}'s data without an account. It can't change anything, and it stops working on its own.`
-            : "A code that lets a teacher, nurse or doctor see the data without an account. It can't change anything, and it stops working on its own.",
+            ? `A code that lets a teacher, nurse or doctor see ${voice.name}'s data without an account. It cannot change anything, and it stops working on its own.`
+            : "A code that lets a teacher, nurse or doctor see the data without an account. It cannot change anything, and it stops working on its own.",
     },
     {
       id: "public",
@@ -85,7 +85,7 @@ export function familyRoleChoices(roles: TenantRoleDto[]): InviteRoleChoice[] {
       slug: "clinician",
       level: RoleAccessLevel.ReadOnly,
       label: "Can see everything",
-      description: "Readings, treatments, devices and reports. They can't change anything.",
+      description: "Readings, treatments, devices and reports. They cannot change anything.",
     },
     {
       slug: "caretaker",

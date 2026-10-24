@@ -82,7 +82,7 @@
       await write();
       await hubQuery.refresh();
     } catch (err) {
-      error = describeSubmitError(err, "We couldn't save that. Please try again.");
+      error = describeSubmitError(err, "We could not save that. Please try again.");
     } finally {
       busy = false;
     }
@@ -370,9 +370,9 @@
         />
         <Label for="takes-no-insulin">
           {#if voice.kind === "self"}
-            You don't take insulin
+            You do not take insulin
           {:else if voice.kind === "named"}
-            {voice.name} doesn't take insulin
+            {voice.name} does not take insulin
           {:else}
             No insulin is taken
           {/if}
@@ -408,7 +408,7 @@
             optional, and the wear time can be changed in <a class="underline" href={trackerSettingsHref}>tracker settings</a>.
           </p>
           <p class="text-sm text-muted-foreground">
-            Trackers don't send alerts on their own yet. Alerts for changes can be set up in
+            Trackers do not send alerts on their own yet. Alerts for changes can be set up in
             <a class="underline" href={alertsHref}>Alerts</a>.
           </p>
         </div>

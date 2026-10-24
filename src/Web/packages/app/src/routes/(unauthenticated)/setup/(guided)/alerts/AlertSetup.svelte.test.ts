@@ -74,7 +74,7 @@ const sentTest: AlertSetupTest = {
 
 const self = { kind: "self" } as const;
 const urgentLowSwitch = () => page.getByRole("switch", { name: "Urgent low" });
-const note = () => page.getByText("You won't be alerted to urgent lows");
+const note = () => page.getByText("You will not be alerted to urgent lows");
 
 describe("alerts guided page", () => {
   beforeEach(() => {
@@ -151,7 +151,7 @@ describe("alerts guided page", () => {
 
     await expect.element(page.getByTestId("troubleshoot-permission")).toHaveTextContent(/blocked/);
     await expect.element(page.getByText(/Do Not Disturb/)).toBeVisible();
-    await expect.element(page.getByTestId("troubleshoot-delivery")).toHaveTextContent(/couldn't send it \(No destination\)/);
+    await expect.element(page.getByTestId("troubleshoot-delivery")).toHaveTextContent(/could not send it \(No destination\)/);
     expect(api.confirm).not.toHaveBeenCalled();
     await expect.element(page.getByRole("button", { name: "Send another test" })).toBeVisible();
   });
@@ -161,7 +161,7 @@ describe("alerts guided page", () => {
     await expect.element(page.getByTestId("this-device")).toBeVisible();
     await expect
       .element(page.getByTestId("this-device-limit"))
-      .toHaveTextContent(/Nocturne can't wake you with this/);
+      .toHaveTextContent(/Nocturne cannot wake you with this/);
 
     await page.getByRole("button", { name: "Send somewhere else" }).click();
 

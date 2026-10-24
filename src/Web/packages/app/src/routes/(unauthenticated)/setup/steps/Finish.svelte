@@ -55,15 +55,15 @@
       {#if path === "migration"}
         {#if importResult === "complete" && voice.kind === "self"}
           Your Nightscout history has been copied into Nocturne. Your Nightscout
-          site hasn't been changed, and your uploaders keep sending to it until
+          site has not been changed, and your uploaders keep sending to it until
           you choose to move them.
         {:else if importResult === "complete" && voice.kind === "named"}
           {voice.name}'s Nightscout history has been copied into Nocturne. The
-          Nightscout site hasn't been changed, and {voice.name}'s uploaders keep
+          Nightscout site has not been changed, and {voice.name}'s uploaders keep
           sending to it until you choose to move them.
         {:else if importResult === "complete"}
           The Nightscout history has been copied into Nocturne. The Nightscout
-          site hasn't been changed, and its uploaders keep sending to it until
+          site has not been changed, and its uploaders keep sending to it until
           you choose to move them.
         {:else if importResult === "partial"}
           Some of the Nightscout history was copied, but not all of it. You can
@@ -74,10 +74,10 @@
           try again from Settings.
         {:else if importResult === "running"}
           We lost track of your import before it finished. It may still be
-          running; check Settings to see how it ended.
+          running. Check Settings to see how it ended.
         {:else}
-          The Nightscout history hasn't been imported yet. You can start the
-          import from Settings whenever you're ready.
+          The Nightscout history has not been imported yet. You can start the
+          import from Settings whenever you are ready.
         {/if}
       {:else if source === "uploader-receiving"}
         The phone app is sending readings to Nocturne, so the dashboard is
@@ -86,7 +86,7 @@
         Your data source is saved and switched on. Readings will appear on the
         dashboard after its first sync.
       {:else}
-        You haven't connected a data source yet, so the dashboard will be empty
+        You have not connected a data source yet, so the dashboard will be empty
         until you do. You can connect one from Settings at any time.
       {/if}
     </p>
@@ -94,9 +94,9 @@
     {#if continueFailed}
       <Alert.Root variant="warning" data-testid="finish-failed">
         <TriangleAlert />
-        <Alert.Title>We couldn't finish setup</Alert.Title>
+        <Alert.Title>We could not finish setup</Alert.Title>
         <Alert.Description>
-          Nocturne didn't record that setup is finished, so it can't move on yet. Check your
+          Nocturne did not record that setup is finished, so it cannot move on yet. Check your
           connection and try again.
         </Alert.Description>
       </Alert.Root>

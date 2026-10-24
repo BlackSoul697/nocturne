@@ -50,7 +50,7 @@
       await confirmTherapySettings();
       await backToHub();
     } catch (err) {
-      error = describeSubmitError(err, "We couldn't save that.");
+      error = describeSubmitError(err, "We could not save that.");
     } finally {
       confirming = false;
     }
@@ -59,7 +59,7 @@
 
 {#if reviewQuery.error}
   <p class="text-sm text-destructive">
-    {remoteErrorMessage(reviewQuery.error, "We couldn't load the therapy settings.")}
+    {remoteErrorMessage(reviewQuery.error, "We could not load the therapy settings.")}
   </p>
 {:else if !review}
   <p class="animate-pulse text-sm text-muted-foreground">Loading therapy settings...</p>
@@ -148,19 +148,19 @@
         <Alert.Description>
           <p>
             {#if review.source === TherapySource.Synced && app}
-              If something here doesn't match, change it in {app}. If {app} sends its settings
+              If something here does not match, change it in {app}. If {app} sends its settings
               again, they replace these, so a change made here would not last.
             {:else if review.source === TherapySource.Synced}
-              If something here doesn't match, change it in the app that sent these settings. If
+              If something here does not match, change it in the app that sent these settings. If
               that app sends its settings again, they replace these.
             {:else if voice.kind === "named"}
-              If something here doesn't match, change it in the app {voice.name} uses now. If that
+              If something here does not match, change it in the app {voice.name} uses now. If that
               app sends its settings to Nocturne, they replace these.
             {:else if voice.kind === "self"}
-              If something here doesn't match, change it in the app you use now. If that app sends
+              If something here does not match, change it in the app you use now. If that app sends
               its settings to Nocturne, they replace these.
             {:else}
-              If something here doesn't match, change it in the app in use now. If that app sends
+              If something here does not match, change it in the app in use now. If that app sends
               its settings to Nocturne, they replace these.
             {/if}
           </p>
@@ -169,15 +169,15 @@
               {#if voice.kind === "self"}
                 If no app sends your settings to Nocturne, you can find them on the
                 <a class="underline underline-offset-2" href={profileHref}>profile page</a> and change the target range there. Basal rates, carb
-                ratios and insulin sensitivity can't be changed in Nocturne yet.
+                ratios and insulin sensitivity cannot be changed in Nocturne yet.
               {:else if voice.kind === "named"}
                 If no app sends {voice.name}'s settings to Nocturne, you can find them on the
                 <a class="underline underline-offset-2" href={profileHref}>profile page</a> and change the target range there. Basal rates, carb
-                ratios and insulin sensitivity can't be changed in Nocturne yet.
+                ratios and insulin sensitivity cannot be changed in Nocturne yet.
               {:else}
                 If no app sends these settings to Nocturne, you can find them on the
                 <a class="underline underline-offset-2" href={profileHref}>profile page</a> and change the target range there. Basal rates, carb
-                ratios and insulin sensitivity can't be changed in Nocturne yet.
+                ratios and insulin sensitivity cannot be changed in Nocturne yet.
               {/if}
             </p>
           {/if}
@@ -195,7 +195,7 @@
           <FormError issues={error} />
           {#if !mismatch}
             <Button variant="outline" onclick={() => (mismatch = true)}>
-              Something doesn't match
+              Something does not match
             </Button>
           {/if}
           <Button disabled={confirming} onclick={confirm}>

@@ -413,7 +413,7 @@ describe("setup import step", () => {
     await expect.element(page.getByText("Step 05 / 06")).toBeVisible();
     await expect
       .element(page.getByTestId("start-error"))
-      .toHaveTextContent("Your Nightscout connection isn't saved yet.");
+      .toHaveTextContent("Your Nightscout connection is not saved yet.");
   });
 });
 
@@ -558,7 +558,7 @@ describe("setup units step", () => {
 
     const mismatch = page.getByTestId("profile-units-mismatch");
     await expect.element(mismatch).toHaveTextContent(/Your Nightscout profile uses mmol\/L/);
-    await expect.element(mismatch).toHaveTextContent(/you've chosen mg\/dL/);
+    await expect.element(mismatch).toHaveTextContent(/you have chosen mg\/dL/);
 
     await mmolCard().click();
 
@@ -569,7 +569,7 @@ describe("setup units step", () => {
     unitsAnswer.stored = { glucoseUnits: "mg/dl", nightscoutUnavailable: true };
     await reachUnitsFromNightscout();
 
-    await expect.element(page.getByText(/couldn't read your Nightscout's settings/)).toBeVisible();
+    await expect.element(page.getByText(/could not read your Nightscout's settings/)).toBeVisible();
   });
 
   it("starts the import when the step is skipped", async () => {

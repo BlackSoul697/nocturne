@@ -236,7 +236,7 @@ describe("ImportProgress", () => {
     render(ImportProgress, { voice, startError: "Your Nightscout site refused the request.", onComplete: () => {} });
 
     await expect
-      .element(page.getByText("We couldn't start the import from Nightscout. You can continue and run it later from Settings."))
+      .element(page.getByText("We could not start the import from Nightscout. You can continue and run it later from Settings."))
       .toBeVisible();
     await expect.element(page.getByText("Your Nightscout site refused the request.", { exact: true })).toBeVisible();
     await expect.element(page.getByText(/records migrated/)).not.toBeInTheDocument();
@@ -251,6 +251,6 @@ describe("ImportProgress", () => {
 
     await expect.poll(() => onSettled.mock.calls.length, { timeout: 15000 }).toBe(1);
     expect(onResult.mock.calls).toEqual([["running"]]);
-    await expect.element(page.getByText(/It may still be running; check Settings/)).toBeVisible();
+    await expect.element(page.getByText(/It may still be running. Check Settings/)).toBeVisible();
   }, 20000);
 });

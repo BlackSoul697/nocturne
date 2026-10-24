@@ -116,7 +116,7 @@
     rules = copyRules(status);
   }
 
-  const saveOnly = () => run(save, "We couldn't save your alerts.");
+  const saveOnly = () => run(save, "We could not save your alerts.");
 
   const sendTest = () =>
     run(async () => {
@@ -125,7 +125,7 @@
       test = await sendSetupTestAlert();
       answer = "asking";
       await followTest(test.instanceId!);
-    }, "We couldn't send a test alert.");
+    }, "We could not send a test alert.");
 
   /** Follows the test's deliveries until none is still sending, for the troubleshooting list. */
   async function followTest(instanceId: string) {
@@ -146,7 +146,7 @@
       });
       answer = "yes";
       await getSetupHub().refresh();
-    }, "We couldn't record that.");
+    }, "We could not record that.");
 
   const allowNotifications = async () => {
     permission = await requestNotificationPermission();
@@ -155,7 +155,7 @@
   const toggleMember = (subjectId: string, alerted: boolean) =>
     run(async () => {
       status = await setUrgentLowRecipient({ subjectId, request: { alerted } });
-    }, "We couldn't change that.");
+    }, "We could not change that.");
 </script>
 
 {#if status.routing === AlertRouting.LeftForRecipient}
@@ -217,7 +217,7 @@
       {#if urgentLowOff}
         <p class="flex items-center gap-2 text-sm text-warning" data-testid="urgent-low-off-note">
           <TriangleAlert class="h-4 w-4" />
-          You won't be alerted to urgent lows
+          You will not be alerted to urgent lows
         </p>
       {/if}
     </section>
@@ -246,7 +246,7 @@
         <Alert.Root variant="warning" data-testid="this-device-limit">
           <TriangleAlert />
           <Alert.Description>
-            Nocturne can't wake you with this. Browser notifications only show while a signed-in
+            Nocturne cannot wake you with this. Browser notifications only show while a signed-in
             Nocturne page is open and the device is awake. To be alerted overnight or when Nocturne
             is closed, send alerts somewhere else.
           </Alert.Description>
@@ -297,9 +297,9 @@
                 {:else if permission === "denied"}
                   Notifications are blocked for this site. Allow them in your browser's site settings.
                 {:else if permission === "unsupported"}
-                  This browser can't show notifications. Try another browser, or send alerts somewhere else.
+                  This browser cannot show notifications. Try another browser, or send alerts somewhere else.
                 {:else}
-                  Notifications aren't allowed in this browser yet.
+                  Notifications are not allowed in this browser yet.
                   <Button variant="link" size="inline" onclick={allowNotifications}>
                     Allow notifications
                   </Button>
@@ -313,7 +313,7 @@
                 {#if delivery.status === "delivered"}
                   Nocturne sent it.
                 {:else if delivery.status === "failed"}
-                  Nocturne couldn't send it{delivery.lastError ? ` (${delivery.lastError})` : ""}.
+                  Nocturne could not send it{delivery.lastError ? ` (${delivery.lastError})` : ""}.
                 {:else}
                   still sending.
                 {/if}
@@ -357,7 +357,7 @@
             {/each}
           </ul>
           <p class="text-sm text-muted-foreground" data-testid="alerts-member-limit">
-            They'll see your urgent low alerts, including your glucose value, in Nocturne on their own
+            They will see your urgent low alerts, including your glucose value, in Nocturne on their own
             account. Like this device, those only show while they have Nocturne open. Ask them to set
             up their own way to be alerted, such as Telegram or WhatsApp, in
             <a class="text-primary underline underline-offset-4" href={resolve("/(authenticated)/alerts")}>Alerts</a>.

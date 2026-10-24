@@ -164,7 +164,7 @@
 
   const STEPS = $derived({
     fresh: [
-      { id: "who", label: "Who it's for", short: "Who", art: "who" },
+      { id: "who", label: "Who it is for", short: "Who", art: "who" },
       { id: "path", label: "Choose your path", short: "Path", art: "welcome" },
       { id: "units", label: "Units and timezone", short: "Units", art: "units" },
       { id: "cgm", label: "Connect a data source", short: "Source", art: "source" },
@@ -172,7 +172,7 @@
       { id: "finish", label: "Finish", short: "Done", art: "done" },
     ],
     migration: [
-      { id: "who", label: "Who it's for", short: "Who", art: "who" },
+      { id: "who", label: "Who it is for", short: "Who", art: "who" },
       { id: "path", label: "Choose your path", short: "Path", art: "welcome" },
       { id: "connect", label: "Connect Nightscout", short: "Connect", art: "source" },
       { id: "units", label: "Units and timezone", short: "Units", art: "units" },
@@ -321,7 +321,7 @@
         chosenRelationship = saved.relationship;
         chosenName = saved.patientName ?? "";
       } catch (err) {
-        relationshipError = describeSubmitError(err, "We couldn't save your answer.");
+        relationshipError = describeSubmitError(err, "We could not save your answer.");
         return;
       }
     }
@@ -343,7 +343,7 @@
       }
       await handleNext();
     } catch (err) {
-      unitsError = describeSubmitError(err, "We couldn't save your units and timezone.");
+      unitsError = describeSubmitError(err, "We could not save your units and timezone.");
     } finally {
       unitsSaving = false;
     }
@@ -417,8 +417,8 @@
       // Every 400 from start-from-connector means the saved connector is missing or has no URL.
       migrationStartError =
         errorStatus(err) === 400
-          ? "Your Nightscout connection isn't saved yet."
-          : describeSubmitError(err, "Something went wrong while starting it.");
+          ? "Your Nightscout connection is not saved yet."
+          : describeSubmitError(err, "Could not start the import. Try again.");
     }
   }
 </script>
@@ -596,12 +596,12 @@
                   </h1>
                   <p class="max-w-140 text-base leading-relaxed text-muted-foreground">
                     {#if voice.kind === "self"}
-                      Enter your credentials and we'll start syncing your data.
+                      Enter your credentials and we will start syncing your data.
                     {:else if voice.kind === "named"}
-                      Enter the service's sign-in details and we'll start syncing
+                      Enter the service's sign-in details and we will start syncing
                       {voice.name}'s data.
                     {:else}
-                      Enter the service's sign-in details and we'll start syncing the
+                      Enter the service's sign-in details and we will start syncing the
                       data.
                     {/if}
                   </p>

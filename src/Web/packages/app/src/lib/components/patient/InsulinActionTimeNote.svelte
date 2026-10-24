@@ -25,16 +25,16 @@
   {#if actionTime.source === InsulinActionTimeSource.PrimaryInsulin}
     {#if voice.kind === "self"}
       Nocturne uses the action time of {insulin}, {hours} hours, for insulin on board and predictions,
-      in place of the value in your profile. It doesn't change your pump or AID app. You can change the
+      in place of the value in your profile. It does not change your pump or AID app. You can change the
       time in <a class="underline" href={patientSettingsHref}>patient settings</a>. Check it with your care team.
     {:else if voice.kind === "named"}
       Nocturne uses the action time of {insulin}, {hours} hours, for insulin on board and predictions,
-      in place of the value in {voice.name}'s profile. It doesn't change {voice.name}'s pump or AID app.
+      in place of the value in {voice.name}'s profile. It does not change {voice.name}'s pump or AID app.
       You can change the time in <a class="underline" href={patientSettingsHref}>patient settings</a>. Check
       it with the care team.
     {:else}
       Nocturne uses the action time of {insulin}, {hours} hours, for insulin on board and predictions,
-      in place of the profile's value. It doesn't change the pump or AID app. You can change the time in
+      in place of the profile's value. It does not change the pump or AID app. You can change the time in
       <a class="underline" href={patientSettingsHref}>patient settings</a>. Check it with the care team.
     {/if}
   {:else if actionTime.source === InsulinActionTimeSource.ExternalProfile}

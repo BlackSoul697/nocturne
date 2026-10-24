@@ -41,8 +41,8 @@
   const EXAMPLE_RANGE_MGDL = [70, 180] as const;
 
   const OPTIONS: { value: GlucoseUnits; name: string }[] = [
-    { value: "mg/dl", name: "Milligrams per decilitre" },
-    { value: "mmol", name: "Millimoles per litre" },
+    { value: "mg/dl", name: "Milligrams per deciliter" },
+    { value: "mmol", name: "Millimoles per liter" },
   ];
 
   const profileUnits = $derived(
@@ -71,7 +71,7 @@
         Pick the unit the meter or sensor app shows.
       {/if}
       The same reading looks very different in each, so check the example matches
-      what you're used to.
+      what you are used to.
     </p>
   </div>
 
@@ -79,14 +79,14 @@
     <Alert.Root variant="info" class="max-w-200">
       <Info />
       <Alert.Description>
-        We've filled these in from your Nightscout. Check they're right.
+        We have filled these in from your Nightscout. Check they are right.
       </Alert.Description>
     </Alert.Root>
   {:else if nightscoutUnavailable}
     <Alert.Root variant="warning" class="max-w-200">
       <TriangleAlert />
       <Alert.Description>
-        We couldn't read your Nightscout's settings, so check these match what it
+        We could not read your Nightscout's settings, so check these match what it
         uses.
       </Alert.Description>
     </Alert.Root>
@@ -147,7 +147,7 @@
       <Alert.Title>Your Nightscout profile uses {getUnitLabel(profileUnits)}</Alert.Title>
       <Alert.Description>
         Its targets and insulin sensitivity were entered in {getUnitLabel(profileUnits)},
-        but you've chosen {getUnitLabel(units)}. Nocturne will show them in
+        but you have chosen {getUnitLabel(units)}. Nocturne will show them in
         {getUnitLabel(units)}, so the numbers will look different from Nightscout.
         Nothing in Nightscout, the pump or the loop app is changed.
       </Alert.Description>

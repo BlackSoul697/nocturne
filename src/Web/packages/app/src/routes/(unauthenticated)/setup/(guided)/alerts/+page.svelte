@@ -14,7 +14,7 @@
     <p class="text-sm text-muted-foreground">Loading…</p>
   {/snippet}
   {#snippet failed(error)}
-    <p class="text-sm text-destructive">{remoteErrorMessage(error, "We couldn't load your alerts.")}</p>
+    <p class="text-sm text-destructive">{remoteErrorMessage(error, "We could not load your alerts.")}</p>
   {/snippet}
 
   {@const status = await setupQuery}

@@ -36,7 +36,7 @@
       value: PatientRelationship.Helper,
       icon: HandHelping,
       title: "I'm setting it up for someone else",
-      description: "I'll hand it over to them when it's ready.",
+      description: "I will hand it over to them when it is ready.",
     },
   ];
 
@@ -55,7 +55,7 @@
       Who is Nocturne <em class="not-italic font-light text-primary">for</em>?
     </h1>
     <p class="max-w-140 text-base leading-relaxed text-muted-foreground">
-      We'll use your answer to word the rest of setup, so it talks about the
+      We will use your answer to word the rest of setup, so it talks about the
       right person.
     </p>
   </div>
@@ -104,7 +104,7 @@
         label="What's their name?"
         id="patient-name"
         labelVariant="muted"
-        description="Setup will say things like “Sam's glucose”. It's saved as their preferred name, and you can change it later in Settings."
+        description="Setup will say things like “Sam's glucose”. It is saved as their preferred name, and you can change it later in Settings."
       >
         {#snippet control(field)}
           <Input

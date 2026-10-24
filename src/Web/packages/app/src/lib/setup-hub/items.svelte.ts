@@ -53,10 +53,10 @@ export function setupHubItems(): Record<SetupHubItemKey, SetupHubItemView> {
       title: "Alerts",
       description: (voice) =>
         voice.kind === "self"
-          ? "Choose when Nocturne should alert you about your glucose."
+          ? "Choose when Nocturne alerts you about your glucose."
           : voice.kind === "named"
-            ? `Choose when Nocturne should alert you about ${voice.name}'s glucose.`
-            : "Choose when Nocturne should send glucose alerts.",
+            ? `Choose when Nocturne alerts you about ${voice.name}'s glucose.`
+            : "Choose when Nocturne sends glucose alerts.",
     },
     [SetupHubItemKey.Devices]: {
       slug: "devices",
@@ -81,7 +81,7 @@ export function setupHubItems(): Record<SetupHubItemKey, SetupHubItemView> {
           : voice.kind === "named"
             ? `Check the basal rates, carb ratios and targets ${voice.name}'s care team set.`
             : "Check the basal rates, carb ratios and targets the care team set.",
-      notForMeLabel: "I don't use these settings",
+      notForMeLabel: "I do not use these settings",
     },
     [SetupHubItemKey.Sharing]: {
       slug: "sharing",

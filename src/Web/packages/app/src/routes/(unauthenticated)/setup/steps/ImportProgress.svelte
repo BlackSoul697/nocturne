@@ -131,7 +131,7 @@
       // exist by now. If none is found there is nothing to monitor.
       if (!resolvedJobId) {
         error = startError
-          ? "We couldn't start the import from Nightscout. You can continue and run it later from Settings."
+          ? "We could not start the import from Nightscout. You can continue and run it later from Settings."
           : "No import from Nightscout is running. You can continue and start one later from Settings.";
         startReason = startError ?? null;
         loading = false;
@@ -224,7 +224,7 @@
           // itself keeps running on the server regardless of what we show here.
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
             error =
-              "We lost track of the import's progress. It may still be running; check Settings to see how it ended.";
+              "We lost track of the import's progress. It may still be running. Check Settings to see how it ended.";
             onResult?.("running");
             onSettled?.();
             break;

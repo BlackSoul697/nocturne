@@ -35,7 +35,7 @@
         <div class="flex items-center gap-4">
           <CircleCheck class="h-6 w-6 shrink-0 text-success" />
           <div class="flex flex-col gap-1">
-            <h1 class="font-brand text-2xl font-light">All set up</h1>
+            <h1 class="font-brand text-2xl font-light">Setup is complete</h1>
             <p class="text-sm text-muted-foreground">
               Everything here is done or set aside. You can change any of it below.
             </p>

@@ -60,7 +60,7 @@
       }
       editing = null;
     } catch (err) {
-      error = describeSubmitError(err, "We couldn't save that.");
+      error = describeSubmitError(err, "We could not save that.");
     }
   }
 
@@ -76,7 +76,7 @@
   <dl class="divide-y">
     <div class="grid grid-cols-[1fr_auto] items-center gap-4 px-6 py-4">
       <div class="flex flex-col gap-1">
-        <dt class="text-xs text-muted-foreground">Who it's for</dt>
+        <dt class="text-xs text-muted-foreground">Who it is for</dt>
         <dd class="text-sm font-medium" data-testid="basics-who">
           {#if stored?.relationship === PatientRelationship.Self}
             You
@@ -85,9 +85,9 @@
           {:else if stored?.relationship === PatientRelationship.Caregiver}
             Someone you care for
           {:else if stored?.relationship === PatientRelationship.Helper && voice.kind === "named"}
-            {voice.name}, who you're setting it up for
+            {voice.name}, who you are setting it up for
           {:else if stored?.relationship === PatientRelationship.Helper}
-            Someone you're setting it up for
+            Someone you are setting it up for
           {:else}
             Not answered yet
           {/if}
@@ -117,7 +117,7 @@
   <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
     <Dialog.Header class="sr-only">
       <Dialog.Title>
-        {editing === "who" ? "Who it's for" : "Glucose units and timezone"}
+        {editing === "who" ? "Who it is for" : "Glucose units and timezone"}
       </Dialog.Title>
     </Dialog.Header>
 
@@ -132,7 +132,7 @@
         {error}
       />
       <p class="px-4 text-center text-sm text-muted-foreground">
-        Changing units changes how readings are shown to you and to anyone who hasn't picked
+        Changing units changes how readings are shown to you and to anyone who has not picked
         their own. Therapy settings, like targets and insulin sensitivity, are entered in the
         unit chosen here. Settings already saved keep the unit they were entered in.
       </p>
