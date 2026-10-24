@@ -142,7 +142,8 @@
             placement="bottom"
             ticks={hourTicks}
             format={tickLabel}
-            tickLabelProps={{ class: "text-xs fill-muted-foreground" }}
+            tickOcclusion
+            tickLabelProps={{ class: "text-xs fill-muted-foreground", fontSize: 12 }}
           />
         {/if}
       </Svg>
