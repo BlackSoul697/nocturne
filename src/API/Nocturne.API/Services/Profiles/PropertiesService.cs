@@ -244,7 +244,7 @@ public class PropertiesService : IPropertiesService
         if (currentSgv == null)
             return;
 
-        var mgdlValue = DirectionService.MgdlOf(currentSgv);
+        var mgdlValue = currentSgv.GlucoseMgdl();
         var bgnow = BucketProperties(DirectionService.BuildBuckets(ddata.Sgvs!)[0]);
         bgnow["mgdl"] = mgdlValue;
         bgnow["scaled"] = currentSgv.Scaled ?? mgdlValue;
@@ -260,7 +260,7 @@ public class PropertiesService : IPropertiesService
         if (bucket.Last != null)
         {
             result["mean"] = bucket.Mean!.Value;
-            result["last"] = DirectionService.MgdlOf(bucket.Last);
+            result["last"] = bucket.Last.GlucoseMgdl();
             result["mills"] = bucket.Last.Mills;
         }
 
@@ -507,7 +507,7 @@ public class PropertiesService : IPropertiesService
         if (rawEntry == null)
             return;
 
-        var mgdlValue = rawEntry.Mgdl != 0 ? rawEntry.Mgdl : rawEntry.Sgv ?? 0;
+        var mgdlValue = rawEntry.GlucoseMgdl();
 
         properties["rawbg"] = new Dictionary<string, object?>
         {

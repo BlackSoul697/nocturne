@@ -92,6 +92,18 @@ public class PebbleControllerTests
             .GetProperty("bgs")[0];
 
     [Fact]
+    public async Task Glucose_IsTheMgdlValueWhenItDiffersFromSgv()
+    {
+        var entry = Sgv(113, 0);
+        entry.Sgv = 90;
+        var controller = NewController("mg/dl", entry);
+
+        var bg = FirstBg(await Get(controller));
+
+        bg.GetProperty("sgv").GetString().Should().Be("113");
+    }
+
+    [Fact]
     public async Task IobAndCob_ComeFromTheReader()
     {
         _iobCob

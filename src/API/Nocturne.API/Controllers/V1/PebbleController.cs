@@ -126,7 +126,7 @@ public class PebbleController : ControllerBase
                 var entry = entries[i];
                 var bg = new PebbleBg
                 {
-                    Sgv = FormatGlucose(entry.Sgv ?? entry.Mgdl, useMmol),
+                    Sgv = FormatGlucose(entry.GlucoseMgdl(), useMmol),
                     Trend = entry.Trend ?? DirectionExtensions.ParseToTrendNumber(entry.Direction),
                     Direction = entry.Direction ?? "NONE",
                     Datetime = entry.Mills
