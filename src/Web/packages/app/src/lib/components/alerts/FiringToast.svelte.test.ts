@@ -98,6 +98,24 @@ describe("FiringToast", () => {
 		await expect.element(page.getByRole("button", { name: "Acknowledge" })).not.toBeInTheDocument();
 	});
 
+	it("links to the rule only for a member holding alerts.read", async () => {
+		activeAlerts = [excursion("e", { alertRuleId: "11111111-1111-1111-1111-111111111111" })];
+
+		pageState.data = { effectivePermissions: ["glucose.read", "device.notify"] };
+		const withoutScope = render(FiringToast);
+		await expect.element(page.getByRole("button", { name: "Mute for me" })).toBeVisible();
+		await expect
+			.element(page.getByRole("link", { name: /Open settings for/ }))
+			.not.toBeInTheDocument();
+		withoutScope.unmount();
+
+		pageState.data = { effectivePermissions: ["alerts.read", "device.notify"] };
+		render(FiringToast);
+		await expect
+			.element(page.getByRole("link", { name: /Open settings for/ }))
+			.toHaveAttribute("href", "/alerts/11111111-1111-1111-1111-111111111111");
+	});
+
 	it("never raises a card for an alert the member already muted", async () => {
 		pageState.data = { effectivePermissions: ["glucose.read", "device.notify"] };
 		activeAlerts = [excursion("e", { mutedByCaller: true })];
