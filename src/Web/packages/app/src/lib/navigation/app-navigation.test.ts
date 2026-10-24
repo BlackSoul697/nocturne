@@ -83,7 +83,6 @@ describe("buildAppNavigation", () => {
       "Calendar",
       "Time Spans",
       "Reports",
-      "Clock",
     ]);
   });
 
@@ -148,7 +147,6 @@ describe("readOnlyNav", () => {
       "calendar",
       "time-spans",
       "reports",
-      "clock",
     ]);
   });
 

@@ -233,6 +233,21 @@ public class ClockFacesControllerTests
     }
 
     [Fact]
+    public async Task ACallerWithNoSubject_ReadsNoFacesAndAnEmptyStarter()
+    {
+        var controller = CreateController(new AuthContext { IsAuthenticated = true, SubjectId = null });
+
+        var list = await controller.List();
+        var starter = await controller.GetStarter();
+
+        list.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeAssignableTo<IEnumerable<ClockFaceListItem>>().Which.Should().BeEmpty();
+        starter.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<ClockFaceConfig>().Which.Rows.Should().BeEmpty();
+        _clockFaceServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetGlucose_ReturnsNotFound_AndNeverReadsGlucose_WhenClockDoesNotExist()
     {
         var id = Guid.NewGuid();

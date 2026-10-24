@@ -18,7 +18,8 @@ namespace Nocturne.API.Controllers.V4.Profiles;
 /// A face serves glucose to anyone holding its link, so creating, changing or deleting one is
 /// managing a public link to the tenant and takes <see cref="Scope.SharingManage"/>, as
 /// <see cref="Identity.ShareLinkController"/> does. A face belongs to the caller's own subject, so a
-/// caller with none (the instance key) is refused rather than saving an ownerless face.
+/// caller with none (the instance key) is refused rather than saving an ownerless face, and reads
+/// an empty list and an empty starter.
 /// </remarks>
 /// <seealso cref="IClockFaceService"/>
 [ApiController]
@@ -125,7 +126,11 @@ public class ClockFacesController : ControllerBase
     [ProducesResponseType(typeof(ClockFaceListItem[]), 200)]
     public async Task<ActionResult<ClockFaceListItem[]>> List()
     {
-        var userId = HttpContext.GetSubjectIdString()!;
+        if (HttpContext.GetSubjectIdString() is not { } userId)
+        {
+            return Ok(Array.Empty<ClockFaceListItem>());
+        }
+
         var clockFaces = await _clockFaceService.GetByUserAsync(userId, HttpContext.RequestAborted);
 
         return Ok(clockFaces.ToArray());
@@ -141,7 +146,11 @@ public class ClockFacesController : ControllerBase
     [ProducesResponseType(typeof(ClockFaceConfig), 200)]
     public async Task<ActionResult<ClockFaceConfig>> GetStarter()
     {
-        var userId = HttpContext.GetSubjectIdString()!;
+        if (HttpContext.GetSubjectIdString() is not { } userId)
+        {
+            return Ok(new ClockFaceConfig());
+        }
+
         return Ok(await _clockFaceService.GetStarterConfigAsync(userId, HttpContext.RequestAborted));
     }
 

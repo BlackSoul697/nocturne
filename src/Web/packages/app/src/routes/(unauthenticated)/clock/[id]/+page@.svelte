@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import { satisfiesScope } from "$lib/authorization/scopes";
   import { onMount } from "svelte";
   import { setClockGlucoseSource } from "$lib/stores/realtime-store.svelte";
   import { PublicClockStore } from "$lib/stores/public-clock-store.svelte";
@@ -24,6 +25,10 @@
 
   // The route param identifies the clock and is the capability for its glucose.
   const id = page.params.id ?? "";
+
+  const canManage = $derived(
+    satisfiesScope(page.data.effectivePermissions ?? [], "sharing.manage"),
+  );
 
   // `?embed=1` hosts this page inside the desktop companion's floating window, where the in-app
   // navigation (which links back to the authenticated /clock area) doesn't apply.
@@ -149,14 +154,16 @@
           Demo Mode
         </Badge>
       {/if}
-      <Button
-        variant="overlay"
-        size="sm"
-        onclick={() => goto(resolve("/(authenticated)/clock/config/[id]", { id }))}
-      >
-        <Settings class="size-4" />
-        Edit
-      </Button>
+      {#if canManage}
+        <Button
+          variant="overlay"
+          size="sm"
+          onclick={() => goto(resolve("/(authenticated)/clock/config/[id]", { id }))}
+        >
+          <Settings class="size-4" />
+          Edit
+        </Button>
+      {/if}
     </div>
   </div>
   {/if}
