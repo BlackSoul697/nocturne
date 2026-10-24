@@ -71,4 +71,11 @@ public interface IGoogleHealthReadingWriter
     /// number deleted.
     /// </summary>
     Task<int> DeleteSleepAsync(bool allowReimport, IAuditContext auditContext, CancellationToken ct);
+    /// <summary>
+    /// Counts the tenant's Google Health sleep sessions starting from <paramref name="since"/> on, or
+    /// all of them when it is null. Returns null when there are none.
+    /// </summary>
+    Task<GoogleHealthSleepStats?> DescribeSleepAsync(DateTime? since, DateTime last24Hours, CancellationToken ct);
 }
+
+public sealed record GoogleHealthSleepStats(long Count, int CountLast24Hours, DateTime Latest, DateTime Oldest);

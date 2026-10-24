@@ -634,6 +634,10 @@ public class GoogleHealthTests : IDisposable
         IConnectorDataPurge purge = Service(store, new StubHandler(_ => Json("{}")), tenantId, writer: writer);
         Assert.Equal(GoogleHealthConnectorService.ConnectorName, purge.ConnectorName);
 
+        var described = Assert.Single(await purge.DescribeAsync(null, start.AddHours(1), default));
+        Assert.Equal(("Sleep", 1L, 0, start), (described.DataType, described.Count, described.CountLast24Hours, described.Latest));
+        Assert.Empty(await purge.DescribeAsync(start.AddDays(1), start.AddDays(1), default));
+
         var deleted = await purge.PurgeAsync(allowReimport,
             new AuditContext { SubjectId = Guid.NewGuid(), SubjectName = "owner", AuthType = "Session" }, default);
 
