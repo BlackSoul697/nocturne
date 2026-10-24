@@ -48,7 +48,7 @@ public partial class StatisticsControllerTests
             new[]
             {
                 new ContributingDevice { PatientDeviceId = read.Id, Name = "Reader", ReadingCount = 3 },
-                new ContributingDevice { PatientDeviceId = null, Name = "Unattributed", ReadingCount = 2 },
+                new ContributingDevice { PatientDeviceId = null, Name = null, ReadingCount = 2 },
             },
             options => options.WithStrictOrdering());
     }

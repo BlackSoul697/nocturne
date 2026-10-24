@@ -63,7 +63,7 @@ public class StatisticsServiceReportsTests
             [a, idle, pump]);
 
         result.Select(d => (d.PatientDeviceId, d.Name, d.ReadingCount))
-            .Should().Equal((a.Id, "A", 2), (null, "Unattributed", 1));
+            .Should().Equal((a.Id, (string?)"A", 2), (null, (string?)null, 1));
     }
 
     [Fact]

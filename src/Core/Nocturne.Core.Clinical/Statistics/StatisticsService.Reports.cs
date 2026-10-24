@@ -47,7 +47,7 @@ public partial class StatisticsService
             yield return new ContributingDevice
             {
                 PatientDeviceId = null,
-                Name = "Unattributed",
+                Name = null,
                 ReadingCount = unattributedCount,
             };
         }

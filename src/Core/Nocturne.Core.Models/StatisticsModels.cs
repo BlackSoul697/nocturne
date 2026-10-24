@@ -1524,8 +1524,8 @@ public sealed class ContributingDevice
     /// <summary>The registered <see cref="PatientDevice"/> id, or <c>null</c> for the unattributed bucket.</summary>
     public Guid? PatientDeviceId { get; set; }
 
-    /// <summary>Display name of the device, or "Unattributed" for readings with no <see cref="PatientDeviceId"/>.</summary>
-    public string Name { get; set; } = string.Empty;
+    /// <summary>Display name of the device, or <c>null</c> for the unattributed bucket.</summary>
+    public string? Name { get; set; }
 
     /// <summary>Number of readings attributed to this device within the requested window.</summary>
     public int ReadingCount { get; set; }
