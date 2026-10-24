@@ -42,7 +42,7 @@
 
     <SystemRequirements />
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Step 1: Download the release bundle</h2>
+    <h2 data-install-step="1" class="text-2xl font-bold mt-8 mb-4">Step 1: Download the release bundle</h2>
     <p class="text-muted-foreground mb-4">
         Download the <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">docker-compose</code>
         bundle from the
@@ -67,7 +67,7 @@
         <CodeBlock code={dockerCompose} class="mt-2" maxHeight="400px" />
     </details>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Step 2: Configure environment variables</h2>
+    <h2 data-install-step="2" class="text-2xl font-bold mt-8 mb-4">Step 2: Configure environment variables</h2>
     <p class="text-muted-foreground mb-4">
         Edit <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">.env</code> and fill in your
         values. The required fields come first and are left blank; optional bot integrations are commented out.
@@ -181,7 +181,7 @@
         <CodeBlock code={bindDataCompose} class="mt-2" maxHeight="240px" />
     </details>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Step 3: Start the services</h2>
+    <h2 data-install-step="3" class="text-2xl font-bold mt-8 mb-4">Step 3: Start the services</h2>
     <CodeBlock code="docker compose up -d" class="mb-4" />
     <p class="text-muted-foreground mb-8">
         Docker will pull the images and start all services. First run takes a few minutes.
@@ -215,7 +215,7 @@
         for worked nginx, Traefik, and Caddy configurations.
     </p>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Step 4: Verify the installation</h2>
+    <h2 data-install-step="4" class="text-2xl font-bold mt-8 mb-4">Step 4: Verify the installation</h2>
     <VerificationSteps />
 
     <h2 class="text-2xl font-bold mt-8 mb-4">Updating</h2>
@@ -274,7 +274,7 @@
     <p class="text-muted-foreground mb-8">To start fresh, stop all services and remove volumes:</p>
     <CodeBlock code="docker compose down -v" class="mb-8" />
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
+    <h2 data-install-step="next-steps" class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
     <NextSteps />
 
     <SupportNocturne />

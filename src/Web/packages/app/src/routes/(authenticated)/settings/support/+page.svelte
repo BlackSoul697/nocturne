@@ -40,6 +40,7 @@
   import { toast } from "svelte-sonner";
   import { createCopyFeedback } from "$lib/hooks/copy-feedback.svelte";
   import { describeSubmitError } from "$lib/forms/submit-error";
+  import { docsUrl } from "$lib/docs-url";
   import {
     buildDiagnosticReport,
     readDiagnosticDevice,
@@ -105,7 +106,7 @@
       name: "Documentation",
       description: "Guides, tutorials, and API reference",
       icon: BookOpen,
-      href: "https://getnocturne.dev/docs",
+      href: docsUrl("/docs", "support"),
     },
     {
       name: "Nightscout Foundation",
