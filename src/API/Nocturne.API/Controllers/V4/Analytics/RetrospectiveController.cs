@@ -6,6 +6,7 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.API.Services.Devices;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Treatments;
@@ -131,7 +132,9 @@ public class RetrospectiveController : ControllerBase
         // Get glucose at the specified time (interpolated)
         var glucoseData = GetGlucoseAtTime(entryList, time);
         // Get basal rate at the specified time
-        var basalData = await GetBasalRateAtTimeAsync(tempBasals, time);
+        var basalData = await GetBasalRateAtTimeAsync(
+            StatisticsService.ClipOverlappingTempBasals(tempBasals, Math.Min(time + 1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())),
+            time);
         // Get recent treatments as summary data (boluses and carb intakes within 30 minutes)
         var recentTreatments = new List<TreatmentSummaryData>();
         var recentCutoff = time - 30 * 60 * 1000;
@@ -219,7 +222,7 @@ public class RetrospectiveController : ControllerBase
         var dayEnd = dayStart.AddDays(1).AddMilliseconds(-1);
         var startMills = dayStart.ToUnixTimeMilliseconds();
         var endMills = dayEnd.ToUnixTimeMilliseconds();
-        // Fetch all data for the day (plus 8 hours before for IOB calculation context)
+        // Fetch all data for the day, boluses and carbs from 8 hours before for IOB calculation context
         var fetchFrom = dayStart.UtcDateTime.AddHours(-8);
         var fetchTo = dayEnd.UtcDateTime;
         // Get entries for the day
@@ -234,8 +237,8 @@ public class RetrospectiveController : ControllerBase
             limit: 5000, offset: 0, descending: false, ct: cancellationToken
         )).ToList();
         var tempBasals = (await _tempBasalRepository.GetAsync(
-            from: fetchFrom, to: fetchTo, device: null, source: null,
-            limit: 5000, offset: 0, descending: false, ct: cancellationToken
+            from: StatisticsService.TempBasalReadStart(dayStart.UtcDateTime), to: fetchTo, device: null, source: null,
+            limit: int.MaxValue, offset: 0, descending: false, ct: cancellationToken
         )).ToList();
         var carbIntakes = (await _carbIntakeRepository.GetAsync(
             from: fetchFrom, to: fetchTo, device: null, source: null,
@@ -253,6 +256,8 @@ public class RetrospectiveController : ControllerBase
             .ToList() ?? new List<DeviceStatus>();
         // Calculate data points at each interval
         var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, cancellationToken);
+        var delivered = StatisticsService.ClipOverlappingTempBasals(
+            tempBasals, Math.Min(endMills, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         var dataPoints = new List<RetrospectiveDataPoint>();
         var totalIntervals = (24 * 60) / intervalMinutes;
         var intervalMs = intervalMinutes * 60 * 1000L;
@@ -275,7 +280,7 @@ public class RetrospectiveController : ControllerBase
             // Get glucose at this time
             var glucose = GetGlucoseAtTime(entryList, pointTime);
             // Get basal rate
-            var basal = GetBasalRateAtTime(tempBasals, pointTime, rateAt);
+            var basal = GetBasalRateAtTime(delivered, pointTime, rateAt);
             dataPoints.Add(new RetrospectiveDataPoint
             {
                 Time = pointTime,
@@ -333,13 +338,13 @@ public class RetrospectiveController : ControllerBase
         var dayEnd = dayStart.AddDays(1);
         var startMills = dayStart.ToUnixTimeMilliseconds();
         var endMills = dayEnd.ToUnixTimeMilliseconds();
-        // Query temp basals (include 1 hour before for active temp basals spanning midnight)
-        var fetchFrom = dayStart.UtcDateTime.AddHours(-1);
         var fetchTo = dayEnd.UtcDateTime;
         var tempBasals = (await _tempBasalRepository.GetAsync(
-            from: fetchFrom, to: fetchTo, device: null, source: null,
-            limit: 2000, offset: 0, descending: false, ct: cancellationToken
+            from: StatisticsService.TempBasalReadStart(dayStart.UtcDateTime), to: fetchTo, device: null, source: null,
+            limit: int.MaxValue, offset: 0, descending: false, ct: cancellationToken
         )).ToList();
+        var delivered = StatisticsService.ClipOverlappingTempBasals(
+            tempBasals, Math.Min(endMills, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         // Generate basal timeline
         var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, cancellationToken);
         var dataPoints = new List<BasalDataPoint>();
@@ -348,7 +353,7 @@ public class RetrospectiveController : ControllerBase
         {
             var pointTime = startMills + (i * intervalMinutes * 60 * 1000);
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(pointTime);
-            var basal = GetBasalRateAtTime(tempBasals, pointTime, rateAt);
+            var basal = GetBasalRateAtTime(delivered, pointTime, rateAt);
             dataPoints.Add(new BasalDataPoint
             {
                 Time = pointTime,

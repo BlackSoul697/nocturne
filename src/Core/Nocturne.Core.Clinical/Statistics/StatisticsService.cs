@@ -2395,7 +2395,7 @@ public partial class StatisticsService : IStatisticsService
     /// The insulin (U) a delivered temp basal from <see cref="ClipOverlappingTempBasals"/> gave.
     /// Null when the rate is unknown.
     /// </summary>
-    internal static double? GetTempBasalInsulin(TempBasal delivered) =>
+    public static double? GetTempBasalInsulin(TempBasal delivered) =>
         delivered.Rate * ((delivered.EndMills!.Value - delivered.StartMills) / (1000.0 * 60 * 60));
 
     /// <summary>
