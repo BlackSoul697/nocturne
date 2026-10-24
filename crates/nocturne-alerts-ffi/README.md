@@ -63,7 +63,10 @@ The `rule`, `context` and `result` shapes are exactly the golden-corpus
 interchange shapes (`ScenarioRule`, `ScenarioContext`, `ExpectedRuleResult` in
 `tests/Parity/Nocturne.Alerts.Corpus/ScenarioModels.cs`)
 — the corpus in `tests/Parity/AlertEngineCorpus/` is the machine-checkable
-spec for all of them. Timestamps are RFC 3339 UTC; the engine emits
+spec for all of them. An enum value in the context (a state span's
+`category`, `trend_bucket`, `glucose_bucket`, the active pump state's `mode`)
+is exactly its wire name, as in condition JSON; any other spelling reads as
+absent. Timestamps are RFC 3339 UTC; the engine emits
 whole-second instants without a fraction (`2026-01-05T12:00:00Z`) and
 preserves sub-second precision when present.
 
@@ -347,7 +350,7 @@ The names are `glucose`, `predictions`, `insulin`, `carbs`, `pump`, `aps`,
 ## References any (`nocturne_alerts_references_any`)
 
 Whether a rule reads any of `facts`. The request is the `rule_reads` request
-plus a required `facts` list of wire names, matched ignoring ASCII case:
+plus a required `facts` list of wire names, matched exactly:
 
 ```jsonc
 { "schema_version": 1, "condition_type": "threshold", "condition_params": { … }, "facts": ["carbs"] }
@@ -426,13 +429,12 @@ Response — a recursive `tree`:
   the same pre-order walk, so a malformed container
   (missing `child`/`conditions`) collapses to a single leaf and a JSON-`null`
   composite slot is a typeless leaf — identical to the force-eval log.
-- **Operands are decoded for rendering:** enum ordinals become wire names
-  (`days: [0, 6]` → `["Sunday", "Saturday"]`); decimal operands round-trip
-  **exactly** (the crate's `serde_json` uses `arbitrary_precision`).
+- **Operands are rendered as read:** enum operands by wire name; decimal
+  operands round-trip **exactly** (the crate's `serde_json` uses
+  `arbitrary_precision`).
 - Like `evaluate`, an **unknown `condition_type`** (or a malformed envelope /
-  wrong `schema_version`) is an error envelope. A malformed *payload* is not —
-  it collapses to a single best-effort leaf with default operands, mirroring
-  the engine's silent-fail.
+  wrong `schema_version`) is an error envelope. A body that does not parse is
+  not: its `tree` is `null`.
 - **Auto-resolve tree.** A request may also carry `auto_resolve_params`, a full
   condition node as a rule stores it. The response then has
   `auto_resolve_tree`, described the same way with paths under the

@@ -1379,6 +1379,15 @@ fn raw(json: &str) -> Value {
 }
 
 #[test]
+fn a_repeated_property_binds_its_last_occurrence() {
+    let ctx = glucose_ctx(Some("60"), Some("0"));
+    let last_is_70 = raw(r#"{"direction": "below", "value": 50, "value": 70}"#);
+    let last_is_50 = raw(r#"{"direction": "below", "value": 70, "value": 50}"#);
+    assert!(eval_payload(ConditionKind::Threshold, &last_is_70, &ctx));
+    assert!(!eval_payload(ConditionKind::Threshold, &last_is_50, &ctx));
+}
+
+#[test]
 fn uuid_payload_fields_accept_only_the_hyphenated_form() {
     let parses = |id: &str| {
         parse_payload(
@@ -1395,7 +1404,7 @@ fn uuid_payload_fields_accept_only_the_hyphenated_form() {
 }
 
 #[test]
-fn enum_integers_must_fit_an_int() {
+fn an_enum_value_is_exactly_a_wire_name() {
     let parses = |category: Value| {
         parse_payload(
             ConditionKind::StateSpanActive,
@@ -1403,32 +1412,16 @@ fn enum_integers_must_fit_an_int() {
         )
         .is_ok()
     };
-    assert!(parses(json!(2_147_483_647)));
-    assert!(parses(json!(-1)));
-    assert!(!parses(json!(2_147_483_648_i64)));
-    assert!(!parses(json!(-2_147_483_649_i64)));
-    assert!(!parses(json!("2147483648")));
-    assert!(!parses(json!("4.0")));
-    assert!(!parses(json!("0x4")));
-}
-
-#[test]
-fn enum_integer_strings_allow_surrounding_whitespace_and_a_sign() {
-    let ctx: SensorContext = serde_json::from_value(json!({
-        "active_state_spans": [
-            { "category": "Exercise", "state": null, "started_at": "2026-01-05T11:00:00Z" }
-        ]
-    }))
-    .unwrap();
-    for category in [" 4", "4 ", "+4"] {
-        assert!(
-            eval_payload(
-                ConditionKind::StateSpanActive,
-                &json!({ "category": category, "is_active": true }),
-                &ctx
-            ),
-            "{category:?}"
-        );
+    assert!(parses(json!("Exercise")));
+    for other in [
+        json!(4),
+        json!("4"),
+        json!(" 4"),
+        json!("exercise"),
+        json!("Exercise "),
+        json!(null),
+    ] {
+        assert!(!parses(other.clone()), "{other}");
     }
 }
 
