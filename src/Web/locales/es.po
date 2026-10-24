@@ -25005,6 +25005,7 @@ msgid "<0/> Condition"
 msgstr "<0/> Condición"
 
 #: src/lib/navigation/app-navigation.svelte.ts
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenants"
 msgstr "Inquilinos"
 
@@ -33677,4 +33678,29 @@ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
 msgid "Open the full profile page <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Database size"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Average per tenant"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Largest tenant"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Used"
+msgstr ""
+
+#. 0: formatNumber(capacity.usedPercent); 1: formatFileSize( capacity.budgetBytes ?? 0, )
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "{0}% of {1}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Database capacity"
 msgstr ""
