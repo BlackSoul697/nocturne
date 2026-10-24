@@ -101,7 +101,7 @@
       await deviceApprove({ user_code: deviceInfo.userCode, approved: true });
       deviceApproved = true;
     } catch (err) {
-      deviceLookupError = describeSubmitError(err, "Failed to approve. Check if the code expired.");
+      deviceLookupError = describeSubmitError(err, "Could not approve the device. The code possibly expired.");
     } finally {
       deviceApproveLoading = false;
     }

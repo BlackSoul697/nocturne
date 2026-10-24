@@ -418,7 +418,7 @@
               />
               <div class="space-y-0.5">
                 <Label class="cursor-pointer" for="rule-allow-dnd">
-                  Allow through do not disturb
+                  Allow through Do Not Disturb
                 </Label>
                 <p class="text-xs text-muted-foreground">
                   Critical-severity rules implicitly bypass DND regardless of

@@ -173,7 +173,7 @@
         toast.error(
           describeSubmitError(
             outcome.reason,
-            "This list can be out of date. Reload the page to see the latest."
+            "This list is possibly out of date. Reload the page to see the latest."
           )
         );
       }

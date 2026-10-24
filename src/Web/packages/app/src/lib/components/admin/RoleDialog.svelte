@@ -55,7 +55,7 @@
       ],
     },
     {
-      name: "Care portal",
+      name: "Careportal",
       permissions: [
         "careportal:read",
         "careportal:create",

@@ -135,7 +135,7 @@
                 onclick={() =>
                   (viewParams.tightRange = showTightRange ? "hide" : "show")}
               >
-                {showTightRange ? "Hide" : "Show"} Tight range
+                {showTightRange ? "Hide" : "Show"} tight range
               </Button>
             </div>
           </Card.Header>

@@ -91,7 +91,7 @@
 </script>
 
 <svelte:head>
-  <title>{dateDisplay ? `${dateDisplay} - Sleep Report` : "Sleep report"} - Nocturne</title>
+  <title>{dateDisplay ? `${dateDisplay} - Sleep report` : "Sleep report"} - Nocturne</title>
 </svelte:head>
 
 {#if report && session}

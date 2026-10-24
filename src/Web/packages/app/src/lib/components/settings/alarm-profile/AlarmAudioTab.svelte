@@ -109,7 +109,7 @@
               (showCustomSoundUpload = !showCustomSoundUpload)}
           >
             <Upload class="h-3 w-3 mr-1" />
-            {showCustomSoundUpload ? "Hide" : "Manage"} Custom sounds
+            {showCustomSoundUpload ? "Hide" : "Manage"} custom sounds
           </Button>
         </div>
         <div class="flex items-center gap-2">

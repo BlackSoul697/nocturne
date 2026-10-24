@@ -90,7 +90,7 @@
 <h2>5. Optional analytics and error reporting</h2>
 
 <p>
-  In the future, Nocturne can offer optional, opt-in features for:
+  In the future, Nocturne will possibly offer optional, opt-in features for:
 </p>
 
 <ul>

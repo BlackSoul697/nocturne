@@ -304,7 +304,7 @@
     {#if isStaleBasal}
       <div class="flex items-center gap-2 py-2 text-warning text-sm">
         <AlertTriangle class="h-4 w-4" />
-        <span>Basal data can be stale. The last update was received some time ago.</span>
+        <span>Basal data is possibly out of date. The last update arrived some time ago.</span>
       </div>
     {/if}
 

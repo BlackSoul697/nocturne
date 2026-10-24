@@ -91,7 +91,7 @@
 <ul>
   <li>Use the software for lawful purposes only</li>
   <li>Not use it to harm others or violate their rights</li>
-  <li>Not abuse the software or use it in ways that damage the project or community</li>
+  <li>Not abuse the software or use it in ways that can damage the project or community</li>
   <li>Comply with all applicable laws and regulations</li>
 </ul>
 

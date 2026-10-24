@@ -39,7 +39,7 @@
   function getSuggestion(code: AuthErrorCode | undefined): string {
     const suggestions: Partial<Record<AuthErrorCode, string>> = {
       [AuthErrorCode.InvalidState]:
-        "Your session expired. Try linking again.",
+        "The sign-in state did not match. Your session possibly expired. Try linking again.",
       [AuthErrorCode.InvalidIntent]:
         "Your session expired before the link was completed. Try linking again.",
       [AuthErrorCode.IdentityAlreadyLinked]:

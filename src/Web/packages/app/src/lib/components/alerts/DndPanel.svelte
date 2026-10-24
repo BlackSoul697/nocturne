@@ -56,7 +56,7 @@
     } catch (err) {
       if (read === reads) {
         settings = null;
-        errorMessage = remoteErrorMessage(err, "Could not load do not disturb.");
+        errorMessage = remoteErrorMessage(err, "Could not load Do Not Disturb.");
       }
     } finally {
       loading = false;
@@ -84,7 +84,7 @@
     } catch (e) {
       errorMessage = describeSubmitError(
         e,
-        "Could not change do not disturb. Try again.",
+        "Could not change Do Not Disturb. Try again.",
       );
     } finally {
       saving = false;
@@ -125,7 +125,7 @@
             {:else}
               <Bell class="h-4 w-4" />
             {/if}
-            <span class="flex-1 truncate text-sm {inEffect ? 'text-status-info' : ''}">Do not disturb</span>
+            <span class="flex-1 truncate text-sm {inEffect ? 'text-status-info' : ''}">Do Not Disturb</span>
             {#if saving}
               <Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             {:else}

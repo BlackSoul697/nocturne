@@ -450,6 +450,7 @@
             <div class="flex items-center gap-3">
               <!-- Path badge -->
               <span
+                data-testid="setup-path-badge"
                 class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-semibold tracking-wider uppercase border border-(--onb-accent-dim) bg-(--onb-accent-dim) text-(--onb-accent)"
               >
                 {#if path === "migration"}
