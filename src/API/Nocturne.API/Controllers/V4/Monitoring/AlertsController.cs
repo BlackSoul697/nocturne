@@ -154,7 +154,7 @@ public class AlertsController : ControllerBase
     /// <see cref="V4ReadLimits.MaxPageSize"/>; both are clamped rather than rejected.
     /// </remarks>
     [HttpGet("history")]
-    [DenyNoAccountViewer(AllowGuest = true)]
+    [DenyNoAccountViewer]
     [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(AlertHistoryResponse), StatusCodes.Status200OK)]
@@ -286,14 +286,31 @@ public class AlertsController : ControllerBase
     [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> Acknowledge(
-        [FromBody] AcknowledgeRequest request, CancellationToken ct)
+        [FromBody] AcknowledgeRequest request,
+        [FromServices] AlertReceiptService receipts, CancellationToken ct)
     {
         var tenantId = _tenantAccessor.TenantId;
+
+        List<Guid> open;
+        await using (var db = await _contextFactory.CreateAsync(ct))
+        {
+            open = await db.AlertExcursions.AsNoTracking()
+                .Where(e => e.EndedAt == null)
+                .Select(e => e.Id)
+                .ToListAsync(ct);
+        }
 
         await _acknowledgementService.AcknowledgeAllAsync(
             tenantId,
             User.ResolveAcknowledger(request.AcknowledgedBy),
             ct);
+
+        // As for one excursion: acknowledging every alarm is also seeing each of them.
+        if (AlertReceiptActor.Of(HttpContext) is { Kind: AlertReceiptActorKind.Member } member)
+        {
+            foreach (var excursionId in open)
+                await receipts.RecordAsync(excursionId, member, ct);
+        }
 
         return NoContent();
     }
@@ -480,8 +497,8 @@ public class ActiveExcursionResponse
     public List<ActiveInstanceResponse> ActiveInstances { get; set; } = [];
 
     /// <summary>
-    /// Who has recorded seeing it, oldest first: every viewer for a member, only its own for a share
-    /// or guest link.
+    /// Who has recorded seeing it, oldest first: every viewer for a caller with an account, only its
+    /// own for a share or guest link.
     /// </summary>
     public List<AlertReceiptResponse> Receipts { get; set; } = [];
 }

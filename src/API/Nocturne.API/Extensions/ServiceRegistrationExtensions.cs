@@ -213,18 +213,30 @@ public static class ServiceRegistrationExtensions
     public const string NoAccountAlertsRateLimitPolicy = "no-account-alerts";
 
     /// <summary>
-    /// Partition key for <see cref="NoAccountAlertsRateLimitPolicy"/>: the request host, lowered, and
-    /// the caller's credential when it has one, else the clock face in the route. Not the client
-    /// address, which the caller controls through X-Forwarded-For.
+    /// Partition key for <see cref="NoAccountAlertsRateLimitPolicy"/>: the request host, lowered,
+    /// and the hashed credential the request presents (session or bearer, as
+    /// <see cref="TranslationDraftPartitionKey"/> reads them, or a guest session cookie), else the
+    /// clock face in the route, else one anonymous bucket for the host.
     /// </summary>
+    /// <remarks>
+    /// The limiter runs before authentication, so the key reads the request rather than the auth
+    /// context, and never the client address, which the caller controls through X-Forwarded-For.
+    /// A public share is its own host, so its viewers share a bucket no one without the link can
+    /// spend.
+    /// </remarks>
     internal static string NoAccountAlertsPartitionKey(HttpContext context)
     {
         var host = context.Request.Host.Host.ToLowerInvariant();
-        var auth = context.GetAuthContext();
-        var who = auth?.TokenId?.ToString()
-            ?? auth?.SubjectId?.ToString()
-            ?? context.Request.RouteValues["id"]?.ToString()
-            ?? "anonymous";
+        var cookie = context.RequestServices.GetService<IOptions<OidcOptions>>()?.Value.Cookie;
+        var credential =
+            (cookie is null ? null : context.Request.Cookies[cookie.AccessTokenName])
+            ?? (cookie is null ? null : context.Request.Cookies[cookie.RefreshTokenName])
+            ?? context.Request.Cookies[GuestSessionHandler.CookieName]
+            ?? TokenCredential(context.Request);
+
+        var who = !string.IsNullOrEmpty(credential)
+            ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(credential)))
+            : context.Request.RouteValues["id"]?.ToString() ?? AnonymousDraftPartition;
         return $"{host}|{who}";
     }
 
@@ -594,8 +606,8 @@ public static class ServiceRegistrationExtensions
                     )
             );
 
-            // A clock polls its alerts every few seconds from each screen it is open on, and a
-            // receipt is one press per alarm; 120 a minute per host and caller clears both.
+            // A clock polls its alerts every 10 seconds from each screen it is open on, so a face on
+            // a few dozen screens shares one bucket; a receipt is one press per alarm.
             options.AddPolicy(
                 NoAccountAlertsRateLimitPolicy,
                 context =>
@@ -603,7 +615,7 @@ public static class ServiceRegistrationExtensions
                         partitionKey: NoAccountAlertsPartitionKey(context),
                         factory: _ => new FixedWindowRateLimiterOptions
                         {
-                            PermitLimit = 120,
+                            PermitLimit = 300,
                             Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0,
                         }

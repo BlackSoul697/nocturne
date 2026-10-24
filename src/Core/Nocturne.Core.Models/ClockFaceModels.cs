@@ -333,8 +333,8 @@ public class ClockSettings
     /// the face, not a person: anyone holding the clock link can press it. Needs
     /// <see cref="ShowAlerts"/>.
     /// </summary>
-    [JsonPropertyName("allowAcknowledge")]
-    public bool AllowAcknowledge { get; set; }
+    [JsonPropertyName("allowMarkSeen")]
+    public bool AllowMarkSeen { get; set; }
 
     /// <summary>
     /// Validates against the <see cref="UserDisplayPreferences"/> vocabulary. A face saved before
@@ -343,7 +343,7 @@ public class ClockSettings
     public string? Validate() =>
         UserDisplayPreferences.Check("settings.glucoseUnits", GlucoseUnits ?? "null", UserDisplayPreferences.AllowedGlucoseUnits)
         ?? UserDisplayPreferences.Check("settings.timeFormat", TimeFormat ?? "null", UserDisplayPreferences.AllowedTimeFormats)
-        ?? (AllowAcknowledge && !ShowAlerts ? "settings.allowAcknowledge: requires showAlerts" : null);
+        ?? (AllowMarkSeen && !ShowAlerts ? "settings.allowMarkSeen: requires showAlerts" : null);
 }
 
 public class CreateClockFaceRequest

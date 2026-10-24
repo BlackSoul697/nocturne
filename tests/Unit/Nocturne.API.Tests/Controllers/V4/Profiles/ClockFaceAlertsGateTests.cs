@@ -31,12 +31,12 @@ public class ClockFaceAlertsGateTests
     [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task Create_RefusesAlertsToACallerWhoCannotReadThem(bool showAlerts, bool allowAcknowledge)
+    public async Task Create_RefusesAlertsToACallerWhoCannotReadThem(bool showAlerts, bool allowMarkSeen)
     {
         var result = await Faces(Scope.GlucoseRead, Scope.ReportsRead).Create(new CreateClockFaceRequest
         {
             Name = "Kitchen",
-            Config = WithAlerts(showAlerts, allowAcknowledge),
+            Config = WithAlerts(showAlerts, allowMarkSeen),
         });
 
         result.Result.Should().BeOfType<ObjectResult>()
@@ -94,9 +94,9 @@ public class ClockFaceAlertsGateTests
         seen.Should().BeOfType<NotFoundResult>();
     }
 
-    private static ClockFaceConfig WithAlerts(bool showAlerts, bool allowAcknowledge) => new()
+    private static ClockFaceConfig WithAlerts(bool showAlerts, bool allowMarkSeen) => new()
     {
-        Settings = new ClockSettings { ShowAlerts = showAlerts, AllowAcknowledge = allowAcknowledge },
+        Settings = new ClockSettings { ShowAlerts = showAlerts, AllowMarkSeen = allowMarkSeen },
     };
 
     private ClockFacesController Faces(params string[] scopes)

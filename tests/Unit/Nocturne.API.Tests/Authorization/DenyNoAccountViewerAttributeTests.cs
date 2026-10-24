@@ -11,22 +11,20 @@ namespace Nocturne.API.Tests.Authorization;
 public class DenyNoAccountViewerAttributeTests
 {
     [Fact]
-    public void APublicShare_IsRefusedEvenWhereGuestsAreAdmitted()
+    public void APublicShare_IsRefused()
     {
         var context = Context(new AuthContext { IsAuthenticated = false });
         context.SetShareAccess();
 
         DenyNoAccountViewerAttribute.Refuses(context).Should().BeTrue();
-        DenyNoAccountViewerAttribute.Refuses(context, allowGuest: true).Should().BeTrue();
     }
 
     [Fact]
-    public void AGuest_IsRefusedUnlessAdmitted()
+    public void AGuest_IsRefused()
     {
         var context = Context(new AuthContext { IsAuthenticated = true, AuthType = AuthType.Guest });
 
         DenyNoAccountViewerAttribute.Refuses(context).Should().BeTrue();
-        DenyNoAccountViewerAttribute.Refuses(context, allowGuest: true).Should().BeFalse();
     }
 
     [Theory]

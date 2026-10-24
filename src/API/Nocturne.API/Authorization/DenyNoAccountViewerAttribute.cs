@@ -6,8 +6,7 @@ using Nocturne.Core.Models.Authorization;
 namespace Nocturne.API.Authorization;
 
 /// <summary>
-/// Refuses a viewer without an account: a public share link, and a guest link unless
-/// <see cref="AllowGuest"/> is set.
+/// Refuses a viewer without an account: a public share link or a guest link.
 /// </summary>
 /// <remarks>
 /// Either may hold <see cref="Scope.AlertsRead"/> so it can see an alarm that is firing now, which
@@ -19,17 +18,14 @@ namespace Nocturne.API.Authorization;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class DenyNoAccountViewerAttribute : Attribute, IAuthorizationFilter
 {
-    /// <summary>Whether a guest-link session is admitted while a public share is still refused.</summary>
-    public bool AllowGuest { get; init; }
-
     public void OnAuthorization(AuthorizationFilterContext context)
     {
-        if (Refuses(context.HttpContext, AllowGuest))
+        if (Refuses(context.HttpContext))
             context.Result = new ForbidResult();
     }
 
-    /// <summary>Whether a filter with <paramref name="allowGuest"/> refuses the request's caller.</summary>
-    public static bool Refuses(HttpContext httpContext, bool allowGuest = false)
+    /// <summary>Whether the filter refuses the request's caller.</summary>
+    public static bool Refuses(HttpContext httpContext)
     {
         // A share principal is the one unauthenticated caller that carries scopes. A caller with no
         // auth context at all is [Authorize]'s to refuse.
@@ -37,6 +33,6 @@ public sealed class DenyNoAccountViewerAttribute : Attribute, IAuthorizationFilt
         if (httpContext.IsShareAccess() || auth is { IsAuthenticated: false })
             return true;
 
-        return auth?.AuthType == AuthType.Guest && !allowGuest;
+        return auth?.AuthType == AuthType.Guest;
     }
 }

@@ -96,6 +96,19 @@ public class AlertAcknowledgeEndpointTests
     // ---- AcknowledgeExcursion ----
 
     [Fact]
+    public async Task AcknowledgeAll_RecordsThatTheMemberSawEachOpenAlarm()
+    {
+        var first = await SeedExcursionAsync();
+        var second = await SeedExcursionAsync();
+
+        await CreateController().Acknowledge(new AcknowledgeRequest(), Receipts, CancellationToken.None);
+
+        await using var db = new NocturneDbContext(_options) { TenantId = _tenantId };
+        (await db.AlertExcursionReceipts.Select(r => r.AlertExcursionId).ToListAsync())
+            .Should().BeEquivalentTo([first, second]);
+    }
+
+    [Fact]
     public async Task AcknowledgeExcursion_RecordsThatTheMemberSawIt()
     {
         var excursionId = await SeedExcursionAsync();
@@ -225,7 +238,7 @@ public class AlertAcknowledgeEndpointTests
         var request = new AcknowledgeRequest { AcknowledgedBy = "user:bob" };
 
         // Act
-        var result = await controller.Acknowledge(request, CancellationToken.None);
+        var result = await controller.Acknowledge(request, Receipts, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<NoContentResult>();

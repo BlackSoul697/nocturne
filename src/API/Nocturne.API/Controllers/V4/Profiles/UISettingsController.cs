@@ -90,16 +90,19 @@ public class UISettingsController : ControllerBase, IWriteScopedController
         var result = await ReadUISettings(cancellationToken);
         if (result.Result is OkObjectResult { Value: UISettingsConfiguration config })
         {
-            var granted = HttpContext.GetGrantedScopes();
             foreach (var section in UISettingsSections.All)
             {
-                if (section.ReadScope is { } scope && !Scope.Satisfies(granted, scope))
+                if (!CanRead(section))
                     section.Set(config, null);
             }
         }
 
         return result;
     }
+
+    private bool CanRead(UISettingsSection section) =>
+        (section.ReadScope is not { } scope || Scope.Satisfies(HttpContext.GetGrantedScopes(), scope))
+        && !(section.MemberOnly && DenyNoAccountViewerAttribute.Refuses(HttpContext));
 
     private async Task<ActionResult<UISettingsConfiguration>> ReadUISettings(
         CancellationToken cancellationToken
@@ -207,6 +210,8 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         if (known.ReadScope is { } scope && !Scope.Satisfies(HttpContext.GetGrantedScopes(), scope))
             return this.ForbiddenForScope(scope);
+        if (!CanRead(known))
+            return Forbid();
 
         var settings = await ReadUISettings(cancellationToken);
 

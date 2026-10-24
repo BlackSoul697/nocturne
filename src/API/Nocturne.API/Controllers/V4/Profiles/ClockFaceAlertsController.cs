@@ -81,7 +81,7 @@ public class ClockFaceAlertsController(
 
     /// <summary>
     /// Record that someone at the clock saw an alarm that is firing, for a face whose owner set
-    /// <see cref="ClockSettings.AllowAcknowledge"/>. It acknowledges and mutes nothing; members see
+    /// <see cref="ClockSettings.AllowMarkSeen"/>. It acknowledges and mutes nothing; members see
     /// that the face saw it.
     /// </summary>
     [HttpPost("{excursionId:guid}/seen")]
@@ -92,7 +92,7 @@ public class ClockFaceAlertsController(
     {
         var ct = HttpContext.RequestAborted;
         var face = await clockFaces.GetByIdAsync(id, ct);
-        if (face is null || !face.Config.Settings.ShowAlerts || !face.Config.Settings.AllowAcknowledge
+        if (face is null || !face.Config.Settings.ShowAlerts || !face.Config.Settings.AllowMarkSeen
             || !await OwnerReadsAlertsAsync(face, ct))
             return NotFound();
 

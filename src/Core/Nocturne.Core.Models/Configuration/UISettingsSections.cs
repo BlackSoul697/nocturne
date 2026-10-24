@@ -26,6 +26,12 @@ public sealed record UISettingsSection(
     /// renders with. Set on a section that reveals a data category.
     /// </summary>
     public string? ReadScope { get; init; }
+
+    /// <summary>
+    /// Whether the section is withheld from a viewer without an account (a guest or share link)
+    /// whatever its scopes: it holds household contact details or delivery credentials.
+    /// </summary>
+    public bool MemberOnly { get; init; }
 }
 
 /// <summary>
@@ -76,6 +82,9 @@ public static class UISettingsSections
             OmittedProperties = ["alarmConfiguration"],
             // Alarm thresholds and profiles decide when a low alert fires.
             ReadScope = Scope.AlertsRead,
+            // The alarm configuration carries emergency contacts and push-delivery keys, and a
+            // guest link holds alerts.read by default.
+            MemberOnly = true,
         },
         new(
             "services",

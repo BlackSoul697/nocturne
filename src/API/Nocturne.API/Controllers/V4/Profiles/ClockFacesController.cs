@@ -216,7 +216,7 @@ public class ClockFacesController : ControllerBase
     {
         var turnsOn = config?.Settings is { } after
             && ((after.ShowAlerts && before?.ShowAlerts != true)
-                || (after.AllowAcknowledge && before?.AllowAcknowledge != true));
+                || (after.AllowMarkSeen && before?.AllowMarkSeen != true));
 
         return turnsOn && !HttpContext.HasScope(Scope.AlertsRead)
             ? this.ForbiddenForScope(Scope.AlertsRead)

@@ -173,7 +173,7 @@
   <ClockAlertBand
     alerts={clockStore.alerts}
     now={currentTime.getTime()}
-    onSeen={clockConfig.settings?.allowAcknowledge
+    onSeen={clockConfig.settings?.allowMarkSeen
       ? (excursionId) => clockStore.markSeen(excursionId)
       : undefined}
   />

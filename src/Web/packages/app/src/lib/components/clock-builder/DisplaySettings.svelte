@@ -153,15 +153,15 @@
               onSettingsChange({
                 ...settings,
                 showAlerts: !!v,
-                allowAcknowledge: v ? settings.allowAcknowledge : false,
+                allowMarkSeen: v ? settings.allowMarkSeen : false,
               })}
           />
         </div>
         <div class="flex items-center justify-between">
           <Label>Let viewers mark alerts as seen</Label>
           <Checkbox
-            checked={settings.allowAcknowledge ?? false}
-            onCheckedChange={(v: boolean) => updateSetting("allowAcknowledge", !!v)}
+            checked={settings.allowMarkSeen ?? false}
+            onCheckedChange={(v: boolean) => updateSetting("allowMarkSeen", !!v)}
             disabled={!settings.showAlerts}
           />
         </div>

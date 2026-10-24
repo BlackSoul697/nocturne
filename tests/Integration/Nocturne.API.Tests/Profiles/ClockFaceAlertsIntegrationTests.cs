@@ -97,7 +97,7 @@ public class ClockFaceAlertsIntegrationTests : ApiIntegrationTestBase
     [Fact]
     public async Task AFaceAllowedToAcknowledge_RecordsThatItSawTheAlarm()
     {
-        var faceId = await CreateFaceAsync(showAlerts: true, allowAcknowledge: true);
+        var faceId = await CreateFaceAsync(showAlerts: true, allowMarkSeen: true);
         using var viewer = Fixture.CreateHttpClient(new HttpClientHandler());
 
         (await viewer.PostAsync($"/api/v4/clockfaces/{faceId}/alerts/{_excursionId}/seen", null))
@@ -132,18 +132,18 @@ public class ClockFaceAlertsIntegrationTests : ApiIntegrationTestBase
         using var response = await _owner.PostAsJsonAsync("/api/v4/clockfaces", new
         {
             name = "Kitchen",
-            config = new { rows = Array.Empty<object>(), settings = new { allowAcknowledge = true } },
+            config = new { rows = Array.Empty<object>(), settings = new { allowMarkSeen = true } },
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    private async Task<Guid> CreateFaceAsync(bool showAlerts, bool allowAcknowledge = false)
+    private async Task<Guid> CreateFaceAsync(bool showAlerts, bool allowMarkSeen = false)
     {
         using var response = await _owner.PostAsJsonAsync("/api/v4/clockfaces", new
         {
             name = "Kitchen",
-            config = new { rows = Array.Empty<object>(), settings = new { showAlerts, allowAcknowledge } },
+            config = new { rows = Array.Empty<object>(), settings = new { showAlerts, allowMarkSeen } },
         });
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.Created, body);
