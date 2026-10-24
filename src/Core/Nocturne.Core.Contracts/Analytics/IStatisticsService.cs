@@ -429,6 +429,52 @@ public interface IStatisticsService
         TimeZoneInfo userTimeZone,
         IEnumerable<BasalInjection>? basalInjections = null,
         IEnumerable<BasalSegment>? profileBasalSegments = null);
+
+    /// <summary>
+    /// The registered CGMs that contributed <paramref name="readings"/>, each with its reading count,
+    /// then an "Unattributed" entry when any reading has no device.
+    /// </summary>
+    IEnumerable<ContributingDevice> CalculateContributingDevices(
+        IReadOnlyCollection<SensorGlucose> readings,
+        IEnumerable<PatientDevice> devices);
+
+    /// <summary>
+    /// One standard period of the multi-period report. Every collection is the period's slice, and
+    /// <paramref name="tempBasals"/> already holds any profile basal standing in for the pump's.
+    /// A period with too few readings carries only its counts.
+    /// </summary>
+    /// <param name="untilMills">As for <see cref="CalculateInsulinDeliveryStatistics"/>.</param>
+    PeriodStatistics CalculatePeriodStatistics(
+        int periodDays,
+        DateTime startDate,
+        DateTime endDate,
+        IReadOnlyCollection<SensorGlucose> entries,
+        IReadOnlyCollection<Bolus> manualBoluses,
+        IReadOnlyCollection<Bolus> algorithmBoluses,
+        IReadOnlyCollection<TempBasal> tempBasals,
+        IReadOnlyCollection<BasalInjection> basalInjections,
+        IReadOnlyCollection<CarbIntake> carbs,
+        IReadOnlyCollection<DeviceEvent> deviceEvents,
+        long untilMills,
+        TimeZoneInfo? timeZone);
+
+    /// <summary>
+    /// Per-day glucose, treatment and basal figures for the calendar punch-card view, bucketed into
+    /// the tenant's local days from <paramref name="startDate"/> to <paramref name="endDate"/> inclusive.
+    /// </summary>
+    /// <param name="now">Ends the window of a range that has not finished, and sets which day is today.</param>
+    PunchCardResponse CalculatePunchCard(
+        IEnumerable<SensorGlucose> glucose,
+        IEnumerable<Bolus> manualBoluses,
+        IEnumerable<Bolus> algorithmBoluses,
+        IEnumerable<CarbIntake> carbs,
+        IEnumerable<TempBasal> tempBasals,
+        IEnumerable<BasalInjection> basalInjections,
+        DateOnly startDate,
+        DateOnly endDate,
+        TimeZoneInfo timeZone,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

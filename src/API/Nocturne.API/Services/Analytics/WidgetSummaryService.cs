@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Nocturne.Core.Contracts.Alerts;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Notifications;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Treatments;
@@ -34,7 +36,9 @@ public class WidgetSummaryService : IWidgetSummaryService
     private readonly ITrackerRepository _trackerRepository;
     private readonly INotificationV1Service _notificationService;
     private readonly IGlucoseStatusClassifier _statusClassifier;
-    private readonly INocturneDbContextFactory _contextFactory;
+    private readonly IAlertRepository _alertRepository;
+    private readonly ITenantAccessor _tenantAccessor;
+    private readonly ICategoryReadContext _categoryReadContext;
     private readonly ILogger<WidgetSummaryService> _logger;
 
     /// <summary>
@@ -53,7 +57,9 @@ public class WidgetSummaryService : IWidgetSummaryService
         ITrackerRepository trackerRepository,
         INotificationV1Service notificationService,
         IGlucoseStatusClassifier statusClassifier,
-        INocturneDbContextFactory contextFactory,
+        IAlertRepository alertRepository,
+        ITenantAccessor tenantAccessor,
+        ICategoryReadContext categoryReadContext,
         ILogger<WidgetSummaryService> logger
     )
     {
@@ -67,7 +73,9 @@ public class WidgetSummaryService : IWidgetSummaryService
         _trackerRepository = trackerRepository;
         _notificationService = notificationService;
         _statusClassifier = statusClassifier;
-        _contextFactory = contextFactory;
+        _alertRepository = alertRepository;
+        _tenantAccessor = tenantAccessor;
+        _categoryReadContext = categoryReadContext;
         _logger = logger;
     }
 
@@ -160,8 +168,10 @@ public class WidgetSummaryService : IWidgetSummaryService
 
         try
         {
-            await using var db = await _contextFactory.CreateAsync(cancellationToken);
-            var thresholds = await _statusClassifier.ResolveThresholdsAsync(db, cancellationToken);
+            var thresholds = _categoryReadContext.IsShare
+                ? _statusClassifier.Defaults
+                : _statusClassifier.ResolveThresholds(
+                    await _alertRepository.GetEnabledRulesAsync(_tenantAccessor.TenantId, cancellationToken));
             current.Status = _statusClassifier.Classify(
                 current.Sgv,
                 DateTimeOffset.FromUnixTimeMilliseconds(current.Mills).UtcDateTime,

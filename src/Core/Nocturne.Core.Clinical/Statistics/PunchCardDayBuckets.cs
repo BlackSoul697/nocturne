@@ -1,11 +1,11 @@
-namespace Nocturne.API.Services.Analytics;
+namespace Nocturne.Core.Clinical.Statistics;
 
 /// <summary>
 /// Inclusive millisecond bounds of one tenant-local calendar day. The end is one tick before the
 /// next local midnight, floored to a millisecond, so a record at exactly local midnight belongs to
 /// the day it opens.
 /// </summary>
-internal readonly record struct PunchCardDayWindow(long StartMs, long EndMs)
+public readonly record struct PunchCardDayWindow(long StartMs, long EndMs)
 {
     public static PunchCardDayWindow For(DateTime localDay, TimeZoneInfo tz)
     {
@@ -20,7 +20,7 @@ internal readonly record struct PunchCardDayWindow(long StartMs, long EndMs)
         new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
 }
 
-internal static class PunchCardDayBuckets
+public static class PunchCardDayBuckets
 {
     /// <summary>
     /// Groups <paramref name="records"/> by every window holding their mills in one pass over the
