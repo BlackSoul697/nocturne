@@ -109,7 +109,7 @@ public class CobCalculator(
                 .CalculateTotalAsync(boluses ?? [], tempBasals, t, deliveredUntil: time, ct: default)
                 .GetAwaiter()
                 .GetResult()
-                ?.Activity ?? double.NaN;
+                ?.Activity ?? 0.0;
 
         return FromCarbIntakesCore(
             carbIntakes,
@@ -142,7 +142,7 @@ public class CobCalculator(
 
         // The bolus plus net basal activity the async IOB total gives, computed in-memory.
         double ActivityAt(long t) =>
-            (iobCalculator.FromBoluses(boluses ?? [], snapshot, t).Activity ?? double.NaN)
+            (iobCalculator.FromBoluses(boluses ?? [], snapshot, t).Activity ?? 0.0)
             + (iobCalculator.FromTempBasals(tempBasals ?? [], snapshot, scheduledBasalAt, t, deliveredUntil: time).Activity ?? 0);
 
         return FromCarbIntakesCore(
@@ -178,7 +178,7 @@ public class CobCalculator(
             if (carbIntake.Carbs > 0 && carbIntake.Mills < currentTime)
             {
                 lastCarbs = carbIntake;
-                var cCalc = CobCalc(carbIntake, lastDecayedBy, currentTime);
+                var cCalc = CobCalc(carbIntake, lastDecayedBy, currentTime, carbAbsorptionAt);
                 if (cCalc == null)
                     continue;
 
@@ -285,7 +285,7 @@ public class CobCalculator(
         var isDecaying = false;
         if (carbIntake.Carbs > 0 && carbIntake.Mills < currentTime)
         {
-            var cCalc = CobCalc(carbIntake, 0, currentTime);
+            var cCalc = CobCalc(carbIntake, 0, currentTime, GetCarbAbsorptionRateOrDefault);
             if (cCalc != null)
             {
                 var decayedByTime = cCalc.DecayedBy.ToUnixTimeMilliseconds();
@@ -334,7 +334,8 @@ public class CobCalculator(
     private CobCalcResult? CobCalc(
         CarbIntake carbIntake,
         long lastDecayedBy,
-        long time
+        long time,
+        Func<long, double> carbAbsorptionAt
     )
     {
         if (carbIntake.Carbs <= 0)
@@ -347,7 +348,7 @@ public class CobCalculator(
 
         var carbsHr = carbIntake.AbsorptionTime.HasValue
             ? (carbIntake.Carbs / (carbIntake.AbsorptionTime.Value / 60.0))
-            : GetCarbAbsorptionRateOrDefault(carbIntake.Mills);
+            : carbAbsorptionAt(carbIntake.Mills);
 
         // No ApplyAdvancedAbsorptionAdjustments — absorption rate comes purely from
         // carbIntake.AbsorptionTime or the profile default.
