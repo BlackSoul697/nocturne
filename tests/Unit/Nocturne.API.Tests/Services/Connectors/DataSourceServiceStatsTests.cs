@@ -66,6 +66,7 @@ public class DataSourceServiceStatsTests : IDisposable
         _connectorConfig.Object,
         Nocturne.API.Tests.Infrastructure.ProfileActivationTestDeps.Writer(context),
         [],
+        [],
         NullLogger<DataSourceService>.Instance);
 
     private void SeedApsSnapshot(string? dataSource, string? device, DateTime timestamp)
