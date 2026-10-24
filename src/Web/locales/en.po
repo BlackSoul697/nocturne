@@ -4409,6 +4409,7 @@ msgstr "Clock"
 
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "Overview"
 msgstr "Overview"
 
@@ -6093,12 +6094,12 @@ msgstr "<0/> Status at {0}"
 msgid "U"
 msgstr "U"
 
-#. 0: (data.iob.bolus ?? 0).toFixed(1)
+#. 0: data.iob.bolus.toFixed(1)
 #: src/lib/components/reports/RetrospectiveStats.svelte
 msgid "Bolus: {0}U"
 msgstr "Bolus: {0}U"
 
-#. 0: (data.iob.basal ?? 0).toFixed(1)
+#. 0: data.iob.basal.toFixed(1)
 #: src/lib/components/reports/RetrospectiveStats.svelte
 msgid "Basal: {0}U"
 msgstr "Basal: {0}U"
@@ -6227,22 +6228,17 @@ msgstr "g/U <0/>"
 msgid "Correction Factor"
 msgstr "Correction Factor"
 
-#: src/lib/components/reports/ScheduleFooter.svelte
-#: src/lib/components/reports/ScheduleFooter.svelte
-msgid "12AM"
-msgstr "12AM"
+#~ msgid "12AM"
+#~ msgstr "12AM"
 
-#: src/lib/components/reports/ScheduleFooter.svelte
-msgid "6AM"
-msgstr "6AM"
+#~ msgid "6AM"
+#~ msgstr "6AM"
 
-#: src/lib/components/reports/ScheduleFooter.svelte
-msgid "12PM"
-msgstr "12PM"
+#~ msgid "12PM"
+#~ msgstr "12PM"
 
-#: src/lib/components/reports/ScheduleFooter.svelte
-msgid "6PM"
-msgstr "6PM"
+#~ msgid "6PM"
+#~ msgstr "6PM"
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
 msgid "Median glucose"
@@ -8868,9 +8864,8 @@ msgstr "Remove \"{0}\" from this meal? The food will remain in your database."
 msgid "Removing..."
 msgstr "Removing..."
 
-#: src/routes/(authenticated)/reports/+page.svelte
-msgid "Reports - Nocturne"
-msgstr "Reports - Nocturne"
+#~ msgid "Reports - Nocturne"
+#~ msgstr "Reports - Nocturne"
 
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "Comprehensive diabetes management analytics and insights"
@@ -8946,15 +8941,11 @@ msgstr "Last {0} days"
 #~ msgid "Last 7 days"
 #~ msgstr "Last 7 days"
 
-#. 0: reportName
-#: src/routes/(authenticated)/reports/+layout.svelte
-msgid "{0} - Nightscout"
-msgstr "{0} - Nightscout"
+#~ msgid "{0} - Nightscout"
+#~ msgstr "{0} - Nightscout"
 
-#. 0: reportName.toLowerCase()
-#: src/routes/(authenticated)/reports/+layout.svelte
-msgid "Nightscout {0} with comprehensive data analysis and filtering capabilities"
-msgstr "Nightscout {0} with comprehensive data analysis and filtering capabilities"
+#~ msgid "Nightscout {0} with comprehensive data analysis and filtering capabilities"
+#~ msgstr "Nightscout {0} with comprehensive data analysis and filtering capabilities"
 
 #: src/routes/(authenticated)/settings/+layout.svelte
 msgid "<0/> Settings"
@@ -10077,7 +10068,6 @@ msgid "Close Emergency View"
 msgstr "Close Emergency View"
 
 #: src/lib/navigation/report-navigation.svelte.ts
-#: src/routes/(authenticated)/reports/year-overview/+page.svelte
 msgid "Year Overview"
 msgstr "Year Overview"
 
@@ -10931,9 +10921,9 @@ msgid "Link a Device"
 msgstr "Link a Device"
 
 #. 0: deviceInfo ? "Authorize a Device" \\: "Link a Device"
-#. 0: dateDisplay ? `${dateDisplay} - Sleep Report` \\: "Sleep Report"
+#. 0: reportName
 #: src/routes/(authenticated)/oauth/device/+page.svelte
-#: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
+#: src/routes/(authenticated)/reports/+layout.svelte
 msgid "{0} - Nocturne"
 msgstr "{0} - Nocturne"
 
@@ -10949,9 +10939,8 @@ msgstr "Enter the code shown on your device"
 msgid "Error Loading AGP Report"
 msgstr "Error Loading AGP Report"
 
-#: src/routes/(authenticated)/reports/agp/+page.svelte
-msgid "Ambulatory Glucose Profile - Nocturne Reports"
-msgstr "Ambulatory Glucose Profile - Nocturne Reports"
+#~ msgid "Ambulatory Glucose Profile - Nocturne Reports"
+#~ msgstr "Ambulatory Glucose Profile - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 msgid "Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
@@ -11110,9 +11099,8 @@ msgstr "Next Steps"
 #~ msgid "Error Loading Basal Analysis"
 #~ msgstr "Error Loading Basal Analysis"
 
-#: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
-msgid "Basal Rate Analysis - Nocturne Reports"
-msgstr "Basal Rate Analysis - Nocturne Reports"
+#~ msgid "Basal Rate Analysis - Nocturne Reports"
+#~ msgstr "Basal Rate Analysis - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 msgid "Analyze your basal insulin delivery patterns with percentile visualization"
@@ -11244,9 +11232,8 @@ msgstr "Treatment Log"
 msgid "Error Loading Battery Report"
 msgstr "Error Loading Battery Report"
 
-#: src/routes/(authenticated)/reports/battery/+page.svelte
-msgid "Battery Report - Nocturne"
-msgstr "Battery Report - Nocturne"
+#~ msgid "Battery Report - Nocturne"
+#~ msgstr "Battery Report - Nocturne"
 
 #: src/routes/(authenticated)/reports/battery/+page.svelte
 #: src/routes/(authenticated)/reports/battery/+page.svelte
@@ -11351,9 +11338,8 @@ msgstr "Data collected from {0} device{1} over {2} days"
 msgid "Error Loading Data Quality Report"
 msgstr "Error Loading Data Quality Report"
 
-#: src/routes/(authenticated)/reports/data-quality/+page.svelte
-msgid "Data Quality - Nocturne"
-msgstr "Data Quality - Nocturne"
+#~ msgid "Data Quality - Nocturne"
+#~ msgstr "Data Quality - Nocturne"
 
 #~ msgid "Monitor and manage data exclusions"
 #~ msgstr "Monitor and manage data exclusions"
@@ -11380,8 +11366,8 @@ msgstr "Dismissed"
 msgid "Data Quality Categories"
 msgstr "Data Quality Categories"
 
+#: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/+page.svelte
-#: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 msgid "Compression Lows"
 msgstr "Compression Lows"
 
@@ -11494,9 +11480,8 @@ msgstr "Error Loading Executive Summary"
 #~ msgid "Calculating assessment..."
 #~ msgstr "Calculating assessment..."
 
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Executive Summary - Nocturne Reports"
-msgstr "Executive Summary - Nocturne Reports"
+#~ msgid "Executive Summary - Nocturne Reports"
+#~ msgstr "Executive Summary - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "High-level overview of your diabetes management metrics"
@@ -11615,6 +11600,7 @@ msgstr "<0/> Data Quality"
 msgid "How complete is your CGM data?"
 msgstr "How complete is your CGM data?"
 
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "CGM Active Time"
 msgstr "CGM Active Time"
@@ -11762,9 +11748,8 @@ msgstr "Error Loading Insulin Delivery Data"
 #~ msgid "Insufficient data to assess ratio."
 #~ msgstr "Insufficient data to assess ratio."
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "Insulin Delivery Report - Nocturne Reports"
-msgstr "Insulin Delivery Report - Nocturne Reports"
+#~ msgid "Insulin Delivery Report - Nocturne Reports"
+#~ msgstr "Insulin Delivery Report - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "Analyze your insulin delivery patterns including basal/bolus ratios and TDD trends"
@@ -11911,9 +11896,8 @@ msgstr "Basal Rate Analysis <0/>"
 msgid "Error Loading Heart Rate Report"
 msgstr "Error Loading Heart Rate Report"
 
-#: src/routes/(authenticated)/reports/heart-rate/+page.svelte
-msgid "Heart Rate - Nocturne Reports"
-msgstr "Heart Rate - Nocturne Reports"
+#~ msgid "Heart Rate - Nocturne Reports"
+#~ msgstr "Heart Rate - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/heart-rate/+page.svelte
 msgid "Heart rate actogram with glucose overlay"
@@ -11949,9 +11933,8 @@ msgstr "{0} bpm"
 msgid "Error Loading IDP Report"
 msgstr "Error Loading IDP Report"
 
-#: src/routes/(authenticated)/reports/idp/+page.svelte
-msgid "Insulin Dosing Profile - Nocturne Reports"
-msgstr "Insulin Dosing Profile - Nocturne Reports"
+#~ msgid "Insulin Dosing Profile - Nocturne Reports"
+#~ msgstr "Insulin Dosing Profile - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/idp/+page.svelte
 msgid "Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"
@@ -12082,9 +12065,8 @@ msgstr "User-Initiated Boluses Per Day"
 msgid "Error Loading Sleep Report"
 msgstr "Error Loading Sleep Report"
 
-#: src/routes/(authenticated)/reports/sleep/+page.svelte
-msgid "Sleep & Overnight - Nocturne Reports"
-msgstr "Sleep & Overnight - Nocturne Reports"
+#~ msgid "Sleep & Overnight - Nocturne Reports"
+#~ msgstr "Sleep & Overnight - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "Sleep pattern actogram with glucose overlay"
@@ -12123,9 +12105,8 @@ msgstr "<0/> Sleep Actogram"
 msgid "Error Loading Site Change Data"
 msgstr "Error Loading Site Change Data"
 
-#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
-msgid "Site Change Impact - Nocturne Reports"
-msgstr "Site Change Impact - Nocturne Reports"
+#~ msgid "Site Change Impact - Nocturne Reports"
+#~ msgstr "Site Change Impact - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 msgid "Analyze how pump site changes affect your glucose control"
@@ -12159,9 +12140,8 @@ msgstr "days between changes (avg)"
 msgid "<0/> Glucose Pattern Around Site Changes"
 msgstr "<0/> Glucose Pattern Around Site Changes"
 
-#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
-msgid "Average glucose levels in the hours before and after each site change"
-msgstr "Average glucose levels in the hours before and after each site change"
+#~ msgid "Average glucose levels in the hours before and after each site change"
+#~ msgstr "Average glucose levels in the hours before and after each site change"
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 msgid "Loading site change data..."
@@ -12200,9 +12180,8 @@ msgstr "After Site Change (Right)"
 msgid "Error Loading Step Count Report"
 msgstr "Error Loading Step Count Report"
 
-#: src/routes/(authenticated)/reports/steps/+page.svelte
-msgid "Step Count - Nocturne Reports"
-msgstr "Step Count - Nocturne Reports"
+#~ msgid "Step Count - Nocturne Reports"
+#~ msgstr "Step Count - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/steps/+page.svelte
 msgid "Step count actogram with glucose overlay"
@@ -12260,9 +12239,8 @@ msgstr "Record updated successfully"
 msgid "Failed to update record"
 msgstr "Failed to update record"
 
-#: src/routes/(authenticated)/reports/treatments/+page.svelte
-msgid "Treatment Log - Nocturne"
-msgstr "Treatment Log - Nocturne"
+#~ msgid "Treatment Log - Nocturne"
+#~ msgstr "Treatment Log - Nocturne"
 
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "View and manage your diabetes treatments, insulin doses, and carb entries"
@@ -12392,9 +12370,8 @@ msgstr "StateSpans"
 msgid "DeviceStatus"
 msgstr "DeviceStatus"
 
-#: src/routes/(authenticated)/reports/year-overview/+page.svelte
-msgid "Year Overview - Nocturne"
-msgstr "Year Overview - Nocturne"
+#~ msgid "Year Overview - Nocturne"
+#~ msgstr "Year Overview - Nocturne"
 
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 msgid "Multi-year heatmap overview of all your diabetes data"
@@ -14714,9 +14691,8 @@ msgstr "Error Loading Compression Low History"
 #~ msgid "Night of {0}-{1}"
 #~ msgstr "Night of {0}-{1}"
 
-#: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
-msgid "Compression Lows - Nocturne"
-msgstr "Compression Lows - Nocturne"
+#~ msgid "Compression Lows - Nocturne"
+#~ msgstr "Compression Lows - Nocturne"
 
 #. 0: pendingCount
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
@@ -17920,8 +17896,8 @@ msgstr "Battery data is collected from devices that report uploader status. Make
 msgid "Battery statistics are calculated from device status reports sent by your uploader app."
 msgstr "Battery statistics are calculated from device status reports sent by your uploader app."
 
+#: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/+page.svelte
-#: src/routes/(authenticated)/reports/data-quality/sensor-integrity/+page.svelte
 msgid "Signal Integrity"
 msgstr "Signal Integrity"
 
@@ -17932,14 +17908,14 @@ msgstr "Windows where readings oscillate in a way that is unlikely to be physiol
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "Error Loading Comparison"
 msgstr "Error Loading Comparison"
 
 #. 0: signed(d)
 #. 0: signed(d, 2)
-#. 0: signed(d)
 #. 0: signedNumber(priorWeek.tirDelta)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
@@ -18078,9 +18054,8 @@ msgstr "Shows glucose patterns after the fresh site is inserted. Watch for impro
 #~ msgid "If you see consistently higher glucose before site changes, consider changing your site more frequently or investigating potential site issues."
 #~ msgstr "If you see consistently higher glucose before site changes, consider changing your site more frequently or investigating potential site issues."
 
-#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
-msgid "<0>What this shows:</0> This report averages your glucose readings across all your site changes to reveal patterns in how your glucose control changes as your infusion site ages."
-msgstr "<0>What this shows:</0> This report averages your glucose readings across all your site changes to reveal patterns in how your glucose control changes as your infusion site ages."
+#~ msgid "<0>What this shows:</0> This report averages your glucose readings across all your site changes to reveal patterns in how your glucose control changes as your infusion site ages."
+#~ msgstr "<0>What this shows:</0> This report averages your glucose readings across all your site changes to reveal patterns in how your glucose control changes as your infusion site ages."
 
 #~ msgid "Your glucose improves by {0}% after site changes. Consider more frequent changes if site age affects control."
 #~ msgstr "Your glucose improves by {0}% after site changes. Consider more frequent changes if site age affects control."
@@ -18958,9 +18933,8 @@ msgstr "Reset cursors for {0}?"
 #~ msgid "This re-pulls history for all {0} connector(s) configured on this tenant <0/>. This starts a background job — you can watch per-connector progress here or leave the page while it runs."
 #~ msgstr "This re-pulls history for all {0} connector(s) configured on this tenant <0/>. This starts a background job — you can watch per-connector progress here or leave the page while it runs."
 
-#: src/routes/(authenticated)/reports/data-quality/sensor-integrity/+page.svelte
-msgid "Signal Integrity - Nocturne Reports"
-msgstr "Signal Integrity - Nocturne Reports"
+#~ msgid "Signal Integrity - Nocturne Reports"
+#~ msgstr "Signal Integrity - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/data-quality/sensor-integrity/+page.svelte
 msgid "Daily overview"
@@ -21622,8 +21596,8 @@ msgstr "Report generated from {0} basal events between {1} and {2}"
 #~ msgid "higher in {0} →"
 #~ msgstr "higher in {0} →"
 
+#: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/+page.svelte
-#: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
 msgid "CGM Comparison"
 msgstr "CGM Comparison"
 
@@ -22238,14 +22212,11 @@ msgstr "Error Loading Night Report"
 msgid "Estimated"
 msgstr "Estimated"
 
-#. 0: dateDisplay
-#: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
-msgid "{0} - Sleep Report"
-msgstr "{0} - Sleep Report"
+#~ msgid "{0} - Sleep Report"
+#~ msgstr "{0} - Sleep Report"
 
-#: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
-msgid "Sleep Report"
-msgstr "Sleep Report"
+#~ msgid "Sleep Report"
+#~ msgstr "Sleep Report"
 
 #: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
 msgid "<0/> Sleep & Overnight"
@@ -22296,9 +22267,8 @@ msgstr "Night of {0} – {1}"
 msgid "Error Loading CGM Comparison"
 msgstr "Error Loading CGM Comparison"
 
-#: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
-msgid "CGM Comparison - Nocturne Reports"
-msgstr "CGM Comparison - Nocturne Reports"
+#~ msgid "CGM Comparison - Nocturne Reports"
+#~ msgstr "CGM Comparison - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
 msgid "Readings from two sensors matched to the same moment"
@@ -23706,7 +23676,7 @@ msgstr "Overnight hypo nadir"
 msgid "Daytime hypo nadir"
 msgstr "Daytime hypo nadir"
 
-#: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
+#: src/lib/navigation/report-navigation.svelte.ts
 msgid "Sleep Night Report"
 msgstr "Sleep Night Report"
 
@@ -23871,15 +23841,11 @@ msgstr "TIR before"
 msgid "TIR after"
 msgstr "TIR after"
 
-#. 0: treatmentSummary?.bolusCount ?? 0; 1: (treatmentSummary?.dailyBoluses ?? 0).toFixed(1); 2: (treatmentSummary?.averagePerBolus ?? 0).toFixed(1)
-#: src/lib/components/treatments/TreatmentStatsCard.svelte
-msgid "{0} boluses · {1}/day · {2}U avg"
-msgstr "{0} boluses · {1}/day · {2}U avg"
+#~ msgid "{0} boluses · {1}/day · {2}U avg"
+#~ msgstr "{0} boluses · {1}/day · {2}U avg"
 
-#. 0: treatmentSummary?.carbEntryCount ?? 0; 1: (treatmentSummary?.dailyCarbs ?? 0).toFixed(0); 2: (treatmentSummary?.averageCarbsPerEntry ?? 0).toFixed(0)
-#: src/lib/components/treatments/TreatmentStatsCard.svelte
-msgid "{0} meals · {1}g/day · {2}g avg/meal"
-msgstr "{0} meals · {1}g/day · {2}g avg/meal"
+#~ msgid "{0} meals · {1}g/day · {2}g avg/meal"
+#~ msgstr "{0} meals · {1}g/day · {2}g avg/meal"
 
 #. 0: formatNumber(entries.length)
 #: src/routes/(authenticated)/reports/+page.svelte
@@ -24252,9 +24218,8 @@ msgstr "Your typical day's glucose pattern"
 msgid "Time spent in each glucose zone"
 msgstr "Time spent in each glucose zone"
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Assess the reliability of your data"
-msgstr "Assess the reliability of your data"
+#~ msgid "Assess the reliability of your data"
+#~ msgstr "Assess the reliability of your data"
 
 #~ msgid "Estimated HbA1c"
 #~ msgstr "Estimated HbA1c"
@@ -24385,9 +24350,8 @@ msgstr "How site changes affect control"
 #~ msgid "Standardised insulin and glucose summary"
 #~ msgstr "Standardised insulin and glucose summary"
 
-#: src/lib/navigation/report-navigation.svelte.ts
-msgid "Pump battery trends and longevity"
-msgstr "Pump battery trends and longevity"
+#~ msgid "Pump battery trends and longevity"
+#~ msgstr "Pump battery trends and longevity"
 
 #: src/lib/components/shared/SkippedRecordsNote.svelte
 msgid "1 record was not added again because you had deleted it."
@@ -24792,9 +24756,8 @@ msgstr "Error Loading Hourly Patterns"
 msgid "Which hours of the day spend the most and least time in the glucose target range"
 msgstr "Which hours of the day spend the most and least time in the glucose target range"
 
-#: src/routes/(authenticated)/reports/hourly-stats/+page.svelte
-msgid "Hourly Patterns - Nocturne Reports"
-msgstr "Hourly Patterns - Nocturne Reports"
+#~ msgid "Hourly Patterns - Nocturne Reports"
+#~ msgstr "Hourly Patterns - Nocturne Reports"
 
 #. 0: bgRange(edges.low, edges.targetTop)
 #: src/routes/(authenticated)/reports/hourly-stats/+page.svelte
@@ -26824,6 +26787,7 @@ msgid "{0} records could not be stored. They are listed under"
 msgstr "{0} records could not be stored. They are listed under"
 
 #: src/lib/components/shared/SkippedRecordsNote.svelte
+#: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/+page.svelte
 #: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 msgid "Rejected Uploads"
@@ -26837,9 +26801,8 @@ msgstr "Records an uploader sent that Nocturne could not store"
 msgid "Error Loading Rejected Uploads"
 msgstr "Error Loading Rejected Uploads"
 
-#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
-msgid "Rejected Uploads - Nocturne"
-msgstr "Rejected Uploads - Nocturne"
+#~ msgid "Rejected Uploads - Nocturne"
+#~ msgstr "Rejected Uploads - Nocturne"
 
 #: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 msgid "Records an uploader sent that Nocturne answered but could not store, because a value in them could not be stored as sent. Most uploaders treat them as saved, so they are not in your data. Each is listed once, with how many times it was sent. Long text in a record is shortened here."
@@ -30095,9 +30058,8 @@ msgstr "Cannot load the daily profile"
 msgid "Glucose, basal, loop corrections, IOB and COB at each time of day."
 msgstr "Glucose, basal, loop corrections, IOB and COB at each time of day."
 
-#: src/routes/(authenticated)/reports/loop-analysis/daily-profile/+page.svelte
-msgid "Daily profile - Loop Analysis - Nocturne Reports"
-msgstr "Daily profile - Loop Analysis - Nocturne Reports"
+#~ msgid "Daily profile - Loop Analysis - Nocturne Reports"
+#~ msgstr "Daily profile - Loop Analysis - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/loop-analysis/loop-health/+page.svelte
 msgid "Cannot load the loop health"
@@ -30107,9 +30069,8 @@ msgstr "Cannot load the loop health"
 msgid "How much of the time the loop was closed, why it stopped and how frequently it reached its limits."
 msgstr "How much of the time the loop was closed, why it stopped and how frequently it reached its limits."
 
-#: src/routes/(authenticated)/reports/loop-analysis/loop-health/+page.svelte
-msgid "Loop health - Loop Analysis - Nocturne Reports"
-msgstr "Loop health - Loop Analysis - Nocturne Reports"
+#~ msgid "Loop health - Loop Analysis - Nocturne Reports"
+#~ msgstr "Loop health - Loop Analysis - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/loop-analysis/meals-and-events/+page.svelte
 msgid "Cannot load the meals and events"
@@ -30119,9 +30080,8 @@ msgstr "Cannot load the meals and events"
 msgid "Glucose and insulin before and after meals, corrections and other events."
 msgstr "Glucose and insulin before and after meals, corrections and other events."
 
-#: src/routes/(authenticated)/reports/loop-analysis/meals-and-events/+page.svelte
-msgid "Meals and events - Loop Analysis - Nocturne Reports"
-msgstr "Meals and events - Loop Analysis - Nocturne Reports"
+#~ msgid "Meals and events - Loop Analysis - Nocturne Reports"
+#~ msgstr "Meals and events - Loop Analysis - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/loop-analysis/prediction-accuracy/+page.svelte
 msgid "Cannot load the prediction accuracy"
@@ -30131,9 +30091,8 @@ msgstr "Cannot load the prediction accuracy"
 msgid "The glucose predictions of the loop compared with the glucose readings that followed them."
 msgstr "The glucose predictions of the loop compared with the glucose readings that followed them."
 
-#: src/routes/(authenticated)/reports/loop-analysis/prediction-accuracy/+page.svelte
-msgid "Prediction accuracy - Loop Analysis - Nocturne Reports"
-msgstr "Prediction accuracy - Loop Analysis - Nocturne Reports"
+#~ msgid "Prediction accuracy - Loop Analysis - Nocturne Reports"
+#~ msgstr "Prediction accuracy - Loop Analysis - Nocturne Reports"
 
 #: src/routes/(authenticated)/reports/loop-analysis/settings-evidence/+page.svelte
 msgid "Cannot load the settings evidence"
@@ -30143,9 +30102,8 @@ msgstr "Cannot load the settings evidence"
 msgid "Your profile settings compared with what your data shows."
 msgstr "Your profile settings compared with what your data shows."
 
-#: src/routes/(authenticated)/reports/loop-analysis/settings-evidence/+page.svelte
-msgid "Settings evidence - Loop Analysis - Nocturne Reports"
-msgstr "Settings evidence - Loop Analysis - Nocturne Reports"
+#~ msgid "Settings evidence - Loop Analysis - Nocturne Reports"
+#~ msgstr "Settings evidence - Loop Analysis - Nocturne Reports"
 
 #: src/lib/constants/scope-labels.svelte.ts
 msgid "Silence an alarm for all members for a time"
@@ -31563,3 +31521,135 @@ msgstr "<0>The shaded band</0> <1/> is the consensus target range. The consensus
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Percentage of time in the consensus target range ({0})"
 msgstr "Percentage of time in the consensus target range ({0})"
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Compression lows, signal integrity, CGM comparison and rejected uploads"
+msgstr "Compression lows, signal integrity, CGM comparison and rejected uploads"
+
+#: src/lib/navigation/report-navigation.svelte.ts
+msgid "Device battery levels and charge cycles"
+msgstr "Device battery levels and charge cycles"
+
+#. 0: percentage
+#: src/lib/components/reports/ActiveProfileHeading.svelte
+msgid "· at {0}%"
+msgstr "· at {0}%"
+
+#. 0: timeshift > 0 ? "+" \\: ""; 1: timeshift
+#: src/lib/components/reports/ActiveProfileHeading.svelte
+msgid "· shifted {0}{1}h"
+msgstr "· shifted {0}{1}h"
+
+#: src/lib/components/reports/ActiveProfileHeading.svelte
+msgid "(already in the schedules shown)"
+msgstr "(already in the schedules shown)"
+
+#: src/lib/components/reports/ActiveProfileHeading.svelte
+msgid "(not applied to the schedules shown)"
+msgstr "(not applied to the schedules shown)"
+
+#: src/lib/components/treatments/TreatmentStatsCard.svelte
+msgid "# bolus"
+msgid_plural "# boluses"
+msgstr[0] "# bolus"
+msgstr[1] "# boluses"
+
+#. 0: plural(treatmentSummary?.bolusCount ?? 0, ["# bolus", "# boluses"]); 1: (treatmentSummary?.dailyBoluses ?? 0).toFixed(1); 2: (treatmentSummary?.averagePerBolus ?? 0).toFixed(1)
+#: src/lib/components/treatments/TreatmentStatsCard.svelte
+msgid "{0} · {1}/day · {2}U avg"
+msgstr "{0} · {1}/day · {2}U avg"
+
+#: src/lib/components/treatments/TreatmentStatsCard.svelte
+msgid "# carb entry"
+msgid_plural "# carb entries"
+msgstr[0] "# carb entry"
+msgstr[1] "# carb entries"
+
+#. 0: plural(treatmentSummary?.carbEntryCount ?? 0, ["# carb entry", "# carb entries"]); 1: (treatmentSummary?.dailyCarbs ?? 0).toFixed(0); 2: (treatmentSummary?.averageCarbsPerEntry ?? 0).toFixed(0)
+#: src/lib/components/treatments/TreatmentStatsCard.svelte
+msgid "{0} · {1}g/day · {2}g avg/entry"
+msgstr "{0} · {1}g/day · {2}g avg/entry"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Time Very Low (%)"
+msgstr "Time Very Low (%)"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Time Low (%)"
+msgstr "Time Low (%)"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Time High (%)"
+msgstr "Time High (%)"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Time Very High (%)"
+msgstr "Time Very High (%)"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Time in Personal Range"
+msgstr "Time in Personal Range"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Standard Deviation"
+msgstr "Standard Deviation"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Median Glucose"
+msgstr "Median Glucose"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Total Insulin / Day"
+msgstr "Total Insulin / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Basal / Day"
+msgstr "Basal / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Basal Share of Insulin"
+msgstr "Basal Share of Insulin"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Manual Boluses / Day"
+msgstr "Manual Boluses / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Carbs / Day"
+msgstr "Carbs / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Carb-to-Insulin Ratio"
+msgstr "Carb-to-Insulin Ratio"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Days with Data"
+msgstr "Days with Data"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Readings / Day"
+msgstr "Readings / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Range detail"
+msgstr "Range detail"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Variability and risk"
+msgstr "Variability and risk"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Insulin and carbs"
+msgstr "Insulin and carbs"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Data quality"
+msgstr "Data quality"
+
+#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
+msgid "Median glucose in the hours before and after each site change, with the 25th to 75th and 10th to 90th percentile bands"
+msgstr "Median glucose in the hours before and after each site change, with the 25th to 75th and 10th to 90th percentile bands"
+
+#: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
+msgid "<0>What this shows:</0> This report takes the median of your glucose readings across all your site changes, with the 25th to 75th and 10th to 90th percentile bands, to reveal patterns in how your glucose control changes as your infusion site ages."
+msgstr "<0>What this shows:</0> This report takes the median of your glucose readings across all your site changes, with the 25th to 75th and 10th to 90th percentile bands, to reveal patterns in how your glucose control changes as your infusion site ages."
