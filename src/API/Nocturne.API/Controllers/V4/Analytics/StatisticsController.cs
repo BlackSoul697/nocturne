@@ -153,15 +153,8 @@ public class StatisticsController : ControllerBase
             (await injectionTask).ToList());
     }
 
-    /// <summary>
-    /// The <c>untilMills</c> of <see cref="IStatisticsService.CalculateInsulinDeliveryStatistics"/>
-    /// for a window ending at <paramref name="endUtc"/>. A window that ends in the future has not
-    /// delivered past now.
-    /// </summary>
     private long UntilMills(DateTime endUtc) =>
-        Math.Min(
-            new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        StatisticsService.UntilMills(endUtc, _timeProvider.GetUtcNow());
 
     /// <summary>
     /// Fills <see cref="TempBasal.ScheduledRate"/> from the profile's scheduled rate at each
@@ -470,42 +463,6 @@ public class StatisticsController : ControllerBase
         var carbs   = await carbTask;
         var devices = await devicesTask;
 
-        // Registered devices that contributed readings, for the UI's device picker. Count in a
-        // single pass over the raw readings rather than re-scanning per device. The unattributed
-        // bucket is tracked separately — a null key can't live in a Dictionary.
-        var countByDevice = new Dictionary<Guid, int>();
-        var unattributedCount = 0;
-        foreach (var r in rawGlucose)
-        {
-            if (r.PatientDeviceId is { } id)
-                countByDevice[id] = countByDevice.GetValueOrDefault(id) + 1;
-            else
-                unattributedCount++;
-        }
-
-        var contributingDevices = new List<ContributingDevice>();
-        foreach (var d in devices.Where(d => d.DeviceCategory == DeviceCategory.CGM))
-        {
-            if (!countByDevice.TryGetValue(d.Id, out var readingCount) || readingCount == 0) continue;
-
-            contributingDevices.Add(new ContributingDevice
-            {
-                PatientDeviceId = d.Id,
-                Name = d.DisplayName(),
-                ReadingCount = readingCount,
-            });
-        }
-
-        if (unattributedCount > 0)
-        {
-            contributingDevices.Add(new ContributingDevice
-            {
-                PatientDeviceId = null,
-                Name = "Unattributed",
-                ReadingCount = unattributedCount,
-            });
-        }
-
         var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var result = new ReportAnalysisResult
@@ -520,7 +477,7 @@ public class StatisticsController : ControllerBase
             ),
             AveragedStats = _statisticsService.CalculateAveragedStats(entries, clock.Zone).ToList(),
             HourlyBandThresholds = _statisticsService.HourlyBandThresholds,
-            ContributingDevices = contributingDevices,
+            ContributingDevices = _statisticsService.CalculateContributingDevices(rawGlucose, devices).ToList(),
             // A failed lookup leaves the personal range out, as a failure inside it always has; an
             // unset zone evaluates the schedule on UTC, as it did before the zone was resolved here.
             PersonalRange = clock.Reason == TimeZoneUnavailableReason.LookupFailed
@@ -837,73 +794,26 @@ public class StatisticsController : ControllerBase
             var filteredEntries  = (await _canonicalGlucose.SelectAsync(allGlucose.Where(g => g.Timestamp >= startDate).ToList(), cancellationToken)).ToList();
             var filteredCarbs    = allCarbs.Where(c => c.Timestamp >= startDate).ToList();
 
-            // Calculate analytics if we have sufficient data
-            GlucoseAnalytics? analytics = null;
-            TreatmentSummary? treatmentSummary = null;
-            InsulinDeliveryStatistics? insulinDelivery = null;
-            bool hasSufficientData = filteredEntries.Count >= 10; // Minimum 10 readings
-
-            if (hasSufficientData)
-            {
-                analytics = _statisticsService.AnalyzeGlucoseData(
-                    filteredEntries,
-                    filteredBoluses,
-                    filteredCarbs,
-                    deviceEvents: allDeviceEvents.Where(e => e.Timestamp >= startDate).ToList(),
-                    windowDays: days,
-                    timeZone: clock.Zone
-                );
-
-                treatmentSummary = _statisticsService.CalculateTreatmentSummary(
-                    filteredBoluses,
-                    filteredCarbs,
-                    dayCount: days
-                );
-
+            if (StatisticsService.HasSufficientPeriodData(filteredEntries.Count))
                 await AddScheduledBasalFallbackAsync(tempBasals, startDate, endDate, basalInjections, cancellationToken);
-
-                insulinDelivery = _statisticsService.CalculateInsulinDeliveryStatistics(
-                    filteredBoluses,
-                    algorithmBoluses,
-                    tempBasals,
-                    filteredCarbs,
-                    startDate,
-                    endDate,
-                    UntilMills(endDate),
-                    basalInjections
-                );
-            }
-
-            // Compute GMI and reliability for this period
-            GlucoseManagementIndicator? periodGmi = null;
-            StatisticReliability? periodReliability = null;
-
-            if (hasSufficientData && analytics != null)
-            {
-                periodGmi = _statisticsService.CalculateGMI(analytics.BasicStats.Mean);
-
-                periodReliability = analytics.Reliability;
-
-                periodGmi.Reliability = periodReliability;
-            }
 
             periodResults.Add(
                 (
                     days,
-                    new PeriodStatistics
-                    {
-                        PeriodDays = days,
-                        StartDate = startDate,
-                        EndDate = endDate,
-                        Analytics = analytics,
-                        TreatmentSummary = treatmentSummary,
-                        InsulinDelivery = insulinDelivery,
-                        HasSufficientData = hasSufficientData,
-                        Gmi = periodGmi,
-                        Reliability = periodReliability,
-                        EntryCount = filteredEntries.Count,
-                        TreatmentCount = filteredBoluses.Count + filteredCarbs.Count,
-                    }
+                    _statisticsService.CalculatePeriodStatistics(
+                        days,
+                        startDate,
+                        endDate,
+                        filteredEntries,
+                        filteredBoluses,
+                        algorithmBoluses,
+                        tempBasals,
+                        basalInjections,
+                        filteredCarbs,
+                        allDeviceEvents.Where(e => e.Timestamp >= startDate).ToList(),
+                        UntilMills(endDate),
+                        clock.Zone
+                    )
                 )
             );
         }
@@ -1001,9 +911,8 @@ public class StatisticsController : ControllerBase
 
     /// <summary>
     /// Pre-aggregated month-by-day statistics for the calendar punch-card view. Fetches glucose,
-    /// boluses, carb intakes, and daily basal totals in a single batch, then computes per-day TIR
-    /// and treatment summaries inline (no per-day round-trips). Replaces a frontend orchestrator
-    /// that was issuing ~62 sequential HTTP calls per 31-day month.
+    /// boluses, carb intakes, and basal records in a single batch for
+    /// <see cref="IStatisticsService.CalculatePunchCard"/> (no per-day round-trips).
     /// </summary>
     /// <param name="startDate">Inclusive start calendar date in the tenant's timezone.</param>
     /// <param name="endDate">Inclusive end calendar date in the tenant's timezone.</param>
@@ -1026,10 +935,7 @@ public class StatisticsController : ControllerBase
         if (clock.Zone is not { } tz)
             return Ok(new PunchCardResponse { TimeZoneUnavailableReason = clock.Reason });
 
-        var startLocalDate = startDate.ToDateTime(TimeOnly.MinValue);
-        var endLocalDate = endDate.ToDateTime(TimeOnly.MinValue);
-        var startDt = TimeZoneInfo.ConvertTimeToUtc(startLocalDate, tz);
-        var endDt = TimeZoneInfo.ConvertTimeToUtc(endLocalDate.AddDays(1).AddTicks(-1), tz);
+        var (startDt, endDt) = StatisticsService.PunchCardRange(startDate, endDate, tz);
 
         var rawGlucoseTask = _sensorGlucoseRepository.GetForAnalyticsAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
         var treatmentsAllowed = StatisticsReadScopeGuard.AllowsTreatments(HttpContext.GetGrantedScopes());
@@ -1042,178 +948,21 @@ public class StatisticsController : ControllerBase
             : new InsulinRecords([], [], [], []);
 
         var rawGlucose  = (await rawGlucoseTask).ToList();
-        var glucoseData = (await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken)).ToList();
-        var carbs       = (await carbTask).ToList();
+        var glucoseData = await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken);
+        var carbs       = await carbTask;
 
-        // Daily basal totals come from the existing service path so the calendar's "totalBasal"
-        // matches what /daily-basal-bolus-ratios would return for the same window.
-        var dailyBasalBolus = _statisticsService.CalculateDailyBasalBolusRatios(
-            manualBoluses, algorithmBoluses, tempBasals, UntilMills(endDt), tz, basalInjections);
-        var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var d in dailyBasalBolus.DailyData)
-        {
-            if (!string.IsNullOrEmpty(d.Date)) dailyBasalMap[d.Date] = d.Basal;
-        }
-
-        // Build the per-month/per-day shape.
-        var monthsMap = new Dictionary<string, PunchCardMonth>(StringComparer.Ordinal);
-        string[] monthNames =
-        [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ];
-
-        var days = new List<DateTime>();
-        for (var day = startLocalDate.Date; day <= endLocalDate.Date; day = day.AddDays(1)) days.Add(day);
-        var windows = days.Select(d => PunchCardDayWindow.For(d, tz)).ToList();
-        var glucoseByDay = PunchCardDayBuckets.Bucket(glucoseData, windows, e => e.Mills);
-        var bolusesByDay = PunchCardDayBuckets.Bucket(manualBoluses, windows, b => b.Mills);
-        var algorithmBolusesByDay = PunchCardDayBuckets.Bucket(algorithmBoluses, windows, b => b.Mills);
-        var carbsByDay = PunchCardDayBuckets.Bucket(carbs, windows, c => c.Mills);
-
-        for (var i = 0; i < days.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var day = days[i];
-
-            var monthKey = $"{day.Year}-{day.Month - 1}";
-            if (!monthsMap.TryGetValue(monthKey, out var monthBucket))
-            {
-                monthBucket = new PunchCardMonth
-                {
-                    Year = day.Year,
-                    Month = day.Month - 1,
-                    MonthName = monthNames[day.Month - 1],
-                };
-                monthsMap[monthKey] = monthBucket;
-            }
-
-            var dayStartMs = windows[i].StartMs;
-            var dayEntries = glucoseByDay[i];
-            var dayBoluses = bolusesByDay[i];
-            var dayCarbs = carbsByDay[i];
-
-            TimeInRangeMetrics? tir = dayEntries.Count > 0
-                ? _statisticsService.CalculateTimeInRange(dayEntries)
-                : null;
-            TreatmentSummary? treatment = dayBoluses.Count > 0 || dayCarbs.Count > 0
-                ? _statisticsService.CalculateTreatmentSummary(dayBoluses, dayCarbs)
-                : null;
-
-            var pct = tir?.Percentages;
-            var inRangePct = pct?.Target ?? 0;
-            var veryLowPct = pct?.VeryLow ?? 0;
-            var lowPct = pct?.Low ?? 0;
-            var highPct = pct?.High ?? 0;
-            var veryHighPct = pct?.VeryHigh ?? 0;
-
-            var dateStr = day.ToString("yyyy-MM-dd");
-            var totals = treatment?.Totals;
-            var totalCarbs = totals?.Food?.Carbs ?? 0;
-            var totalBolus = (totals?.Insulin?.Bolus ?? 0)
-                + StatisticsService.CountedBoluses(algorithmBolusesByDay[i]).Sum(b => b.Insulin);
-            var totalBasal = dailyBasalMap.GetValueOrDefault(dateStr, 0.0);
-            var totalInsulin = totalBolus + totalBasal;
-            var carbToInsulinRatio = treatment?.CarbToInsulinRatio ?? 0;
-
-            var entries = dayEntries
-                .Where(e => GlucoseStatistics.IsPlausibleReading(e.Mgdl))
-                .OrderBy(e => e.Mills)
-                .Select(e => new PunchCardEntry { Mills = e.Mills, Mgdl = e.Mgdl })
-                .ToList();
-
-            // The counts are readings, so they come from the readings, not from durations.
-            var totalReadings = entries.Count;
-            var avgGlucose = totalReadings > 0 ? entries.Average(e => e.Mgdl) : 0;
-            var inRangeCount = (int)Math.Round(inRangePct / 100.0 * totalReadings);
-            var veryLowCount = (int)Math.Round(veryLowPct / 100.0 * totalReadings);
-            var lowCount = (int)Math.Round(lowPct / 100.0 * totalReadings);
-            var highCount = (int)Math.Round(highPct / 100.0 * totalReadings);
-            var veryHighCount = (int)Math.Round(veryHighPct / 100.0 * totalReadings);
-
-            var dayStats = new PunchCardDay
-            {
-                Date = dateStr,
-                Timestamp = dayStartMs,
-                TotalReadings = totalReadings,
-                InRangeCount = inRangeCount,
-                VeryLowCount = veryLowCount,
-                LowCount = lowCount,
-                HighCount = highCount,
-                VeryHighCount = veryHighCount,
-                InRangePercent = inRangePct,
-                VeryLowPercent = veryLowPct,
-                LowPercent = lowPct,
-                HighPercent = highPct,
-                VeryHighPercent = veryHighPct,
-                AverageGlucose = avgGlucose,
-                TotalCarbs = totalCarbs,
-                TotalInsulin = totalInsulin,
-                TotalBolus = totalBolus,
-                TotalBasal = totalBasal,
-                CarbToInsulinRatio = carbToInsulinRatio,
-                Entries = entries,
-            };
-
-            monthBucket.Days.Add(dayStats);
-            monthBucket.MaxCarbs = Math.Max(monthBucket.MaxCarbs, dayStats.TotalCarbs);
-            monthBucket.MaxInsulin = Math.Max(monthBucket.MaxInsulin, dayStats.TotalInsulin);
-            monthBucket.MaxCarbInsulinDiff = Math.Max(
-                monthBucket.MaxCarbInsulinDiff, Math.Abs(dayStats.CarbToInsulinRatio));
-            monthBucket.TotalReadings += dayStats.TotalReadings;
-        }
-
-        var today = TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), tz).ToString("yyyy-MM-dd");
-        foreach (var month in monthsMap.Values)
-        {
-            var daysWithData = month.Days.Where(d => d.TotalReadings > 0).ToList();
-            if (daysWithData.Count == 0)
-            {
-                month.Summary = null;
-                continue;
-            }
-
-            var totalIR = daysWithData.Sum(d => d.InRangeCount);
-            var totalVeryLow = daysWithData.Sum(d => d.VeryLowCount);
-            var totalLow = daysWithData.Sum(d => d.LowCount);
-            var totalHigh = daysWithData.Sum(d => d.HighCount);
-            var totalVeryHigh = daysWithData.Sum(d => d.VeryHighCount);
-            var totalReadings = daysWithData.Sum(d => d.TotalReadings);
-            var totalInsulin = month.Days.Sum(d => d.TotalInsulin);
-            var totalCarbs = month.Days.Sum(d => d.TotalCarbs);
-            var elapsedDays = Math.Max(1, month.Days.Count(d => string.CompareOrdinal(d.Date, today) <= 0));
-
-            month.Summary = new PunchCardMonthSummary
-            {
-                DayCount = daysWithData.Count,
-                TotalReadings = totalReadings,
-                InRangePercent = totalReadings > 0 ? (double)totalIR / totalReadings * 100 : 0,
-                VeryLowPercent = totalReadings > 0 ? (double)totalVeryLow / totalReadings * 100 : 0,
-                LowPercent = totalReadings > 0 ? (double)totalLow / totalReadings * 100 : 0,
-                HighPercent = totalReadings > 0 ? (double)totalHigh / totalReadings * 100 : 0,
-                VeryHighPercent = totalReadings > 0 ? (double)totalVeryHigh / totalReadings * 100 : 0,
-                AvgGlucose = daysWithData.Sum(d => d.AverageGlucose * d.TotalReadings) / totalReadings,
-                Tdd = totalInsulin > 0 ? totalInsulin / elapsedDays : null,
-                AvgDailyCarbs = totalCarbs > 0 ? totalCarbs / elapsedDays : null,
-            };
-        }
-
-        var months = monthsMap.Values
-            .OrderBy(m => m.Year).ThenBy(m => m.Month)
-            .ToList();
-
-        return Ok(new PunchCardResponse
-        {
-            Months = months,
-            DateRange = new PunchCardDateRange
-            {
-                From = startDt.ToString("o"),
-                To = endDt.ToString("o"),
-            },
-            GlobalMaxCarbs = months.Count > 0 ? months.Max(m => m.MaxCarbs) : 0,
-            GlobalMaxInsulin = months.Count > 0 ? months.Max(m => m.MaxInsulin) : 0,
-            GlobalMaxCarbInsulinDiff = months.Count > 0 ? months.Max(m => m.MaxCarbInsulinDiff) : 0,
-        });
+        return Ok(_statisticsService.CalculatePunchCard(
+            glucoseData,
+            manualBoluses,
+            algorithmBoluses,
+            carbs,
+            tempBasals,
+            basalInjections,
+            startDate,
+            endDate,
+            tz,
+            _timeProvider.GetUtcNow(),
+            cancellationToken));
     }
 
     /// <summary>

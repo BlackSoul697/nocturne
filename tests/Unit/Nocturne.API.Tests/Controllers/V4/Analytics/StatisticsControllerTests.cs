@@ -1637,21 +1637,8 @@ public partial class StatisticsControllerTests
                 })
             .ReturnsAsync(new[] { reading });
         SetupEmptyTreatments();
-        _statsServiceMock
-            .Setup(s => s.CalculateTimeInRange(
-                It.IsAny<IEnumerable<SensorGlucose>>(),
-                It.IsAny<GlycemicThresholds?>()))
-            .Returns(new TimeInRangeMetrics
-            {
-                Percentages = new TimeInRangePercentages { Target = 100 },
-                Durations = new TimeInRangeDurations { Target = 5 },
-                RangeStats = new TimeInRangeDetailedStats
-                {
-                    Target = new PeriodMetrics { PeriodName = "In Range", Mean = 100 },
-                },
-            });
 
-        var controller = CreateController();
+        var controller = CreateController(statisticsService: new StatisticsService());
 
         var result = await controller.GetPunchCardData(
             new DateOnly(2026, 6, 1),
@@ -1695,7 +1682,7 @@ public partial class StatisticsControllerTests
             .ReturnsAsync(Array.Empty<SensorGlucose>());
         SetupEmptyTreatments();
 
-        var result = await CreateController()
+        var result = await CreateController(statisticsService: new StatisticsService())
             .GetPunchCardData(new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -1728,21 +1715,8 @@ public partial class StatisticsControllerTests
                 It.IsAny<CancellationToken>(), It.IsAny<Guid?>()))
             .ReturnsAsync(readings);
         SetupEmptyTreatments();
-        _statsServiceMock
-            .Setup(s => s.CalculateTimeInRange(
-                It.IsAny<IEnumerable<SensorGlucose>>(),
-                It.IsAny<GlycemicThresholds?>()))
-            .Returns(new TimeInRangeMetrics
-            {
-                Percentages = new TimeInRangePercentages { Target = 100 },
-                Durations = new TimeInRangeDurations { Target = 60 },
-                RangeStats = new TimeInRangeDetailedStats
-                {
-                    Target = new PeriodMetrics { PeriodName = "In Range", Mean = 100 },
-                },
-            });
 
-        var result = await CreateController().GetPunchCardData(
+        var result = await CreateController(statisticsService: new StatisticsService()).GetPunchCardData(
             DateOnly.FromDateTime(dayStart),
             DateOnly.FromDateTime(dayStart.AddDays(1)));
 
@@ -1763,23 +1737,16 @@ public partial class StatisticsControllerTests
         var dayStart = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         var readings = Enumerable
             .Range(0, 100)
-            .Select(i => new SensorGlucose { Timestamp = dayStart.AddMinutes(i), Mgdl = 100 })
+            .Select(i => new SensorGlucose
+            {
+                Timestamp = dayStart.AddMinutes(i),
+                Mgdl = i switch { < 5 => 40, < 15 => 60, < 65 => 100, < 85 => 200, _ => 300 },
+            })
             .ToArray();
         SetupPunchCardGlucose(readings);
         SetupEmptyTreatments();
-        _statsServiceMock
-            .Setup(s => s.CalculateTimeInRange(
-                It.IsAny<IEnumerable<SensorGlucose>>(),
-                It.IsAny<GlycemicThresholds?>()))
-            .Returns(new TimeInRangeMetrics
-            {
-                Percentages = new TimeInRangePercentages
-                {
-                    VeryLow = 5, Low = 10, Target = 50, High = 20, VeryHigh = 15,
-                },
-            });
 
-        var result = await CreateController().GetPunchCardData(
+        var result = await CreateController(statisticsService: new StatisticsService()).GetPunchCardData(
             DateOnly.FromDateTime(dayStart), DateOnly.FromDateTime(dayStart));
 
         var month = result.Result.Should().BeOfType<OkObjectResult>().Subject
@@ -1818,20 +1785,8 @@ public partial class StatisticsControllerTests
                 It.IsAny<CancellationToken>(), It.IsAny<Guid?>()))
             .ReturnsAsync(readings);
         SetupEmptyTreatments();
-        _statsServiceMock
-            .Setup(s => s.CalculateTimeInRange(
-                It.IsAny<IEnumerable<SensorGlucose>>(),
-                It.IsAny<GlycemicThresholds?>()))
-            .Returns(new TimeInRangeMetrics
-            {
-                Percentages = new TimeInRangePercentages { Target = 100 },
-                RangeStats = new TimeInRangeDetailedStats
-                {
-                    Target = new PeriodMetrics { PeriodName = "In Range", Mean = 100 },
-                },
-            });
 
-        var result = await CreateController().GetPunchCardData(
+        var result = await CreateController(statisticsService: new StatisticsService()).GetPunchCardData(
             DateOnly.FromDateTime(dayStart),
             DateOnly.FromDateTime(dayStart.AddDays(1)));
 
@@ -2003,13 +1958,8 @@ public partial class StatisticsControllerTests
                 It.IsAny<CancellationToken>(), It.IsAny<Guid?>()))
             .ReturnsAsync(readings);
         SetupEmptyTreatments();
-        _statsServiceMock
-            .Setup(s => s.CalculateTimeInRange(
-                It.IsAny<IEnumerable<SensorGlucose>>(),
-                It.IsAny<GlycemicThresholds?>()))
-            .Returns(new TimeInRangeMetrics { Percentages = new TimeInRangePercentages { Target = 100 } });
 
-        var result = await CreateController().GetPunchCardData(
+        var result = await CreateController(statisticsService: new StatisticsService()).GetPunchCardData(
             DateOnly.FromDateTime(dayStart),
             DateOnly.FromDateTime(dayStart));
 
@@ -2782,32 +2732,6 @@ public partial class StatisticsControllerTests
             .Months.Single().Days;
         days.Single(d => d.Date == "2026-10-04").Entries.Select(e => e.Mgdl).Should().Equal(100);
         days.Single(d => d.Date == "2026-10-05").Entries.Select(e => e.Mgdl).Should().Equal(110);
-    }
-
-    [Fact]
-    public void PunchCardDayBuckets_PutsARecordInEveryWindowContainingIt()
-    {
-        PunchCardDayWindow[] windows = [new(0, 99), new(60, 159), new(100, 199)];
-        long[] records = [10, 70, 99, 100, 120, 160, 250];
-
-        var buckets = PunchCardDayBuckets.Bucket(records, windows, r => r);
-
-        buckets.Select(b => b.ToArray()).Should().BeEquivalentTo(
-            windows.Select(w => records.Where(r => r >= w.StartMs && r <= w.EndMs).ToArray()),
-            options => options.WithStrictOrdering());
-    }
-
-    [Fact]
-    public void PunchCardDayBuckets_HandlesWindowsThatAreNotAscending()
-    {
-        PunchCardDayWindow[] windows = [new(100, 199), new(0, 149), new(120, 130), new(300, 399)];
-        long[] records = [5, 100, 125, 149, 150, 199, 200, 350, 400];
-
-        var buckets = PunchCardDayBuckets.Bucket(records, windows, r => r);
-
-        buckets.Select(b => b.ToArray()).Should().BeEquivalentTo(
-            windows.Select(w => records.Where(r => r >= w.StartMs && r <= w.EndMs).ToArray()),
-            options => options.WithStrictOrdering());
     }
 
     private static (List<SensorGlucose> Glucose, List<Bolus> Boluses, List<CarbIntake> Carbs, List<BasalInjection> Injections)

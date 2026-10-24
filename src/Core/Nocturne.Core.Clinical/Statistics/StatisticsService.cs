@@ -19,7 +19,7 @@ namespace Nocturne.Core.Clinical.Statistics;
 /// <seealso cref="IStatisticsService"/>
 /// <seealso cref="Entry"/>
 /// <seealso cref="Treatment"/>
-public class StatisticsService : IStatisticsService
+public partial class StatisticsService : IStatisticsService
 {
     /// <summary>
     /// The low end of the 20-600 mg/dL range the Kovatchev risk scale is constructed over, where
