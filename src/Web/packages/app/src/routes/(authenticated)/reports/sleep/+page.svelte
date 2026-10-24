@@ -13,7 +13,6 @@
   import CalendarRange from "@lucide/svelte/icons/calendar-range";
   import {
     Actogram,
-    buildDayRange,
     type ActogramRowContext,
   } from "$lib/components/actogram";
   import { MS_PER_HOUR, HOURS_PER_ROW, type ActogramPoint } from "$lib/components/actogram/actogram";
@@ -73,12 +72,6 @@
         source: sourceFilter === "all" ? undefined : sourceFilter,
       }),
     { errorTitle: "Error Loading Sleep Report" }
-  );
-
-  // Unpadded, user-selected day range for the composition chart — includes
-  // gap days with no recorded night so tracking gaps stay visible.
-  const selectedRangeDays = $derived(
-    buildDayRange(reportsParams.dateRangeMillis.from, reportsParams.dateRangeMillis.to)
   );
 
   // Convert sleep spans into ActogramPoints (use midpoint of each span)
@@ -338,7 +331,7 @@
         <CardContent>
           <SleepCompositionChart
             nights={sleepNights}
-            days={selectedRangeDays}
+            days={trendsResource.current?.days ?? []}
             meanDeepPct={sleepSummary?.meanDeepPct}
             meanRemPct={sleepSummary?.meanRemPct}
             referenceRanges={sleepSummary?.referenceRanges}

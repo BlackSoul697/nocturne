@@ -460,10 +460,10 @@ public static class SleepReportCalculator
     private static DateTime WeekStartOf(DateTime day, DayOfWeek firstDay) => day.AddDays(-(((int)day.DayOfWeek - (int)firstDay + 7) % 7));
 
     public static IReadOnlyList<SleepWeekSummary> ComputeWeekSummaries(
-        IReadOnlyList<SleepNightSummary> nights, DateTime from, DateTime to, DayOfWeek firstDay)
+        IReadOnlyList<SleepNightSummary> nights, DateOnly from, DateOnly to, DayOfWeek firstDay)
     {
-        var rangeStart = from.Date;
-        var rangeEnd   = to.Date;
+        var rangeStart = from.ToDateTime(TimeOnly.MinValue);
+        var rangeEnd   = to.ToDateTime(TimeOnly.MinValue);
         if (rangeEnd < rangeStart)
             return [];
 
