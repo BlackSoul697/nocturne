@@ -1,6 +1,7 @@
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.ChartData.Stages;
@@ -53,7 +54,11 @@ public class DataFetchStageTests
             .Setup(r => r.GetRangeAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
-        _stage = new DataFetchStage(
+        _stage = CreateStage(new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(EndTime)));
+    }
+
+    private DataFetchStage CreateStage(TimeProvider now) =>
+        new(
             _mockSensorGlucoseRepo.Object,
             TestDoubles.CanonicalGlucosePassThrough.Create(),
             _mockBolusRepo.Object,
@@ -71,9 +76,9 @@ public class DataFetchStageTests
             NullLogger<DataFetchStage>.Instance,
             _mockHeartRateService.Object,
             _mockStepCountService.Object,
-            _mockSleepService.Object
+            _mockSleepService.Object,
+            now
         );
-    }
 
     private void SetupDefaultMocks()
     {
@@ -248,6 +253,28 @@ public class DataFetchStageTests
         result.StartTime.Should().Be(StartTime);
         result.EndTime.Should().Be(EndTime);
         result.BufferStartTime.Should().Be(BufferStartTime);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReadsPumpModeOverrideAndTheDrawnActivityCategories()
+    {
+        var inputContext = new ChartDataContext
+        {
+            StartTime = StartTime,
+            EndTime = EndTime,
+            IntervalMinutes = 5,
+            BufferStartTime = BufferStartTime,
+        };
+
+        await _stage.ExecuteAsync(inputContext, CancellationToken.None);
+
+        _mockStateSpanRepo.Verify(r => r.GetByCategories(
+            It.Is<IEnumerable<StateSpanCategory>>(c => c.OrderBy(x => x).SequenceEqual(
+                new[] { StateSpanCategory.PumpMode, StateSpanCategory.Override }
+                    .Concat(StateSpanCategories.DrawnActivities).OrderBy(x => x))),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -475,7 +502,32 @@ public class DataFetchStageTests
         requestedLimit.Should().Be(Nocturne.API.Services.Analytics.ChartDataService.TempBasalQueryLimit);
         requestedDescending.Should().BeFalse();
         result.TempBasalList.Should().BeEquivalentTo([beforeWindow, runningAcrossStart, atStart, inWindow]);
-        result.DisplayTempBasals.Should().BeEquivalentTo([runningAcrossStart, atStart, inWindow]);
+        result.DisplayTempBasals.Should().BeEquivalentTo([atStart, inWindow], "the temp at the window start cancels the one running across it");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WindowEndingAfterNow_DrawsARunningTempToNow()
+    {
+        var now = StartTime + 2 * 60 * 60 * 1000;
+        var running = new TempBasal
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartTime + 60 * 60 * 1000).UtcDateTime,
+            Rate = 2.0,
+            Origin = TempBasalOrigin.Algorithm,
+        };
+        _mockTempBasalRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([running]);
+
+        var result = await CreateStage(new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(now)))
+            .ExecuteAsync(Window(includeHealthSeries: false), CancellationToken.None);
+
+        result.DisplayTempBasals.Should().ContainSingle()
+            .Which.EndMills.Should().Be(now);
     }
 
     [Fact]

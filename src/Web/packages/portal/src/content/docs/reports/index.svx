@@ -101,6 +101,8 @@ report name and the period.
   one page, for a clinic visit.
 - **[Site Change Impact](/docs/reports/site-change-impact)**: what does my
   glucose do around an infusion site change?
+- **[Loop Analysis](/docs/reports/loop-analysis)**: what does my loop change,
+  when, and what occurs after it?
 
 ### Devices and data
 

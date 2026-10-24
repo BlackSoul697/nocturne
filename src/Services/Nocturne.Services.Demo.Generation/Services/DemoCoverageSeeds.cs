@@ -21,7 +21,8 @@ public static class DemoCoverageSeeds
 
     /// <summary>
     /// The primary reading at <paramref name="step"/>, with the compression artifact applied to
-    /// <c>step.Entry</c> in place, and the comparison reading when one is due.
+    /// <c>step.Entry</c> in place, and the comparison reading when one is due. None while a new
+    /// sensor warms up.
     /// </summary>
     /// <remarks>
     /// The detector reads both sensors as one stream and measures the drop and the recovery
@@ -31,6 +32,9 @@ public static class DemoCoverageSeeds
     /// </remarks>
     public static IReadOnlyList<Entry> CgmReadings(DemoTimeStep step)
     {
+        if (step.Loop == DemoLoopState.SensorWarmUp)
+            return [];
+
         if (CompressionArtifactAt(step.Time) is { } artifact)
         {
             step.Entry.Mgdl = artifact;
@@ -66,7 +70,7 @@ public static class DemoCoverageSeeds
         var mills = source.Mills + 120_000;
         var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime;
         var variation = source.Mills / 300_000 % 5 - 2;
-        var glucose = Math.Clamp((source.Sgv ?? source.Mgdl) + variation, 40, 400);
+        var glucose = Math.Clamp(source.GlucoseMgdl() + variation, 40, 400);
 
         return new Entry
         {

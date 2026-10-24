@@ -1,3 +1,4 @@
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 
 namespace Nocturne.API.Services.Glucose;
@@ -81,7 +82,7 @@ public static class DirectionService
         var recent = sortedEntries[0];
         var previous = sortedEntries[1];
 
-        return BuildDelta(MgdlOf(recent), MgdlOf(previous), recent, previous, units);
+        return BuildDelta(recent.GlucoseMgdl(), previous.GlucoseMgdl(), recent, previous, units);
     }
 
     /// <summary>
@@ -105,8 +106,8 @@ public static class DirectionService
                 new BgNowBucket(
                     fromMills,
                     inBucket,
-                    inBucket.Where(e => MgdlOf(e) > ErrorCodeCeiling).ToList(),
-                    inBucket.Where(e => MgdlOf(e) < ErrorCodeCeiling).ToList()
+                    inBucket.Where(e => e.GlucoseMgdl() > ErrorCodeCeiling).ToList(),
+                    inBucket.Where(e => e.GlucoseMgdl() < ErrorCodeCeiling).ToList()
                 )
             );
         }
@@ -140,11 +141,6 @@ public static class DirectionService
         );
         return info == null ? null : new BucketDelta(info, previous);
     }
-
-    /// <summary>
-    /// Glucose in mg/dL, preferring <see cref="Entry.Mgdl"/> and falling back to <see cref="Entry.Sgv"/>.
-    /// </summary>
-    public static double MgdlOf(Entry entry) => entry.Mgdl != 0 ? entry.Mgdl : entry.Sgv ?? 0;
 
     private static Core.Models.DeltaInfo? BuildDelta(
         double recentMean,
@@ -234,12 +230,9 @@ public static class DirectionService
         return $"&#{(int)character[0]};";
     }
 
-    /// <summary>
-    /// Scale mg/dL to mmol/L - exact legacy conversion
-    /// </summary>
     private static double ScaleMgdl(double mgdl)
     {
-        return mgdl / 18.0;
+        return mgdl / GlucoseConstants.MgdlPerMmol;
     }
 
     /// <summary>
@@ -265,7 +258,7 @@ public sealed record BgNowBucket(
 {
     public Entry? Last => Valid.Count > 0 ? Valid[^1] : null;
 
-    public double? Mean => Valid.Count > 0 ? Valid.Average(DirectionService.MgdlOf) : null;
+    public double? Mean => Valid.Count > 0 ? Valid.Average(e => e.GlucoseMgdl()) : null;
 }
 
 /// <summary>

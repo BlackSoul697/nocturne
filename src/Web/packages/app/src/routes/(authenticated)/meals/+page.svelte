@@ -25,6 +25,7 @@
   import MealsTable from "$lib/components/meals/MealsTable.svelte";
   import MealBolusDialog from "$lib/components/meals/MealBolusDialog.svelte";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import { localDayStart, localDayEnd } from "$lib/utils/timezone";
   import { toIsoString } from "$lib/utils/api-date";
   import { Now } from "$lib/hooks/now.svelte";
@@ -301,16 +302,15 @@
 
   async function handleQuickAccept(match: SuggestedMealMatch) {
     try {
+      // Awaited so the row's pending state covers the refresh too, not just the
+      // command; otherwise the row is clickable again before it disappears.
       await acceptMatch({
         foodEntryId: match.foodEntryId!,
         carbIntakeId: match.carbIntakeId!,
         carbs: match.carbs ?? 0,
         timeOffsetMinutes: 0,
-      });
+      }).updates(getMealMatchingSuggestions, getMeals);
       toast.success("Meal match accepted");
-      // Awaited so the row's pending state covers the refresh too, not just the
-      // command; otherwise the row is clickable again before it disappears.
-      await Promise.all([mealsQuery.refresh(), suggestionsQuery.refresh()]);
     } catch (err) {
       console.error("Failed to accept match:", err);
       toast.error(describeSubmitError(err, "Failed to accept match"));
@@ -319,9 +319,10 @@
 
   async function handleDismiss(match: SuggestedMealMatch) {
     try {
-      await dismissMatch({ foodEntryId: match.foodEntryId! });
+      await dismissMatch({ foodEntryId: match.foodEntryId! }).updates(
+        getMealMatchingSuggestions
+      );
       toast.success("Match dismissed");
-      await suggestionsQuery.refresh();
     } catch (err) {
       console.error("Failed to dismiss match:", err);
       toast.error(describeSubmitError(err, "Failed to dismiss match"));
@@ -369,9 +370,7 @@
   </div>
 
   <div {@attach coachmark({
-    key: "feature-intro.meals-matching",
-    title: "Smart matching",
-    description: "Nocturne suggests food matches based on your history \u2014 review them here.",
+    ...coachFor("feature-intro.meals-matching"),
     completeOn: { event: "click" },
   })}>
     <MealsTable

@@ -29,6 +29,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
 
   // Get shared date params from context (set by reports layout)
   // Default: 14 days is standard for reports overview
@@ -72,10 +73,15 @@
   const units = $derived(glucoseUnits.current);
   const glucoseFormatting = $derived({
     unitLabel: getUnitLabel(units),
-    targetRangeDisplay: formatGlucoseRange(70, 180, units),
   });
 
   const tir = $derived(analysis?.timeInRange?.percentages);
+  const consensusRange = $derived.by(() => {
+    const served = analysis?.timeInRange?.thresholds;
+    return served?.targetBottom != null && served.targetTop != null
+      ? { low: served.targetBottom, high: served.targetTop }
+      : undefined;
+  });
   const variability = $derived(analysis?.glycemicVariability);
   const stats = $derived(analysis?.basicStats);
 
@@ -107,11 +113,11 @@
     patterns: "text-report-patterns",
     lifestyle: "text-report-lifestyle",
     treatment: "text-report-treatment",
+    loop: "text-report-treatment",
   } as const;
 </script>
 
 <svelte:head>
-  <title>Reports - Nocturne</title>
   <meta
     name="description"
     content="Comprehensive diabetes management analytics and insights"
@@ -124,9 +130,9 @@
   <div class="flex min-h-[60vh] items-center justify-center px-4">
     <div class="max-w-md space-y-4 text-center">
       <AlertTriangle class="mx-auto size-6 text-destructive" aria-hidden="true" />
-      <h2 class="text-xl font-semibold">Unable to load reports</h2>
+      <h2 class="text-xl font-semibold">Could not load reports</h2>
       <p class="text-muted-foreground">
-        {remoteErrorMessage(reportsResource.error, "Something went wrong")}
+        {remoteErrorMessage(reportsResource.error, "An error occurred")}
       </p>
       <Button variant="outline" onclick={() => reportsResource.refresh()}>
         Try again
@@ -176,7 +182,7 @@
               <h2 class="text-sm font-medium text-muted-foreground">Time in range</h2>
               {#if tirValue != null}
                 <div class="h-64 @sm:h-72">
-                  <TIRStackedChart percentages={tir} personalRange={personalRangeOverlay} showThresholds />
+                  <TIRStackedChart percentages={tir} personalRange={personalRangeOverlay} thresholds={consensusRange} />
                 </div>
               {:else}
                 <p class="text-xl text-muted-foreground">No data</p>
@@ -231,7 +237,7 @@
           </CardHeader>
           <CardContent>
             <div class="h-64">
-              <AmbulatoryGlucoseProfile {averagedStats} />
+              <AmbulatoryGlucoseProfile {averagedStats} thresholds={analysis?.timeInRange?.thresholds} />
             </div>
           </CardContent>
         </Card>
@@ -240,8 +246,8 @@
           <CardContent class="text-center">
             <h2 class="mb-2 text-lg font-semibold">No data in this range</h2>
             <p class="mx-auto max-w-md text-muted-foreground">
-              There aren't enough glucose readings between these dates to
-              summarise. Choose a longer date range.
+              There are not enough glucose readings between these dates to
+              summarize. Choose a longer date range.
             </p>
           </CardContent>
         </Card>
@@ -252,9 +258,7 @@
       class="grid gap-x-12 gap-y-10 @3xl:grid-cols-2"
       aria-label="All reports"
       {@attach coachmark({
-        key: "setup-reports.categories",
-        title: "Start with Executive Summary",
-        description: "It combines your key metrics into a single page — great for clinic visits or sharing with your endo.",
+        ...coachFor("setup-reports.categories"),
         completeOn: { event: "click" },
       })}
     >

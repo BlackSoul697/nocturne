@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends ActogramPoint">
+  import { Key } from "@nocturne/ui/keys";
   import { formatShortDate } from "$lib/utils/formatting";
   import type { Snippet } from 'svelte';
   import type {
@@ -99,8 +100,8 @@
     if (visibleCount === undefined) return;
 
     let delta = 0;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const sign = e.key === 'ArrowDown' ? 1 : -1;
+    if (e.key === Key.ArrowDown || e.key === Key.ArrowUp) {
+      const sign = e.key === Key.ArrowDown ? 1 : -1;
       if (e.altKey) delta = 30 * sign;
       else if (e.shiftKey) delta = 7 * sign;
       else delta = 1 * sign;
@@ -135,7 +136,7 @@
           class="print:hidden"
           disabled={offset === 0}
           onclick={() => navigate(-7)}
-          aria-label="Previous week"
+          aria-label="Newer week"
         >
           <ChevronUp class="size-4" />
         </Button>
@@ -211,7 +212,7 @@
           size="icon-2xs"
           disabled={offset >= maxOffset}
           onclick={() => navigate(7)}
-          aria-label="Next week"
+          aria-label="Older week"
         >
           <ChevronDown class="size-4" />
         </Button>

@@ -2,7 +2,6 @@ using System.Text.Json;
 using Nocturne.API.Helpers;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -11,9 +10,9 @@ using Nocturne.Core.Models.Queries;
 namespace Nocturne.API.Services.Glucose;
 
 /// <summary>
-/// Domain service implementation for <see cref="Entry"/> operations using Store/Cache/EventSink ports.
+/// Domain service implementation for <see cref="Entry"/> operations using Store/Cache ports.
 /// Delegates reads through <see cref="IEntryCache"/> with fallback to <see cref="IEntryStore"/>,
-/// and writes through <see cref="IEntryDecomposer"/> to V4 tables with event notification via <see cref="IDataEventSink{T}"/>.
+/// and writes through <see cref="IEntryDecomposer"/> to V4 tables, whose repositories raise the events.
 /// </summary>
 /// <seealso cref="IEntryService"/>
 /// <seealso cref="IEntryStore"/>
@@ -29,7 +28,6 @@ public class EntryService : IEntryService
     private readonly IEntryStore _store;
     private readonly IEntryDecomposer _decomposer;
     private readonly IEntryCache _cache;
-    private readonly IDataEventSink<Entry> _events;
     private readonly ILogger<EntryService> _logger;
 
     /// <summary>
@@ -38,19 +36,16 @@ public class EntryService : IEntryService
     /// <param name="store">The entry store for query operations.</param>
     /// <param name="decomposer">The entry decomposer for writing to V4 tables.</param>
     /// <param name="cache">The entry cache for read-through caching.</param>
-    /// <param name="events">The event sink for broadcasting create/update/delete events.</param>
     /// <param name="logger">The logger instance.</param>
     public EntryService(
         IEntryStore store,
         IEntryDecomposer decomposer,
         IEntryCache cache,
-        IDataEventSink<Entry> events,
         ILogger<EntryService> logger)
     {
         _store = store;
         _decomposer = decomposer;
         _cache = cache;
-        _events = events;
         _logger = logger;
     }
 
@@ -232,6 +227,14 @@ public class EntryService : IEntryService
         var patched = JsonSerializer.Deserialize<Entry>(mergedJson);
         if (patched == null) return;
 
+        // The existing entry's sgv and mgdl are one stored value, so a patch that moves only one of them carries the other.
+        var patchesSgv = patchData.TryGetProperty("sgv", out _);
+        var patchesMgdl = patchData.TryGetProperty("mgdl", out _);
+        if (patchesSgv && !patchesMgdl && patched.Sgv is { } sgv)
+            patched.Mgdl = sgv;
+        else if (patchesMgdl && !patchesSgv && patched.Mgdl != 0)
+            patched.Sgv = patched.Mgdl;
+
         var props = typeof(Entry).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         foreach (var prop in props)
         {
@@ -268,10 +271,6 @@ public class EntryService : IEntryService
         string? find = null,
         CancellationToken cancellationToken = default)
     {
-        var deletedCount = await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
-
-        await _events.OnBulkDeletedAsync(deletedCount, cancellationToken);
-
-        return deletedCount;
+        return await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
     }
 }

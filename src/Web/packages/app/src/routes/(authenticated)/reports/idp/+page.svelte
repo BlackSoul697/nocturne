@@ -25,6 +25,8 @@
   import ScheduledBasalRateChart from "$lib/components/reports/ScheduledBasalRateChart.svelte";
   import HourlyBolusChart from "$lib/components/reports/HourlyBolusChart.svelte";
   import ScheduleFooter from "$lib/components/reports/ScheduleFooter.svelte";
+  import ActiveProfileHeading from "$lib/components/reports/ActiveProfileHeading.svelte";
+  import AidSystemUseCard from "$lib/components/reports/AidSystemUseCard.svelte";
   import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
   import { bgPatternClass } from "$lib/components/charts/print/chart-print-patterns";
   import { getIdpData } from "$api/idp.remote";
@@ -47,7 +49,7 @@
     entries: reportsResource.current?.entries ?? [],
     boluses: reportsResource.current?.boluses ?? [],
     insulinDeliveryStats: reportsResource.current?.insulinDeliveryStats,
-    profileSummary: reportsResource.current?.profileSummary,
+    activeSchedules: reportsResource.current?.activeSchedules ?? [],
     analysis: reportsResource.current?.analysis,
     averagedStats: reportsResource.current?.averagedStats,
     aidSystemMetrics: reportsResource.current?.aidSystemMetrics,
@@ -68,7 +70,6 @@
 </script>
 
 <svelte:head>
-  <title>Insulin Dosing Profile - Nocturne Reports</title>
   <meta
     name="description"
     content="Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"
@@ -101,7 +102,7 @@
       { label: "Avg Total Daily Dose", value: insulinStats?.tdd?.toFixed(1) ?? "--", unit: "U/day" },
       { label: "Average", value: stats.mean ? String(bg(stats.mean)) : "--", unit: bgLabel() },
       { label: a1cLabel(true), value: formatA1cValue(variability.estimatedA1cDisplay), unit: a1cUnitLabel(), note: "From mean glucose", },
-      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: "Target: ≤33%" },
+      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: variability.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
     ]}
   />
 
@@ -148,6 +149,9 @@
               style:--share="{bolusPct}%"
             ></div>
           </div>
+          <p class="text-xs text-muted-foreground tabular-nums">
+            Bolus total: manual {(insulinStats?.manualBolus ?? 0).toFixed(1)} U / automatic {(insulinStats?.automaticBolus ?? 0).toFixed(1)} U
+          </p>
         </div>
 
         <Separator />
@@ -219,45 +223,7 @@
   </div>
 
   <div class="grid grid-cols-1 @3xl:grid-cols-2 gap-6">
-    <Card>
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Activity class="w-5 h-5" />
-          AID System Use
-        </CardTitle>
-        <CardDescription>
-          Automated insulin delivery system metrics
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div class="grid grid-cols-1 @xs:grid-cols-2 print:grid-cols-3 gap-4 text-sm">
-          <div>
-            <div class="text-muted-foreground">CGM</div>
-            <div class="font-semibold text-lg">{aidMetrics?.cgmDeviceNames ?? '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Pump</div>
-            <div class="font-semibold text-lg">{aidMetrics?.pumpDeviceNames ?? '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">CGM Active</div>
-            <div class="font-semibold text-lg">{aidMetrics?.cgmActivePercent != null ? `${Math.round(aidMetrics.cgmActivePercent)}%` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">AID Active</div>
-            <div class="font-semibold text-lg">{aidMetrics?.aidActivePercent != null ? `${Math.round(aidMetrics.aidActivePercent)}%` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Target</div>
-            <div class="font-semibold text-lg">{aidMetrics?.targetLow != null && aidMetrics?.targetHigh != null ? `${bg(aidMetrics.targetLow)}-${bg(aidMetrics.targetHigh)} ${bgLabel()}` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Site Changes</div>
-            <div class="font-semibold text-lg">{aidMetrics?.siteChangeCount != null ? aidMetrics.siteChangeCount : '--'}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <AidSystemUseCard metrics={aidMetrics} />
 
     <Card>
       <CardHeader>
@@ -293,14 +259,19 @@
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="h-80 w-full @2xl:h-96">
-        <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} />
+        <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} thresholds={analysis?.timeInRange?.thresholds} />
       </div>
 
       <div>
         <h4 class="text-sm font-semibold text-muted-foreground mb-1">Scheduled Basal Rate</h4>
-        <div class="h-24 w-full">
-          <ScheduledBasalRateChart entries={data.profileSummary?.basalSchedules?.[0]?.entries ?? []} />
-        </div>
+        {#each data.activeSchedules as profile (profile.profileName)}
+          <ActiveProfileHeading {profile} multiple={data.activeSchedules.length > 1} />
+          <div class="h-24 w-full">
+            <ScheduledBasalRateChart entries={profile.basal ?? []} />
+          </div>
+        {:else}
+          <div class="h-24 w-full"></div>
+        {/each}
       </div>
 
       <div class="w-full">
@@ -308,7 +279,7 @@
         <HourlyBolusChart {boluses} {dayCount} />
       </div>
 
-      <ScheduleFooter profile={data.profileSummary} />
+      <ScheduleFooter profiles={data.activeSchedules} />
     </CardContent>
   </Card>
 

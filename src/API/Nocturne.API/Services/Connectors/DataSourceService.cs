@@ -42,7 +42,6 @@ public class DataSourceService : IDataSourceService
     private readonly ICalibrationRepository _calibrations;
     private readonly IAuditContext _auditContext;
     private readonly IConnectorConfigurationService _connectorConfiguration;
-    private readonly ITreatmentDecomposer _treatmentDecomposer;
     private readonly ProfileActivationWriter _profileActivationWriter;
     private readonly ILogger<DataSourceService> _logger;
 
@@ -53,7 +52,6 @@ public class DataSourceService : IDataSourceService
         ICalibrationRepository calibrations,
         IAuditContext auditContext,
         IConnectorConfigurationService connectorConfiguration,
-        ITreatmentDecomposer treatmentDecomposer,
         ProfileActivationWriter profileActivationWriter,
         ILogger<DataSourceService> logger
     )
@@ -65,7 +63,6 @@ public class DataSourceService : IDataSourceService
         _calibrations = calibrations;
         _auditContext = auditContext;
         _connectorConfiguration = connectorConfiguration;
-        _treatmentDecomposer = treatmentDecomposer;
         _logger = logger;
     }
 
@@ -985,9 +982,9 @@ public class DataSourceService : IDataSourceService
     )
     {
         // Glucose: audited soft-delete, user-attributed (via the V4 repositories).
-        var sensorGlucoseDeleted = await _sensorGlucose.DeleteBySourceAsync(source, cancellationToken);
-        var meterGlucoseDeleted = await _meterGlucose.DeleteBySourceAsync(source, cancellationToken);
-        var calibrationsDeleted = await _calibrations.DeleteBySourceAsync(source, cancellationToken);
+        var sensorGlucoseDeleted = await _sensorGlucose.DeleteBySourceAsync(source, WriteOrigin.Live, cancellationToken);
+        var meterGlucoseDeleted = await _meterGlucose.DeleteBySourceAsync(source, WriteOrigin.Live, cancellationToken);
+        var calibrationsDeleted = await _calibrations.DeleteBySourceAsync(source, WriteOrigin.Live, cancellationToken);
 
         // Auditable + soft-deletable records: audited soft-delete, user-attributed.
         var scope = $"data_source={source}";
@@ -1008,8 +1005,6 @@ public class DataSourceService : IDataSourceService
         var tempBasalsDeleted = await db.AuditedSoftDeleteAsync(
             db.TempBasals.FromSource(source), _auditContext, scope, cancellationToken);
 
-        await _treatmentDecomposer.DeleteProfileSwitchSnapshotsFromSourceAsync(
-            source, WriteOrigin.Live, cancellationToken);
         var stateSpansDeleted = await db.AuditedSoftDeleteAsync(
             db.StateSpans.Where(s => s.Source == source), _auditContext, scope, cancellationToken);
         stateSpansDeleted += await db.AuditedSoftDeleteAsync(

@@ -3,6 +3,8 @@ import {
   reportCategories,
   visibleReportCategories,
   getSidebarReportItems,
+  reportSubRouteTitle,
+  reportTitle,
   type ReportViewer,
 } from "./report-navigation.svelte";
 
@@ -141,5 +143,41 @@ describe("getSidebarReportItems", () => {
     });
 
     expect(items.map((i) => i.href)).not.toContain("/reports/meals");
+  });
+});
+
+describe("a report made of several pages", () => {
+  const loop = () => reportCategories().find((c) => c.id === "loop")!;
+
+  it("is one sidebar entry at the report's address", () => {
+    const items = getSidebarReportItems({ grantedScopes: OWNER, anonymous: false });
+    const entries = items.filter((i) => i.href.startsWith("/reports/loop-analysis"));
+    expect(entries).toEqual([expect.objectContaining({ title: "Loop Analysis", href: "/reports/loop-analysis" })]);
+  });
+
+  it("names each page with the report", () => {
+    const category = loop();
+    expect(category.reports.map((r) => reportTitle(category, r))).toContain("Loop Analysis: Daily profile");
+  });
+
+  it("is found by searching for the report", () => {
+    expect(loop().reports.find((r) => r.href.endsWith("/daily-profile"))?.keywords).toContain("loop analysis");
+  });
+});
+
+describe("reportSubRouteTitle", () => {
+  it.each([
+    ["/reports/data-quality/compression-lows", "Compression Lows"],
+    ["/reports/data-quality/sensor-integrity", "Signal Integrity"],
+    ["/reports/data-quality/cgm-comparison", "CGM Comparison"],
+    ["/reports/data-quality/rejected-uploads", "Rejected Uploads"],
+    ["/reports/sleep/2026-10-01", "Sleep Night Report"],
+  ])("names %s", (path, name) => {
+    expect(reportSubRouteTitle(path)).toBe(name);
+  });
+
+  it("has no name for an unknown path", () => {
+    expect(reportSubRouteTitle("/reports/unknown")).toBeUndefined();
+    expect(reportSubRouteTitle("/reports/sleep")).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@
 	import { getBotAuthorizeContext, buildTenantRedirectUrl } from "../bot.remote";
 	import { getPending, claimLink } from "$lib/api/generated/chatIdentities.generated.remote";
 	import { retainQuery } from "$lib/api/retain-query.svelte";
-	import { describeSubmitError } from "$lib/forms/submit-error";
+	import { describeSubmitError, errorStatus } from "$lib/forms/submit-error";
 
 	// Read state token from URL
 	const stateToken = $derived(page.url.searchParams.get("state") ?? "");
@@ -78,7 +78,13 @@
 			await claimLink({ token: stateToken });
 			goto(resolve("/auth/bot/authorize/done"));
 		} catch (err) {
-			claimError = describeSubmitError(err, "Failed to link account. Please try again.");
+			const status = errorStatus(err);
+			claimError =
+				status === 409
+					? "This chat account is already linked to another member."
+					: status === 400
+						? "This link is expired or invalid. Please run /connect in your chat app again."
+						: describeSubmitError(err, "Failed to link account. Please try again.");
 			isClaiming = false;
 		}
 	}
@@ -90,14 +96,14 @@
 	</div>
 {:else if mode === "error"}
 	<div class="flex flex-col items-center justify-center min-h-screen gap-4 p-6 text-center">
-		<h1 class="text-2xl font-bold">Can't Complete This Link</h1>
+		<h1 class="text-2xl font-bold">Cannot Complete This Link</h1>
 		<p class="text-destructive max-w-md">{errorMessage}</p>
 	</div>
 {:else if mode === "slug-prompt"}
 	<div class="flex flex-col items-center justify-center min-h-screen gap-4 p-6">
 		<h1 class="text-2xl font-bold">Which Nocturne Instance?</h1>
 		<p class="text-muted-foreground max-w-md text-center">
-			Enter the slug of the Nocturne instance you'd like to link your chat account to.
+			Enter the slug of the Nocturne instance that you want to link your chat account to.
 		</p>
 		{#if slugError}
 			<p class="text-destructive">{slugError}</p>
@@ -112,7 +118,7 @@
 					type="text"
 					bind:value={slug}
 					required
-					pattern="[a-z0-9][a-z0-9\-]{'{ 0,62}'}[a-z0-9]?"
+					pattern={"[a-z0-9][a-z0-9\\-]{0,61}[a-z0-9]?"}
 					placeholder="e.g. myfamily"
 				/>
 			</label>

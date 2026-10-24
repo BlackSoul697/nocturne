@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { createRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import {
     displayedGlucose,
@@ -25,11 +26,11 @@
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import AlertSurfaces from "$lib/components/alerts/AlertSurfaces.svelte";
+  import { satisfiesScope } from "$lib/authorization/scopes";
   import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
   import InitialReadsPrefetch from "$lib/components/layout/InitialReadsPrefetch.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
-  import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { CoachMarkProvider, type CoachRouter } from "@nocturne/coach";
@@ -37,6 +38,7 @@
   import "../../styles/coach-theme-overrides.css";
   import { createCoachMarkAdapter } from "$lib/coach-marks/adapter";
   import { sequences } from "$lib/coach-marks/sequences";
+  import { coachLabels } from "$lib/coach-marks/copy.svelte";
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import ChartPrintPatterns from "$lib/components/charts/print/ChartPrintPatterns.svelte";
@@ -131,7 +133,7 @@
   );
 
   function handleCommandPaletteKeydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    if ((e.metaKey || e.ctrlKey) && e.key === Key.K) {
       e.preventDefault();
       commandPalette.open = !commandPalette.open;
     }
@@ -238,7 +240,7 @@
 
 <InitialReadsPrefetch enabled={data.canViewRealtimeData} />
 
-<CoachMarkProvider adapter={coachMarkAdapter} {sequences} router={coachRouter}>
+<CoachMarkProvider adapter={coachMarkAdapter} labels={coachLabels()} {sequences} router={coachRouter}>
   <CoachParamHandler />
   <ChartPrintPatterns />
   <Sidebar.Provider>
@@ -265,15 +267,14 @@
             <BackupSignInPrompt show={data.showBackupSignInPrompt} />
           {/if}
       </div>
-      {#if data.user && !data.isGuestSession}
-        <SessionExpiryWatcher />
-      {/if}
       {#if !tenantless}
         <MembershipRequestAutoSubmit
           isAuthenticated={!!data.user}
           isGuestSession={data.isGuestSession}
         />
-        <AlertSurfaces />
+        {#if satisfiesScope(data.effectivePermissions ?? [], "alerts.read")}
+          <AlertSurfaces />
+        {/if}
       {/if}
       <main class="flex-1 overflow-x-clip">
         <svelte:boundary>
@@ -284,7 +285,7 @@
             {@const stack = dev && e instanceof Error ? e.stack : undefined}
             <Card.Root class="mx-auto mt-10 max-w-2xl">
               <Card.Header>
-                <Card.Title>Something went wrong</Card.Title>
+                <Card.Title>An error occurred</Card.Title>
               </Card.Header>
               <Card.Content class="space-y-4">
                 <p class="text-destructive">{message}</p>

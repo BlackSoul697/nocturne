@@ -52,7 +52,7 @@
 </script>
 
 <svelte:head>
-  <title>Login - Nocturne</title>
+  <title>Sign in - Nocturne</title>
 </svelte:head>
 
 <div class="flex flex-1 items-center justify-center p-4">
@@ -71,7 +71,7 @@
         <Card.Title class="text-2xl font-bold">Enter your guest code</Card.Title>
         <Card.Description>
           Enter the code you were given to view health data. The code works
-          once — this device stays signed in for 48 hours.
+          once. This device stays signed in for 48 hours.
         </Card.Description>
       {:else}
         <Card.Title class="text-2xl font-bold">
@@ -103,7 +103,7 @@
       </Card.Footer>
     {:else}
       <Card.Content>
-        <LoginForm {returnUrl} {tenantless} />
+        <LoginForm {returnUrl} {tenantless} pendingStepUpToken={data.stepUpToken} />
       </Card.Content>
 
       <Card.Footer class="flex flex-col space-y-2">

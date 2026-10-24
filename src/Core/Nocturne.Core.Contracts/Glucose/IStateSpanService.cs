@@ -41,6 +41,29 @@ public interface IStateSpanService
         bool descending = true,
         CancellationToken cancellationToken = default);
 
+    /// <inheritdoc cref="Nocturne.Core.Contracts.Repositories.IStateSpanRepository.GetStateSpansInCategoriesAsync"/>
+    Task<IEnumerable<StateSpan>> GetStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        int count,
+        int skip,
+        bool descending,
+        CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="Nocturne.Core.Contracts.Repositories.IStateSpanRepository.CountStateSpansInCategoriesAsync"/>
+    Task<int> CountStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        CancellationToken cancellationToken = default);
+
     /// <inheritdoc cref="Nocturne.Core.Contracts.Repositories.IStateSpanRepository.GetStateSpansStartingFromAsync"/>
     Task<IEnumerable<StateSpan>> GetStateSpansStartingFromAsync(
         StateSpanCategory category,
@@ -133,14 +156,12 @@ public interface IStateSpanService
     /// <summary>
     /// Get activities stored as StateSpans for v1 API compatibility
     /// </summary>
-    /// <param name="type">Optional activity type filter</param>
     /// <param name="count">Maximum number of activities to return</param>
     /// <param name="skip">Number of activities to skip for pagination</param>
     /// <param name="from">Inclusive lower bound on the activity's start, or <c>null</c> for none</param>
     /// <param name="to">Inclusive upper bound on the activity's start, or <c>null</c> for none</param>
     /// <returns>Collection of activities, newest first</returns>
     Task<IEnumerable<Activity>> GetActivitiesAsync(
-        string? type = null,
         int count = 10,
         int skip = 0,
         DateTime? from = null,

@@ -70,14 +70,23 @@ public sealed record ChartDataContext
     public IReadOnlyList<DeviceEvent> DeviceEventList { get; init; } = [];
     public IReadOnlyList<TempBasal> TempBasalList { get; init; } = [];
 
-    /// <summary>Temp basals starting in the display window (StartTime..EndTime).</summary>
+    /// <summary>
+    /// Temp basals as delivered that overlap the display window (StartTime..EndTime), which every
+    /// reader of the window's basal delivery reads.
+    /// </summary>
     public IReadOnlyList<TempBasal> DisplayTempBasals { get; init; } = [];
+
+    /// <summary>When the data was fetched: a temp basal still running delivers up to here, or to <see cref="EndTime"/> when that comes first.</summary>
+    public long NowMills { get; init; } = long.MaxValue;
 
     /// <summary>
     /// APS snapshot IOB/COB points covering the buffer window, ascending by timestamp. Carries the
     /// IOB/COB the AID system reported, which the IOB/COB series prefers over its own recomputation.
     /// </summary>
     public IReadOnlyList<ApsIobCobPoint> ApsSnapshotList { get; init; } = [];
+
+    /// <summary>Pump snapshot IOB points covering the buffer window, ascending by timestamp.</summary>
+    public IReadOnlyList<PumpIobPoint> PumpIobPointList { get; init; } = [];
     public IReadOnlyList<BasalInjection> BasalInjectionList { get; init; } = [];
 
     /// <summary>The newest pump status at or before <see cref="EndTime"/>.</summary>
@@ -98,6 +107,7 @@ public sealed record ChartDataContext
 
     public List<TimeSeriesPoint> IobSeries { get; init; } = [];
     public List<TimeSeriesPoint> CobSeries { get; init; } = [];
+    public double MinIob { get; init; }
     public double MaxIob { get; init; }
     public double MaxCob { get; init; }
     public List<BasalPoint> BasalSeries { get; init; } = [];

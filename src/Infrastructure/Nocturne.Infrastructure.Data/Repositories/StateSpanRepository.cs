@@ -49,8 +49,6 @@ public class StateSpanRepository : IStateSpanRepository
     /// </summary>
     private const int OpenCarryInLimit = 10;
 
-    private static readonly string ProfileCategory = nameof(StateSpanCategory.Profile);
-
     /// <summary>
     /// Exclusive categories whose open spans exclude each other only within a partition.
     /// </summary>
@@ -107,8 +105,57 @@ public class StateSpanRepository : IStateSpanRepository
     )
     {
         await using var db = await _contexts.CreateAsync(cancellationToken);
-        var query = BuildFilteredQuery(db, category, state, from, to, source, active);
+        return await PageAsync(
+            BuildFilteredQuery(db, category, state, from, to, source, active),
+            count, skip, descending, cancellationToken);
+    }
 
+    /// <inheritdoc />
+    public async Task<IEnumerable<StateSpan>> GetStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        int count,
+        int skip,
+        bool descending,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await using var db = await _contexts.CreateAsync(cancellationToken);
+        return await PageAsync(
+            InCategories(BuildFilteredQuery(db, null, state, from, to, source, active), categories),
+            count, skip, descending, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await using var db = await _contexts.CreateAsync(cancellationToken);
+        return await InCategories(BuildFilteredQuery(db, null, state, from, to, source, active), categories)
+            .CountAsync(cancellationToken);
+    }
+
+    private static IQueryable<StateSpanEntity> InCategories(
+        IQueryable<StateSpanEntity> query, IReadOnlyCollection<StateSpanCategory> categories)
+    {
+        var names = categories.Select(c => c.ToString()).ToList();
+        return query.Where(s => names.Contains(s.Category));
+    }
+
+    private static async Task<IEnumerable<StateSpan>> PageAsync(
+        IQueryable<StateSpanEntity> query, int count, int skip, bool descending, CancellationToken cancellationToken)
+    {
         var ordered = descending
             ? query.OrderByDescending(s => s.StartTimestamp).ThenByDescending(s => s.Id)
             : query.OrderBy(s => s.StartTimestamp).ThenBy(s => s.Id);
@@ -165,8 +212,7 @@ public class StateSpanRepository : IStateSpanRepository
         string? source,
         bool? active)
     {
-        // A Profile span is listed as nothing: a profile switch is a ProfileActivation.
-        var query = db.StateSpans.AsNoTracking().Where(s => s.Category != ProfileCategory);
+        var query = db.StateSpans.AsNoTracking();
 
         if (category.HasValue)
             query = query.Where(s => s.Category == category.Value.ToString());
@@ -389,7 +435,7 @@ public class StateSpanRepository : IStateSpanRepository
 
         // PumpMode mixes independent dimensions (Automatic/Manual loop mode vs Suspended
         // delivery) which can legitimately overlap, so only the SAME state is mutually exclusive
-        // there. Other exclusive categories (Override, TemporaryTarget, Profile) supersede any
+        // there. Other exclusive categories (Override, TemporaryTarget, Motion) supersede any
         // open span regardless of state.
         var sameStateOnly = string.Equals(
             entity.Category, nameof(StateSpanCategory.PumpMode), StringComparison.OrdinalIgnoreCase);
@@ -817,13 +863,11 @@ public class StateSpanRepository : IStateSpanRepository
     /// <summary>
     /// Get state spans that represent Activity records (Exercise, Sleep, Illness, Travel categories)
     /// </summary>
-    /// <param name="type">Optional specific activity type (state) filter.</param>
     /// <param name="count">The maximum number of spans to return.</param>
     /// <param name="skip">The number of spans to skip.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A collection of state spans representing activities.</returns>
     public async Task<IEnumerable<StateSpan>> GetActivityStateSpansAsync(
-        string? type = null,
         int count = 10,
         int skip = 0,
         DateTime? from = null,
@@ -838,12 +882,6 @@ public class StateSpanRepository : IStateSpanRepository
             query = query.Where(s => s.StartTimestamp >= fromValue);
         if (to is { } toValue)
             query = query.Where(s => s.StartTimestamp <= toValue);
-
-        // A Motion span's state is its class; its v1 type is the category, as ToActivity maps it.
-        if (string.Equals(type, ActivityStateSpanMapper.MotionClassType, StringComparison.Ordinal))
-            query = query.Where(s => s.Category == nameof(StateSpanCategory.Motion));
-        else if (!string.IsNullOrEmpty(type))
-            query = query.Where(s => s.State == type && s.Category != nameof(StateSpanCategory.Motion));
 
         query = query.ExcludeNonPrimary(db, RecordType.StateSpan);
 

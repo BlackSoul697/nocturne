@@ -87,11 +87,12 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     protected virtual Entry? ProjectToLegacyEntry(TModel model) => null;
 
     /// <summary>
-    /// Filters the models that reach the legacy <see cref="Entry"/> projection. The legacy surface
-    /// is single-stream: SensorGlucose overrides this with canonical stream selection so a losing
-    /// CGM's live writes don't interleave into v1/v3 clients' dataUpdate feed. Deletes are never
-    /// filtered — a previously-broadcast record must always emit its removal. The native V4
-    /// broadcast is unaffected (multi-stream access is a V4 concern).
+    /// Filters the models that reach the single-stream surfaces: the legacy <see cref="Entry"/>
+    /// projection and <see cref="OnLiveVisibleCreatedAsync"/>. SensorGlucose overrides this with
+    /// canonical stream selection so a losing CGM's live writes don't interleave into v1/v3 clients'
+    /// dataUpdate feed or the Home Assistant glucose relay. Deletes are never filtered — a
+    /// previously-broadcast record must always emit its removal. The native V4 broadcast is
+    /// unaffected (multi-stream access is a V4 concern).
     /// </summary>
     protected virtual Task<IReadOnlyList<TModel>> FilterLegacyProjectionAsync(
         IReadOnlyList<TModel> models, CancellationToken ct) => Task.FromResult(models);
@@ -101,17 +102,21 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     /// projection fire only for <see cref="WriteOrigin.Live"/> writes (backfill imports stay silent so
     /// clients aren't flooded); <see cref="RaiseEntriesWrittenAsync"/> fires for every origin. Every
     /// mutating method routes through here, so the origin rule lives in exactly one place.
+    /// <c>vacated</c> holds the stored state of updated records before the write, read only by
+    /// <see cref="RaiseEntriesWrittenAsync"/>: it is not a record any more, so the V4 broadcast and the
+    /// legacy projection never see it.
     /// </summary>
     protected async Task RaiseBroadcastAsync(
         IReadOnlyList<TModel> created,
         IReadOnlyList<TModel> updated,
         IReadOnlyList<TModel> deleted,
         WriteOrigin origin,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<TModel>? vacated = null)
     {
         await V4RecordBroadcast.RaiseAsync(
             _broadcaster, created, updated, deleted.Select(m => m.Id).ToList(), origin, ct);
-        await RaiseEntriesWrittenAsync(created, updated, deleted, ct);
+        await RaiseEntriesWrittenAsync(created, updated, deleted, vacated ?? [], ct);
         await RaiseEntriesProjectionAsync(created, updated, deleted, origin, ct);
         await RaiseLiveCreatedAsync(created, origin, ct);
         await RaiseLiveDeletedAsync(deleted, origin, ct);
@@ -166,28 +171,45 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     /// <summary>
     /// Tells the legacy entry sink what a committed write touched, for every <see cref="WriteOrigin"/>
     /// and without the canonical-stream filter, so a sink that keeps derived data current sees
-    /// backfills, imports and non-canonical streams the realtime projection leaves out.
+    /// backfills, imports and non-canonical streams the realtime projection leaves out. An updated
+    /// record that moved also reports the reading it left, from its <paramref name="vacated"/> state.
     /// </summary>
     private async Task RaiseEntriesWrittenAsync(
         IReadOnlyList<TModel> created,
         IReadOnlyList<TModel> updated,
         IReadOnlyList<TModel> deleted,
+        IReadOnlyList<TModel> vacated,
         CancellationToken ct)
     {
         if (_entrySink is null)
             return;
 
+        var reached = vacated.Count == 0 ? [] : updated.GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First());
+        var left = vacated
+            .Where(m => reached.ContainsKey(m.Id))
+            .Select(m => (Before: ProjectToLegacyEntry(m), After: ProjectToLegacyEntry(reached[m.Id])))
+            .Where(p => p.Before is not null && p.Before.Date != p.After?.Date)
+            .Select(p => p.Before!);
         var written = created.Concat(updated).Concat(deleted)
             .Select(ProjectToLegacyEntry)
             .OfType<Entry>()
+            .Concat(left)
             .ToList();
         if (written.Count > 0)
             await _entrySink.OnWrittenAsync(written, ct);
     }
 
     /// <summary>
-    /// Projects glucose-family writes to the legacy <see cref="Entry"/> shape and fires the legacy entry
-    /// sink — gated to <see cref="WriteOrigin.Live"/>, and a no-op when no sink is wired or the type has no
+    /// Hook for live creates that survive <see cref="FilterLegacyProjectionAsync"/>. Default is a no-op;
+    /// SensorGlucose relays them as the Home Assistant hub's <c>glucose_reading</c>.
+    /// </summary>
+    protected virtual Task OnLiveVisibleCreatedAsync(IReadOnlyList<TModel> visibleCreated, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    /// <summary>
+    /// Runs the single-stream surfaces of a live write: <see cref="OnLiveVisibleCreatedAsync"/>, then the
+    /// legacy entry sink with the write projected to the <see cref="Entry"/> shape. Gated to
+    /// <see cref="WriteOrigin.Live"/>; the projection is a no-op when no sink is wired or the type has no
     /// projection (<see cref="ProjectToLegacyEntry"/> returns null).
     /// </summary>
     private async Task RaiseEntriesProjectionAsync(
@@ -197,10 +219,16 @@ public abstract class V4RepositoryBase<TModel, TEntity>
         WriteOrigin origin,
         CancellationToken ct)
     {
-        if (origin != WriteOrigin.Live || _entrySink is null)
+        if (origin != WriteOrigin.Live)
             return;
 
         var visibleCreated = created.Count > 0 ? await FilterLegacyProjectionAsync(created, ct) : created;
+        if (visibleCreated.Count > 0)
+            await OnLiveVisibleCreatedAsync(visibleCreated, ct);
+
+        if (_entrySink is null)
+            return;
+
         var createdEntries = visibleCreated.Select(ProjectToLegacyEntry).OfType<Entry>().ToList();
         if (createdEntries.Count > 0)
             await _entrySink.OnCreatedAsync(createdEntries, ct);
@@ -245,18 +273,12 @@ public abstract class V4RepositoryBase<TModel, TEntity>
         CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        var query = InWindow(Listed(ctx.Set<TEntity>().AsNoTracking()), from, to, device);
+        var query = InWindow(ctx.Set<TEntity>().AsNoTracking(), from, to, device);
         if (source != null) query = query.Where(e => e.DataSource == source);
         query = descending ? query.OrderByDescending(e => e.Timestamp) : query.OrderBy(e => e.Timestamp);
         var entities = await query.Skip(offset).Take(limit).ToListAsync(ct);
         return entities.Select(ToDomain);
     }
-
-    /// <summary>
-    /// The rows <see cref="GetAsync"/> and <see cref="CountAsync"/> list. A type whose table also
-    /// holds rows that are not records of their own narrows it.
-    /// </summary>
-    protected virtual IQueryable<TEntity> Listed(IQueryable<TEntity> rows) => rows;
 
     /// <summary>
     /// The time window and device filter of <see cref="GetAsync"/>, shared with the counts that must
@@ -490,12 +512,13 @@ public abstract class V4RepositoryBase<TModel, TEntity>
         await using var ctx = await ContextFactory.CreateAsync(ct);
         var entity = await ctx.Set<TEntity>().FindAsync([id], ct)
             ?? throw new KeyNotFoundException($"{typeof(TModel).Name} {id} not found");
+        var before = ToDomain(entity);
         ApplyUpdate(entity, model);
         var materiallyChanged = HasMaterialChange(ctx, entity);
         await ctx.SaveChangesAsync(ct);
         var updated = ToDomain(entity);
         if (materiallyChanged)
-            await RaiseBroadcastAsync([], [updated], [], origin, ct);
+            await RaiseBroadcastAsync([], [updated], [], origin, ct, vacated: [before]);
         return updated;
     }
 
@@ -542,6 +565,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
 
         var inserted = new List<(string LegacyId, TEntity Entity)>();
         var updated = new List<(string LegacyId, TEntity Entity)>();
+        var before = new Dictionary<Guid, TModel>();
         foreach (var (legacyId, model) in byLegacyId)
         {
             if (storedByLegacyId.TryGetValue(legacyId, out var entity))
@@ -554,6 +578,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
                 }
 
                 model.Id = entity.Id;
+                before[entity.Id] = ToDomain(entity);
                 ApplyUpdate(entity, model);
                 updated.Add((legacyId, entity));
             }
@@ -597,7 +622,8 @@ public abstract class V4RepositoryBase<TModel, TEntity>
             inserted.Select(i => outcomes[i.LegacyId].Record).ToList(),
             materiallyChanged.Select(ToDomain).ToList(),
             [],
-            origin, ct);
+            origin, ct,
+            vacated: materiallyChanged.Select(e => before[e.Id]).ToList());
 
         Logger.LogSkippedDeleted(typeof(TModel).Name, skippedDeleted);
         return new LegacyUpsertBatch<TModel>(outcomes, skippedDeleted);
@@ -704,7 +730,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     public virtual async Task<int> CountAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        var query = ApplyReadVisibility(Listed(ctx.Set<TEntity>().AsNoTracking()), ctx);
+        var query = ApplyReadVisibility(ctx.Set<TEntity>().AsNoTracking(), ctx);
         if (from.HasValue) query = query.Where(e => e.Timestamp >= from.Value);
         if (to.HasValue) query = query.Where(e => e.Timestamp <= to.Value);
         return await query.CountAsync(ct);
@@ -796,10 +822,13 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     /// The result of <see cref="SplitUpsertsAsync"/>: rows upserted in place (returned to the caller),
     /// the subset of those that changed materially (broadcast as <c>update</c>), and the rows still to
     /// insert. <see cref="MateriallyChanged"/> must be a subset of <see cref="UpdatedInPlace"/>.
+    /// <see cref="Vacated"/> holds the state each of <see cref="MateriallyChanged"/> had before the
+    /// update, read ahead of it.
     /// </summary>
     protected readonly record struct UpsertSplit(
         List<TEntity> UpdatedInPlace,
         List<TEntity> MateriallyChanged,
+        List<TModel> Vacated,
         List<TEntity> ToInsert,
         int SkippedDeleted);
 
@@ -808,7 +837,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     /// Default: nothing upserted.</summary>
     protected virtual Task<UpsertSplit> SplitUpsertsAsync(
         NocturneDbContext ctx, List<TEntity> entities, CancellationToken ct)
-        => Task.FromResult(new UpsertSplit([], [], entities, 0));
+        => Task.FromResult(new UpsertSplit([], [], [], entities, 0));
 
     /// <summary>DeduplicationService participants override: link the just-inserted rows into canonical groups
     /// (runs AFTER commit). Default: no-op.</summary>
@@ -854,7 +883,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
             {
                 var legacy = updateByLegacyId
                     ? await SplitLegacyIdUpdatesAsync(ctx, records, token)
-                    : new UpsertSplit([], [], records.Select(ToEntity).ToList(), 0);
+                    : new UpsertSplit([], [], [], records.Select(ToEntity).ToList(), 0);
 
                 var split = await SplitUpsertsAsync(ctx, legacy.ToInsert, token);
 
@@ -869,6 +898,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
                 var upserts = new UpsertSplit(
                     [.. legacy.UpdatedInPlace, .. split.UpdatedInPlace],
                     [.. legacy.MateriallyChanged, .. split.MateriallyChanged],
+                    [.. legacy.Vacated, .. split.Vacated],
                     toInsert,
                     split.SkippedDeleted + blockedSkipped);
                 return (upserts, toInsert);
@@ -888,7 +918,8 @@ public abstract class V4RepositoryBase<TModel, TEntity>
                 inserted.Select(ToDomain).ToList(),
                 upserts.MateriallyChanged.Select(ToDomain).ToList(),
                 [],
-                origin, ct);
+                origin, ct,
+                vacated: upserts.Vacated);
         }
 
         Logger.LogSkippedDeleted(typeof(TModel).Name, upserts.SkippedDeleted);
@@ -930,6 +961,7 @@ public abstract class V4RepositoryBase<TModel, TEntity>
 
         var updated = new List<TEntity>();
         var materiallyChanged = new List<TEntity>();
+        var vacated = new List<TModel>();
         var toInsert = new List<TEntity>();
         foreach (var record in records)
         {
@@ -955,15 +987,19 @@ public abstract class V4RepositoryBase<TModel, TEntity>
             }
 
             record.Id = entity.Id;
+            var before = ToDomain(entity);
             ApplyUpdate(entity, record);
             updated.Add(entity);
             if (HasMaterialChange(ctx, entity))
+            {
                 materiallyChanged.Add(entity);
+                vacated.Add(before);
+            }
         }
 
         if (updated.Count > 0)
             await ctx.SaveChangesAsync(ct);
 
-        return new UpsertSplit(updated, materiallyChanged, toInsert, 0);
+        return new UpsertSplit(updated, materiallyChanged, vacated, toInsert, 0);
     }
 }

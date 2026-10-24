@@ -5,7 +5,7 @@
 	import Loader2 from "@lucide/svelte/icons/loader-circle";
 	import { Button } from "$lib/components/ui/button";
 	import { retainQuery } from "$lib/api/retain-query.svelte";
-	import { describeSubmitError } from "$lib/forms/submit-error";
+	import { describeSubmitError, errorStatus } from "$lib/forms/submit-error";
 	import { confirmDiscordLink, getDiscordLinkClaim } from "./finalize.remote";
 
 	const claim = $derived(page.url.searchParams.get("claim") ?? "");
@@ -31,10 +31,16 @@
 		try {
 			linked = await confirmDiscordLink(claim);
 		} catch (err: unknown) {
-			confirmError = describeSubmitError(
-				err,
-				"We couldn't complete the Discord link. It may have expired. Please try again from Settings.",
-			);
+			const status = errorStatus(err);
+			confirmError =
+				status === 409
+					? "This Discord account is already linked to another member."
+					: status === 400
+						? "This link is expired or invalid. Please try again from Settings."
+						: describeSubmitError(
+								err,
+								"We could not complete the Discord link. If the link expired, try again from Settings.",
+							);
 		} finally {
 			isConfirming = false;
 		}
@@ -58,7 +64,7 @@
 			Back to Settings
 		</a>
 	{:else if pending === null || claimQuery?.error}
-		<h1 class="text-2xl font-bold">Can't complete this link</h1>
+		<h1 class="text-2xl font-bold">Cannot complete this link</h1>
 		<p class="text-destructive max-w-md">
 			This link has expired, or was started from another browser or account. Start linking your
 			Discord account again from Settings.

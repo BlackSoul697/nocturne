@@ -59,8 +59,8 @@ public class CobCalculatorTests
         // Real IobCalculator — COB calculation calls IOB internally for activity
         var basalRateResolver = new Mock<IBasalRateResolver>();
         basalRateResolver
-            .Setup(b => b.GetBasalRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(DefaultBasalRate);
+            .Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Func<long, double>)(_ => DefaultBasalRate));
 
         var iobApsRepo = new Mock<IApsSnapshotRepository>();
         iobApsRepo
@@ -133,13 +133,48 @@ public class CobCalculatorTests
         };
 
         var viaAsync = _calculator.FromCarbIntakes(carbs, boluses, tempBasals, now);
-        var viaSnapshot = _calculator.FromCarbIntakes(carbs, boluses, tempBasals, MatchingSnapshot(), now);
+        var viaSnapshot = _calculator.FromCarbIntakes(carbs, boluses, tempBasals, MatchingSnapshot(), _ => DefaultBasalRate, now);
 
         Assert.Equal(viaAsync.Cob, viaSnapshot.Cob, 6);
         Assert.Equal(viaAsync.DecayedBy, viaSnapshot.DecayedBy);
         Assert.Equal(viaAsync.IsDecaying, viaSnapshot.IsDecaying);
         Assert.Equal(viaAsync.RawCarbImpact.GetValueOrDefault(), viaSnapshot.RawCarbImpact.GetValueOrDefault(), 6);
         Assert.True(viaSnapshot.Cob > 0, "sanity: the scenario should produce non-zero COB");
+    }
+
+    [Fact]
+    public void FromCarbIntakes_RunningTemp_DelaysCarbsOnlyByWhatItDeliveredByNow()
+    {
+        // The carb delay reads insulin activity at the future decay time. A temp still running must
+        // count only what it delivered by now, exactly as if it had ended now. The snapshot path takes
+        // pieces, which always carry an end, so a temp due to end later stands in for a running one.
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var carbs = new List<CarbIntake>
+        {
+            new() { Carbs = 50, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 45 * 60 * 1000).UtcDateTime },
+        };
+        List<Bolus> boluses =
+        [
+            new() { Insulin = 1.0, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 45 * 60 * 1000).UtcDateTime },
+        ];
+        TempBasal HighTemp(long? end) => new()
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 30 * 60 * 1000).UtcDateTime,
+            EndTimestamp = end is { } e ? DateTimeOffset.FromUnixTimeMilliseconds(e).UtcDateTime : null,
+            Rate = 10.0,
+            Origin = TempBasalOrigin.Algorithm,
+        };
+
+        var runningSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now + 30 * 60 * 1000)], MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var endedSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now)], MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var runningAsync = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(null)], now);
+        var endedAsync = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now)], now);
+        var withoutTemp = _calculator.FromCarbIntakes(carbs, boluses, [], now);
+
+        Assert.Equal(endedSnapshot.DecayedBy, runningSnapshot.DecayedBy);
+        Assert.Equal(endedAsync.DecayedBy, runningAsync.DecayedBy);
+        Assert.True(endedAsync.DecayedBy > withoutTemp.DecayedBy, "the temp's insulin must reach the carb delay");
+        Assert.True(endedSnapshot.DecayedBy > withoutTemp.DecayedBy, "the temp's insulin must reach the carb delay");
     }
 
     #endregion
@@ -159,7 +194,7 @@ public class CobCalculatorTests
             },
         };
 
-        var result = await _calculator.CalculateTotalAsync(carbIntakes, time: now);
+        var result = await _calculator.CalculateTotalAsync(carbIntakes, null, null, now);
 
         Assert.True(result.Cob > 0, "50g carbs 30 min ago should have non-zero COB");
         Assert.True(result.Cob <= 50, "COB should not exceed total carbs");
@@ -178,7 +213,7 @@ public class CobCalculatorTests
             },
         };
 
-        var result = await _calculator.CalculateTotalAsync(carbIntakes, time: now);
+        var result = await _calculator.CalculateTotalAsync(carbIntakes, null, null, now);
 
         Assert.Equal(0.0, result.Cob);
     }
@@ -201,8 +236,8 @@ public class CobCalculatorTests
             AbsorptionTime = 240,
         };
 
-        var fastResult = await _calculator.CalculateTotalAsync(new List<CarbIntake> { fastIntake }, time: now);
-        var slowResult = await _calculator.CalculateTotalAsync(new List<CarbIntake> { slowIntake }, time: now);
+        var fastResult = await _calculator.CalculateTotalAsync(new List<CarbIntake> { fastIntake }, null, null, now);
+        var slowResult = await _calculator.CalculateTotalAsync(new List<CarbIntake> { slowIntake }, null, null, now);
 
         Assert.True(slowResult.Cob > fastResult.Cob,
             "Slow absorption (240 min) should have more COB remaining than fast absorption (60 min)");
@@ -230,7 +265,7 @@ public class CobCalculatorTests
             },
         };
 
-        var result = _calculator.FromCarbIntakes(carbIntakes, time: now);
+        var result = _calculator.FromCarbIntakes(carbIntakes, null, null, now);
 
         Assert.True(result.Cob > 0, "Multiple recent carb intakes should produce non-zero COB");
         Assert.True(result.Cob <= 50, "COB should not exceed total carbs (30 + 20)");
@@ -253,7 +288,9 @@ public class CobCalculatorTests
 
         var result = _calculator.FromCarbIntakes(
             new List<CarbIntake> { olderIntake, newerIntake },
-            time: now
+            null,
+            null,
+            now
         );
 
         Assert.NotNull(result.LastCarbs);
@@ -291,7 +328,7 @@ public class CobCalculatorTests
             },
         };
 
-        var result = await _calculator.CalculateTotalAsync(carbIntakes, time: now);
+        var result = await _calculator.CalculateTotalAsync(carbIntakes, null, null, now);
 
         Assert.Equal(0.0, result.Cob);
         Assert.NotEqual("Care Portal", result.Source);
@@ -315,7 +352,7 @@ public class CobCalculatorTests
                 },
             });
 
-        var result = await _calculator.CalculateTotalAsync(new List<CarbIntake>(), time: historical);
+        var result = await _calculator.CalculateTotalAsync(new List<CarbIntake>(), null, null, historical);
 
         Assert.Equal(25.0, result.Cob);
     }

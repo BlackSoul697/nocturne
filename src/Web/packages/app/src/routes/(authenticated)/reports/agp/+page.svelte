@@ -42,6 +42,7 @@
   const entries = $derived(reportsResource.current?.entries ?? []);
   const analysis = $derived(reportsResource.current?.analysis);
   const averagedStats = $derived(reportsResource.current?.averagedStats);
+  const edges = $derived(analysis?.timeInRange?.thresholds);
   const lastUpdated = $derived(reportsResource.current?.dateRange?.lastUpdated);
   const startDate = $derived(reportsResource.date.from);
   const endDate = $derived(reportsResource.date.to);
@@ -49,7 +50,6 @@
 </script>
 
 <svelte:head>
-  <title>Ambulatory Glucose Profile - Nocturne Reports</title>
   <meta
     name="description"
     content="Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
@@ -63,7 +63,7 @@
     <div class="flex items-center justify-between flex-wrap gap-4">
       <div class="print:hidden">
         <p class="text-muted-foreground">
-          Your typical daily glucose pattern — a standardized clinical report
+          Your typical daily glucose pattern: a standardized clinical report
         </p>
       </div>
       <div class="flex items-center gap-2 print:hidden">
@@ -112,7 +112,7 @@
         <div class="mt-2 space-y-2 pl-4 border-l border-info/30">
           <p>
             <strong>The dark line</strong>
-            is your median (middle) glucose at each hour — what happens most often.
+            is your median (middle) glucose at each hour. It shows what happens most often.
           </p>
           <p>
             <strong>The darker shaded area</strong>
@@ -124,8 +124,11 @@
           </p>
           <p>
             <strong>The shaded band</strong>
-            ({bgRange(70, 180)}) is the consensus target range. The consensus target
-            is at least 70% of time in this zone.
+            {#if edges?.targetBottom != null && edges.targetTop != null}
+              ({bgRange(edges.targetBottom, edges.targetTop)})
+            {/if}
+            is the consensus target range. The consensus target
+            is at least 70% of time in this range.
           </p>
         </div>
       </details>
@@ -143,7 +146,7 @@
         { label: "Time in range", value: tir.target?.toFixed(0) ?? "–", unit: "%", note: "Target: ≥70%" },
         { label: "Average", value: stats.mean ? String(bg(stats.mean)) : "–", unit: bgLabel() },
         { label: a1cLabel(true), value: formatA1cValue(variability.estimatedA1cDisplay), unit: a1cUnitLabel(), note: "From mean glucose", },
-        { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: "Target: ≤33%" },
+        { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: variability.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
         { label: "Below range", value: ((tir.low ?? 0) + (tir.veryLow ?? 0)).toFixed(1), unit: "%", note: "Target: <4%" },
         { label: "Above range", value: ((tir.high ?? 0) + (tir.veryHigh ?? 0)).toFixed(1), unit: "%", note: "Target: <25%" },
       ]}
@@ -164,7 +167,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="h-80 @lg:h-96 w-full">
-        <AmbulatoryGlucoseProfile {averagedStats} />
+        <AmbulatoryGlucoseProfile {averagedStats} thresholds={edges} />
       </CardContent>
     </Card>
 
@@ -209,10 +212,13 @@
               label: "Coefficient of variation (CV)",
               value: variability.coefficientOfVariation,
               format: (v: number) => `${v.toFixed(0)}%`,
-              target: "33% or below",
+              target:
+                variability.coefficientOfVariationTarget != null
+                  ? `${variability.coefficientOfVariationTarget}% or below`
+                  : undefined,
             },
             {
-              label: `Time below ${bg(70)} ${bgLabel()}`,
+              label: edges?.low != null ? `Time below ${bg(edges.low)} ${bgLabel()}` : "Time below range",
               value:
                 tir.low != null || tir.veryLow != null
                   ? (tir.low ?? 0) + (tir.veryLow ?? 0)
@@ -227,9 +233,11 @@
             >
               <div>
                 <p class="font-medium">{observation.label}</p>
-                <p class="text-sm text-muted-foreground">
-                  Consensus target: {observation.target}
-                </p>
+                {#if observation.target}
+                  <p class="text-sm text-muted-foreground">
+                    Consensus target: {observation.target}
+                  </p>
+                {/if}
               </div>
               <p class="text-lg font-semibold tabular-nums">
                 {observation.value != null

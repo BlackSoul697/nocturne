@@ -39,6 +39,34 @@ public interface IStateSpanRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Spans of any of <paramref name="categories"/> matching the filters, as
+    /// <see cref="GetStateSpansAsync"/> reads them. An empty set matches nothing.
+    /// </summary>
+    Task<IEnumerable<StateSpan>> GetStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        int count,
+        int skip,
+        bool descending,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The number of spans <see cref="GetStateSpansInCategoriesAsync"/> pages over.
+    /// </summary>
+    Task<int> CountStateSpansInCategoriesAsync(
+        IReadOnlyCollection<StateSpanCategory> categories,
+        string? state,
+        DateTime? from,
+        DateTime? to,
+        string? source,
+        bool? active,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns spans of <paramref name="category"/> starting at or after <paramref name="from"/>,
     /// oldest first. Unlike <see cref="GetStateSpansAsync"/>, excludes open spans that started earlier.
     /// </summary>
@@ -193,17 +221,15 @@ public interface IStateSpanRepository
     // Activity Compatibility Methods
 
     /// <summary>
-    /// Returns activity-category state spans with optional type filtering and pagination.
+    /// Returns activity-category state spans with pagination.
     /// Compatibility layer for the legacy Activity API.
     /// </summary>
-    /// <param name="type">Optional activity type filter.</param>
     /// <param name="count">Maximum number of records to return.</param>
     /// <param name="skip">Number of records to skip for pagination.</param>
     /// <param name="from">Inclusive lower bound on the span's start, or <c>null</c> for none.</param>
     /// <param name="to">Inclusive upper bound on the span's start, or <c>null</c> for none.</param>
     /// <returns>A collection of activity <see cref="StateSpan"/> records, newest start first.</returns>
     Task<IEnumerable<StateSpan>> GetActivityStateSpansAsync(
-        string? type = null,
         int count = 10,
         int skip = 0,
         DateTime? from = null,

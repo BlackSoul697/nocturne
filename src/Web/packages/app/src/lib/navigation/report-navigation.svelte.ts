@@ -6,6 +6,7 @@ import BarChart3 from "@lucide/svelte/icons/chart-column";
 import BatteryFull from "@lucide/svelte/icons/battery-full";
 import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
 import Calendar from "@lucide/svelte/icons/calendar";
+import ChartLine from "@lucide/svelte/icons/chart-line";
 import CalendarDays from "@lucide/svelte/icons/calendar-days";
 import Clock from "@lucide/svelte/icons/clock";
 import Dumbbell from "@lucide/svelte/icons/dumbbell";
@@ -16,10 +17,13 @@ import HeartPulse from "@lucide/svelte/icons/heart-pulse";
 import Layers from "@lucide/svelte/icons/layers";
 import Moon from "@lucide/svelte/icons/moon";
 import PieChart from "@lucide/svelte/icons/chart-pie";
+import Repeat from "@lucide/svelte/icons/repeat";
 import Sunrise from "@lucide/svelte/icons/sunrise";
 import SunMoon from "@lucide/svelte/icons/sun-moon";
 import Syringe from "@lucide/svelte/icons/syringe";
 import Utensils from "@lucide/svelte/icons/utensils";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+import Target from "@lucide/svelte/icons/target";
 import SiteChangeIcon from "$lib/components/icons/SiteChangeIcon.svelte";
 import { satisfiesAllScopes } from "$lib/authorization/scopes";
 
@@ -50,11 +54,17 @@ export interface ReportItem {
 }
 
 export interface ReportCategory {
-  id: "overview" | "patterns" | "lifestyle" | "treatment";
+  id: "overview" | "patterns" | "lifestyle" | "treatment" | "loop";
   title: string;
   subtitle: string;
   icon: IconComponent;
   reports: ReportItem[];
+  /**
+   * The reports are the pages of one report, opened at this address, and share its filters. The
+   * report header links between them (`ReportPageSwitcher`), the sidebar offers the report as one
+   * entry, and each page is titled with the report's name ({@link reportTitle}).
+   */
+  pages?: { href: string };
 }
 
 /** Read scopes, spelled as the API's `OAuthScopes` spells them. */
@@ -62,6 +72,7 @@ const READ = {
   glucose: "glucose.read",
   treatments: "treatments.read",
   devices: "devices.read",
+  therapy: "therapy.read",
   heartRate: "heartrate.read",
   stepCount: "stepcount.read",
   sleep: "sleep.read",
@@ -116,16 +127,16 @@ export function reportCategories(): ReportCategory[] {
           title: "Glucose Distribution",
           description: "Time spent in each glucose zone",
           href: "/reports/glucose-distribution",
-          keywords: ["box chart", "box plot", "whisker", "percentiles", "quartiles", "spread"],
+          keywords: ["spread"],
           scopes: [READ.reports],
           icon: PieChart,
           status: "available",
         },
         {
           title: "Data Quality",
-          description: "Assess the reliability of your data",
+          description: "Compression lows, signal integrity, CGM comparison and rejected uploads",
           href: "/reports/data-quality",
-          keywords: ["gaps", "missing", "coverage", "reliability"],
+          keywords: ["compression", "signal", "sensor", "rejected uploads"],
           scopes: [READ.glucose, READ.reports],
           icon: Layers,
           status: "available",
@@ -305,7 +316,7 @@ export function reportCategories(): ReportCategory[] {
         {
           title: "Insulin Dosing Profile",
           sidebarTitle: "IDP",
-          description: "Standardised insulin and glucose summary",
+          description: "Standardized insulin and glucose summary",
           href: "/reports/idp",
           keywords: ["insulin dosing profile", "daily insulin", "dose adjustment"],
           scopes: [READ.treatments, READ.reports],
@@ -315,7 +326,7 @@ export function reportCategories(): ReportCategory[] {
         },
         {
           title: "Battery",
-          description: "Pump battery trends and longevity",
+          description: "Device battery levels and charge cycles",
           href: "/reports/battery",
           keywords: ["pump battery", "phone battery", "charge"],
           scopes: [READ.devices],
@@ -324,6 +335,88 @@ export function reportCategories(): ReportCategory[] {
         },
       ],
     },
+    {
+      id: "loop",
+      title: "Loop Analysis",
+      subtitle: "What your automated insulin delivery does",
+      icon: Repeat,
+      pages: { href: "/reports/loop-analysis" },
+      reports: [
+        {
+          title: "Daily profile",
+          description: "Glucose, insulin and carbs at each time of day",
+          href: "/reports/loop-analysis/daily-profile",
+          keywords: ["loop analysis", "loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: ChartLine,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Meals and events",
+          description: "Glucose and insulin before and after each event",
+          href: "/reports/loop-analysis/meals-and-events",
+          keywords: ["loop analysis", "meal response", "corrections", "unannounced meals"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Utensils,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Prediction accuracy",
+          description: "The loop's predictions compared with the readings that followed",
+          href: "/reports/loop-analysis/prediction-accuracy",
+          keywords: ["loop analysis", "predictions", "forecast", "uam", "zt"],
+          scopes: [READ.glucose, READ.treatments, READ.devices, READ.reports],
+          icon: Target,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Loop health",
+          description: "How much of the time the loop was closed",
+          href: "/reports/loop-analysis/loop-health",
+          keywords: ["loop analysis", "closed loop", "open loop", "limits", "sensitivity ratio"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Repeat,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Settings evidence",
+          description: "Your profile settings compared with your data",
+          href: "/reports/loop-analysis/settings-evidence",
+          keywords: ["loop analysis", "basal", "isf", "carb ratio", "profile settings"],
+          scopes: [READ.glucose, READ.treatments, READ.therapy, READ.reports],
+          icon: SlidersHorizontal,
+          status: "available",
+          memberOnly: true,
+        },
+      ],
+    },
+  ];
+}
+
+/** A report's full title: a page of a report made of several is named with that report. */
+export function reportTitle(category: ReportCategory, report: ReportItem): string {
+  return category.pages ? `${category.title}: ${report.title}` : report.title;
+}
+
+const reportSubRouteTitles: Record<string, string> = {
+  "/reports/data-quality/compression-lows": "Compression Lows",
+  "/reports/data-quality/sensor-integrity": "Signal Integrity",
+  "/reports/data-quality/cgm-comparison": "CGM Comparison",
+  "/reports/data-quality/rejected-uploads": "Rejected Uploads",
+  "/reports/sleep/[date]": "Sleep Night Report",
+};
+
+/**
+ * The name of a report route the registry does not list, resolvable on the
+ * server where a page's own effects do not run.
+ */
+export function reportSubRouteTitle(pathname: string): string | undefined {
+  return reportSubRouteTitles[
+    /^\/reports\/sleep\/[^/]+$/.test(pathname) ? "/reports/sleep/[date]" : pathname
   ];
 }
 
@@ -359,18 +452,23 @@ export function visibleReportCategories(
     .filter((c) => c.reports.length > 0);
 }
 
-/** Flat list of available report items for sidebar navigation, per viewer. */
+/**
+ * Flat list of available report items for sidebar navigation, per viewer. A report made of several
+ * pages is one entry, at the report's own address.
+ */
 export function getSidebarReportItems(viewer: ReportViewer): {
   title: string;
   href: string;
   icon: IconComponent;
 }[] {
-  return visibleReportCategories(viewer)
-    .flatMap((c) => c.reports)
-    .filter((r) => r.status === "available")
-    .map((r) => ({
+  return visibleReportCategories(viewer).flatMap((c) => {
+    const available = c.reports.filter((r) => r.status === "available");
+    if (c.pages)
+      return available.length > 0 ? [{ title: c.title, href: c.pages.href, icon: c.icon }] : [];
+    return available.map((r) => ({
       title: r.sidebarTitle ?? r.title,
       href: r.href,
       icon: r.icon,
     }));
+  });
 }

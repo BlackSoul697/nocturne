@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    a1cDisplayValue,
     a1cLabel,
     a1cUnitLabel,
     formatA1cValue,
@@ -20,6 +21,7 @@
   import TrendingUp from "@lucide/svelte/icons/trending-up";
   import Shield from "@lucide/svelte/icons/shield";
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import CircleCheck from "@lucide/svelte/icons/circle-check";
   import Activity from "@lucide/svelte/icons/activity";
   import BarChart3 from "@lucide/svelte/icons/chart-column";
   import Calendar from "@lucide/svelte/icons/calendar";
@@ -28,6 +30,7 @@
   import ClinicalInsights from "$lib/components/reports/ClinicalInsights.svelte";
   import ReliabilityBadge from "$lib/components/reports/ReliabilityBadge.svelte";
   import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
+  import { TargetStatus } from "$api/generated/nocturne-api-client";
   import { getReportsData } from "$api/reports.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
@@ -37,6 +40,9 @@
   // Format a nullable mg/dL value in the user's preferred units, or em dash if absent.
   const bgOr = (mgdl: number | undefined | null) =>
     mgdl != null ? bg(mgdl) : "–";
+
+  const bgRangeOr = (low: number | undefined | null, high: number | undefined | null) =>
+    low != null && high != null ? bgRange(low, high) : "–";
 
   // Get shared date params from context (set by reports layout)
   // Default: 14 days is standard for executive summary reports
@@ -53,34 +59,55 @@
   const analysis = $derived(reportsResource.current?.analysis);
   const lastUpdated = $derived(reportsResource.current?.dateRange?.lastUpdated);
   const dayCount = $derived(reportsResource.date.dayCount);
+  const cvStatus = $derived(analysis?.clinicalAssessment?.cvAssessment?.status);
+  const cvMeetsTarget = $derived(
+    cvStatus == null || cvStatus === TargetStatus.NotAssessed
+      ? undefined
+      : cvStatus === TargetStatus.Met
+  );
 </script>
 
 <svelte:head>
-  <title>Executive Summary - Nocturne Reports</title>
   <meta
     name="description"
     content="High-level overview of your diabetes management metrics"
   />
 </svelte:head>
 
+{#snippet targetState(target: string, met: boolean | undefined)}
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <span class="text-muted-foreground">{target}</span>
+    {#if met != null}
+      <span class="flex items-center gap-1 font-medium {met ? 'text-success' : 'text-warning'}">
+        {#if met}
+          <CircleCheck class="w-4 h-4" />
+          Target met
+        {:else}
+          <AlertTriangle class="w-4 h-4" />
+          Target not met
+        {/if}
+      </span>
+    {/if}
+  </div>
+{/snippet}
+
 {#if reportsResource.current}
   <div class="@container space-y-8">
     {#if analysis}
       {@const tir = analysis?.timeInRange?.percentages}
+      {@const edges = analysis?.timeInRange?.thresholds}
       {@const dailyMinutes = analysis?.timeInRange?.averageDailyMinutes}
       {@const variability = analysis?.glycemicVariability}
       {@const stats = analysis?.basicStats}
       {@const quality = analysis?.dataQuality}
-      {@const totalLows = (tir?.low ?? 0) + (tir?.veryLow ?? 0)}
-      {@const totalHighs = (tir?.high ?? 0) + (tir?.veryHigh ?? 0)}
 
       <FigureStrip
         figures={[
           { label: "Time in range", value: tir?.target?.toFixed(0) ?? "–", unit: "%", note: "Target: ≥70%" },
-          { label: "Below range", value: totalLows.toFixed(1), unit: "%", note: "Target: <4%" },
-          { label: "Above range", value: totalHighs.toFixed(1), unit: "%", note: "Target: <25%" },
+          { label: "Below range", value: (tir?.belowRange ?? 0).toFixed(1), unit: "%", note: "Target: <4%" },
+          { label: "Above range", value: (tir?.aboveRange ?? 0).toFixed(1), unit: "%", note: "Target: <25%" },
           { label: a1cLabel(true), value: formatA1cValue(variability?.estimatedA1cDisplay), unit: a1cUnitLabel(), note: variability?.a1cTarget ? `Target: <${formatA1c(variability.a1cTarget)}` : undefined, },
-          { label: "CV", value: variability?.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: "Target: ≤33%" },
+          { label: "CV", value: variability?.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: variability?.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
           { label: "Average", value: String(bgOr(stats?.mean)), unit: bgLabel(), note: `Over ${dayCount} days` },
         ]}
       />
@@ -95,7 +122,7 @@
               Time in Range
             </CardTitle>
             <CardDescription>
-              Percentage of time in your target zone ({bgRange(70, 180)})
+              Percentage of time in the consensus target range ({bgRangeOr(edges?.targetBottom, edges?.targetTop)})
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
@@ -142,8 +169,15 @@
           <CardContent class="space-y-4">
             <div>
               {#if variability?.estimatedA1c != null}
-                <p class="text-sm text-muted-foreground">
-                  Target: below {formatA1c(variability?.a1cTarget)}. Your care team sets your individual target.
+                <div class="text-4xl font-semibold tabular-nums">
+                  {formatA1c(variability.estimatedA1cDisplay)}
+                </div>
+                {@render targetState(
+                  `Target: below ${formatA1c(variability.a1cTarget)}`,
+                  a1cDisplayValue(variability.estimatedA1cMeetsTarget)
+                )}
+                <p class="text-sm text-muted-foreground mt-1">
+                  Your care team sets your individual target.
                 </p>
               {:else}
                 <div class="text-lg font-medium text-muted-foreground">
@@ -189,11 +223,19 @@
               <div class="text-lg font-medium text-muted-foreground">
                 No data for this window
               </div>
+            {:else}
+              <div class="text-xs text-muted-foreground">Coefficient of variation</div>
+              <div class="text-4xl font-semibold tabular-nums">
+                {variability.coefficientOfVariation.toFixed(0)}%
+              </div>
+              {@render targetState(
+                `Target: ≤${variability.coefficientOfVariationTarget}%`,
+                cvMeetsTarget
+              )}
             {/if}
 
             <p class="text-sm text-muted-foreground">
-              Target: ≤33%. Lower means steadier glucose with fewer ups and
-              downs.
+              Lower means steadier glucose with fewer ups and downs.
             </p>
 
             <!-- Additional variability metrics -->
@@ -218,10 +260,10 @@
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <AlertTriangle class="w-5 h-5 text-glucose-very-low" />
-              Low Blood Sugar Events
+              Low Glucose Events
             </CardTitle>
             <CardDescription>
-              Time spent below {bg(70)} {bgLabel()} (target: &lt;4%)
+              Time spent below {bgOr(edges?.low)} {bgLabel()} (target: &lt;4%)
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
@@ -229,11 +271,11 @@
               <div class="space-y-1 text-sm tabular-nums">
                 <div class="flex items-center gap-2">
                   <TextureSwatch texture="very-low" />
-                  <span>&lt;{bg(54)}: {tir?.veryLow?.toFixed(1) ?? 0}%</span>
+                  <span>&lt;{bgOr(edges?.veryLow)}: {tir?.veryLow?.toFixed(1) ?? 0}%</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <TextureSwatch texture="low" />
-                  <span>{bg(54)}-{bg(70)}: {tir?.low?.toFixed(1) ?? 0}%</span>
+                  <span>{bgOr(edges?.veryLow)}-{bgOr(edges?.low)}: {tir?.low?.toFixed(1) ?? 0}%</span>
                 </div>
               </div>
             </div>
@@ -251,7 +293,7 @@
             {/if}
 
             <div class="text-sm text-muted-foreground">
-              Target for time below {bg(70)} {bgLabel()} is under 4%.
+              Target for time below {bgOr(edges?.low)} {bgLabel()} is under 4%.
             </div>
           </CardContent>
         </Card>
@@ -261,10 +303,10 @@
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <TrendingUp class="w-5 h-5 text-glucose-high" />
-              High Blood Sugar Events
+              High Glucose Events
             </CardTitle>
             <CardDescription>
-              Time spent above {bg(180)} {bgLabel()} (target: &lt;25%)
+              Time spent above {bgOr(edges?.high)} {bgLabel()} (target: &lt;25%)
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
@@ -272,17 +314,17 @@
               <div class="space-y-1 text-sm tabular-nums">
                 <div class="flex items-center gap-2">
                   <TextureSwatch texture="high" />
-                  <span>{bg(180)}-{bg(250)}: {tir?.high?.toFixed(1) ?? 0}%</span>
+                  <span>{bgOr(edges?.high)}-{bgOr(edges?.veryHigh)}: {tir?.high?.toFixed(1) ?? 0}%</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <TextureSwatch texture="very-high" />
-                  <span>&gt;{bg(250)}: {tir?.veryHigh?.toFixed(1) ?? 0}%</span>
+                  <span>&gt;{bgOr(edges?.veryHigh)}: {tir?.veryHigh?.toFixed(1) ?? 0}%</span>
                 </div>
               </div>
             </div>
 
             <div class="text-sm text-muted-foreground">
-              Target for time above {bg(180)} {bgLabel()} is under 25%. The AGP
+              Target for time above {bgOr(edges?.high)} {bgLabel()} is under 25%. The AGP
               report shows the times of day when highs occur most.
             </div>
           </CardContent>
@@ -382,7 +424,7 @@
               </div>
             {/if}
             <p class="text-xs text-muted-foreground">
-              Target: at least 70% CGM active time over 14 days; the statistics
+              Target: at least 70% CGM active time over 14 days. The statistics
               on this page are most reliable at 90% or above.
             </p>
 

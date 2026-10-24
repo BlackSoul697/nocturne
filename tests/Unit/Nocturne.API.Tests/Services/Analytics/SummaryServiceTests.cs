@@ -140,35 +140,6 @@ public class SummaryServiceTests
     }
 
     [Fact]
-    public async Task GetSummaryAsync_EndedSwitchSnapshotIsNotTheDefault()
-    {
-        var rows = NightAndDay(nightFirst: true);
-        rows.Insert(
-            0,
-            StoredRow($"Night{TherapySettings.ProfileSwitchStoreMarker}1", false, 3, 0.2, Minutes(0))
-        );
-
-        var summary = await SummaryJsonAsync(rows, null);
-
-        summary["profile"]!["carbratio"]![0]!["value"]!.GetValue<double>().Should().Be(12);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("Night")]
-    public async Task GetSummaryAsync_ResolvesTheEntryPastMoreThanTenNewerSwitchSnapshots(string? switchedProfile)
-    {
-        var rows = NightAndDay(nightFirst: true);
-        for (var i = 0; i < 12; i++)
-            rows.Insert(0, StoredRow($"Night{TherapySettings.ProfileSwitchStoreMarker}{i}", false, 3, 0.2, Minutes(i)));
-
-        var summary = await SummaryJsonAsync(rows, switchedProfile);
-
-        summary["profile"]!["carbratio"]![0]!["value"]!.GetValue<double>()
-            .Should().Be(switchedProfile is null ? 12 : 8);
-    }
-
-    [Fact]
     public async Task GetSummaryAsync_ProfileStartingInTheFutureStillResolves()
     {
         var rows = new List<TherapySettings> { StoredRow("Day", true, 12, 0.9, Minutes(5)) };
@@ -264,7 +235,7 @@ public class SummaryServiceTests
         _mockTherapySettings
             .Setup(r => r.GetDocumentRowsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string documentId, CancellationToken _) => rows
-                .Where(r => TherapySettings.DocumentIdOf(r) == documentId && !TherapySettings.IsProfileSwitchSnapshot(r))
+                .Where(r => TherapySettings.DocumentIdOf(r) == documentId)
                 .ToList());
 
         foreach (var row in rows)
@@ -364,10 +335,27 @@ public class SummaryServiceTests
 
         // Assert
         result.Should().HaveCount(2);
-        result[0].Sgv.Should().Be(120);
-        result[0].Noise.Should().BeNull(); // Noise of 1 should be excluded
-        result[1].Sgv.Should().Be(110);
-        result[1].Noise.Should().Be(2); // Noise != 1 should be included
+        result[0].Sgv.Should().Be(110);
+        result[0].Noise.Should().Be(2); // Noise != 1 should be included
+        result[1].Sgv.Should().Be(120);
+        result[1].Noise.Should().BeNull(); // Noise of 1 should be excluded
+    }
+
+    [Fact]
+    public void ProcessSgvs_GivenNewestFirst_ListsOldestFirst()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var sgvs = new List<Entry>
+        {
+            new() { Mills = now - 1000, Mgdl = 120 },
+            new() { Mills = now - 2000, Mgdl = 118 },
+            new() { Mills = now - 3000, Mgdl = 116 },
+        };
+
+        var result = _service.ProcessSgvs(sgvs, 6);
+
+        result.Select(r => r.Mills).Should().BeInAscendingOrder();
+        result.Select(r => r.Sgv).Should().Equal(116, 118, 120);
     }
 
     [Fact]
@@ -403,10 +391,26 @@ public class SummaryServiceTests
 
         // Assert
         result.Treatments.Should().HaveCount(2); // Should filter out 8-hour old treatment
-        result.Treatments[0].Insulin.Should().Be(5.5);
-        result.Treatments[0].Carbs.Should().Be(30);
-        result.Treatments[1].Insulin.Should().Be(2.0);
-        result.Treatments[1].Carbs.Should().BeNull();
+        result.Treatments[0].Insulin.Should().Be(2.0);
+        result.Treatments[0].Carbs.Should().BeNull();
+        result.Treatments[1].Insulin.Should().Be(5.5);
+        result.Treatments[1].Carbs.Should().Be(30);
+    }
+
+    [Fact]
+    public void ProcessTreatments_GivenNewestFirst_ListsOldestFirst()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var treatments = new List<Treatment>
+        {
+            new() { Mills = now - 1000, EventType = "Meal Bolus", Insulin = 5.0 },
+            new() { Mills = now - 2000, EventType = "Correction Bolus", Insulin = 2.0 },
+        };
+
+        var result = _service.ProcessTreatments(treatments, null, 6);
+
+        result.Treatments.Select(t => t.Mills).Should().BeInAscendingOrder();
+        result.Treatments.Select(t => t.Insulin).Should().Equal(2.0, 5.0);
     }
 
     [Fact]
@@ -490,6 +494,72 @@ public class SummaryServiceTests
         result.Cage.Should().Be(48);
         result.Sage.Should().Be(72);
         result.Battery.Should().Be(85);
+    }
+
+    [Fact]
+    public async Task ConstructStateAsync_WithNoProperties_WritesNullIobNullCobAndZeroBwp()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object>());
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json.ContainsKey("iob").Should().BeTrue();
+        json["iob"].Should().BeNull();
+        json.ContainsKey("cob").Should().BeTrue();
+        json["cob"].Should().BeNull();
+        json["bwp"]!.GetValue<double>().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ConstructStateAsync_WithZeroIobAndCob_WritesZeroNotNull()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                new Dictionary<string, object>
+                {
+                    ["iob"] = new Dictionary<string, object> { ["iob"] = 0.0 },
+                    ["cob"] = new Dictionary<string, object> { ["cob"] = 0.0 },
+                }
+            );
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json["iob"]!.GetValue<double>().Should().Be(0);
+        json["cob"]!.GetValue<int>().Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(2.3456, 24.6, 2.35, 25)]
+    [InlineData(0.125, 24.5, 0.13, 25)]
+    [InlineData(-0.125, 0.5, -0.12, 1)]
+    [InlineData(2.344, 24.4, 2.34, 24)]
+    public async Task ConstructStateAsync_RoundsIobAndCobHalfUpAsJavaScriptDoes(
+        double iob,
+        double cob,
+        double expectedIob,
+        int expectedCob
+    )
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                new Dictionary<string, object>
+                {
+                    ["iob"] = new Dictionary<string, object> { ["iob"] = iob },
+                    ["cob"] = new Dictionary<string, object> { ["cob"] = cob },
+                }
+            );
+
+        var state = await _service.ConstructStateAsync(CancellationToken.None);
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize(state, NightscoutJsonOptions.Create()))!.AsObject();
+        json["iob"]!.GetValue<double>().Should().Be(expectedIob);
+        json["cob"]!.GetValue<int>().Should().Be(expectedCob);
     }
 
     [Fact]

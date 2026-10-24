@@ -332,7 +332,7 @@ public class StorageDeleteBroadcastContractTests
         await CreateSideEffects(capture).OnCreatedAsync("devicestatus", new[] { status });
 
         var v1 = Rest(status).GetProperty("_id").GetString();
-        var v3 = RestIdentifier(V3DeviceStatusController.MapToV3Dto(status));
+        var v3 = RestIdentifier(V3DeviceStatusController.ToDocument(status));
         v1.Should().Be(v3);
         IdKeys(capture.Create.GetProperty("doc"))
             .Should()
@@ -585,25 +585,5 @@ public class StorageDeleteBroadcastContractTests
 
         capture.Delete.GetProperty("colName").GetString().Should().Be("activity");
         Identifier(capture.Delete).Should().Be(RecordGuid);
-    }
-
-    [Fact]
-    public async Task ActivityService_BulkDelete_CarriesColNameAndCount()
-    {
-        var stateSpans = new Mock<IStateSpanService>();
-        stateSpans
-            .Setup(s => s.GetActivitiesAsync(
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new Activity { Id = RecordGuid, Type = "exercise", Mills = 1 }]);
-        stateSpans
-            .Setup(s => s.DeleteActivityAsync(RecordGuid, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<string>)[RecordGuid]);
-
-        var capture = new BroadcastCapture();
-        await CreateActivityService(capture, stateSpans, new Mock<ISleepService>())
-            .DeleteMultipleActivitiesAsync("exercise", CancellationToken.None);
-
-        capture.Delete.GetProperty("colName").GetString().Should().Be("activity");
-        capture.Delete.GetProperty("deletedCount").GetInt64().Should().Be(1);
     }
 }
