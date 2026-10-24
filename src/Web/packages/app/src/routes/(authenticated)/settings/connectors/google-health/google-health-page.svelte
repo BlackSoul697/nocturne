@@ -145,9 +145,18 @@
   }
 
   async function saveSettings(sync: boolean) {
+    notice = null;
     if (!(await run("save", () => saveGoogleHealth(options(false))))) return;
     if (!sync || selected.length === 0) {
-      await run("status", refresh);
+      if (await run("status", refresh))
+        notice =
+          selected.length === 0
+            ? "selectionPaused"
+            : paused
+              ? "settingsSavedPaused"
+              : status?.isSyncing
+                ? "settingsSavedOnly"
+                : "settingsSaved";
       return;
     }
     if (!(await run("sync", syncNow))) await refresh().catch(() => {});
@@ -308,7 +317,7 @@
               ? "Google Health is connected. Review the available data below, then save your selection to start importing."
               : connection === GoogleHealthConnectionState.NothingSelected
                 ? "Google Health is connected. Imports are paused because no data types are selected."
-                : "Google Health is connected. Automatic sync runs approximately every 15 minutes."}
+                : "Google Health is connected. Automatic sync runs on a schedule."}
         </p>
         <p class="text-sm text-muted-foreground">
           Change the import start date and selection below without reconnecting.
@@ -372,6 +381,16 @@
             );
           }}
         >
+          {#if status.previewRequired}
+            <div role="status" class="rounded-lg border border-primary p-4">
+              <p class="font-medium">Next step: confirm what to import</p>
+              <p class="mt-1 text-sm">
+                Google access is authorised, but nothing is imported until you
+                confirm a selection. Review the data types below, tick the ones
+                you want, then save.
+              </p>
+            </div>
+          {/if}
           <label class="block text-sm font-medium">
             Import data from
             <Input
@@ -406,7 +425,11 @@
             </div>
           {/if}
           <div class="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy || disconnecting || status.isSyncing}>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={busy || disconnecting || status.isSyncing}
+            >
               Save import settings
             </Button>
             <Button
@@ -431,6 +454,18 @@
                 : "Refresh inventory"}
             </Button>
           </div>
+          <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>
+              Save selection and import: confirms the selection and requests an
+              import now.
+            </li>
+            <li>
+              Save import settings: confirms the selection without requesting an
+              import. {paused
+                ? "Imports resume when your Nocturne operator turns Google Health back on."
+                : "Automatic sync imports it on its next scheduled run."}
+            </li>
+          </ul>
         </form>
       </CardContent>
     </Card>

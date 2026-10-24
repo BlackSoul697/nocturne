@@ -78,6 +78,13 @@ const notices = {
   importRunning:
     "The import is running in the background. You can leave this page and return later.",
   importCompleted: "Google Health import completed.",
+  settingsSaved:
+    "Import settings saved. No import has started. Automatic sync picks up the selection on its next scheduled run.",
+  settingsSavedPaused:
+    "Import settings saved. No import has started. Imports resume when your Nocturne operator turns Google Health back on.",
+  settingsSavedOnly: "Import settings saved.",
+  selectionPaused:
+    "Import settings saved. Imports are paused because no data types are selected. Previously imported data is kept.",
   statusUnavailable: "Import status is temporarily unavailable. Retrying.",
   disconnected: "Google Health is disconnected. Your imported data has been kept.",
   alreadyRunning: errorMessages.already_running,
