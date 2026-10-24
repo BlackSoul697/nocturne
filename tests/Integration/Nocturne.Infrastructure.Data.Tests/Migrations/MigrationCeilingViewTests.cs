@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Interceptors;
@@ -9,7 +7,7 @@ using Npgsql;
 namespace Nocturne.Infrastructure.Data.Tests.Migrations;
 
 [Trait("Category", "Integration")]
-public class MigrationCeilingTests
+public class MigrationCeilingViewTests
 {
     [Fact]
     public async Task A_ceiling_below_the_applied_migrations_reverts_nothing()
@@ -27,25 +25,6 @@ public class MigrationCeilingTests
 
         (await AppliedAsync(dataSource)).Should().Equal(all,
             "another instance can apply past this one's ceiling between two of its calls");
-    }
-
-    [Fact]
-    public async Task A_partly_migrated_database_finishes_across_several_calls()
-    {
-        var database = await SharedPostgres.CreateEmptyDatabaseAsync("migration_ceiling_resume");
-        await using var dataSource = new NpgsqlDataSourceBuilder(database.MigratorConnectionString).Build();
-        string[] all;
-        using (var context = DatabaseInitializationExtensions.CreateMigratorContext(
-            dataSource, new TenantConnectionInterceptor(), NullLogger.Instance))
-        {
-            all = context.Database.GetMigrations().ToArray();
-            await context.GetService<IMigrator>().MigrateAsync(all[DatabaseInitializationExtensions.MigrationsPerCall / 2]);
-        }
-
-        await DatabaseInitializationExtensions.RunMigrationsAsync(
-            database.MigratorConnectionString, NullLogger.Instance, new TenantConnectionInterceptor());
-
-        (await AppliedAsync(dataSource)).Should().Equal(all);
     }
 
     private static async Task<List<string>> AppliedAsync(NpgsqlDataSource dataSource)

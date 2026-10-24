@@ -9,8 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Nocturne.Infrastructure.Data;
 
 /// <summary>
-/// Hides from a migrator context every migration whose id sorts after <see cref="Id"/>, when it
-/// has one. A
+/// Hides from a migrator context every migration after <see cref="Id"/>, when it has one. A
 /// targetless <c>MigrateAsync</c> then applies the pending migrations up to it and no further.
 /// <para>
 /// A run is cut this way, not by a target, because a targetless migrate never reverts.
@@ -24,7 +23,9 @@ internal sealed class MigrationCeiling(string? id) : IDbContextOptionsExtension
 {
     public string? Id { get; } = id;
 
-    public DbContextOptionsExtensionInfo Info => new ExtensionInfo(this);
+    private DbContextOptionsExtensionInfo? _info;
+
+    public DbContextOptionsExtensionInfo Info => _info ??= new ExtensionInfo(this);
 
     public void ApplyServices(IServiceCollection services) { }
 
@@ -39,7 +40,8 @@ internal sealed class MigrationCeiling(string? id) : IDbContextOptionsExtension
     {
         public override bool IsDatabaseProvider => false;
 
-        public override string LogFragment => $"MigrationCeiling={((MigrationCeiling)Extension).Id} ";
+        public override string LogFragment =>
+            ((MigrationCeiling)Extension).Id is { } id ? $"MigrationCeiling={id} " : "";
 
         public override int GetServiceProviderHashCode() => 0;
 
@@ -54,7 +56,7 @@ internal sealed class MigrationCeiling(string? id) : IDbContextOptionsExtension
 /// The migrations of the context's assembly up to its <see cref="MigrationCeiling"/>, or all of
 /// them when it has none.
 /// </summary>
-#pragma warning disable EF1001 // MigrationsAssembly is internal API; Migrations is its documented extension point.
+#pragma warning disable EF1001 // MigrationsAssembly is internal API; Migrations is virtual.
 internal sealed class CeilingMigrationsAssembly(
     ICurrentDbContext currentContext,
     IDbContextOptions options,
@@ -68,8 +70,10 @@ internal sealed class CeilingMigrationsAssembly(
     public override IReadOnlyDictionary<string, TypeInfo> Migrations =>
         _migrations ??= _ceiling is null
             ? base.Migrations
+            // Sorted by id, the order EF applies them in.
             : base.Migrations
-                .Where(migration => string.CompareOrdinal(migration.Key, _ceiling) <= 0)
+                .TakeWhile(migration => migration.Key != _ceiling)
+                .Append(KeyValuePair.Create(_ceiling, base.Migrations[_ceiling]))
                 .ToDictionary();
 }
 #pragma warning restore EF1001

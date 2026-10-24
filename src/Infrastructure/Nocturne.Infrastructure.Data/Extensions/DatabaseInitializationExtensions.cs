@@ -23,10 +23,9 @@ public static class DatabaseInitializationExtensions
     /// <summary>
     /// The most migrations one <c>MigrateAsync</c> call applies.
     /// <para>
-    /// EF builds every migration of a call before applying the first. Each one caches its
-    /// Designer target model, a model of the whole schema at that point, until the call returns.
-    /// Migrating a fresh database in one call peaked at 454 MB of managed heap over 292 migrations
-    /// and grows with every migration added. In calls of 10 it peaked at about 65 MB, no slower.
+    /// EF builds every migration of a call before applying the first. Each one holds its Designer
+    /// target model, a model of the whole schema at that point, until the call returns. A call's
+    /// memory therefore grows with the number of migrations it applies.
     /// </para>
     /// <para>
     /// Each call commits its own transaction, so a failure keeps the calls before it. A
@@ -55,9 +54,6 @@ public static class DatabaseInitializationExtensions
     /// takes from the pool has none. Subscribing there is silent, not wrong-looking.
     /// </para>
     /// </summary>
-    /// <param name="dataSource">The migrator role's data source.</param>
-    /// <param name="interceptor">The runtime connection interceptor, so its role guard runs here too.</param>
-    /// <param name="logger">Receives the server's notices.</param>
     /// <param name="ceiling">The last migration the context sees (<see cref="MigrationCeiling"/>), or
     /// null for all of them.</param>
     internal static NocturneDbContext CreateMigratorContext(
