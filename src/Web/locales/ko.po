@@ -31723,3 +31723,7 @@ msgstr ""
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "Your glucose summary for the chosen period and every report you can open"
 msgstr ""
+
+#: src/lib/components/meals/MealBolusDialog.svelte
+msgid "This meal has no link to an insulin record. You cannot add insulin here."
+msgstr ""
