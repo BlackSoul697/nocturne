@@ -312,12 +312,10 @@
   const sortedYears = $derived([...availableYears].sort((a, b) => b - a));
 
   setReportPrintMeta(() => {
-    const title = "Year Overview";
-    if (sortedYears.length === 0) return { title };
+    if (sortedYears.length === 0) return {};
     const first = sortedYears.at(-1);
     const last = sortedYears[0];
     return {
-      title,
       period: { label: first === last ? `${last}` : `${first} – ${last}` },
     };
   });
@@ -596,7 +594,6 @@
 </script>
 
 <svelte:head>
-  <title>Year Overview - Nocturne</title>
   <meta
     name="description"
     content="Multi-year heatmap overview of all your diabetes data"

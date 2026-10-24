@@ -44,7 +44,6 @@
 </script>
 
 <svelte:head>
-  <title>Site Change Impact - Nocturne Reports</title>
   <meta
     name="description"
     content="Analyze how pump site changes affect your glucose control"
