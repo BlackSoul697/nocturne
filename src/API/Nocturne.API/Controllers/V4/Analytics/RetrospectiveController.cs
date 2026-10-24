@@ -6,6 +6,7 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.API.Services.Devices;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Entries;
@@ -222,8 +223,7 @@ public class RetrospectiveController : ControllerBase
         var dayEnd = dayStart.AddDays(1).AddMilliseconds(-1);
         var startMills = dayStart.ToUnixTimeMilliseconds();
         var endMills = dayEnd.ToUnixTimeMilliseconds();
-        // Fetch all data for the day, boluses and carbs from 8 hours before for IOB calculation context
-        var fetchFrom = dayStart.UtcDateTime.AddHours(-8);
+        var fetchFrom = dayStart.UtcDateTime.AddMilliseconds(-DailyProfileCalculator.ActingMs);
         var fetchTo = dayEnd.UtcDateTime;
         // Get entries for the day
         var entries = await _entryService.QueryEntriesAsync(
@@ -263,7 +263,7 @@ public class RetrospectiveController : ControllerBase
         var intervalMs = intervalMinutes * 60 * 1000L;
         var lastPoint = startMills + (totalIntervals - 1) * intervalMs;
         var timeline = await _therapyTimelineResolver.BuildAsync(
-            dayStart.AddHours(-8).ToUnixTimeMilliseconds(), lastPoint + 1, ct: cancellationToken);
+            startMills - DailyProfileCalculator.ActingMs, lastPoint + 1, ct: cancellationToken);
         var deviceFrom = DateTimeOffset.FromUnixTimeMilliseconds(startMills - DeviceReportedValues.RecencyThresholdMs).UtcDateTime;
         var deviceTo = DateTimeOffset.FromUnixTimeMilliseconds(lastPoint + DeviceReportedValues.FutureSkewToleranceMs).UtcDateTime;
         var devices = DeviceReadings.Of(

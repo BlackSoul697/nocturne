@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -162,7 +163,7 @@ public class IobCobReaderTests
 
         await NewReader().ReadInputsAsync(at);
 
-        var insulinFrom = atUtc.AddHours(-IIobCobReader.InsulinLookbackHours);
+        var insulinFrom = atUtc.AddMilliseconds(-DailyProfileCalculator.ActingMs);
         var tempFrom = atUtc.AddHours(-32);
         _boluses.Verify(r => r.GetAsync(
             insulinFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<bool>(),
