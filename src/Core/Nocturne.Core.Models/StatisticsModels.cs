@@ -1631,6 +1631,11 @@ public class InsulinDeliveryStatistics
     public double TotalCarbs { get; set; }
 
     /// <summary>
+    /// Grams of carbohydrate per day: <see cref="TotalCarbs"/> over <see cref="WindowDays"/>
+    /// </summary>
+    public double CarbsPerDay { get; set; }
+
+    /// <summary>
     /// Number of manually initiated boluses in the period. Algorithm-delivered boluses
     /// are excluded and counted by <see cref="AutomaticBolusCount"/>.
     /// </summary>

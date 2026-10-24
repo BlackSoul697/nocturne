@@ -149,6 +149,19 @@ export const getReportsAnalysis = query(
 );
 
 /**
+ * Insulin and carbohydrate delivery over a date range, with the per-day figures the API takes
+ * over the window's calendar days.
+ */
+export const getReportsInsulinDelivery = query(
+  DateRangeSchema.optional(),
+  async (input) => {
+    const { apiClient } = getRequestEvent().locals;
+    const { startDate, endDate } = await resolveReportRange(input);
+    return apiClient.statistics.getInsulinDeliveryStatistics(startDate, endDate);
+  }
+);
+
+/**
  * Two of the patient's CGMs time-paired over a date range, with the agreement measures
  * over that pairing. Both devices come from the contributing-devices list on
  * {@link getReportsAnalysis} for the same range.
