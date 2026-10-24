@@ -102,7 +102,7 @@ export function factDescription(kind: LeafKind): string {
     case "sensor_age":
       return "Days since CGM sensor start";
     case "tracker_age":
-      return "Time since a tracker's start (Duration) or scheduled time (Event); negative before the event. A tracker with no active instance never matches";
+      return "Time since a tracker's start (Duration) or scheduled time (Event), negative before the event. A tracker with no active instance never matches";
     case "pump_battery":
       return "Pump battery percent";
     case "uploader_battery":
@@ -149,7 +149,7 @@ export function factGroupLabel(group: FactGroup): string {
     case "device":
       return "Device";
     case "behaviour":
-      return "Behaviour";
+      return "Behavior";
     case "state":
       return "State spans";
     case "time":
