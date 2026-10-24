@@ -94,6 +94,60 @@ public class AlertRepositoryTenantScopingTests
     }
 
     [Fact]
+    public async Task GetRuleSnapshotsAsync_ReturnsEveryRuleOfTheTenantInSortOrder()
+    {
+        var options = NewStore();
+        var second = NewRule(TenantA, "Second");
+        second.SortOrder = 2;
+        var first = NewRule(TenantA, "First");
+        first.SortOrder = 1;
+        first.IsEnabled = false;
+        await SeedAsync(options, ctx => ctx.AlertRules.AddRange(second, first, NewRule(TenantB, "Other tenant")));
+        var repo = new AlertRepository(new InMemoryContextFactory(options, staleTenantId: TenantB));
+
+        var rules = await repo.GetRuleSnapshotsAsync(TenantA, CancellationToken.None);
+
+        rules.Select(r => r.Name).Should().Equal("First", "Second");
+    }
+
+    [Fact]
+    public async Task GetUnacknowledgedExcursionIdsAsync_ReturnsOpenUnacknowledgedExcursionsOfTheManagedRules()
+    {
+        var options = NewStore();
+        var managed = NewRule(TenantA, "Managed");
+        managed.ManagedBy = "tracker:1";
+        var otherOwner = NewRule(TenantA, "Other owner");
+        otherOwner.ManagedBy = "tracker:2";
+        var otherTenant = NewRule(TenantB, "Other tenant");
+        otherTenant.ManagedBy = "tracker:1";
+        var start = new DateTime(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
+        var open = Guid.NewGuid();
+        await SeedAsync(options, ctx =>
+        {
+            ctx.AlertRules.AddRange(managed, otherOwner, otherTenant);
+            ctx.AlertExcursions.AddRange(
+                new AlertExcursionEntity { Id = open, TenantId = TenantA, AlertRuleId = managed.Id, StartedAt = start },
+                new AlertExcursionEntity
+                {
+                    Id = Guid.NewGuid(), TenantId = TenantA, AlertRuleId = managed.Id, StartedAt = start,
+                    AcknowledgedAt = start.AddMinutes(1),
+                },
+                new AlertExcursionEntity
+                {
+                    Id = Guid.NewGuid(), TenantId = TenantA, AlertRuleId = managed.Id, StartedAt = start,
+                    EndedAt = start.AddMinutes(1),
+                },
+                new AlertExcursionEntity { Id = Guid.NewGuid(), TenantId = TenantA, AlertRuleId = otherOwner.Id, StartedAt = start },
+                new AlertExcursionEntity { Id = Guid.NewGuid(), TenantId = TenantB, AlertRuleId = otherTenant.Id, StartedAt = start });
+        });
+        var repo = new AlertRepository(new InMemoryContextFactory(options, staleTenantId: TenantB));
+
+        var ids = await repo.GetUnacknowledgedExcursionIdsAsync(TenantA, "tracker:1", CancellationToken.None);
+
+        ids.Should().Equal(open);
+    }
+
+    [Fact]
     public async Task CountRulesAsync_CountsTheTenantsRulesEnabledOrNot()
     {
         var options = NewStore();

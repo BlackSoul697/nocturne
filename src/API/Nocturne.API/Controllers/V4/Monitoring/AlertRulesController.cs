@@ -882,7 +882,6 @@ public class AlertRulesController : ControllerBase
             : DeserializeJson(record.Rule.AutoResolveParams),
         ClientConfiguration = DeserializeJson(record.Rule.ClientConfiguration),
         Channels = record.Channels
-            .OrderBy(c => c.SortOrder)
             .Select(c => new AlertRuleChannelResponse
             {
                 Id = c.Id,

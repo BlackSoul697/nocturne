@@ -44,6 +44,14 @@ public sealed record AlertRuleRecord(
     IReadOnlyList<AlertRuleChannelSnapshot> Channels);
 
 /// <summary>
+/// A tenant's enabled rules, with the enabled rules left out because their stored condition type or
+/// severity names no member the engine has.
+/// </summary>
+public sealed record EnabledAlertRules(
+    IReadOnlyList<AlertRuleSnapshot> Rules,
+    IReadOnlyList<Guid> UnreadableRuleIds);
+
+/// <summary>
 /// Immutable snapshot of a live alert instance.
 /// </summary>
 /// <seealso cref="AlertExcursion"/>

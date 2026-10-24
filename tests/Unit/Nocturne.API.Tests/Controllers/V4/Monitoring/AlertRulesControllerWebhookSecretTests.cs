@@ -47,6 +47,28 @@ public class AlertRulesControllerWebhookSecretTests
     }
 
     [Fact]
+    public async Task GetRules_and_GetRule_report_that_a_secret_exists_and_return_neither_it_nor_its_ciphertext()
+    {
+        var (controller, db, _) = CreateController();
+        var id = Created(await controller.CreateRule(Rule(Channel(PlaintextSecret)), CancellationToken.None)).Id;
+        var ciphertext = (await db.AlertRuleChannels.AsNoTracking().SingleAsync(CancellationToken.None)).Secret!;
+
+        var list = (await controller.GetRules(CancellationToken.None)).Result
+            .Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<List<AlertRuleResponse>>().Subject;
+        var single = Ok(await controller.GetRule(id, CancellationToken.None));
+
+        list.Should().ContainSingle().Which.Channels.Should().ContainSingle().Which.HasSecret.Should().BeTrue();
+        single.Channels.Should().ContainSingle().Which.HasSecret.Should().BeTrue();
+        // Unescaped, so a base64 '+' or '/' in the ciphertext matches as written.
+        var raw = new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        foreach (var body in new[] { JsonSerializer.Serialize(list, raw), JsonSerializer.Serialize(single, raw) })
+        {
+            body.Should().NotContain(PlaintextSecret);
+            body.Should().NotContain(ciphertext);
+        }
+    }
+
+    [Fact]
     public async Task CreateRule_without_a_secret_leaves_the_channel_unsigned()
     {
         var (controller, db, _) = CreateController();

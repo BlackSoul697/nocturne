@@ -80,9 +80,10 @@ public sealed class AlertRuleConditionAuditService : BackgroundService
         Guid tenantId,
         CancellationToken ct)
     {
-        var rules = await alerts.GetEnabledRulesAsync(tenantId, ct);
+        var (rules, unreadable) = await alerts.ReadEnabledRulesAsync(tenantId, ct);
 
-        var flagged = 0;
+        // The repository has already logged each unreadable rule by id.
+        var flagged = unreadable.Count;
         foreach (var rule in rules)
         {
             IReadOnlyList<RustValidationIssue> issues;

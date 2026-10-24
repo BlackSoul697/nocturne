@@ -109,7 +109,7 @@ internal sealed class AlertReferenceService(
                 "AlertReferenceService requires a resolved tenant context.");
         }
 
-        var rows = (await alerts.GetRulesAsync(tenantAccessor.TenantId, ct)).Select(r => r.Rule).ToList();
+        var rows = await alerts.GetRuleSnapshotsAsync(tenantAccessor.TenantId, ct);
 
         var result = new List<(Guid, IReadOnlyCollection<Guid>)>(rows.Count);
         foreach (var r in rows)
