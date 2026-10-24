@@ -225,14 +225,9 @@ public class AlertRulesController : ControllerBase
         if (rule is null)
             return NotFound();
 
-        var requested = RequestTrees.From(request.ConditionParams, request.AutoResolveParams, request.ClientConfiguration);
-        var check = _conditionValidator.ValidateUpdate(
-            request.ConditionType, requested.ConditionParams, request.AutoResolveEnabled,
-            requested.AutoResolveParams, requested.ClientConfiguration,
-            new StoredConditionTrees(rule.ConditionType, rule.ConditionParams, rule.AutoResolveParams, rule.ClientConfiguration));
-        if (ConditionProblem(check.Issues) is { } invalid)
+        var trees = RequestTrees.From(request.ConditionParams, request.AutoResolveParams, request.ClientConfiguration);
+        if (RejectInvalidConditions(request.ConditionType, trees, request.AutoResolveEnabled) is { } invalid)
             return invalid;
-        var trees = new RequestTrees(check.ConditionParams, check.AutoResolveParams, check.ClientConfiguration);
 
         if (await ResolveAndValidateChannelsAsync(request.Channels, InAppRecipientsOf(rule.Channels), db, ct) is { } badChannel)
             return badChannel;
@@ -308,13 +303,6 @@ public class AlertRulesController : ControllerBase
             await db.SaveChangesAsync(ct);
         if (wasEnabled && !request.IsEnabled)
             await _retirement.CloseAsync([id], tenantId, CancellationToken.None);
-
-        foreach (var field in check.Stripped)
-        {
-            _logger.LogWarning(
-                "Removed property {Field} from {Scope} condition {Path} of alert rule {AlertRuleId}: no condition kind reads it",
-                field.Field, field.Scope, field.Path, id);
-        }
 
         var updated = await db.AlertRules
             .AsNoTracking()
@@ -1069,9 +1057,9 @@ public class AlertRuleResponse
     /// <summary>Why a data repair changed or disabled this rule (<see cref="AlertRuleReviewReasons"/>);
     /// null when none did. Cleared by the next edit.</summary>
     public string? ReviewReason { get; set; }
-    /// <summary>What a save of the rule's stored conditions would reject. A stored rule keeps
-    /// evaluating with them, so a non-empty list can mean a condition that never fires as
-    /// written.</summary>
+    /// <summary>Every problem that keeps one of the rule's stored condition trees from being
+    /// evaluated: with one in its body the rule is skipped, in its auto-resolve tree it never
+    /// resolves, and in its smart-snooze conditions the snooze clears.</summary>
     public List<RustValidationIssue> ConditionIssues { get; set; } = [];
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
