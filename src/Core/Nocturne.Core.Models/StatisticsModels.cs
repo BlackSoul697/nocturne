@@ -260,7 +260,11 @@ public class TimeInRangeDetailedStats
 }
 
 /// <summary>
-/// Time in range percentages
+/// Time in range percentages: the minutes a zone covers over the minutes the readings cover, from
+/// the same minutes that back <see cref="TimeInRangeDurations"/>, so the two agree whatever mix of
+/// sensor cadences the period holds. A count of readings would weigh a one-minute sensor's
+/// reading as much as a five-minute one's. The four outer zones and the time between them sum to
+/// 100; <see cref="Target"/> is that time only when the target range starts where low ends.
 /// </summary>
 public class TimeInRangePercentages
 {
@@ -347,8 +351,7 @@ public class ExtendedTimeInRangePercentages
 /// Time in range durations (in minutes), measured from the gaps between the readings themselves
 /// rather than assuming a cadence, so a one-minute sensor and a five-minute one both report the
 /// time they actually covered. A gap the sensor did not cover counts as one extra median gap.
-/// <see cref="TimeInRangePercentages"/> counts readings while these sum time, so the two diverge
-/// on a series with gaps or a cadence that varies.
+/// <see cref="TimeInRangePercentages"/> is these over the covered minutes.
 /// </summary>
 public class TimeInRangeDurations
 {
