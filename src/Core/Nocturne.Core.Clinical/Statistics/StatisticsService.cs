@@ -529,7 +529,8 @@ public partial class StatisticsService : IStatisticsService
     public DataSufficiencyAssessment AssessDataSufficiency(
         IEnumerable<SensorGlucose> entries,
         int days = 14,
-        int expectedReadingsPerDay = 288 // 5-minute intervals = 288/day
+        int expectedReadingsPerDay = 288, // 5-minute intervals = 288/day
+        TimeZoneInfo? timeZone = null
     )
     {
         var entriesList = entries.ToList();
@@ -550,13 +551,12 @@ public partial class StatisticsService : IStatisticsService
             };
         }
 
-        // Group by date to count days with data
-        var entriesByDate = entriesList
+        var dayZone = timeZone ?? TimeZoneInfo.Utc;
+        var daysWithData = entriesList
             .Where(e => e.Mills > 0)
-            .GroupBy(e => DateTimeOffset.FromUnixTimeMilliseconds(e.Mills).Date)
-            .ToList();
-
-        var daysWithData = entriesByDate.Count;
+            .Select(e => LocalSlotBinning.LocalDay(e.Mills, dayZone))
+            .Distinct()
+            .Count();
         var actualReadings = entriesList.Count;
         var completeness = expectedTotal > 0 ? (double)actualReadings / expectedTotal * 100 : 0;
         var avgPerDay = daysWithData > 0 ? (double)actualReadings / daysWithData : 0;
@@ -707,7 +707,7 @@ public partial class StatisticsService : IStatisticsService
         var clinicalAssessment = AssessAgainstTargets(baseAnalytics, population);
 
         // Assess data sufficiency
-        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays);
+        var dataSufficiency = AssessDataSufficiency(entriesList, windowDays, timeZone: timeZone);
 
         // Calculate treatment summary if data available
         TreatmentSummary? treatmentSummary = null;

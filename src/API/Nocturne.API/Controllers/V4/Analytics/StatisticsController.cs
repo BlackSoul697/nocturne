@@ -648,18 +648,22 @@ public class StatisticsController : ControllerBase
     /// Assess data sufficiency for a valid clinical report
     /// </summary>
     /// <param name="request">Request containing entries and optional period settings</param>
-    /// <returns>Data sufficiency assessment</returns>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Data sufficiency assessment, counting days with data on the tenant's local calendar (UTC when it has no zone)</returns>
     [HttpPost("data-sufficiency")]
     [EnableRateLimiting(ServiceRegistrationExtensions.StatisticsComputeRateLimitPolicy)]
     [RequireScope(Scope.ReportsRead)]
-    public ActionResult<DataSufficiencyAssessment> AssessDataSufficiency(
-        [FromBody] DataSufficiencyRequest request
+    public async Task<ActionResult<DataSufficiencyAssessment>> AssessDataSufficiency(
+        [FromBody] DataSufficiencyRequest request,
+        CancellationToken cancellationToken = default
     )
     {
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         var result = _statisticsService.AssessDataSufficiency(
             request.Entries,
             request.Days,
-            request.ExpectedReadingsPerDay
+            request.ExpectedReadingsPerDay,
+            clock.Zone
         );
         return Ok(result);
     }

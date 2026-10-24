@@ -69,12 +69,14 @@ public interface IStatisticsService
 
     /// <summary>
     /// Check if there is sufficient data for a valid clinical report
-    /// Requires minimum 70% data coverage per international guidelines
+    /// Requires minimum 70% data coverage per international guidelines.
+    /// Days with data are counted on <paramref name="timeZone"/>'s calendar, UTC when null.
     /// </summary>
     DataSufficiencyAssessment AssessDataSufficiency(
         IEnumerable<SensorGlucose> entries,
         int days = 14,
-        int expectedReadingsPerDay = 288
+        int expectedReadingsPerDay = 288,
+        TimeZoneInfo? timeZone = null
     );
 
     /// <summary>

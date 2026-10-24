@@ -76,6 +76,28 @@ public partial class StatisticsControllerTests
             });
     }
 
+    [Theory]
+    [InlineData("Australia/Sydney", 1)]
+    [InlineData(null, 2)]
+    public async Task AssessDataSufficiency_CountsDaysOnTheTenantZone(string? timezoneId, int expectedDays)
+    {
+        var request = new DataSufficiencyRequest
+        {
+            Days = 1,
+            Entries = new[]
+            {
+                new DateTime(2026, 1, 14, 14, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc),
+            }.Select(t => new SensorGlucose { Timestamp = t, Mgdl = 100 }).ToList(),
+        };
+
+        var result = await ControllerOnClock(timezoneId, share: false).AssessDataSufficiency(request);
+
+        result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<DataSufficiencyAssessment>().Subject
+            .DaysWithData.Should().Be(expectedDays);
+    }
+
     [Fact]
     public async Task GetWeekdayAverages_BucketsOnTheTenantZone()
     {
