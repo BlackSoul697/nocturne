@@ -25903,9 +25903,8 @@ msgstr "Google Health ist verbunden. Überprüfen Sie die verfügbaren Daten unt
 msgid "Google Health is connected. Imports are paused because no data types are selected."
 msgstr "Google Health ist verbunden. Importe werden angehalten, da keine Datentypen ausgewählt sind."
 
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Google Health is connected. Automatic sync runs approximately every 15 minutes."
-msgstr "Google Health ist verbunden. Die automatische Synchronisierung erfolgt etwa alle 15 Minuten."
+#~ msgid "Google Health is connected. Automatic sync runs approximately every 15 minutes."
+#~ msgstr "Google Health ist verbunden. Die automatische Synchronisierung erfolgt etwa alle 15 Minuten."
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "<0/>Sync now"
@@ -30591,4 +30590,49 @@ msgstr ""
 
 #: ../portal/src/routes/docs/installation/+page.svelte
 msgid "Install Platform"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. No import has started. Automatic sync picks up the selection on its next scheduled run."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. No import has started. Imports resume when your Nocturne operator turns Google Health back on."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. Imports are paused because no data types are selected. Previously imported data is kept."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Google Health is connected. Automatic sync runs on a schedule."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Next step: confirm what to import"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Google access is authorised, but nothing is imported until you confirm a selection. Review the data types below, tick the ones you want, then save."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Imports resume when your Nocturne operator turns Google Health back on."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Automatic sync imports it on its next scheduled run."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Save selection and import: confirms the selection and requests an import now."
+msgstr ""
+
+#. 0: paused ? "Imports resume when your Nocturne operator turns Google Health back on." \\: "Automatic sync imports it on its next scheduled run."
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Save import settings: confirms the selection without requesting an import. {0}"
 msgstr ""

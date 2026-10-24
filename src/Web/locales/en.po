@@ -25903,9 +25903,8 @@ msgstr "Google Health is connected. Review the available data below, then save y
 msgid "Google Health is connected. Imports are paused because no data types are selected."
 msgstr "Google Health is connected. Imports are paused because no data types are selected."
 
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Google Health is connected. Automatic sync runs approximately every 15 minutes."
-msgstr "Google Health is connected. Automatic sync runs approximately every 15 minutes."
+#~ msgid "Google Health is connected. Automatic sync runs approximately every 15 minutes."
+#~ msgstr "Google Health is connected. Automatic sync runs approximately every 15 minutes."
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "<0/>Sync now"
@@ -30592,3 +30591,48 @@ msgstr "Docs Read"
 #: ../portal/src/routes/docs/installation/+page.svelte
 msgid "Install Platform"
 msgstr "Install Platform"
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. No import has started. Automatic sync picks up the selection on its next scheduled run."
+msgstr "Import settings saved. No import has started. Automatic sync picks up the selection on its next scheduled run."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. No import has started. Imports resume when your Nocturne operator turns Google Health back on."
+msgstr "Import settings saved. No import has started. Imports resume when your Nocturne operator turns Google Health back on."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved."
+msgstr "Import settings saved."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "Import settings saved. Imports are paused because no data types are selected. Previously imported data is kept."
+msgstr "Import settings saved. Imports are paused because no data types are selected. Previously imported data is kept."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Google Health is connected. Automatic sync runs on a schedule."
+msgstr "Google Health is connected. Automatic sync runs on a schedule."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Next step: confirm what to import"
+msgstr "Next step: confirm what to import"
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Google access is authorised, but nothing is imported until you confirm a selection. Review the data types below, tick the ones you want, then save."
+msgstr "Google access is authorised, but nothing is imported until you confirm a selection. Review the data types below, tick the ones you want, then save."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Imports resume when your Nocturne operator turns Google Health back on."
+msgstr "Imports resume when your Nocturne operator turns Google Health back on."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Automatic sync imports it on its next scheduled run."
+msgstr "Automatic sync imports it on its next scheduled run."
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Save selection and import: confirms the selection and requests an import now."
+msgstr "Save selection and import: confirms the selection and requests an import now."
+
+#. 0: paused ? "Imports resume when your Nocturne operator turns Google Health back on." \\: "Automatic sync imports it on its next scheduled run."
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Save import settings: confirms the selection without requesting an import. {0}"
+msgstr "Save import settings: confirms the selection without requesting an import. {0}"
