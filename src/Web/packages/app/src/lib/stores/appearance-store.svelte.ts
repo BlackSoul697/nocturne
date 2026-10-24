@@ -27,8 +27,13 @@ import { getContext, setContext } from "svelte";
 import { PersistedState } from "runed";
 import { setMode, mode, userPrefersMode } from "mode-watcher";
 import supportedLocales from "../../../../../supportedLocales.json";
-import { WidgetId, type UserDisplayPreferences } from "../api/generated/nocturne-api-client";
+import {
+  WidgetId,
+  type RailItemId,
+  type UserDisplayPreferences,
+} from "../api/generated/nocturne-api-client";
 import { DEFAULT_TOP_WIDGETS } from "../components/dashboard/top-widget-ids";
+import { knownRailItems } from "../components/status-pills/rail";
 import { weekStartName } from "../components/calendar/calendar-date";
 import { resolveCookieDomain } from "../utils/tenant-host";
 import { isRecord } from "../utils/type-guards";
@@ -235,6 +240,9 @@ const widgetListPref: PrefParser<WidgetId[]> = (raw) =>
   Array.isArray(raw)
     ? raw.flatMap((id) => WIDGET_IDS.find((known) => known === id) ?? [])
     : undefined;
+
+const railListPref: PrefParser<RailItemId[]> = (raw) =>
+  Array.isArray(raw) ? knownRailItems(raw) : undefined;
 
 function parseJson(json: string): unknown {
   try {
@@ -478,6 +486,17 @@ export const dashboardTopWidgets = new SyncedPref<WidgetId[]>(
   DEFAULT_TOP_WIDGETS,
   (p) => p.dashboardTopWidgets,
   widgetListPref
+);
+
+/**
+ * The ordered status pills of the dashboard rail. Null until the user arranges them, so the
+ * default follows the tenant's tracker pill switch (see `effectiveRail`).
+ */
+export const dashboardRail = new SyncedPref<RailItemId[] | null>(
+  "nocturne-dashboard-rail",
+  null,
+  (p) => p.dashboardRail,
+  railListPref
 );
 
 // ==========================================
@@ -824,6 +843,7 @@ export function collectPreferences(): UserDisplayPreferences {
     nightModeSchedule: nightModeSchedule.stored,
     calendarShowTirPercent: calendarShowTirPercent.stored,
     dashboardTopWidgets: dashboardTopWidgets.stored,
+    dashboardRail: dashboardRail.stored ?? undefined,
     prediction: {
       enabled: predictionEnabled.stored,
       minutes: predictionMinutes.stored,
