@@ -1,6 +1,7 @@
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Basal;
 using Nocturne.Core.Models.V4;
 
@@ -144,8 +145,8 @@ internal sealed class ReservoirEstimationService(
 
         var total = bolusRecords.Sum(b => b.Insulin);
 
-        var fromMs = new DateTimeOffset(DateTime.SpecifyKind(from, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
-        var toMs = new DateTimeOffset(DateTime.SpecifyKind(to, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+        var fromMs = from.ToMills();
+        var toMs = to.ToMills();
 
         var anyTempBasalDelivery = false;
         foreach (var tb in StatisticsService.DeliveredWithin(tempBasalRecords, from, toMs))

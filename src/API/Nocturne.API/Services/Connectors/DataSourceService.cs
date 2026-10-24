@@ -294,7 +294,7 @@ public class DataSourceService : IDataSourceService
             {
                 Device = g.Key!,
                 DataSource = g.Max(ds => ds.DataSource),
-                LastMills = new DateTimeOffset(g.Max(ds => ds.Timestamp), TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                LastMills = g.Max(ds => ds.Timestamp).ToMills(),
             })
             .ToListAsync(cancellationToken);
 
@@ -367,7 +367,7 @@ public class DataSourceService : IDataSourceService
 
             // Check if there's device status data
             var dsDevice = deviceStatusDevices.FirstOrDefault(d => d.Device == device.Device);
-            var lastSeenMills = new DateTimeOffset(device.LastTimestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            var lastSeenMills = device.LastTimestamp.ToMills();
             if (dsDevice != null && dsDevice.LastMills > lastSeenMills)
             {
                 info.LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(dsDevice.LastMills);
