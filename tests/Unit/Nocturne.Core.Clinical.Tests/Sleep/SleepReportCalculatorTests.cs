@@ -180,6 +180,25 @@ public class SleepReportCalculatorTests
         result.MeanBg.Should().Be((int)Math.Round((50 + 65 + 120 + 120 + 200 + 260) / 6.0));
     }
 
+    [Fact]
+    public void ComputeOvernightTir_WeighsTimeNotReadings_WhenTheSensorChangesCadence()
+    {
+        // An hour of one-minute readings at 65, then seven hours of five-minute readings at 120.
+        var session = MakeSession();
+        var oneMinute = Enumerable.Range(0, 60)
+            .Select(i => MakeGlucose(session.StartTime.AddMinutes(i), 65));
+        var fiveMinute = Enumerable.Range(0, 84)
+            .Select(i => MakeGlucose(session.StartTime.AddMinutes(60 + i * 5), 120));
+
+        var result = Clinical.Sleep.SleepReportCalculator.ComputeOvernightTir(
+            session, oneMinute.Concat(fiveMinute).ToList(), _thresholds);
+
+        result!.LowPct.Should().BeApproximately(100.0 * 60 / 480, 0.5);
+        result.InRangePct.Should().BeApproximately(100.0 * 420 / 480, 0.5);
+        (result.VeryLowPct + result.LowPct + result.InRangePct + result.HighPct + result.VeryHighPct)
+            .Should().BeApproximately(100, 0.001);
+    }
+
     // ── Hypo Events ───────────────────────────────────────────────────────
 
     [Fact]
