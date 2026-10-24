@@ -25,11 +25,7 @@ namespace Nocturne.API.Services.Analytics;
 public class WidgetSummaryService : IWidgetSummaryService
 {
     private readonly IEntryService _entryService;
-    private readonly IIobCalculator _iobCalculator;
-    private readonly ICobCalculator _cobCalculator;
-    private readonly IBolusRepository _bolusRepository;
-    private readonly ICarbIntakeRepository _carbIntakeRepository;
-    private readonly ITempBasalRepository _tempBasalRepository;
+    private readonly IIobCobReader _iobCobReader;
     private readonly IApsSnapshotRepository _apsSnapshots;
     private readonly ITrackerRepository _trackerRepository;
     private readonly INotificationV1Service _notificationService;
@@ -44,11 +40,7 @@ public class WidgetSummaryService : IWidgetSummaryService
 
     public WidgetSummaryService(
         IEntryService entryService,
-        IIobCalculator iobCalculator,
-        ICobCalculator cobCalculator,
-        IBolusRepository bolusRepository,
-        ICarbIntakeRepository carbIntakeRepository,
-        ITempBasalRepository tempBasalRepository,
+        IIobCobReader iobCobReader,
         IApsSnapshotRepository apsSnapshots,
         ITrackerRepository trackerRepository,
         INotificationV1Service notificationService,
@@ -58,11 +50,7 @@ public class WidgetSummaryService : IWidgetSummaryService
     )
     {
         _entryService = entryService;
-        _iobCalculator = iobCalculator;
-        _cobCalculator = cobCalculator;
-        _bolusRepository = bolusRepository;
-        _carbIntakeRepository = carbIntakeRepository;
-        _tempBasalRepository = tempBasalRepository;
+        _iobCobReader = iobCobReader;
         _apsSnapshots = apsSnapshots;
         _trackerRepository = trackerRepository;
         _notificationService = notificationService;
@@ -203,30 +191,9 @@ public class WidgetSummaryService : IWidgetSummaryService
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            // Query v4 types: 8h for IOB, 6h for COB
-            var iobFrom = DateTime.UtcNow.AddHours(-8);
-            var cobFrom = DateTime.UtcNow.AddHours(-6);
-
-            var boluses = (await _bolusRepository.GetAsync(
-                from: iobFrom, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false, ct: cancellationToken
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: iobFrom, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false, ct: cancellationToken
-            )).ToList();
-            var carbIntakes = (await _carbIntakeRepository.GetAsync(
-                from: cobFrom, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false, ct: cancellationToken
-            )).ToList();
-
-            // Calculate IOB
-            var iobResult = await _iobCalculator.CalculateTotalAsync(boluses, tempBasals, now, ct: cancellationToken);
-            response.Iob = Math.Round(iobResult.Iob * 100) / 100; // Round to 2 decimal places
-
-            // Calculate COB
-            var cobResult = await _cobCalculator.CalculateTotalAsync(carbIntakes, boluses, tempBasals, now, ct: cancellationToken);
-            response.Cob = Math.Round(cobResult.Cob);
+            var reading = await _iobCobReader.ReadTotalAsync(now, live: true, cancellationToken);
+            response.Iob = Math.Round(reading.Iob.Iob * 100) / 100;
+            response.Cob = reading.Cob is null ? 0 : Math.Round(reading.Cob.Cob);
         }
         catch (Exception ex)
         {

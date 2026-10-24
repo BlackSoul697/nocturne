@@ -70,7 +70,8 @@
         activity:
           (legend?.activitySpans ?? false) &&
           engine.displayActivitySpans.length > 0,
-      }
+      },
+      engine.minIOB
     )
   );
 

@@ -1,3 +1,4 @@
+using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -149,11 +150,7 @@ public class WidgetSummaryServiceStatusTests
 
         return new WidgetSummaryService(
             entries.Object,
-            Mock.Of<IIobCalculator>(),
-            Mock.Of<ICobCalculator>(),
-            Mock.Of<IBolusRepository>(),
-            Mock.Of<ICarbIntakeRepository>(),
-            Mock.Of<ITempBasalRepository>(),
+            TestIobCobReader.Empty(),
             Mock.Of<IApsSnapshotRepository>(),
             trackers.Object,
             Mock.Of<INotificationV1Service>(),

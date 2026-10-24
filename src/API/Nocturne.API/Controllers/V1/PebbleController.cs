@@ -6,10 +6,10 @@ using Nocturne.API.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Glucose;
-using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models;
@@ -24,19 +24,19 @@ namespace Nocturne.API.Controllers.V1;
 /// </summary>
 /// <remarks>
 /// The action requires only <c>glucose.read</c> while the response also carries IOB and COB, from the
-/// AID system or treatments (<see cref="ICurrentIobCobReader"/>), and the uploader battery. This is
+/// AID system or treatments (<see cref="IIobCobReader"/>), and the uploader battery. This is
 /// the accepted narrowing described on <see cref="V2.PropertiesController"/>, which names the
 /// per-category follow-up.
 /// </remarks>
 /// <seealso cref="IEntryService"/>
-/// <seealso cref="ICurrentIobCobReader"/>
+/// <seealso cref="IIobCobReader"/>
 [ApiController]
 [Tags("V1")]
 [Route("")]
 public class PebbleController : ControllerBase
 {
     private readonly IEntryService _entryService;
-    private readonly ICurrentIobCobReader _iobCobReader;
+    private readonly IIobCobReader _iobCobReader;
     private readonly IUploaderSnapshotRepository _uploaderSnapshots;
     private readonly ITenantAppearanceReader _appearanceReader;
     private readonly ITenantAccessor _tenantAccessor;
@@ -60,7 +60,7 @@ public class PebbleController : ControllerBase
     /// <param name="logger">Logger instance.</param>
     public PebbleController(
         IEntryService entryService,
-        ICurrentIobCobReader iobCobReader,
+        IIobCobReader iobCobReader,
         IUploaderSnapshotRepository uploaderSnapshots,
         ITenantAppearanceReader appearanceReader,
         ITenantAccessor tenantAccessor,
@@ -142,8 +142,9 @@ public class PebbleController : ControllerBase
                     );
 
                     bg.Battery = battery;
-                    bg.Iob = iobCob?.IobDisplay;
-                    bg.Cob = iobCob?.Cob;
+                    bg.Iob = iobCob is null ? null : IobResult.FormatDisplay(iobCob.Iob.Iob);
+                    // Nightscout's pebble shows COB to one decimal.
+                    bg.Cob = iobCob?.Cob is null ? null : Math.Round(iobCob.Cob.Cob, 1);
                 }
 
                 bgs.Add(bg);
@@ -184,11 +185,12 @@ public class PebbleController : ControllerBase
         }
     }
 
-    private async Task<CurrentIobCob?> ReadIobCobAsync(CancellationToken cancellationToken)
+    private async Task<IobCobReading?> ReadIobCobAsync(CancellationToken cancellationToken)
     {
         try
         {
-            return await _iobCobReader.GetAsync(cancellationToken);
+            return await _iobCobReader.ReadTotalAsync(
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), live: true, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
