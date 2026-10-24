@@ -55,8 +55,10 @@
   const acknowledgesForEveryone = $derived(
     satisfiesScope(page.data.effectivePermissions ?? [], "alerts.readwrite")
   );
+  // A guest or share link may see the alarm but not the rule behind it.
   const canOpenRule = $derived(
-    satisfiesScope(page.data.effectivePermissions ?? [], "alerts.read")
+    !!page.data.hasAccount &&
+      satisfiesScope(page.data.effectivePermissions ?? [], "alerts.read")
   );
 
   // The layout drives one shared poll of this query; react to whatever it

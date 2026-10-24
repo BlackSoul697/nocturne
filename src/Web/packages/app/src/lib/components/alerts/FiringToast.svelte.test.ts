@@ -98,7 +98,7 @@ describe("FiringToast", () => {
 		await expect.element(page.getByRole("button", { name: "Acknowledge" })).not.toBeInTheDocument();
 	});
 
-	it("links to the rule only for a member holding alerts.read", async () => {
+	it("links to the rule only for a member with an account holding alerts.read", async () => {
 		activeAlerts = [excursion("e", { alertRuleId: "11111111-1111-1111-1111-111111111111" })];
 
 		pageState.data = { effectivePermissions: ["glucose.read", "device.notify"] };
@@ -109,7 +109,15 @@ describe("FiringToast", () => {
 			.not.toBeInTheDocument();
 		withoutScope.unmount();
 
-		pageState.data = { effectivePermissions: ["alerts.read", "device.notify"] };
+		pageState.data = { hasAccount: false, effectivePermissions: ["alerts.read"] };
+		const guest = render(FiringToast);
+		await expect.element(page.getByText("Rule e")).toBeVisible();
+		await expect
+			.element(page.getByRole("link", { name: /Open settings for/ }))
+			.not.toBeInTheDocument();
+		guest.unmount();
+
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.read", "device.notify"] };
 		render(FiringToast);
 		await expect
 			.element(page.getByRole("link", { name: /Open settings for/ }))

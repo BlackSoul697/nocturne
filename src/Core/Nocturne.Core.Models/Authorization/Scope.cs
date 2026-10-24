@@ -238,6 +238,7 @@ public static class Scope
         {
             GlucoseRead, TreatmentsRead, DevicesRead,
             HeartRateRead, StepCountRead, FoodRead, ReportsRead,
+            AlertsRead,
         };
 
     /// <summary>

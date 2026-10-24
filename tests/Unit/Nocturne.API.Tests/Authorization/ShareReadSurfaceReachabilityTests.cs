@@ -77,6 +77,9 @@ public class ShareReadSurfaceReachabilityTests
             // (compression_low_suggestions has no ShareDataCategories entry), so the gate decides
             // error-vs-empty-list, not what a share can see.
             ["Nocturne.API.Controllers.V4.TenantAdmin.CompressionLowController"] = Scope.GlucoseRead,
+            // The firing alarm a share holding alerts.read shows. History is refused to a share by
+            // DenyNoAccountViewer, which a scope sweep cannot see; the integration suite covers it.
+            ["Nocturne.API.Controllers.V4.Monitoring.AlertsController"] = Scope.AlertsRead,
         };
 
     /// <summary>
@@ -211,6 +214,7 @@ public class ShareReadSurfaceReachabilityTests
             // The recycle bin exists to feed Restore; records the owner deleted are not part of
             // the share surface (see the remark on V4CrudControllerBase.ListDeleted).
             ["ListDeleted"] = "deleted-record enumeration is an editing surface",
+            ["GetPendingDeliveries"] = "the delivery adapters' queue, with other recipients' destinations",
         };
 
     [Fact]

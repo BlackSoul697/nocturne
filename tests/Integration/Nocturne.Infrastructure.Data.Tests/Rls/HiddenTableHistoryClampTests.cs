@@ -114,7 +114,10 @@ public class HiddenTableHistoryClampTests(RlsCompletenessFixture fx)
     {
         foreach (var table in TableNames)
         {
-            ShareDataCategories.GoverningScopeFor(table).Should().BeNull();
+            // The alert spans are shared under alerts.read, which EveryCategory leaves out, and
+            // clamped for members by overlap exactly like the hidden spans.
+            if (!ShareDataCategories.GovernedSpanEndColumns.ContainsKey(table))
+                ShareDataCategories.GoverningScopeFor(table).Should().BeNull();
             (ShareDataCategories.RecencyColumnFor(table) ?? ShareDataCategories.SpanEndColumnFor(table)
                 ?? ShareDataCategories.ParentRecencyFor(table)?.Table).Should().NotBeNull(table);
         }

@@ -19,20 +19,27 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 /// Controller for active alert state, history, and acknowledgement.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Acknowledging, snoozing and recording a delivery outcome all silence or close an excursion, so
 /// every write action here requires <see cref="Scope.AlertsReadWrite"/>, as does
 /// <see cref="GetPendingDeliveries"/>, which returns other recipients' destinations and payloads
-/// to the delivery adapters; the class-level
-/// <c>[Authorize]</c> alone is satisfied by read-only credentials such as a guest-link session,
-/// which holds <c>alerts.read</c>. <see cref="AcknowledgeExcursion"/> additionally accepts
+/// to the delivery adapters; a guest-link session, which may hold <c>alerts.read</c>, reaches none
+/// of them. <see cref="AcknowledgeExcursion"/> additionally accepts
 /// <see cref="Scope.DeviceNotify"/>, because for a caller without <c>alerts.readwrite</c> it mutes
 /// the excursion for that caller alone. See the note on that action.
+/// </para>
+/// <para>
+/// The one alert controller without a class <c>[Authorize]</c>: a public share link is an
+/// unauthenticated principal that may hold <c>alerts.read</c> to show the alarm that is firing, and
+/// <c>[Authorize]</c> would answer it 401. Every action carries its own <c>[RequireScope]</c>, which
+/// admits an unauthenticated caller only to a read. The other alert controllers keep
+/// <c>[Authorize]</c> and <see cref="DenyNoAccountViewerAttribute"/>: they serve configuration.
+/// </para>
 /// </remarks>
 /// <seealso cref="IAlertAcknowledgementService"/>
 /// <seealso cref="IAlertDeliveryService"/>
 [ApiController]
 [Tags("Monitoring")]
-[Authorize]
 [Route("api/v4/alerts")]
 public class AlertsController : ControllerBase
 {
