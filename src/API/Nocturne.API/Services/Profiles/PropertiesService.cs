@@ -9,6 +9,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Treatments;
 
@@ -765,8 +766,8 @@ public class PropertiesService : IPropertiesService
 
         // Find the appropriate basal rate - exact legacy lookup logic
         var applicableRate = basalSchedule
-            .Where(b => b.TimeAsSeconds.HasValue && b.TimeAsSeconds.Value <= timeOfDaySeconds)
-            .OrderByDescending(b => b.TimeAsSeconds)
+            .Where(b => ScheduleEntryTime.SecondsOf(b.TimeAsSeconds, b.Time) <= timeOfDaySeconds)
+            .OrderByDescending(b => ScheduleEntryTime.SecondsOf(b.TimeAsSeconds, b.Time))
             .FirstOrDefault();
 
         return applicableRate?.Value ?? basalSchedule.FirstOrDefault()?.Value ?? 0.0;

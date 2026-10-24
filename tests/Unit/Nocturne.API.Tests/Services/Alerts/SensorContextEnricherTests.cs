@@ -804,6 +804,35 @@ public class SensorContextEnricherTests
         enriched.GlucoseBucket.Should().Be(Nocturne.Core.Models.Alerts.GlucoseBucket.Low);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GlucoseBucket_resolution_reads_the_entry_time_when_TimeAsSeconds_is_absent(bool withSeconds)
+    {
+        var enricher = BuildEnricher();
+        var tickUtc = new DateTime(2026, 3, 22, 7, 0, 0, DateTimeKind.Utc);
+
+        _activeProfileResolver.Setup(s => s.GetActiveProfileNameAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Default");
+        _targetRangeScheduleRepository.Setup(s => s.GetActiveAtAsync("Default", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TargetRangeSchedule
+            {
+                ProfileName = "Default",
+                Entries =
+                [
+                    new TargetRangeEntry { Time = "06:00", TimeAsSeconds = withSeconds ? 21600 : null, Low = 80, High = 180 },
+                    new TargetRangeEntry { Time = "00:00", TimeAsSeconds = withSeconds ? 0 : null, Low = 70, High = 180 },
+                ],
+            });
+
+        var rule = MakeRule(AlertConditionType.GlucoseBucket, """{"buckets":["low"]}""");
+        var baseContext = BaseContext() with { LatestValue = 75m };
+
+        var enriched = await enricher.EnrichAsOfAsync(baseContext, new[] { rule }, _tenantId, tickUtc, CancellationToken.None);
+
+        enriched.GlucoseBucket.Should().Be(Nocturne.Core.Models.Alerts.GlucoseBucket.Low);
+    }
+
     // ---- scoped Do Not Disturb (ADR 0004 D5) ----
 
     [Fact]
