@@ -1215,6 +1215,7 @@ msgstr "Alerta compuesta"
 #: src/lib/components/alerts/AlertBanner.svelte
 #: src/lib/components/alerts/AlertBanner.svelte
 #: src/lib/components/alerts/FiringToast.svelte
+#: src/lib/components/clock/ClockAlertBand.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
@@ -17312,9 +17313,8 @@ msgstr "{0} día{1}"
 msgid "Failed to create a new code. Active links are limited to 5 at a time."
 msgstr "No se pudo crear un código nuevo. Los enlaces activos están limitados a 5 a la vez."
 
-#: src/lib/components/members/GuestLinksSection.svelte
-msgid "Generate a temporary link for read-only access to reports. The code works once: the first device to enter it stays signed in for 48 hours. For another device, issue a new code."
-msgstr "Genera un enlace temporal para acceso de solo lectura a los informes. El código funciona una sola vez: el primer dispositivo que lo introduzca permanecerá conectado durante 48 horas. Para otro dispositivo, genera un código nuevo."
+#~ msgid "Generate a temporary link for read-only access to reports. The code works once: the first device to enter it stays signed in for 48 hours. For another device, issue a new code."
+#~ msgstr "Genera un enlace temporal para acceso de solo lectura a los informes. El código funciona una sola vez: el primer dispositivo que lo introduzca permanecerá conectado durante 48 horas. Para otro dispositivo, genera un código nuevo."
 
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Share this code or link. The code works once: the first device to enter it stays signed in for 48 hours. Use \"New code\" on the link below to add another device."
@@ -17438,7 +17438,7 @@ msgstr "Al regenerarlo, el enlace actual deja de ser válido inmediatamente."
 msgid "What anonymous viewers can see"
 msgstr "Qué pueden ver los visitantes anónimos"
 
-#. 0: scopes.length; 1: publicDataCategories.length
+#. 0: scopes.length; 1: shareable.length
 #: src/lib/components/members/PublicAccessCard.svelte
 msgid "{0} of {1} shared"
 msgstr "{0} de {1} compartidos"
@@ -30652,4 +30652,46 @@ msgstr ""
 #. 0: lookbackSentence(status.historyDays)
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "A date requests a one-time import of older data shared with Google Health, back to that day. Choose an earlier date and save to request more history. The field clears once the requested history is complete. {0} Automatic sync does not re-import that period each time, and an empty field does not remove older records. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
+msgstr ""
+
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/clock/ClockAlertBand.svelte
+msgid "<0/> Seen"
+msgstr ""
+
+#: src/lib/components/alerts/FiringToast.svelte
+msgid "Seen"
+msgstr ""
+
+#: src/lib/components/clock/ClockAlertBand.svelte
+msgid "<0/> Seen here"
+msgstr ""
+
+#: src/lib/components/clock/ClockAlertBand.svelte
+msgid "<0/> Acknowledged"
+msgstr ""
+
+#: src/lib/components/clock/ClockAlertBand.svelte
+msgid "<0/> Snoozed"
+msgstr ""
+
+#: src/lib/components/clock-builder/DisplaySettings.svelte
+msgid "Show firing alerts"
+msgstr ""
+
+#: src/lib/components/clock-builder/DisplaySettings.svelte
+msgid "Let viewers mark alerts as seen"
+msgstr ""
+
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Generate a temporary link for read-only access to the categories you choose. The code works once: the first device to enter it stays signed in for 48 hours. For another device, issue a new code."
+msgstr ""
+
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "What they can see"
+msgstr ""
+
+#. 0: formatList( categoriesIn(link.scopes).map((c) => c.name.toLowerCase()) )
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Sees {0}"
 msgstr ""
