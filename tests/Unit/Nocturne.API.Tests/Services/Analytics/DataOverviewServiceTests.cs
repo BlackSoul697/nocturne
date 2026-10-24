@@ -70,6 +70,7 @@ public class DataOverviewServiceTests : IDisposable
 
         _therapySettings.Setup(p => p.GetTimezoneAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("UTC");
         var mockStatisticsService = new Mock<IStatisticsService>();
+        mockStatisticsService.SetupGet(s => s.HourlyBandThresholds).Returns(ServedThresholds);
         _service = new DataOverviewService(
             _factory.Object,
             new TenantClockResolver(_therapySettings.Object, _readContext, NullLogger<TenantClockResolver>.Instance),
@@ -222,6 +223,25 @@ public class DataOverviewServiceTests : IDisposable
     }
 
     #region GetAvailableYearsAsync Tests
+
+    private static readonly GlycemicThresholds ServedThresholds = new()
+    {
+        VeryLow = 50,
+        Low = 63,
+        TargetBottom = 63,
+        TargetTop = 140,
+        High = 140,
+        VeryHigh = 260,
+    };
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task GetAvailableYearsAsync_ServesTheBandEdgesTheStatisticsServiceClassifiesOn()
+    {
+        var result = await _service.GetAvailableYearsAsync();
+
+        result.Thresholds.Should().BeSameAs(ServedThresholds);
+    }
 
     [Fact]
     [Trait("Category", "Unit")]

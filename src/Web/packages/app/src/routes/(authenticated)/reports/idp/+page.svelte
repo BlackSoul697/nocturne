@@ -259,7 +259,7 @@
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="h-80 w-full @2xl:h-96">
-        <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} />
+        <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} thresholds={analysis?.timeInRange?.thresholds} />
       </div>
 
       <div>
