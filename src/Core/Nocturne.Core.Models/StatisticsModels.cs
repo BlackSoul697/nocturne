@@ -207,6 +207,9 @@ public class GlycemicThresholds
 
 public class TimeInRangeMetrics
 {
+    /// <summary>The band edges the percentages, durations and episodes were measured against.</summary>
+    public GlycemicThresholds? Thresholds { get; set; }
+
     /// <summary>
     /// Percentages of time in each range
     /// </summary>
@@ -2106,6 +2109,9 @@ public class SiteChangeImpactAnalysis
 
     /// <summary>Summary statistics comparing before vs after</summary>
     public SiteChangeImpactSummary Summary { get; set; } = new();
+
+    /// <summary>The consensus band edges the chart draws its target range between.</summary>
+    public required GlycemicThresholds Thresholds { get; set; }
 
     /// <summary>Hours analyzed before site change</summary>
     public int HoursBeforeChange { get; set; }

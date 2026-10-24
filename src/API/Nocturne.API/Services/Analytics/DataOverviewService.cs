@@ -119,6 +119,7 @@ public class DataOverviewService : IDataOverviewService
             AvailableDataSources = allDataSources
                 .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
+            Thresholds = _statisticsService.HourlyBandThresholds,
             TimeZoneUnavailableReason = clock.Reason,
         };
     }
