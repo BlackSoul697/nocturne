@@ -391,7 +391,7 @@ public class RetrospectiveController : ControllerBase
         if (entries == null || entries.Count == 0) return null;
         // Sort entries by time
         var sortedEntries = entries
-            .Where(e => e.Mills > 0 && (e.Sgv ?? e.Mgdl) > 0)
+            .Where(e => e.Mills > 0 && e.GlucoseMgdl() > 0)
             .OrderBy(e => e.Mills)
             .ToList();
         if (sortedEntries.Count == 0) return null;
@@ -415,7 +415,7 @@ public class RetrospectiveController : ControllerBase
         {
             return new GlucoseData
             {
-                Value = (int)(before.Sgv ?? before.Mgdl),
+                Value = (int)before.GlucoseMgdl(),
                 Direction = before.Direction,
                 Delta = CalculateDelta(sortedEntries, before)
             };
@@ -423,8 +423,8 @@ public class RetrospectiveController : ControllerBase
         // Interpolate between before and after
         if (before != null && after != null)
         {
-            var beforeValue = (int)(before.Sgv ?? before.Mgdl);
-            var afterValue = (int)(after.Sgv ?? after.Mgdl);
+            var beforeValue = (int)before.GlucoseMgdl();
+            var afterValue = (int)after.GlucoseMgdl();
             var ratio = (double)(targetTime - before.Mills) / (after.Mills - before.Mills);
             var interpolated = beforeValue + (afterValue - beforeValue) * ratio;
             return new GlucoseData
@@ -439,7 +439,7 @@ public class RetrospectiveController : ControllerBase
         {
             return new GlucoseData
             {
-                Value = (int)(before.Sgv ?? before.Mgdl),
+                Value = (int)before.GlucoseMgdl(),
                 Direction = before.Direction,
                 Delta = CalculateDelta(sortedEntries, before)
             };
@@ -448,7 +448,7 @@ public class RetrospectiveController : ControllerBase
         {
             return new GlucoseData
             {
-                Value = (int)(after.Sgv ?? after.Mgdl),
+                Value = (int)after.GlucoseMgdl(),
                 Direction = after.Direction,
                 Delta = null
             };
@@ -467,8 +467,8 @@ public class RetrospectiveController : ControllerBase
             .FirstOrDefault();
         if (previous != null)
         {
-            var currentValue = (int)(current.Sgv ?? current.Mgdl);
-            var previousValue = (int)(previous.Sgv ?? previous.Mgdl);
+            var currentValue = (int)current.GlucoseMgdl();
+            var previousValue = (int)previous.GlucoseMgdl();
             return currentValue - previousValue;
         }
         return null;

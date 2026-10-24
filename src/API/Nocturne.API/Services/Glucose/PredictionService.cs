@@ -82,11 +82,11 @@ public class PredictionService : IPredictionService
 
         // Convert to oref glucose readings
         var orefGlucose = glucoseEntries
-            .Where(e => e.Sgv.HasValue && e.Sgv > 0)
+            .Where(e => e.GlucoseMgdl() > 0)
             .OrderByDescending(e => e.Mills)
             .Select(e => new OrefModels.GlucoseReading
             {
-                Sgv = e.Sgv ?? 0,
+                Sgv = e.GlucoseMgdl(),
                 Date = e.Mills,
                 Direction = e.Direction
             })
@@ -290,12 +290,12 @@ public class PredictionService : IPredictionService
         // Get current entry
         var currentEntry = await _store.GetCurrentAsync(cancellationToken);
 
-        if (currentEntry?.Sgv == null)
+        if (currentEntry is null || currentEntry.GlucoseMgdl() <= 0)
         {
             throw new InvalidOperationException("No glucose readings available");
         }
 
-        var currentBg = currentEntry.Sgv.Value;
+        var currentBg = currentEntry.GlucoseMgdl();
         var delta = currentEntry.Delta ?? 0;
 
         // Generate 48 points = 4 hours at 5-minute intervals

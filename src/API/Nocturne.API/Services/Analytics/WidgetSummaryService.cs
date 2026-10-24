@@ -182,7 +182,7 @@ public class WidgetSummaryService : IWidgetSummaryService
     {
         return new V4GlucoseReading
         {
-            Sgv = entry.Sgv ?? entry.Mgdl,
+            Sgv = entry.GlucoseMgdl(),
             Direction = entry.DirectionEnum,
             TrendRate = entry.TrendRate,
             Delta = entry.Delta,
