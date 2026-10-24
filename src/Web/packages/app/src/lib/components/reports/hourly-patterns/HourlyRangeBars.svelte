@@ -6,6 +6,7 @@
 <script lang="ts">
   import { BarChart } from "layerchart";
   import type { GlycemicThresholds, HourlyPattern } from "$lib/api";
+  import { roundLastSeriesOnly } from "$lib/components/charts/stack-rounding";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
   import { hourlyBandSeries } from "../hourly-bands";
   import { hourSpan, hourStart } from "./hour-labels";
@@ -17,7 +18,7 @@
 
   let { hours, thresholds }: Props = $props();
 
-  const series = $derived(hourlyBandSeries(thresholds));
+  const series = $derived(roundLastSeriesOnly(hourlyBandSeries(thresholds)));
 
   const data = $derived(
     hours.map((h) => ({

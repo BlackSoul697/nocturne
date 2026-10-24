@@ -42,7 +42,9 @@
   const MAX_X_TICKS = 13;
   const TICK_STEPS_HOURS = [1, 2, 3, 4, 6, 12];
 
-  // Hour ticks anchored on the change itself, thinned so labels never touch.
+  // Hour ticks anchored on the change itself, thinned so labels never touch. Ordered by distance
+  // from the change: occlusion with priority "start" keeps the first tick it can, so the
+  // "Site Change" label always survives and the rest thin outwards from it.
   const hourlyTicks = $derived.by(() => {
     const [minMinutes, maxMinutes] = xDomain;
     const startHour = Math.ceil(minMinutes / 60);
@@ -53,7 +55,7 @@
     for (let h = Math.ceil(startHour / step) * step; h <= endHour; h += step) {
       ticks.push(h * 60);
     }
-    return ticks;
+    return ticks.sort((a, b) => Math.abs(a) - Math.abs(b));
   });
 
   // Filter and validate data points to ensure all required fields are present
@@ -179,6 +181,7 @@
             tickMultiline: true,
             format: formatHoursFromChange,
             ticks: hourlyTicks,
+            tickOcclusion: { priority: "start" },
           },
           yAxis: {
             label: `Glucose (${bgLabel()})`,
