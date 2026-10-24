@@ -1,17 +1,24 @@
-using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Connectors;
+using Nocturne.API.Services.Health.GoogleHealth;
 using Nocturne.API.Services.V4;
+using Nocturne.API.Tests.Health.GoogleHealth;
+using Nocturne.API.Tests.Infrastructure;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Services;
+using Nocturne.Connectors.Glooko.Configurations;
+using Nocturne.Connectors.GoogleHealth.Configurations;
+using Nocturne.Connectors.GoogleHealth.Services;
 using Nocturne.Connectors.Nightscout.Configurations;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
@@ -62,6 +69,8 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
         // Force-load the Nightscout connector assembly so the static metadata registry can resolve
         // the connector id to its data-source id ("nightscout-connector").
         _ = typeof(NightscoutConnectorConfiguration);
+        _ = typeof(GoogleHealthConnectorConfiguration);
+        _ = typeof(GlookoConnectorConfiguration);
         _deviceId = ConnectorMetadataService.GetByConnectorId(ConnectorId)?.DataSourceId
             ?? throw new InvalidOperationException("Nightscout connector metadata failed to load");
 
@@ -72,7 +81,13 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
 
     private NocturneDbContext NewContext() => _db.CreateContext(TenantId);
 
-    private DataSourceService CreateService(NocturneDbContext context) => new(
+    private DataSourceService CreateService(NocturneDbContext context, params IConnectorPurgeGuard[] purgeGuards) =>
+        CreateService(context, [], purgeGuards);
+
+    private DataSourceService CreateService(
+        NocturneDbContext context,
+        IEnumerable<IConnectorDataPurge> dataPurges,
+        params IConnectorPurgeGuard[] purgeGuards) => new(
         context.AsFactory(),
         _sensorGlucose.Object,
         _meterGlucose.Object,
@@ -80,7 +95,54 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
         _auditContext,
         _connectorConfig.Object,
         Nocturne.API.Tests.Infrastructure.ProfileActivationTestDeps.Writer(context),
+        purgeGuards,
+        dataPurges,
         NullLogger<DataSourceService>.Instance);
+
+    private static string GoogleHealthDataSourceId =>
+        ConnectorMetadataService.GetByConnectorId(GoogleHealthConnectorService.ConnectorName)!.DataSourceId;
+
+    private static string GlookoDataSourceId =>
+        ConnectorMetadataService.GetByConnectorId("Glooko")!.DataSourceId;
+
+    private static Mock<IConnectorDataPurge> GoogleHealthSleepPurge()
+    {
+        var purge = new Mock<IConnectorDataPurge>();
+        purge.SetupGet(p => p.ConnectorName).Returns(GoogleHealthConnectorService.ConnectorName);
+        purge.Setup(p => p.DescribeAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        purge.Setup(p => p.PurgeAsync(It.IsAny<bool>(), It.IsAny<IAuditContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long> { ["Sleep"] = 1 });
+        return purge;
+    }
+
+    private void SeedHealthRecords(string source)
+    {
+        using var db = NewContext();
+        foreach (var dataSource in new[] { source, "manual" })
+        {
+            var at = DateTime.UtcNow.AddHours(-1);
+            db.HeartRates.Add(new HeartRateEntity { Id = Guid.NewGuid(), Timestamp = at, Bpm = 60, DataSource = dataSource, SyncIdentifier = dataSource });
+            db.StepCounts.Add(new StepCountEntity { Id = Guid.NewGuid(), Timestamp = at, Metric = 42, DataSource = dataSource, SyncIdentifier = dataSource });
+            db.BodyWeights.Add(new BodyWeightEntity { Id = Guid.NewGuid(), Mills = new DateTimeOffset(at).ToUnixTimeMilliseconds(), WeightKg = 70, DataSource = dataSource, SyncIdentifier = dataSource });
+        }
+
+        db.SaveChanges();
+    }
+
+    private async Task AssertHealthRecordsDeletedByUserAsync(string source)
+    {
+        await using var db = NewContext();
+        (await db.HeartRates.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.StepCounts.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.BodyWeights.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.UserTombstones<HeartRateEntity>().Select(r => r.DataSource).ToListAsync()).Should().Equal(source);
+        (await db.UserTombstones<StepCountEntity>().Select(r => r.DataSource).ToListAsync()).Should().Equal(source);
+        (await db.UserTombstones<BodyWeightEntity>().Select(r => r.DataSource).ToListAsync()).Should().Equal(source);
+    }
+
+    private static GoogleHealthPurgeGuard GoogleHealthGuard(GoogleHealthCoordinator coordinator, TimeSpan? gateTimeout = null) =>
+        new(coordinator, Mock.Of<ITenantAccessor>(tenant => tenant.TenantId == TenantId), gateTimeout);
 
     private void SeedOneOfEachType()
     {
@@ -358,5 +420,245 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
         _connectorConfig.Verify(c => c.SetActiveAsync(
             It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_GoogleHealth_DeletesOnlyAfterARunningSyncFinishes()
+    {
+        var coordinator = InMemoryGoogleHealthCoordinator.Create();
+        var syncFinished = false;
+        bool? deletedAfterSync = null;
+        _sensorGlucose
+            .Setup(r => r.DeleteBySourceAsync(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback(() => deletedAfterSync = syncFinished)
+            .ReturnsAsync(0);
+        var sync = await coordinator.AcquireAsync(TenantId, default);
+
+        await using var ctx = NewContext();
+        var purge = CreateService(ctx, GoogleHealthGuard(coordinator))
+            .DeleteConnectorDataAsync(GoogleHealthConnectorService.ConnectorName);
+        purge.IsCompleted.Should().BeFalse();
+        syncFinished = true;
+        await sync!.DisposeAsync();
+
+        (await purge).Success.Should().BeTrue();
+        deletedAfterSync.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_GoogleHealth_KeepsSyncsOutUntilThePurgeEnds()
+    {
+        var coordinator = InMemoryGoogleHealthCoordinator.Create();
+        var deleting = new TaskCompletionSource();
+        var finishDelete = new TaskCompletionSource();
+        _sensorGlucose
+            .Setup(r => r.DeleteBySourceAsync(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                deleting.SetResult();
+                await finishDelete.Task;
+                return 0;
+            });
+
+        await using var ctx = NewContext();
+        var purge = CreateService(ctx, GoogleHealthGuard(coordinator))
+            .DeleteConnectorDataAsync(GoogleHealthConnectorService.ConnectorName);
+        await deleting.Task;
+
+        (await coordinator.AcquireAsync(TenantId, default, TimeSpan.Zero))
+            .Should().BeNull("a sync takes this gate before it writes any record");
+
+        finishDelete.SetResult();
+        (await purge).Success.Should().BeTrue();
+        await using var syncAfter = await coordinator.AcquireAsync(TenantId, default, TimeSpan.Zero);
+        syncAfter.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_GoogleHealth_WhileASyncHoldsTheGate_ReportsSyncRunningAndDeletesNothing()
+    {
+        var coordinator = InMemoryGoogleHealthCoordinator.Create();
+        await using var sync = await coordinator.AcquireAsync(TenantId, default);
+        SeedOneOfEachType();
+
+        await using (var ctx = NewContext())
+        {
+            var result = await CreateService(ctx, GoogleHealthGuard(coordinator, TimeSpan.FromMilliseconds(50)))
+                .DeleteConnectorDataAsync(GoogleHealthConnectorService.ConnectorName);
+
+            result.Success.Should().BeFalse();
+            result.ErrorCode.Should().Be(DataSourceDeleteError.SyncRunning);
+        }
+
+        _sensorGlucose.Verify(r => r.DeleteBySourceAsync(
+            It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Never);
+        await using var assertCtx = NewContext();
+        (await assertCtx.Boluses.IgnoreQueryFilters().SingleAsync(b => b.LegacyId == "bolus-1"))
+            .DeletedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_Glooko_RemovesItsHeartRateStepsAndWeightAndLeavesManualRows()
+    {
+        SeedHealthRecords(GlookoDataSourceId);
+
+        await using (var ctx = NewContext())
+        {
+            var result = await CreateService(ctx).DeleteConnectorDataAsync("Glooko");
+
+            result.Success.Should().BeTrue();
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("HeartRate", 1));
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("Steps", 1));
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("BodyWeight", 1));
+        }
+
+        await AssertHealthRecordsDeletedByUserAsync(GlookoDataSourceId);
+        await using var db = NewContext();
+        var summary = await db.MutationAuditLog.SingleAsync(a => a.EntityType == "HeartRate" && a.Action == "bulk_delete");
+        summary.AuthType.Should().Be(AuthType);
+        summary.ChangesJson.Should().Contain($"data_source={GlookoDataSourceId}");
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_AllowingReimport_ReleasesTheSourcesHealthRecords()
+    {
+        SeedHealthRecords(GlookoDataSourceId);
+
+        await using (var ctx = NewContext())
+            (await CreateService(ctx).DeleteConnectorDataAsync("Glooko", allowReimport: true)).Success.Should().BeTrue();
+
+        await using var db = NewContext();
+        (await db.HeartRates.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.HeartRates.IgnoreQueryFilters().CountAsync()).Should().Be(2);
+        (await db.UserTombstones<HeartRateEntity>().AnyAsync()).Should().BeFalse();
+        (await db.UserTombstones<StepCountEntity>().AnyAsync()).Should().BeFalse();
+        (await db.UserTombstones<BodyWeightEntity>().AnyAsync()).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteConnectorData_GoogleHealth_DeletesItsHealthRecordsBySourceAndItsSleepThroughItsPurge(bool allowReimport)
+    {
+        SeedHealthRecords(GoogleHealthDataSourceId);
+        var sleep = GoogleHealthSleepPurge();
+
+        await using (var ctx = NewContext())
+        {
+            var result = await CreateService(ctx, [sleep.Object], GoogleHealthGuard(InMemoryGoogleHealthCoordinator.Create()))
+                .DeleteConnectorDataAsync(GoogleHealthConnectorService.ConnectorName, allowReimport);
+
+            result.Success.Should().BeTrue();
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("HeartRate", 1));
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("Steps", 1));
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("BodyWeight", 1));
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("Sleep", 1));
+        }
+
+        sleep.Verify(p => p.PurgeAsync(allowReimport, _auditContext, It.IsAny<CancellationToken>()), Times.Once);
+        await using var db = NewContext();
+        (await db.HeartRates.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.StepCounts.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+        (await db.BodyWeights.Select(r => r.DataSource).ToListAsync()).Should().Equal("manual");
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_AnotherConnector_LeavesGoogleHealthRecordsAlone()
+    {
+        SeedHealthRecords(GoogleHealthDataSourceId);
+        var sleep = GoogleHealthSleepPurge();
+
+        await using (var ctx = NewContext())
+            await CreateService(ctx, [sleep.Object]).DeleteConnectorDataAsync(ConnectorId);
+
+        sleep.Verify(p => p.PurgeAsync(It.IsAny<bool>(), It.IsAny<IAuditContext>(), It.IsAny<CancellationToken>()), Times.Never);
+        await using var db = NewContext();
+        (await db.HeartRates.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task DeleteDataSourceData_GoogleHealth_PurgesItsRecordsAndSleepThroughItsPurge()
+    {
+        SeedHealthRecords(GoogleHealthDataSourceId);
+        var sleep = GoogleHealthSleepPurge();
+
+        await using (var ctx = NewContext())
+        {
+            var service = CreateService(ctx, [sleep.Object], GoogleHealthGuard(InMemoryGoogleHealthCoordinator.Create()));
+            (await service.GetActiveDataSourcesAsync()).Should().Contain(s => s.DeviceId == GoogleHealthDataSourceId);
+
+            var result = await service.DeleteDataSourceDataAsync(GoogleHealthDataSourceId);
+
+            result.Success.Should().BeTrue();
+            result.DeletedCounts.Should().Contain(new KeyValuePair<string, long>("Sleep", 1));
+        }
+
+        await AssertHealthRecordsDeletedByUserAsync(GoogleHealthDataSourceId);
+    }
+
+    [Fact]
+    public async Task DeleteDataSourceData_GoogleHealth_WhileASyncHoldsTheGate_ReportsSyncRunningAndDeletesNothing()
+    {
+        var coordinator = InMemoryGoogleHealthCoordinator.Create();
+        await using var sync = await coordinator.AcquireAsync(TenantId, default);
+        SeedHealthRecords(GoogleHealthDataSourceId);
+        var sleep = GoogleHealthSleepPurge();
+
+        await using (var ctx = NewContext())
+        {
+            var result = await CreateService(ctx, [sleep.Object], GoogleHealthGuard(coordinator, TimeSpan.FromMilliseconds(50)))
+                .DeleteDataSourceDataAsync(GoogleHealthDataSourceId);
+
+            result.Success.Should().BeFalse();
+            result.ErrorCode.Should().Be(DataSourceDeleteError.SyncRunning);
+        }
+
+        sleep.Verify(p => p.PurgeAsync(It.IsAny<bool>(), It.IsAny<IAuditContext>(), It.IsAny<CancellationToken>()), Times.Never);
+        await using var db = NewContext();
+        (await db.HeartRates.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task DeleteDataSourceData_OfAConnectorWithoutAGuard_DisablesItBeforeDeleting()
+    {
+        SeedOneOfEachType();
+        var steps = new List<string>();
+        _connectorConfig
+            .Setup(c => c.SetActiveAsync("Nightscout", false, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback(() => steps.Add("disable"))
+            .Returns(Task.CompletedTask);
+        _sensorGlucose
+            .Setup(r => r.DeleteBySourceAsync(_deviceId, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback(() => steps.Add("delete"))
+            .ReturnsAsync(0);
+
+        await using (var ctx = NewContext())
+            (await CreateService(ctx).DeleteDataSourceDataAsync(_deviceId)).Success.Should().BeTrue();
+
+        steps.Should().Equal("disable", "delete");
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_GoogleHealth_DoesNotTouchThePersistedActiveFlag()
+    {
+        await using var ctx = NewContext();
+        (await CreateService(ctx, GoogleHealthGuard(InMemoryGoogleHealthCoordinator.Create()))
+            .DeleteConnectorDataAsync(GoogleHealthConnectorService.ConnectorName, allowReimport: true))
+            .Success.Should().BeTrue();
+
+        _connectorConfig.Verify(c => c.SetActiveAsync(
+            It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_AnotherConnectorsGuard_StillDisablesThisConnector()
+    {
+        await using (var ctx = NewContext())
+            await CreateService(ctx, GoogleHealthGuard(InMemoryGoogleHealthCoordinator.Create()))
+                .DeleteConnectorDataAsync(ConnectorId);
+
+        _connectorConfig.Verify(c => c.SetActiveAsync(
+            ConnectorId, false, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

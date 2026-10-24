@@ -14,12 +14,6 @@ public interface ICobCalculator
         bool live = false,
         CancellationToken ct = default);
 
-    CobResult FromCarbIntakes(
-        List<CarbIntake> carbIntakes,
-        List<Bolus>? boluses,
-        List<TempBasal>? tempBasals,
-        long time);
-
     /// <summary>
     /// Async-free overload for the chart COB tick loop. Resolves carb absorption, sensitivity and
     /// carb ratio from the in-memory <paramref name="snapshot"/>, and derives insulin activity for
@@ -36,6 +30,4 @@ public interface ICobCalculator
         TherapySnapshot snapshot,
         Func<long, double> scheduledBasalAt,
         long time);
-
-    CarbCobContribution CalcCarbIntake(CarbIntake carbIntake, long time);
 }

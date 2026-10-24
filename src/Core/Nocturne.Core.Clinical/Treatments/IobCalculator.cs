@@ -391,7 +391,7 @@ public class IobCalculator(
         var aps = (await apsSnapshotRepo.GetAsync(
             from: fromTime, to: toTime, device: null, source: null, limit: 1, offset: 0, descending: true, ct: ct))
             .Select(s => new DeviceReading(
-                DeviceReading.MillsOf(s.Timestamp), DeviceSource.Aps, s.Iob, s.Cob, s.BolusIob, s.BasalIob,
+                s.Timestamp.ToMills(), DeviceSource.Aps, s.Iob, s.Cob, s.BolusIob, s.BasalIob,
                 s.AidAlgorithm == AidAlgorithm.Loop ? "Loop" : "OpenAPS", s.Device));
         var pump = (await pumpSnapshotRepo.GetAsync(
             from: fromTime, to: toTime, device: null, source: null, limit: 1, offset: 0, descending: true, ct: ct))

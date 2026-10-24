@@ -5,7 +5,7 @@
   import Check from "@lucide/svelte/icons/check";
   import { playAlarmSound, stopAlarmSound } from "$lib/audio/alarm-sounds";
   import { Now } from "$lib/hooks/now.svelte";
-  import { formatTimeSince } from "./alertTime";
+  import { formatTimeSince } from "./alertTime.svelte";
   import { createAlertActions, SNOOZE_MINUTES } from "./alert-actions.svelte";
 
   /**

@@ -43,13 +43,6 @@
   }
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Analyze how pump site changes affect your glucose control"
-  />
-</svelte:head>
-
 {#if siteChangeResource.current}
 <div class="@container space-y-8">
   <div class="space-y-4">

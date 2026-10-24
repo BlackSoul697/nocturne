@@ -470,7 +470,7 @@ public class WidgetSummaryService : IWidgetSummaryService
         }
 
         var startMills = snapshot.PredictedStartMills
-            ?? new DateTimeOffset(snapshot.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            ?? snapshot.Timestamp.ToMills();
 
         response.Predictions = new V4Predictions
         {
@@ -498,7 +498,7 @@ public class WidgetSummaryService : IWidgetSummaryService
         }
 
         var startMills = snapshot.PredictedStartMills
-            ?? new DateTimeOffset(snapshot.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            ?? snapshot.Timestamp.ToMills();
 
         response.Predictions = new V4Predictions
         {

@@ -9,15 +9,13 @@ namespace Nocturne.Core.Contracts.Treatments;
 /// </summary>
 public interface IIobCobReader
 {
-    /// <summary>Hours of boluses and temp basals read: longer than any DIA.</summary>
-    const int InsulinLookbackHours = 8;
-
     /// <summary>Hours of carb intakes read.</summary>
     const int CarbLookbackHours = 6;
 
     /// <summary>
-    /// The treatments that can still be on board at <paramref name="at"/>: those dated in the
-    /// look-back before it, and none after it.
+    /// The treatments that can still be on board at <paramref name="at"/>: boluses dated in the
+    /// look-back before it, temp basals that began early enough to still be running in it, and none
+    /// after it.
     /// </summary>
     Task<IobCobInputs> ReadInputsAsync(long at, CancellationToken ct = default);
 

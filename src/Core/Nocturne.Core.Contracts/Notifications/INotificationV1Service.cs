@@ -51,12 +51,6 @@ public interface INotificationV1Service
     );
 
     /// <summary>
-    /// Cleans up old admin notifications (older than 12 hours unless persistent)
-    /// Implements the legacy adminnotifies.clean() functionality
-    /// </summary>
-    Task CleanAdminNotificationsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Clears all admin notifications
     /// Implements the legacy adminnotifies.cleanAll() functionality
     /// </summary>
@@ -68,19 +62,7 @@ public interface INotificationV1Service
     /// </summary>
     /// <param name="level">Alarm level</param>
     /// <param name="group">Alarm group</param>
-    void RegisterPushoverReceipt(
-        string receipt,
-        int level,
-        string group,
-        string title,
-        string message
-    );
-
-    /// <summary>
-    /// Cleans up expired Pushover receipts (older than 24 hours)
-    /// Pushover receipts expire after 24 hours, so we can safely remove them
-    /// </summary>
-    void CleanExpiredPushoverReceipts();
+    void RegisterPushoverReceipt(string receipt, int level, string group);
 
     /// <summary>
     /// Gets the count of active Pushover receipts for monitoring/debugging

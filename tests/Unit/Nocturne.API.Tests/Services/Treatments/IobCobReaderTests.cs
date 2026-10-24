@@ -1,8 +1,10 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Treatments;
 using Nocturne.API.Tests.Infrastructure;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
@@ -20,6 +22,7 @@ public class IobCobReaderTests
     private readonly Mock<ITempBasalRepository> _tempBasals = new();
     private readonly Mock<ICarbIntakeRepository> _carbs = new();
     private readonly List<Bolus> _storedBoluses = [];
+    private readonly List<TempBasal> _storedTempBasals = [];
     private readonly List<CarbIntake> _storedCarbs = [];
 
     public IobCobReaderTests()
@@ -29,13 +32,23 @@ public class IobCobReaderTests
             .ReturnsAsync(() => _storedBoluses.ToList());
         _tempBasals
             .Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Enumerable.Empty<TempBasal>());
+            .ReturnsAsync((DateTime? from, DateTime? to, string? _, string? _, int limit, int _, bool descending, CancellationToken _) =>
+                (descending
+                    ? _storedTempBasals.OrderByDescending(t => t.StartTimestamp)
+                    : _storedTempBasals.OrderBy(t => t.StartTimestamp))
+                .Where(t => t.StartTimestamp >= from && t.StartTimestamp <= to)
+                .Take(limit)
+                .ToList()
+                .AsEnumerable());
         _carbs
             .Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _storedCarbs.ToList());
     }
 
-    private IobCobReader NewReader(string? partition = "full", ICobCalculator? cobCalculator = null)
+    private IobCobReader NewReader(string? partition = "full", ICobCalculator? cobCalculator = null) =>
+        NewReader(out _, partition, cobCalculator);
+
+    private IobCobReader NewReader(out IobCalculator iob, string? partition = "full", ICobCalculator? cobCalculator = null)
     {
         var aps = new Mock<IApsSnapshotRepository>();
         aps.Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -51,7 +64,6 @@ public class IobCobReaderTests
             .ReturnsAsync(Enumerable.Empty<PumpSnapshot>());
 
         var therapy = new Mock<ITherapySettingsResolver>();
-        therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
         therapy.Setup(t => t.GetDIAAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(4.0);
         therapy.Setup(t => t.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(30.0);
         var sensitivity = new Mock<ISensitivityResolver>();
@@ -60,8 +72,9 @@ public class IobCobReaderTests
         carbRatio.Setup(c => c.GetCarbRatioAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(10.0);
         var basal = new Mock<IBasalRateResolver>();
         basal.Setup(b => b.GetBasalRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(1.0);
+        basal.Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>())).ReturnsAsync((long _) => 1.0);
 
-        var iob = new IobCalculator(therapy.Object, sensitivity.Object, basal.Object, aps.Object, pump.Object);
+        iob = new IobCalculator(therapy.Object, sensitivity.Object, basal.Object, aps.Object, pump.Object);
         var cob = new CobCalculator(
             NullLogger<CobCalculator>.Instance, iob, sensitivity.Object, carbRatio.Object, therapy.Object, aps.Object);
 
@@ -149,15 +162,63 @@ public class IobCobReaderTests
 
         await NewReader().ReadInputsAsync(at);
 
-        var insulinFrom = atUtc.AddHours(-IIobCobReader.InsulinLookbackHours);
+        var insulinFrom = atUtc.AddMilliseconds(-DailyProfileCalculator.ActingMs);
+        var tempFrom = atUtc.AddHours(-32);
         _boluses.Verify(r => r.GetAsync(
             insulinFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<bool>(),
             It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
         _tempBasals.Verify(r => r.GetAsync(
-            insulinFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()), Times.Once);
+            tempFrom, atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()), Times.Once);
         _carbs.Verify(r => r.GetAsync(
             atUtc.AddHours(-IIobCobReader.CarbLookbackHours), atUtc, null, null, It.IsAny<int>(), 0, false, It.IsAny<bool>(),
             It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ASuspendRunningForTenHours_GivesTheIobTheChartsNewestTickGives()
+    {
+        var at = NowMills;
+        var suspendStart = DateTimeOffset.FromUnixTimeMilliseconds(at).UtcDateTime.AddHours(-10);
+        var suspend = new TempBasal { StartTimestamp = suspendStart, Rate = 0, ScheduledRate = 1.0 };
+        _storedTempBasals.Add(suspend);
+
+        var read = await NewReader(out var iobCalculator).ReadTotalAsync(at, live: false);
+
+        var snapshot = new TherapySnapshot(
+            dia: 4.0, peakMinutes: 75, carbsPerHour: 30.0, timezone: null, ccpPercentage: null, ccpTimeshiftMs: 0,
+            sensitivityEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = 50.0 }],
+            carbRatioEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = 10.0 }],
+            basalEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = 1.0 }]);
+        var timeline = new TherapyTimeline([new TherapySegment(at - 24L * 60 * 60 * 1000, at + 1, snapshot)]);
+        var chartTick = IobCobSeries.Build(
+            iobCalculator, Mock.Of<ICobCalculator>(), [], [], [suspend], timeline, null, at, at, at, 5 * 60 * 1000).Single();
+
+        chartTick.Iob.Should().BeLessThan(0);
+        read.Iob.Iob.Should().BeApproximately(chartTick.Iob, 0.001);
+    }
+
+    [Fact]
+    public async Task MoreThanAThousandTempsInTheWindow_StillReadsTheNewest()
+    {
+        var at = NowMills;
+        var atUtc = DateTimeOffset.FromUnixTimeMilliseconds(at).UtcDateTime;
+        for (var i = 0; i < 1200; i++)
+        {
+            _storedTempBasals.Add(new TempBasal
+            {
+                StartTimestamp = atUtc.AddMinutes(-30 - i),
+                EndTimestamp = atUtc.AddMinutes(-29 - i),
+                Rate = 0,
+                ScheduledRate = 1.0,
+            });
+        }
+        var newest = new TempBasal { StartTimestamp = atUtc.AddMinutes(-10), Rate = 0, ScheduledRate = 1.0 };
+        _storedTempBasals.Add(newest);
+
+        var inputs = await NewReader().ReadInputsAsync(at);
+
+        inputs.TempBasals.Should().HaveCount(1201);
+        inputs.TempBasals.Should().Contain(newest);
     }
 
     [Fact]
