@@ -137,6 +137,13 @@
         />
       </div>
       <div class="flex items-center justify-between">
+        <Label>Show firing alerts</Label>
+        <Checkbox
+          checked={settings.showAlerts ?? false}
+          onCheckedChange={(v: boolean) => updateSetting("showAlerts", !!v)}
+        />
+      </div>
+      <div class="flex items-center justify-between">
         <Label>Screensaver mode (bouncing)</Label>
         <Checkbox
           checked={settings.screensaverMode ?? false}

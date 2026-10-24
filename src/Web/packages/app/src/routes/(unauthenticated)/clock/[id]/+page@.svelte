@@ -13,6 +13,7 @@
   import ClockIcon from "@lucide/svelte/icons/clock";
   import Loader2 from "@lucide/svelte/icons/loader-circle";
   import ClockFaceRenderer from "$lib/components/clock/ClockFaceRenderer.svelte";
+  import ClockAlertBand from "$lib/components/clock/ClockAlertBand.svelte";
   import { formatClockTime } from "$lib/components/clock/clock-time";
   import {
     isClockReadingStale,
@@ -98,6 +99,11 @@
 
   // Show time based on configuration
   const showTime = $derived(clockConfig?.settings?.alwaysShowTime || isStale);
+
+  const showAlerts = $derived(clockConfig?.settings?.showAlerts ?? false);
+  $effect(() => {
+    clockStore.watchAlerts(showAlerts);
+  });
 </script>
 
 <svelte:head>
@@ -163,6 +169,8 @@
     loadTrackerDefinitions={false}
     class="fixed inset-0 h-screen w-screen transition-colors duration-500"
   />
+
+  <ClockAlertBand alerts={clockStore.alerts} now={currentTime.getTime()} />
 
   {#if !(clockConfig.settings?.screensaverMode ?? false)}
     <!-- Show time if configured or stale -->

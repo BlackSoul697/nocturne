@@ -207,6 +207,28 @@ public static class ServiceRegistrationExtensions
         context.Request.Host.Host.ToLowerInvariant();
 
     /// <summary>
+    /// Rate-limiting policy for the anonymous alert reads and receipts of a no-account viewer: a
+    /// clock face's alerts, and the "seen" a share, guest or clock records.
+    /// </summary>
+    public const string NoAccountAlertsRateLimitPolicy = "no-account-alerts";
+
+    /// <summary>
+    /// Partition key for <see cref="NoAccountAlertsRateLimitPolicy"/>: the request host, lowered, and
+    /// the caller's credential when it has one, else the clock face in the route. Not the client
+    /// address, which the caller controls through X-Forwarded-For.
+    /// </summary>
+    internal static string NoAccountAlertsPartitionKey(HttpContext context)
+    {
+        var host = context.Request.Host.Host.ToLowerInvariant();
+        var auth = context.GetAuthContext();
+        var who = auth?.TokenId?.ToString()
+            ?? auth?.SubjectId?.ToString()
+            ?? context.Request.RouteValues["id"]?.ToString()
+            ?? "anonymous";
+        return $"{host}|{who}";
+    }
+
+    /// <summary>
     /// Rate-limiting policy for the per-session translation draft store.
     /// </summary>
     public const string TranslationDraftsRateLimitPolicy = "translation-drafts";
@@ -567,6 +589,22 @@ public static class ServiceRegistrationExtensions
                             PermitLimit = 60,
                             Window = TimeSpan.FromMinutes(1),
                             SegmentsPerWindow = 6,
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            // A clock polls its alerts every few seconds from each screen it is open on, and a
+            // receipt is one press per alarm; 120 a minute per host and caller clears both.
+            options.AddPolicy(
+                NoAccountAlertsRateLimitPolicy,
+                context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: NoAccountAlertsPartitionKey(context),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 120,
+                            Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0,
                         }
                     )
