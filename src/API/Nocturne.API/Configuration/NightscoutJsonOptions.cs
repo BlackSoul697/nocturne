@@ -27,7 +27,7 @@ public static class NightscoutJsonOptions
             WriteIndented = false,
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
-                Modifiers = { IgnoredBasePropertyModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, HideIdBesideUnderscoreId, OmitIndefiniteDuration }
+                Modifiers = { IgnoredBasePropertyModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, HideIdBesideUnderscoreId, OmitIndefiniteDuration, ServeFoodFlagsAsStrings }
             }
         };
     }
@@ -67,6 +67,23 @@ public static class NightscoutJsonOptions
     }
 
     /// <summary>
+    /// Modifier that serves <see cref="Food.Hidden"/> and <see cref="Food.HideAfterUse"/> as the strings
+    /// <c>"true"</c> and <c>"false"</c>, always present. Nightscout's food editor posts form-encoded, so it
+    /// stores and echoes strings, and its UI tests <c>hidden === "false"</c>.
+    /// </summary>
+    public static void ServeFoodFlagsAsStrings(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Kind != JsonTypeInfoKind.Object || typeInfo.Type != typeof(Food))
+            return;
+
+        foreach (var property in typeInfo.Properties.Where(p => p.Name is "hidden" or "hideafteruse"))
+        {
+            property.CustomConverter = new StringBooleanJsonConverter();
+            property.ShouldSerialize = (_, _) => true;
+        }
+    }
+
+    /// <summary>
     /// Modifier that leaves <c>duration</c> out of a treatment with <c>durationType: "indefinite"</c> and
     /// no duration. Loop uploads an open-ended override that way and Nightscout stores it as sent;
     /// NightscoutKit reads any numeric <c>duration</c>, 0 included, as a finite override, and
@@ -83,5 +100,11 @@ public static class NightscoutJsonOptions
 
         duration.ShouldSerialize = (treatment, value) =>
             !(((Treatment)treatment).DurationType == "indefinite" && value is null or 0.0);
+    }
+
+    private sealed class StringBooleanJsonConverter : FlexibleNonNullableBooleanJsonConverter
+    {
+        public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(value ? "true" : "false");
     }
 }
