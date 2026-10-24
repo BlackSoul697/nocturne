@@ -14,6 +14,7 @@ using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V4.Monitoring;
@@ -38,6 +39,8 @@ public class AlertRulesControllerDeviceActionTests
 
         return new AlertRulesController(
             factory,
+            new AlertRepository(factory),
+            MockTenantAccessor.Create(Tenant).Object,
             Mock.Of<IAlertReferenceService>(),
             Mock.Of<IAlertDeliveryService>(),
             Mock.Of<IRuleScopeClassifier>(),

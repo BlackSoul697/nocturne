@@ -22,6 +22,7 @@ using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Sleep;
@@ -567,7 +568,8 @@ public class V4ReadLimitClampTests
             repo.Object,
             Mock.Of<ISignalRBroadcastService>(),
             Mock.Of<ITrackerAlertRuleSyncService>(),
-            Mock.Of<INocturneDbContextFactory>(),
+            Mock.Of<IAlertRepository>(),
+            Mock.Of<ITenantAccessor>(),
             Mock.Of<IAlertAcknowledgementService>(),
             Mock.Of<ILogger<TrackersController>>())
         {
