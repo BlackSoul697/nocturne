@@ -23,4 +23,18 @@ public class AlarmHubEventsTests
     {
         AlarmHubEvents.Kinds.Should().HaveCount(6);
     }
+
+    [Theory]
+    [InlineData("alarm", 1, false)]
+    [InlineData("alarm", 2, true)]
+    [InlineData("alarm", 3, true)]
+    [InlineData("engine_alarm", 1, false)]
+    [InlineData("engine_alarm", 2, true)]
+    [InlineData("engine_urgent_alarm", 1, true)]
+    [InlineData("urgent_alarm", 0, true)]
+    [InlineData("engine_urgent_alarm", 0, true)]
+    public void An_alarm_is_urgent_by_its_event_or_by_its_level(string eventName, int level, bool urgent)
+    {
+        AlarmHubEvents.Kinds[eventName].IsUrgent(level).Should().Be(urgent);
+    }
 }

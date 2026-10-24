@@ -1,7 +1,11 @@
 namespace Nocturne.Widget.Contracts;
 
 /// <summary>What an AlarmHub event means to a client: raise it (urgent or not) or clear it.</summary>
-public readonly record struct AlarmEventKind(bool Urgent, bool Cleared);
+public readonly record struct AlarmEventKind(bool Urgent, bool Cleared)
+{
+    /// <summary>Whether an alarm of this kind carrying <paramref name="level"/> is urgent.</summary>
+    public bool IsUrgent(int level) => Urgent || level >= AlarmHubEvents.UrgentLevel;
+}
 
 /// <summary>
 /// The AlarmHub events a client listens for. The engine names mirror <c>EngineAlarmEvents</c> on the
@@ -9,6 +13,9 @@ public readonly record struct AlarmEventKind(bool Urgent, bool Cleared);
 /// </summary>
 public static class AlarmHubEvents
 {
+    /// <summary>The notification level from which an alarm is urgent whatever its event name says.</summary>
+    public const int UrgentLevel = 2;
+
     /// <summary>Each listened-for event name and its kind.</summary>
     public static IReadOnlyDictionary<string, AlarmEventKind> Kinds { get; } =
         new Dictionary<string, AlarmEventKind>
