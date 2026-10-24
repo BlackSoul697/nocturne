@@ -1031,8 +1031,9 @@ public class DataSourceService : IDataSourceService
     ///   which stamps the <c>deleted_by_user</c> flag the soft-delete dedup reads to block re-import
     ///   (<see cref="SoftDeleteDedupExtensions"/>).</item>
     /// <item>Heart rate, step counts and body weights are soft-deletable but not auditable: the same
-    ///   path soft-deletes and stamps them and records the bulk summary. Their create path does not
-    ///   read the stamp, so it does not block their re-import.</item>
+    ///   path soft-deletes and stamps them and records the bulk summary. Their create path reads the
+    ///   stamp on a row holding the record's sync key or primary key, so it blocks their re-import the
+    ///   same way; once released, a record keyed by its primary key revives its row in place.</item>
     /// </list>
     /// </remarks>
     private async Task<Dictionary<string, long>> DeleteAllSourceDataAsync(

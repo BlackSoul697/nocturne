@@ -102,9 +102,9 @@ public class GlookoBodyWeightMapper(string connectorSource, GlookoTimeMapper tim
 
 /// <summary>
 ///     Shared deterministic-id derivation for the connector's health/biometric records (BodyWeight,
-///     StepCount, HeartRate). These domain models have no string sync-identifier field, and the entity
-///     <c>OriginalId</c> column only accepts 24-char Mongo ObjectIds — so the upsert key must be a real GUID
-///     carried in the model's <c>Id</c>, which round-trips through the entity mapper to the primary key.
+///     StepCount, HeartRate). The upsert key is a real GUID carried in the model's <c>Id</c>, which
+///     round-trips through the entity mapper to the primary key, so rows stored before a sync identifier
+///     existed keep matching. The entity <c>OriginalId</c> column only accepts 24-char Mongo ObjectIds.
 /// </summary>
 internal static class GlookoHealthIds
 {
