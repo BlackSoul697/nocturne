@@ -144,6 +144,26 @@ public class TrackerTriggerServiceTests
         new() { Id = Guid.NewGuid(), Timestamp = timestamp, EventType = eventType, Notes = notes };
 
     [Fact]
+    public async Task AStoredTriggerOutsideTheTriggerableList_DoesNotAdvanceTheTracker()
+    {
+        GivenDefinition(triggerEventTypes: ["Pump Suspend", "Sensor Start"]);
+
+        await _sut.OnCreatedAsync([Event(new DateTime(2026, 9, 11, 10, 43, 30, DateTimeKind.Utc), DeviceEventType.PumpSuspend)]);
+
+        _started.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ATriggerableStoredTrigger_StillAdvancesAlongsideAnIgnoredOne()
+    {
+        GivenDefinition(triggerEventTypes: ["Pump Suspend", "Sensor Start"]);
+
+        await _sut.OnCreatedAsync([Event(new DateTime(2026, 9, 11, 10, 43, 30, DateTimeKind.Utc), DeviceEventType.SensorStart)]);
+
+        _started.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task SiteChange_StartsAnInstance_WhenNoneIsRunning()
     {
         var definition = GivenDefinition();

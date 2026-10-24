@@ -323,7 +323,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
         await _broadcast.BroadcastTrackerDefinitionUpdateAsync(created.Id);
 
         _logger.LogInformation(
-            "Created tracker definition {Id} for user {UserId}",
+            "Tracker definition {Id} created by {CreatedBy}",
             created.Id,
             userId
         );
@@ -742,7 +742,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
 
         var created = await _repository.CreatePresetAsync(entity, HttpContext.RequestAborted);
 
-        _logger.LogInformation("Created tracker preset {Id} for user {UserId}", created.Id, userId);
+        _logger.LogInformation("Tracker preset {Id} created by {CreatedBy}", created.Id, userId);
 
         return Created(
             $"/api/v4/trackers/presets/{created.Id}",
@@ -821,7 +821,6 @@ public class NotificationThresholdDto
     public int Hours { get; set; }
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
-
 
     /// <summary>
     /// The managed alert rule that delivers this threshold. Null until the sync service
@@ -1060,7 +1059,6 @@ public class CreateNotificationThresholdRequest
     public int Hours { get; set; }
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
-
 }
 
 public class StartTrackerInstanceRequest

@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    [Migration("20261024225356_MakeTrackersTenantData")]
-    partial class MakeTrackersTenantData
+    [Migration("20261024231417_RemoveTrackerVisibilityAndDeliveryColumns")]
+    partial class RemoveTrackerVisibilityAndDeliveryColumns
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

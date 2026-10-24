@@ -58,9 +58,7 @@ public class TrackerIntegrationTests : ApiIntegrationTestBase
             {
                 urgency = "Warn",
                 hours = 648,
-                pushEnabled = true,
                 displayOrder = 0,
-                respectQuietHours = true
             }
         }
     };

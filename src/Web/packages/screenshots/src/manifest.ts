@@ -72,7 +72,6 @@ async function sensorTrackerWithThresholds({ fetch }: ArrangeContext): Promise<R
 			lifespanHours: 240,
 			triggerEventTypes: ['Sensor Start'],
 			dashboardVisibility: 'Always',
-			visibility: 'Private',
 			notificationThresholds: [
 				{ urgency: 'Info', hours: -24, description: 'Sensor ends tomorrow', displayOrder: 0 },
 				{ urgency: 'Warn', hours: -2, description: 'Change the sensor soon', displayOrder: 1 },

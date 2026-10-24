@@ -5,7 +5,7 @@
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class MakeTrackersTenantData : Migration
+    public partial class RemoveTrackerVisibilityAndDeliveryColumns : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -118,7 +118,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 table: "tracker_notification_thresholds",
                 type: "boolean",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "vibrate_enabled",
@@ -132,7 +132,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 table: "tracker_definitions",
                 type: "integer",
                 nullable: false,
-                defaultValue: 0);
+                defaultValue: 1);
 
             migrationBuilder.CreateIndex(
                 name: "ix_tracker_presets_user_id",

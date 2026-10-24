@@ -265,9 +265,9 @@ public class TrackerTriggerService : IDeviceEventReactor
     }
 
     /// <summary>
-    /// Reads a definition's trigger list, which stores Nightscout event-type names, and resolves
-    /// them to the typed device event types they correspond to. Entries naming something that is not a
-    /// device event (a bolus type, say) map to nothing and are dropped.
+    /// Reads a definition's trigger list, which stores Nightscout event-type names, and resolves the
+    /// ones in <see cref="TriggerableEventTypes"/> (through <see cref="CanonicalTrigger"/>, as the
+    /// definition DTO does) to their device event types. Any other stored name is ignored.
     /// </summary>
     private static HashSet<DeviceEventType> ParseTriggerEventTypes(string? json)
     {
@@ -288,6 +288,8 @@ public class TrackerTriggerService : IDeviceEventReactor
             return [];
 
         return [.. eventTypes
+            .Select(CanonicalTrigger)
+            .OfType<string>()
             .Select(name => TreatmentTypes.DeviceEventTypeMap.TryGetValue(name, out var parsed)
                 ? parsed
                 : (DeviceEventType?)null)

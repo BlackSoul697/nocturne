@@ -55,15 +55,6 @@ public class TrackerNotificationThresholdEntity : ITenantScoped
     [Column("display_order")]
     public int DisplayOrder { get; set; }
 
-    #region Alert Configuration
-
-
-
-
-
-
-    #endregion
-
     /// <summary>
     /// The managed alert rule synthesised from this threshold (condition
     /// <c>tracker_age</c>, delivered through the alert engine's channel pipeline).
