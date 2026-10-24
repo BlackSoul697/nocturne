@@ -9,6 +9,7 @@
  * Tracking is off unless VITE_PLAUSIBLE_DOMAIN is set at build time, so a self-hosted or
  * local build of the portal makes no request to anything.
  */
+import videos from '@nocturne/video/manifest.json';
 import { PLAUSIBLE_DOMAIN, PLAUSIBLE_HOST } from '$lib/config';
 
 export const PLAUSIBLE_ENABLED = PLAUSIBLE_DOMAIN !== '';
@@ -26,6 +27,7 @@ export const DOCS_SECTION_IDS = [
   'sharing',
   'food',
   'trackers',
+  'reports',
   'alerts',
   'bots',
   'data-sources',
@@ -36,6 +38,9 @@ export const DOCS_SECTION_IDS = [
   'sdks',
   'api-reference',
 ] as const;
+
+/** Docs videos, as reported by `Video Play` and `Video Complete`: the @nocturne/video manifest ids. */
+export const VIDEO_IDS = Object.keys(videos);
 
 /**
  * Off-site destinations worth counting, never a raw href. Links inside a /get-involved lane
@@ -74,6 +79,10 @@ const ALLOWED_PROPS = {
   'Docs Nav': { section: DOCS_SECTION_IDS },
   /** How far down a page the reader actually got. Fires once per milestone per pageview. */
   'Docs Scroll': { depth: ['25', '50', '75', '100'] },
+  /** A docs video started. Once per video per pageview, so plays over completions is a rate. */
+  'Video Play': { video: VIDEO_IDS },
+  /** A docs video played to its last frame. Once per video per pageview. */
+  'Video Complete': { video: VIDEO_IDS },
 
   // --- Everything else -------------------------------------------------------------
   /** A click off the site. Not fired by anything that already reports its own event. */
