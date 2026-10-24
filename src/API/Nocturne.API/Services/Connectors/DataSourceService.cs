@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Nocturne.API.Services.Demo;
 using Nocturne.API.Services.ProfileActivations;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
 using Nocturne.Connectors.Core.Utilities;
@@ -43,6 +44,7 @@ public class DataSourceService : IDataSourceService
     private readonly IAuditContext _auditContext;
     private readonly IConnectorConfigurationService _connectorConfiguration;
     private readonly ProfileActivationWriter _profileActivationWriter;
+    private readonly IEnumerable<IConnectorPurgeGuard> _purgeGuards;
     private readonly ILogger<DataSourceService> _logger;
 
     public DataSourceService(
@@ -53,6 +55,7 @@ public class DataSourceService : IDataSourceService
         IAuditContext auditContext,
         IConnectorConfigurationService connectorConfiguration,
         ProfileActivationWriter profileActivationWriter,
+        IEnumerable<IConnectorPurgeGuard> purgeGuards,
         ILogger<DataSourceService> logger
     )
     {
@@ -63,6 +66,7 @@ public class DataSourceService : IDataSourceService
         _calibrations = calibrations;
         _auditContext = auditContext;
         _connectorConfiguration = connectorConfiguration;
+        _purgeGuards = purgeGuards;
         _logger = logger;
     }
 
@@ -919,21 +923,40 @@ public class DataSourceService : IDataSourceService
                 deviceId
             );
 
-            var reEnable = allowReimport
-                && (await _connectorConfiguration.GetConfigurationAsync(connectorId, cancellationToken))?.IsActive == true;
+            Dictionary<string, long> deletedCounts;
+            var guard = _purgeGuards.FirstOrDefault(g =>
+                g.ConnectorName.Equals(metadata.ConnectorName, StringComparison.OrdinalIgnoreCase));
+            if (guard is not null)
+            {
+                await using var paused = await guard.PauseSyncsAsync(cancellationToken);
+                if (paused is null)
+                {
+                    return DataSourceDeleteResult.Failed(
+                        connectorId,
+                        DataSourceDeleteError.SyncRunning,
+                        $"A sync of connector {connectorId} is running");
+                }
 
-            // Disable the connector before purging so a scheduled or in-flight sync cannot
-            // re-import the data we are about to delete.
-            await _connectorConfiguration.SetActiveAsync(
-                connectorId, isActive: false, _auditContext.SubjectName, cancellationToken);
+                deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
+            }
+            else
+            {
+                var reEnable = allowReimport
+                    && (await _connectorConfiguration.GetConfigurationAsync(connectorId, cancellationToken))?.IsActive == true;
 
-            var deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
-
-            // With nothing of the source left stored, the connector's next sync imports its
-            // history from the start.
-            if (reEnable)
+                // Disable the connector before purging so a scheduled or in-flight sync cannot
+                // re-import the data we are about to delete.
                 await _connectorConfiguration.SetActiveAsync(
-                    connectorId, isActive: true, _auditContext.SubjectName, cancellationToken);
+                    connectorId, isActive: false, _auditContext.SubjectName, cancellationToken);
+
+                deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
+
+                // With nothing of the source left stored, the connector's next sync imports its
+                // history from the start.
+                if (reEnable)
+                    await _connectorConfiguration.SetActiveAsync(
+                        connectorId, isActive: true, _auditContext.SubjectName, cancellationToken);
+            }
 
             _logger.LogInformation(
                 "Deleted data for connector {ConnectorId} (device {DeviceId}): {DeletedCounts}",

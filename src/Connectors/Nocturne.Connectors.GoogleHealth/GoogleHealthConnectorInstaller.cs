@@ -42,6 +42,7 @@ public sealed class GoogleHealthConnectorInstaller : IConnectorInstaller
             .ConfigureConnectorClient(null, timeout: RequestTimeout);
         services.AddConnectorTokenProvider<GoogleHealthAuthTokenProvider>();
         services.AddScoped<GoogleHealthSessionStore>();
+        services.AddScoped<IConnectorPurgeGuard, GoogleHealthPurgeGuard>();
 
         services.AddHttpClient<GoogleHealthConnectorService>()
             .ConfigureConnectorClient(null, timeout: RequestTimeout);
