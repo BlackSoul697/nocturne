@@ -2228,7 +2228,7 @@ public class AidDetectionContext
     /// <summary>APS loop cycles within the segment window (for OS AID strategies)</summary>
     public IReadOnlyList<V4.ApsLoopCycle> LoopCycles { get; set; } = [];
 
-    /// <summary>Temp basals within the segment window (for TBR-based strategies)</summary>
+    /// <summary>Every temp basal read for the report, not only those in the segment (for TBR-based strategies)</summary>
     public IReadOnlyList<V4.TempBasal> TempBasals { get; set; } = [];
 }
 
