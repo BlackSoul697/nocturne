@@ -1325,6 +1325,7 @@ public partial class StatisticsService : IStatisticsService
                 Episodes = new TimeInRangeEpisodes(),
                 RangeStats = new TimeInRangeDetailedStats(),
                 AverageDailyMinutes = new AverageDailyMinutes(),
+                AverageDailyEpisodes = new AverageDailyEpisodes(),
             };
         }
 
@@ -1388,6 +1389,7 @@ public partial class StatisticsService : IStatisticsService
         };
 
         var episodes = CalculateEpisodes(entriesList, thresholds);
+        var coveredDays = instantMinutes.Sum() / 1440.0;
 
         // Calculate per-range detailed statistics
         var rangeZones = RangeStatZones(thresholds);
@@ -1422,22 +1424,43 @@ public partial class StatisticsService : IStatisticsService
             Durations = durations,
             Episodes = episodes,
             RangeStats = rangeStats,
-            AverageDailyMinutes = AverageDailyMinutesFrom(percentages),
+            AverageDailyMinutes = AverageDailyMinutesFrom(durations, coveredDays),
+            AverageDailyEpisodes = AverageDailyEpisodesFrom(episodes, coveredDays),
         };
     }
 
-    /// <summary>
-    /// The average minutes per day in each zone, from the percentages rather than the recorded
-    /// durations. Percentages sum to 100, so the three zones account for a whole day even when the
-    /// data has gaps; <see cref="TimeInRangeDurations"/> would not.
-    /// </summary>
-    private static AverageDailyMinutes AverageDailyMinutesFrom(TimeInRangePercentages percentages) =>
-        new()
+    private static AverageDailyEpisodes AverageDailyEpisodesFrom(
+        TimeInRangeEpisodes episodes,
+        double coveredDays
+    )
+    {
+        double PerDay(int count) => coveredDays > 0 ? count / coveredDays : 0;
+
+        return new AverageDailyEpisodes
         {
-            Target = percentages.Target / 100.0 * 1440.0,
-            Low = (percentages.VeryLow + percentages.Low) / 100.0 * 1440.0,
-            High = (percentages.High + percentages.VeryHigh) / 100.0 * 1440.0,
+            VeryLow = PerDay(episodes.VeryLow),
+            Low = PerDay(episodes.Low),
+            High = PerDay(episodes.High),
+            VeryHigh = PerDay(episodes.VeryHigh),
+            AboveRange = PerDay(episodes.AboveRange),
+            BelowRange = PerDay(episodes.BelowRange),
         };
+    }
+
+    private static AverageDailyMinutes AverageDailyMinutesFrom(
+        TimeInRangeDurations durations,
+        double coveredDays
+    )
+    {
+        double PerDay(double minutes) => coveredDays > 0 ? minutes / coveredDays : 0;
+
+        return new AverageDailyMinutes
+        {
+            Target = PerDay(durations.Target),
+            Low = PerDay(durations.BelowRange),
+            High = PerDay(durations.AboveRange),
+        };
+    }
 
     /// <inheritdoc/>
     public PersonalRangeTimeInRange? CalculatePersonalRangeTime(

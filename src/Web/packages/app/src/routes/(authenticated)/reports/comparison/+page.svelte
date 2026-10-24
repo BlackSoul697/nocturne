@@ -13,6 +13,7 @@
   import { setReportPrintMeta } from "$lib/components/reports/print/report-print.svelte";
   import { getReportsAnalysis, type DateRangeInput } from "$api/reports.remote";
   import { bg, bgDelta, bgLabel, formatShortDate } from "$lib/utils/formatting";
+  import { formatMinutesDuration } from "$lib/utils/duration";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { parseDate } from "@internationalized/date";
   import { untrack } from "svelte";
@@ -216,15 +217,24 @@
     | "cv"
     | "gri"
     | "mean"
-    | "hyperHours"
-    | "hyperEvents"
-    | "hypoHours"
-    | "hypoEvents";
+    | "hyperMinutesPerDay"
+    | "hyperEventsPerDay"
+    | "hypoMinutesPerDay"
+    | "hypoEventsPerDay";
 
-  function signed(value: number, digits = 1): string {
-    if (Math.abs(value) < (digits === 0 ? 0.5 : 0.05)) return "±0";
+  function signed(
+    value: number,
+    digits = 1,
+    flatBelow = digits === 0 ? 0.5 : 0.05
+  ): string {
+    if (Math.abs(value) < flatBelow) return "±0";
     const sign = value > 0 ? "+" : "−";
     return `${sign}${Math.abs(value).toFixed(digits)}`;
+  }
+
+  function signedDuration(minutes: number): string {
+    if (Math.abs(minutes) < 0.5) return "±0m";
+    return `${minutes > 0 ? "+" : "−"}${formatMinutesDuration(Math.abs(minutes))}`;
   }
 
   const metricDefs: Record<
@@ -260,25 +270,25 @@
       format: (v) => `${bg(v)} ${bgLabel()}`,
       formatDelta: (d) => `${bgDelta(d)} ${bgLabel()}`,
     },
-    hyperHours: {
-      label: "Hyper Duration",
-      format: (v) => `${v.toFixed(1)} h`,
-      formatDelta: (d) => `${signed(d)} h`,
+    hyperMinutesPerDay: {
+      label: "Hyper Time / Day",
+      format: formatMinutesDuration,
+      formatDelta: signedDuration,
     },
-    hyperEvents: {
-      label: "Hyper Events",
-      format: (v) => v.toFixed(0),
-      formatDelta: (d) => signed(d, 0),
+    hyperEventsPerDay: {
+      label: "Hyper Events / Day",
+      format: (v) => v.toFixed(2),
+      formatDelta: (d) => signed(d, 2, 0.005),
     },
-    hypoHours: {
-      label: "Hypo Duration",
-      format: (v) => `${v.toFixed(1)} h`,
-      formatDelta: (d) => `${signed(d)} h`,
+    hypoMinutesPerDay: {
+      label: "Hypo Time / Day",
+      format: formatMinutesDuration,
+      formatDelta: signedDuration,
     },
-    hypoEvents: {
-      label: "Hypo Events",
-      format: (v) => v.toFixed(0),
-      formatDelta: (d) => signed(d, 0),
+    hypoEventsPerDay: {
+      label: "Hypo Events / Day",
+      format: (v) => v.toFixed(2),
+      formatDelta: (d) => signed(d, 2, 0.005),
     },
   };
 
@@ -308,14 +318,14 @@
         return a.gri?.score ?? null;
       case "mean":
         return stats?.mean ?? null;
-      case "hyperHours":
-        return tir?.durations?.aboveRange != null ? tir.durations.aboveRange / 60 : null;
-      case "hyperEvents":
-        return tir?.episodes?.aboveRange ?? null;
-      case "hypoHours":
-        return tir?.durations?.belowRange != null ? tir.durations.belowRange / 60 : null;
-      case "hypoEvents":
-        return tir?.episodes?.belowRange ?? null;
+      case "hyperMinutesPerDay":
+        return tir?.averageDailyMinutes?.high ?? null;
+      case "hyperEventsPerDay":
+        return tir?.averageDailyEpisodes?.aboveRange ?? null;
+      case "hypoMinutesPerDay":
+        return tir?.averageDailyMinutes?.low ?? null;
+      case "hypoEventsPerDay":
+        return tir?.averageDailyEpisodes?.belowRange ?? null;
     }
     return null;
   }
@@ -326,10 +336,10 @@
     "cv",
     "gri",
     "mean",
-    "hyperHours",
-    "hyperEvents",
-    "hypoHours",
-    "hypoEvents",
+    "hyperMinutesPerDay",
+    "hyperEventsPerDay",
+    "hypoMinutesPerDay",
+    "hypoEventsPerDay",
   ];
 
   // Cap percent change at ±60 % so outliers don't blow out the bar.
@@ -378,7 +388,11 @@
       const delta = bv - av;
       const flat =
         Math.abs(delta) <
-        (key === "gri" || key === "hyperEvents" || key === "hypoEvents" ? 0.5 : 0.05);
+        (key === "gri" || key === "hyperMinutesPerDay" || key === "hypoMinutesPerDay"
+          ? 0.5
+          : key === "hyperEventsPerDay" || key === "hypoEventsPerDay"
+            ? 0.005
+            : 0.05);
 
       const magnitude = Math.min(BAR_CAP_PCT, Math.abs(percentChange(av, bv)));
       const halfWidth = (magnitude / BAR_CAP_PCT) * 50;
