@@ -241,13 +241,27 @@ describe("Google Health connector page", () => {
       .element(page.getByText("12 Google pages read for this data type"))
       .toBeVisible();
     googleHealthMocks.status.mockResolvedValue(
-      connected({ importFrom: undefined, backfillComplete: true })
+      connected({
+        importFrom: undefined,
+        backfillComplete: true,
+        backfillSyncedThrough: "2026-08-01T00:00:00Z",
+        historyDays: 30,
+      })
     );
     await expect
       .element(page.getByText("Google Health import completed.", { exact: true }))
       .toBeVisible();
     await expect.element(page.getByRole("progressbar")).not.toBeInTheDocument();
     await expect.element(page.getByLabelText("Import data from")).toHaveValue("");
+    await expect
+      .element(page.getByText("Synchronized back through 2026-08-01.", { exact: false }))
+      .toHaveTextContent("Imported history is kept.");
+    await expect
+      .element(page.getByText("a new import covers the last 30 days", { exact: false }))
+      .toBeVisible();
+    await expect
+      .element(page.getByText("last 7 days", { exact: false }))
+      .not.toBeInTheDocument();
     await page.getByRole("button", { name: "Save import settings" }).click();
     await expect.poll(() => googleHealthMocks.save.mock.calls.length).toBe(1);
     expect(googleHealthMocks.save).toHaveBeenCalledWith(

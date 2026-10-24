@@ -6,6 +6,7 @@ import {
   type GoogleHealthDataTypeStatus,
   type GoogleHealthStatus,
 } from "$lib/api";
+import { plural } from "$lib/utils/plural";
 import { isGoogleHealthErrorCode, type GoogleHealthErrorCode } from "$lib/connectors/google-health-error-codes";
 
 const errorMessages: Record<GoogleHealthErrorCode, string> = {
@@ -94,6 +95,16 @@ export type NoticeKey = keyof typeof notices;
 
 export function noticeText(key: NoticeKey): string {
   return notices[key];
+}
+
+/** What a new import covers while no start date is set. */
+export function lookbackSentence(days: number | undefined): string {
+  return days
+    ? plural(days, [
+        "While the field is empty, a new import covers the last # day.",
+        "While the field is empty, a new import covers the last # days.",
+      ])
+    : "While the field is empty, a new import covers the configured history lookback.";
 }
 
 const connectionOutcomes: Record<string, string> = {
