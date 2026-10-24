@@ -15,6 +15,7 @@
   import { formatTimeSince } from "./alertTime";
   import { severity, severityLabel } from "./severity";
   import { seenBy } from "./receipts";
+  import { conditionLabel } from "./conditionLabel.svelte";
   import { markSeenOnThisDevice, seenHere } from "./seen-here.svelte";
 
   // Reactive query: reading `.current` subscribes this component, so an
@@ -46,23 +47,6 @@
       (a) => !a.acknowledgedAt && !a.mutedByCaller && !seenHere(a, viewer)
     )
   );
-
-  function getConditionLabel(conditionType: string | undefined): string {
-    switch (conditionType) {
-      case "threshold_low":
-        return "Low Glucose";
-      case "threshold_high":
-        return "High Glucose";
-      case "rate_of_change":
-        return "Rapid Change";
-      case "signal_loss":
-        return "Signal Lost";
-      case "composite":
-        return "Composite Alert";
-      default:
-        return conditionType ?? "Alert";
-    }
-  }
 
   async function handleSeen(id: string) {
     acknowledgingId = id;
@@ -128,7 +112,7 @@
             {alert.ruleName ?? "Alert"}
           </span>
           <span class="text-sm text-muted-foreground mx-2">
-            {getConditionLabel(alert.conditionType)}
+            {conditionLabel(alert.conditionType)}
           </span>
           <span class="text-xs text-muted-foreground">
             {formatTimeSince(alert.startedAt)}
