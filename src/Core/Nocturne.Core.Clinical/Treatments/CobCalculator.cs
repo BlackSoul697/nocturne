@@ -390,7 +390,7 @@ public class CobCalculator(
             to: DateTimeOffset.FromUnixTimeMilliseconds(to).UtcDateTime,
             device: null, source: null, limit: 1, offset: 0, descending: true, ct: ct))
             .Select(s => new DeviceReading(
-                DeviceReading.MillsOf(s.Timestamp), DeviceSource.Aps, s.Iob, s.Cob,
+                s.Timestamp.ToMills(), DeviceSource.Aps, s.Iob, s.Cob,
                 Name: s.AidAlgorithm == AidAlgorithm.Loop ? "Loop" : "OpenAPS", Device: s.Device));
 
         if (new DeviceReadings(aps, []).At(time, live).Cob is not { } reading)

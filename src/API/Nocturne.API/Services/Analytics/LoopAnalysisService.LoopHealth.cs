@@ -15,7 +15,7 @@ internal sealed partial class LoopAnalysisService
     {
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            window => LoadLoopHealthAsync(window, zone, ToMills(filter.Now), ct),
+            window => LoadLoopHealthAsync(window, zone, filter.Now.ToMills(), ct),
             (loaded, window) => CalculateLoopHealth(loaded, filter, window, zone));
         return new LoopHealthResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
@@ -112,7 +112,7 @@ internal sealed partial class LoopAnalysisService
             var start = profile.StartMills;
             var end = profile.EndMills ?? to;
             var bounds = versions[profile.ProfileName]
-                .Select(v => ToMills(DateTime.SpecifyKind(v.Timestamp, DateTimeKind.Utc)))
+                .Select(v => v.Timestamp.ToMills())
                 .Where(m => m > start && m < end)
                 .Append(start)
                 .Append(end)

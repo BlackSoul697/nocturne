@@ -246,7 +246,7 @@ internal sealed partial class LoopAnalysisService(
     /// whatever it carries.
     /// </summary>
     private static List<long> SnapshotMills(IEnumerable<DateTime> storedAt) =>
-        [.. storedAt.Select(t => ToMills(DateTime.SpecifyKind(t, DateTimeKind.Utc)))];
+        [.. storedAt.Select(t => t.ToMills())];
 
     /// <summary><see cref="MaskSources"/> over <paramref name="common"/>'s spans, devices and profiles.</summary>
     private static LoopAnalysisMaskSources Sources(
@@ -310,13 +310,11 @@ internal sealed partial class LoopAnalysisService(
 
     private static DateTime ToUtc(long mills) => DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime;
 
-    private static long ToMills(DateTime utc) => new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-
     private readonly record struct Window(long From, long To)
     {
         public static Window Of(DateTime from, DateTime to) =>
             to > from
-                ? new(ToMills(from), ToMills(to))
+                ? new(from.ToMills(), to.ToMills())
                 : throw new ArgumentOutOfRangeException(nameof(to), "A Loop Analysis range must end after it starts.");
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;
