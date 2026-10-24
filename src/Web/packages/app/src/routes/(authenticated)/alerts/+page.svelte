@@ -49,7 +49,8 @@
   import DndNoticeStrip from "$lib/components/alerts/DndNoticeStrip.svelte";
   import { isDndInEffect, isDndManualActive } from "$lib/components/alerts/dnd";
   import { refreshOnReturn } from "$lib/utils/refresh-on-return.svelte";
-  import { severity, severityLabel } from "$lib/components/alerts/severity";
+  import { severity } from "$lib/components/alerts/severity";
+  import { severityLabel } from "$lib/components/alerts/severityLabel.svelte";
 
   // Every write on this page — rule toggle/delete/test-fire, acknowledge, and
   // clearing the manual mute — is gated on alerts.readwrite server-side.
@@ -81,7 +82,6 @@
     togglingRuleId = ruleId;
     try {
       await toggleRule(ruleId);
-      await rulesQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
@@ -93,7 +93,6 @@
     deletingRuleId = ruleId;
     try {
       await deleteRule(ruleId);
-      await rulesQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
@@ -126,7 +125,6 @@
         dndScheduleStart: current.dndScheduleStart,
         dndScheduleEnd: current.dndScheduleEnd,
       });
-      await dndQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
@@ -176,7 +174,7 @@
       </div>
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Alerts</h1>
-        <p class="text-sm text-muted-foreground">Rules that decide when, how, and where you're notified.</p>
+        <p class="text-sm text-muted-foreground">Rules that decide when, how, and where you are notified.</p>
       </div>
     </div>
     {#if canManageAlerts}

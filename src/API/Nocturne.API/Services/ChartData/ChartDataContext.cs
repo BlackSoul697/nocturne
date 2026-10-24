@@ -13,7 +13,7 @@ namespace Nocturne.API.Services.ChartData;
 /// <remarks>
 /// Stage ordering and responsibilities:
 /// <list type="number">
-///   <item><see cref="Stages.ProfileLoadStage"/> — populates <see cref="Timezone"/>, <see cref="Thresholds"/>, and <see cref="DefaultBasalRate"/>.</item>
+///   <item><see cref="Stages.ProfileLoadStage"/>: populates <see cref="Zone"/>, <see cref="Thresholds"/>, and <see cref="DefaultBasalRate"/>.</item>
 ///   <item><see cref="Stages.DataFetchStage"/> — populates all raw data collections.</item>
 ///   <item><see cref="Stages.IobCobComputeStage"/> — computes IOB/COB series and basal series from v4 Bolus/CarbIntake/TempBasal records, with 1-minute memory cache keyed by tenant + data fingerprint.</item>
 ///   <item><see cref="Stages.DtoMappingStage"/> — converts raw data to chart-ready DTOs (markers, spans, glucose points).</item>
@@ -42,10 +42,10 @@ public sealed record ChartDataContext
     /// </summary>
     public bool IncludeHealthSeries { get; init; } = true;
 
-    // === Profile-derived config (set by ProfileLoadStage) ===
+    // === Zone and profile-derived config (set by ProfileLoadStage) ===
 
-    /// <summary>IANA timezone string from the active profile, or null if no profile is loaded.</summary>
-    public string? Timezone { get; init; }
+    /// <summary>The tenant's local zone, or null when it has no usable one (see <see cref="Analytics.TenantClockResolver"/>).</summary>
+    public TimeZoneInfo? Zone { get; init; }
 
     /// <summary>Glucose threshold values derived from the active profile.</summary>
     public ChartThresholdsDto Thresholds { get; init; } = new();
@@ -84,6 +84,9 @@ public sealed record ChartDataContext
     /// IOB/COB the AID system reported, which the IOB/COB series prefers over its own recomputation.
     /// </summary>
     public IReadOnlyList<ApsIobCobPoint> ApsSnapshotList { get; init; } = [];
+
+    /// <summary>Pump snapshot IOB points covering the buffer window, ascending by timestamp.</summary>
+    public IReadOnlyList<PumpIobPoint> PumpIobPointList { get; init; } = [];
     public IReadOnlyList<BasalInjection> BasalInjectionList { get; init; } = [];
 
     /// <summary>The newest pump status at or before <see cref="EndTime"/>.</summary>
@@ -104,6 +107,7 @@ public sealed record ChartDataContext
 
     public List<TimeSeriesPoint> IobSeries { get; init; } = [];
     public List<TimeSeriesPoint> CobSeries { get; init; } = [];
+    public double MinIob { get; init; }
     public double MaxIob { get; init; }
     public double MaxCob { get; init; }
     public List<BasalPoint> BasalSeries { get; init; } = [];

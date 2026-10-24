@@ -6,7 +6,7 @@ import {
 	GlucoseBucket,
 	PumpModeState,
 	StateSpanCategory,
-	DayOfWeek,
+	AlertWeekday,
 	AlertComparisonOperator,
 } from "$api-clients";
 import type {
@@ -49,7 +49,7 @@ import type {
 // pinning the wire names to snake_case). Editor-only adornments live here only
 // where they don't exist on the wire — currently just `_uid`.
 
-export { TempBasalMetric, GlucoseBucket, PumpModeState, StateSpanCategory, DayOfWeek };
+export { TempBasalMetric, GlucoseBucket, PumpModeState, StateSpanCategory, AlertWeekday };
 export type {
 	ThresholdCondition,
 	RateOfChangeCondition,
@@ -410,7 +410,7 @@ function makeDefault(kind: ConditionKind): ConditionNode {
 		case "day_of_week":
 			return {
 				type: "day_of_week",
-				day_of_week: { days: [DayOfWeek.Monday] },
+				day_of_week: { days: [AlertWeekday.Monday] },
 			};
 		case "pump_state":
 			return {
@@ -862,7 +862,7 @@ export interface RuleEditorState {
 	clientConfig: ClientConfiguration;
 	/** Flat list of delivery channels. */
 	channels: ChannelDef[];
-	/** When true, this rule still fires while the tenant is in Do Not Disturb
+	/** When true, this rule still fires while the tenant is in Do not disturb
 	 *  mode. Critical-severity rules implicitly bypass DND regardless. */
 	allowThroughDnd: boolean;
 }

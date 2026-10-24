@@ -171,9 +171,7 @@ public class PushoverService : IPushoverService
                     _notificationService.RegisterPushoverReceipt(
                         pushoverResponse.Receipt,
                         request.Level.Value,
-                        request.Group ?? "default",
-                        request.Title,
-                        request.Message
+                        request.Group ?? "default"
                     );
 
                     _logger.LogInformation(

@@ -316,7 +316,16 @@
   --color-heart-rate: var(--heart-rate);
 
   /* Pump modes */
+  --color-pump-mode-automatic: var(--pump-mode-automatic);
+  --color-pump-mode-limited: var(--pump-mode-limited);
+  --color-pump-mode-manual: var(--pump-mode-manual);
+  --color-pump-mode-boost: var(--pump-mode-boost);
+  --color-pump-mode-ease-off: var(--pump-mode-ease-off);
+  --color-pump-mode-sleep: var(--pump-mode-sleep);
+  --color-pump-mode-exercise: var(--pump-mode-exercise);
   --color-pump-mode-suspended: var(--pump-mode-suspended);
+  --color-pump-mode-off: var(--pump-mode-off);
+  --color-pump-mode-liberty: var(--pump-mode-liberty);
 
   /* Record kinds */
   --color-entry-bolus: var(--entry-bolus);

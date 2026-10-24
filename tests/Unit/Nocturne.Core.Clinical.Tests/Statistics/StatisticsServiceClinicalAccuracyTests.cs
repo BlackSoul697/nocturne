@@ -865,6 +865,35 @@ public class StatisticsServiceClinicalAccuracyTests
     }
 
     [Fact]
+    public void AssessDataSufficiency_ReadingsAcrossUtcMidnightInOneLocalDay_CountOneDay()
+    {
+        var sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+        var entries = new[]
+        {
+            new DateTime(2026, 1, 14, 14, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc),
+        }.Select(t => new SensorGlucose { Mgdl = 120, Timestamp = t });
+
+        var result = _sut.AssessDataSufficiency(entries, days: 1, timeZone: sydney);
+
+        result.DaysWithData.Should().Be(1);
+    }
+
+    [Fact]
+    public void AssessDataSufficiency_NullZone_CountsUtcDays()
+    {
+        var entries = new[]
+        {
+            new DateTime(2026, 1, 14, 14, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc),
+        }.Select(t => new SensorGlucose { Mgdl = 120, Timestamp = t });
+
+        var result = _sut.AssessDataSufficiency(entries, days: 1);
+
+        result.DaysWithData.Should().Be(2);
+    }
+
+    [Fact]
     public void AssessDataSufficiency_LargeGap_ShouldWarn()
     {
         // Sufficient data but with a 13-hour gap

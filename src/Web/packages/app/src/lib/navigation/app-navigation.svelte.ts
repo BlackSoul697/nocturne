@@ -71,6 +71,8 @@ export interface NavItem {
   icon: IconComponent;
   strict?: boolean;
   children?: NavLink[];
+  /** Read scope a member or share must hold to see this entry. A guest link session keeps its `GUEST_NAV` entries regardless. */
+  scope?: string;
 }
 
 /** The viewer the navigation is built for. */
@@ -94,13 +96,15 @@ export interface NavViewer {
 }
 
 /** Entries a guest link session keeps. */
-const GUEST_NAV: readonly NavItemId[] = ["dashboard", "calendar", "time-spans", "reports", "clock"];
+const GUEST_NAV: readonly NavItemId[] = ["dashboard", "calendar", "time-spans", "reports"];
 
-/** Entries the public share view keeps, each with the read scope its pages need. */
-const PUBLIC_SHARE_NAV: readonly { id: NavItemId; scope?: string }[] = [
-  { id: "dashboard" },
-  { id: "reports", scope: "reports.read" },
-];
+/** Entries the public share view keeps, before each is held to its own scope. */
+const PUBLIC_SHARE_NAV: readonly NavItemId[] = ["dashboard", "reports"];
+
+/** The entries whose scope, if any, the viewer holds. */
+function withinScope(items: NavItem[], viewer: NavViewer): NavItem[] {
+  return items.filter((item) => !item.scope || satisfiesScope(viewer.grantedScopes, item.scope));
+}
 
 /**
  * The navigation a read-only viewer keeps, or `null` when the viewer is a member and gets the
@@ -118,10 +122,10 @@ export function readOnlyNav(items: NavItem[], viewer: NavViewer): NavItem[] | nu
 
   if (viewer.user) return null;
 
-  const kept = PUBLIC_SHARE_NAV.filter(
-    (entry) => !entry.scope || satisfiesScope(viewer.grantedScopes, entry.scope)
-  ).map((entry) => entry.id);
-  return items.filter((item) => kept.includes(item.id));
+  return withinScope(
+    items.filter((item) => PUBLIC_SHARE_NAV.includes(item.id)),
+    viewer
+  );
 }
 
 export function buildAppNavigation(viewer: NavViewer): NavItem[] {
@@ -149,6 +153,7 @@ export function buildAppNavigation(viewer: NavViewer): NavItem[] {
       id: "reports",
       title: "Reports",
       icon: BarChart3,
+      scope: "reports.read",
       children: [
         { title: "Overview", href: "/reports", icon: PieChart, strict: true },
         ...getSidebarReportItems({
@@ -203,10 +208,11 @@ export function buildAppNavigation(viewer: NavViewer): NavItem[] {
       id: "alerts",
       title: "Alerts",
       icon: Bell,
+      scope: "alerts.read",
       children: [
         { title: "Rules", href: "/alerts", icon: Bell, strict: true },
         { title: "Simulator", href: "/alerts/simulator", icon: PlayCircle },
-        { title: "Do Not Disturb", href: "/alerts/dnd", icon: BellOff },
+        { title: "Do not disturb", href: "/alerts/dnd", icon: BellOff },
         { title: "History", href: "/alerts/history", icon: HistoryIcon },
       ],
     },
@@ -274,10 +280,12 @@ export function buildAppNavigation(viewer: NavViewer): NavItem[] {
     }
   );
 
+  const visible = withinScope(items, viewer);
+
   // See tenantless-navigation for why the tenant-scoped pages come out.
   if (viewer.tenantless) {
-    return filterTenantlessNav(items);
+    return filterTenantlessNav(visible);
   }
 
-  return items;
+  return visible;
 }

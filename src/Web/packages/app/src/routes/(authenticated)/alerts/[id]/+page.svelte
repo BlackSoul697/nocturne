@@ -49,7 +49,8 @@
   import AutoResolveSection from "$lib/components/alerts/AutoResolveSection.svelte";
   import ChannelsSection from "$lib/components/alerts/ChannelsSection.svelte";
   import ReplayPanel from "$lib/components/alerts/ReplayPanel.svelte";
-  import { severity, severityLabel } from "$lib/components/alerts/severity";
+  import { severity } from "$lib/components/alerts/severity";
+  import { severityLabel } from "$lib/components/alerts/severityLabel.svelte";
   import {
     parseRule,
     ensureCompositeRoot,
@@ -345,7 +346,7 @@
             <div class="space-y-1.5">
               <CardTitle>Identity</CardTitle>
               <CardDescription>
-                What should this alert be called?
+                What is the name of this alert?
               </CardDescription>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -380,7 +381,7 @@
               <Textarea
                 id="rule-desc"
                 rows={2}
-                placeholder="Why this alert exists, what it should trigger"
+                placeholder="Why this alert exists and what it triggers"
                 value={editor.description}
                 oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) => {
                   editor.description = e.currentTarget.value;
@@ -418,7 +419,7 @@
               />
               <div class="space-y-0.5">
                 <Label class="cursor-pointer" for="rule-allow-dnd">
-                  Allow through Do Not Disturb
+                  Allow through Do not disturb
                 </Label>
                 <p class="text-xs text-muted-foreground">
                   Critical-severity rules implicitly bypass DND regardless of
@@ -434,8 +435,8 @@
           <CardHeader>
             <CardTitle>Condition</CardTitle>
             <CardDescription>
-              Define when this alert fires. Mix facts with AND/OR; nest with
-              brackets.
+              Define when this alert fires. Mix facts with AND/OR. Nest them
+              with brackets.
             </CardDescription>
           </CardHeader>
           <CardContent>
