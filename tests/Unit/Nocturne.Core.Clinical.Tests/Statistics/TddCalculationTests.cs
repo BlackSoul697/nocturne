@@ -1297,4 +1297,46 @@ public class TddCalculationTests
     }
 
     #endregion
+
+    #region Per-Day Figures Over A Window With A Gap
+
+    [Fact]
+    public void PerDayFigures_DivideByTheWindowsCalendarDays_NotTheDaysThatHoldData()
+    {
+        var windowEnd = StartDate.AddDays(4);
+        var tempBasals = new List<TempBasal>
+        {
+            MakeScheduledBasal(0, rateUPerHr: 1.0, durationMinutes: 8 * 60),
+            MakeScheduledBasal(3 * 24, rateUPerHr: 1.0, durationMinutes: 8 * 60),
+        };
+        var boluses = new List<Bolus>
+        {
+            MakeBolus(7, units: 6.0),
+            MakeBolus(3 * 24 + 7, units: 6.0),
+        };
+        var carbs = new List<CarbIntake>
+        {
+            new() { Carbs = 40, Timestamp = StartDate.AddHours(7) },
+            new() { Carbs = 40, Timestamp = StartDate.AddHours(3 * 24 + 7) },
+        };
+
+        var result = _statisticsService.CalculateInsulinDeliveryStatistics(
+            boluses,
+            Array.Empty<Bolus>(),
+            tempBasals,
+            carbs,
+            StartDate,
+            windowEnd,
+            Mills(windowEnd));
+
+        result.WindowDays.Should().Be(4);
+        result.TotalInsulin.Should().Be(28.0);
+        result.Tdd.Should().Be(7.0);
+        result.TotalBasalPerDay.Should().Be(4.0);
+        result.BolusesPerDay.Should().Be(0.5);
+        result.TotalCarbs.Should().Be(80.0);
+        result.CarbsPerDay.Should().Be(20.0);
+    }
+
+    #endregion
 }

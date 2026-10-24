@@ -713,7 +713,7 @@ public partial class StatisticsService : IStatisticsService
         TreatmentSummary? treatmentSummary = null;
         if (bolusesList.Any() || carbIntakesList.Any())
         {
-            treatmentSummary = CalculateTreatmentSummary(bolusesList, carbIntakesList);
+            treatmentSummary = CalculateTreatmentSummary(bolusesList, carbIntakesList, dayCount: windowDays);
         }
 
         // Propagate reliability from base analytics to GMI
@@ -2168,6 +2168,7 @@ public partial class StatisticsService : IStatisticsService
             TotalBasal = 0,
             TotalInsulin = Math.Round(totalBolus * 100) / 100,
             TotalCarbs = Math.Round(totalCarbs * 10) / 10,
+            CarbsPerDay = Math.Round(totalCarbs / dayCount * 10) / 10,
             ManualBolusCount = manualCount,
             AutomaticBolusCount = automaticList.Count,
             BasalCount = 0,

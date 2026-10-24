@@ -1682,6 +1682,21 @@ public class StatisticsServiceTests
         result.DataSufficiency.IsSufficient.Should().BeFalse();
     }
 
+    [Fact]
+    public void AnalyzeGlucoseDataExtended_AveragesTheTreatmentSummaryOverTheWindow()
+    {
+        var readings = AtCadence(new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), 5, 288);
+
+        var result = _statisticsService.AnalyzeGlucoseDataExtended(
+            readings,
+            [new Bolus { Insulin = 6 }, new Bolus { Insulin = 6 }],
+            [new CarbIntake { Carbs = 90 }],
+            windowDays: 3);
+
+        result.TreatmentSummary!.DailyCarbs.Should().Be(30);
+        result.TreatmentSummary.DailyBoluses.Should().BeApproximately(2.0 / 3, 1e-9);
+    }
+
     private static SensorGlucose[] AtCadence(
         DateTime start,
         double cadenceMinutes,
