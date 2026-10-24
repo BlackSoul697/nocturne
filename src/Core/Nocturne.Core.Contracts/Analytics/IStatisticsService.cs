@@ -432,7 +432,7 @@ public interface IStatisticsService
 
     /// <summary>
     /// The registered CGMs that contributed <paramref name="readings"/>, each with its reading count,
-    /// then an "Unattributed" entry when any reading has no device.
+    /// then a nameless entry with no device id when any reading has no device.
     /// </summary>
     IEnumerable<ContributingDevice> CalculateContributingDevices(
         IReadOnlyCollection<SensorGlucose> readings,
