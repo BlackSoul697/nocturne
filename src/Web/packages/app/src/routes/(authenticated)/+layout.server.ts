@@ -5,7 +5,7 @@ import { getRequestStatus } from "$lib/server/request-status";
 import { SHELL_DATA_KEY } from "$lib/constants/shell-data";
 import { SHARE_UNAVAILABLE_PATH } from "$lib/share-host";
 import { toIsoString } from "$lib/utils/api-date";
-import { resolveTenantSwitcher, type TenantSwitcherTarget } from "$lib/utils/tenant-host";
+import { toTenantSwitcherTargets, type TenantSwitcherTarget } from "$lib/utils/tenant-host";
 import { autoLoginEndpoint, autoLoginRedirect } from "$lib/server/auto-login";
 
 /** Permissions that grant read access to glucose data (mirrors API's CanRead + OAuth scopes). */
@@ -39,7 +39,7 @@ async function readTenantTargets(
   apiClient: App.Locals["apiClient"]
 ): Promise<TenantSwitcherTarget[]> {
   try {
-    return resolveTenantSwitcher(await apiClient.myTenants.getMyTenants()).targets;
+    return toTenantSwitcherTargets(await apiClient.myTenants.getMyTenants(true));
   } catch (error) {
     console.error("Failed to read the tenant switcher targets:", error);
     return [];

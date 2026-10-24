@@ -52,12 +52,13 @@ interface Situation {
   /** What the backup sign-in prompt endpoint answers; a number rejects with that HTTP status. */
   backupSignInPrompt?: { show: boolean } | number;
   /** The caller's tenant memberships; a number rejects with that HTTP status. */
-  myTenants?: { slug: string; displayName?: string; isActive?: boolean }[] | number;
+  myTenants?: { slug: string; displayName?: string }[] | number;
 }
 
 /** URL properties the server load read outside `untrack`, which SvelteKit would re-run it on. */
 let trackedUrlReads: string[] = [];
 let backupSignInPromptReads = 0;
+let myTenantsReachableOnly: (boolean | undefined)[] = [];
 let apiCalls: string[] = [];
 
 /** The invalidation keys the server load registered. */
@@ -88,6 +89,7 @@ function trackingUrl(href: string): { url: URL; untrack: <T>(fn: () => T) => T }
 async function runLoad(situation: Situation) {
   declaredDependencies = [];
   backupSignInPromptReads = 0;
+  myTenantsReachableOnly = [];
   apiCalls = [];
   const { kind } = classifyHost(situation.host, BASE, situation.dashboardSlugs ?? []);
   const tenantless = isTenantlessHost(kind, situation.apexResolvesTenant ?? false);
@@ -128,10 +130,11 @@ async function runLoad(situation: Situation) {
         },
       },
       myTenants: {
-        getMyTenants: async () => {
+        getMyTenants: async (reachableOnly?: boolean) => {
           apiCalls.push("myTenants");
           const answer = situation.myTenants ?? [];
           if (typeof answer === "number") throw { status: answer };
+          myTenantsReachableOnly.push(reachableOnly);
           return answer;
         },
       },
@@ -696,13 +699,12 @@ describe("(authenticated) layout load: the tenant switcher targets", () => {
     authStatus: { onboardingCompleted: true },
   } as const;
 
-  it("offers the tenants a member can reach, leaving out an inactive one", async () => {
+  it("offers the tenants the API says a member can reach", async () => {
     const data = await loadedData({
       ...tenantHost,
       myTenants: [
         { slug: "acme", displayName: "Acme" },
-        { slug: "bravo", isActive: true },
-        { slug: "old", isActive: false },
+        { slug: "bravo" },
       ],
     });
 
@@ -710,6 +712,7 @@ describe("(authenticated) layout load: the tenant switcher targets", () => {
       { slug: "acme", displayName: "Acme" },
       { slug: "bravo", displayName: null },
     ]);
+    expect(myTenantsReachableOnly).toEqual([true]);
   });
 
   it("reads no memberships for a signed-out visitor", async () => {
