@@ -2,6 +2,7 @@ using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Oref;
 using OrefModels = Nocturne.Core.Oref.Models;
 
@@ -237,11 +238,9 @@ public class PredictionService : IPredictionService
             _logger.LogWarning(ex, "Failed to resolve profile from V4 resolvers, using defaults");
         }
 
-        // Return default profile (DIA falls back through resolver chain already, but we have no data)
-        var defaultDia = bolusInsulin?.Dia ?? 3.0;
         return new OrefModels.OrefProfile
         {
-            Dia = defaultDia,
+            Dia = await ResolveFallbackDiaAsync(profileId, nowMills, cancellationToken),
             CurrentBasal = 1.0,
             Sens = 50.0,
             CarbRatio = 10.0,
@@ -251,6 +250,19 @@ public class PredictionService : IPredictionService
             MaxBasal = 4.0,
             MaxDailyBasal = 2.0
         };
+    }
+
+    private async Task<double> ResolveFallbackDiaAsync(string? profileId, long nowMills, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _therapySettings.GetDIAAsync(nowMills, profileId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to resolve DIA, using the default");
+            return TherapySnapshot.DefaultDia;
+        }
     }
 
     private async Task<Core.Models.V4.PatientInsulin?> ResolveBolusInsulinAsync()
