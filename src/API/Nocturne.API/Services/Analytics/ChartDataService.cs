@@ -214,7 +214,7 @@ public class ChartDataService : IChartDataService
             {
                 Time = c.Mills,
                 Carbs = c.Carbs,
-                Label = GetMealNameForTime(c.Mills, zone),
+                MealPeriod = GetMealPeriod(c.Mills, zone),
                 TreatmentId = c.LegacyId ?? c.Id.ToString(),
                 IsOffset = false,
                 DataSource = c.DataSource ?? c.Device,
@@ -455,7 +455,7 @@ public class ChartDataService : IChartDataService
         return (rate, origin);
     }
 
-    internal static string? GetMealNameForTime(long mills, TimeZoneInfo? zone)
+    internal static MealPeriod? GetMealPeriod(long mills, TimeZoneInfo? zone)
     {
         if (zone is null)
             return null;
@@ -463,11 +463,11 @@ public class ChartDataService : IChartDataService
         var time = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(mills), zone);
         return time.Hour switch
         {
-            >= 5 and < 11 => "Breakfast",
-            >= 11 and < 15 => "Lunch",
-            >= 15 and < 17 => "Snack",
-            >= 17 and < 21 => "Dinner",
-            _ => "Late Night",
+            >= 5 and < 11 => MealPeriod.Breakfast,
+            >= 11 and < 15 => MealPeriod.Lunch,
+            >= 15 and < 17 => MealPeriod.Snack,
+            >= 17 and < 21 => MealPeriod.Dinner,
+            _ => MealPeriod.LateNight,
         };
     }
 

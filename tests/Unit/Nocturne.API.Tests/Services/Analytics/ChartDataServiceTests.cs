@@ -327,14 +327,14 @@ public class ChartDataServiceTests
 
             result.Should().HaveCount(1);
             result[0].Carbs.Should().Be(30.0);
-            result[0].Label.Should().NotBeNullOrEmpty();
+            result[0].MealPeriod.Should().NotBeNull();
             result[0].Time.Should().Be(TestMills);
             result[0].TreatmentId.Should().Be("treat-1");
             result[0].IsOffset.Should().BeFalse();
         }
 
         [Fact]
-        public void WithoutFoodType_UsesMealName()
+        public void WithoutFoodType_CarriesMealPeriod()
         {
             // 12:00 UTC = Lunch time
             var noonUtcMills = DateTimeOffset
@@ -353,11 +353,12 @@ public class ChartDataServiceTests
             var result = ChartDataService.BuildCarbMarkers(carbs, TimeZoneInfo.Utc);
 
             result.Should().HaveCount(1);
-            result[0].Label.Should().Be("Lunch");
+            result[0].MealPeriod.Should().Be(MealPeriod.Lunch);
+            result[0].Label.Should().BeNull();
         }
 
         [Fact]
-        public void WithoutAZone_LeavesTheMealNameOut()
+        public void WithoutAZone_LeavesTheMealPeriodOut()
         {
             var noonUtcMills = DateTimeOffset
                 .Parse("2023-11-15T12:00:00Z")
@@ -374,7 +375,7 @@ public class ChartDataServiceTests
 
             var result = ChartDataService.BuildCarbMarkers(carbs, null);
 
-            result.Should().ContainSingle().Which.Label.Should().BeNull();
+            result.Should().ContainSingle().Which.MealPeriod.Should().BeNull();
         }
 
         [Fact]
@@ -695,36 +696,36 @@ public class ChartDataServiceTests
 
     #endregion
 
-    #region GetMealNameForTime Tests
+    #region GetMealPeriod Tests
 
-    public class GetMealNameForTimeTests
+    public class GetMealPeriodTests
     {
         private static long MillsAtUtcHour(int hourUtc) =>
             new DateTimeOffset(2023, 11, 15, hourUtc, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
         [Theory]
-        [InlineData(5, "Breakfast")]
-        [InlineData(10, "Breakfast")]
-        [InlineData(11, "Lunch")]
-        [InlineData(14, "Lunch")]
-        [InlineData(15, "Snack")]
-        [InlineData(16, "Snack")]
-        [InlineData(17, "Dinner")]
-        [InlineData(20, "Dinner")]
-        [InlineData(21, "Late Night")]
-        [InlineData(23, "Late Night")]
-        [InlineData(0, "Late Night")]
-        [InlineData(4, "Late Night")]
-        public void UtcZoneBuckets(int hourUtc, string expected)
+        [InlineData(5, MealPeriod.Breakfast)]
+        [InlineData(10, MealPeriod.Breakfast)]
+        [InlineData(11, MealPeriod.Lunch)]
+        [InlineData(14, MealPeriod.Lunch)]
+        [InlineData(15, MealPeriod.Snack)]
+        [InlineData(16, MealPeriod.Snack)]
+        [InlineData(17, MealPeriod.Dinner)]
+        [InlineData(20, MealPeriod.Dinner)]
+        [InlineData(21, MealPeriod.LateNight)]
+        [InlineData(23, MealPeriod.LateNight)]
+        [InlineData(0, MealPeriod.LateNight)]
+        [InlineData(4, MealPeriod.LateNight)]
+        public void UtcZoneBuckets(int hourUtc, MealPeriod expected)
         {
-            ChartDataService.GetMealNameForTime(MillsAtUtcHour(hourUtc), TimeZoneInfo.Utc)
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(hourUtc), TimeZoneInfo.Utc)
                 .Should().Be(expected);
         }
 
         [Fact]
-        public void NoZone_GivesNoName()
+        public void NoZone_GivesNoPeriod()
         {
-            ChartDataService.GetMealNameForTime(MillsAtUtcHour(12), null).Should().BeNull();
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(12), null).Should().BeNull();
         }
 
         [Fact]
@@ -732,7 +733,7 @@ public class ChartDataServiceTests
         {
             var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            ChartDataService.GetMealNameForTime(MillsAtUtcHour(6), zone).Should().Be("Late Night");
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(6), zone).Should().Be(MealPeriod.LateNight);
         }
 
         [Fact]
@@ -740,7 +741,7 @@ public class ChartDataServiceTests
         {
             var zone = TimeZoneHelper.GetTimeZoneInfoFromId("America/New_York");
 
-            ChartDataService.GetMealNameForTime(MillsAtUtcHour(12), zone).Should().Be("Breakfast");
+            ChartDataService.GetMealPeriod(MillsAtUtcHour(12), zone).Should().Be(MealPeriod.Breakfast);
         }
     }
 
