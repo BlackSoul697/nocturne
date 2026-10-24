@@ -52,7 +52,6 @@ public class TrackerIntegrationTests : ApiIntegrationTestBase
         lifespanHours = 720,
         mode = "Duration",
         dashboardVisibility = "Always",
-        visibility = "Public",
         notificationThresholds = new[]
         {
             new

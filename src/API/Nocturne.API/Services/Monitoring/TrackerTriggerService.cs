@@ -49,13 +49,10 @@ public class TrackerTriggerService : IDeviceEventReactor
     /// <summary>
     /// Canonicalises a requested trigger list against <see cref="TriggerableEventTypes"/>. Blank entries
     /// are dropped, so a form can post one empty value to mean "none"; an unknown name is an error
-    /// rather than a trigger that silently never fires, unless it is in <paramref name="alreadyStored"/>,
-    /// where it predates the list and is dropped so the definition can still be saved. Null passes
-    /// through as "not supplied".
+    /// rather than a trigger that silently never fires. Null passes through as "not supplied".
     /// </summary>
     public static bool TryNormaliseTriggers(
         IEnumerable<string>? requested,
-        IReadOnlyCollection<string> alreadyStored,
         out List<string>? normalised,
         out string? error)
     {
@@ -70,8 +67,6 @@ public class TrackerTriggerService : IDeviceEventReactor
             var canonical = CanonicalTrigger(name);
             if (canonical is null)
             {
-                if (alreadyStored.Contains(name, StringComparer.OrdinalIgnoreCase))
-                    continue;
                 error = $"'{name}' is not an event a tracker can restart on";
                 return false;
             }
@@ -227,7 +222,7 @@ public class TrackerTriggerService : IDeviceEventReactor
             completeTreatmentId: startTreatmentId,
             (tx, token) => tx.StartInstanceAsync(
                 definition.Id,
-                definition.UserId,
+                definition.CreatedBy,
                 startNotes: null,
                 startTreatmentId: startTreatmentId,
                 startedAt: deviceEvent.Timestamp,
@@ -270,7 +265,7 @@ public class TrackerTriggerService : IDeviceEventReactor
     }
 
     /// <summary>
-    /// Reads a definition's trigger list, which stores legacy Nightscout event-type strings, and resolves
+    /// Reads a definition's trigger list, which stores Nightscout event-type names, and resolves
     /// them to the typed device event types they correspond to. Entries naming something that is not a
     /// device event (a bolus type, say) map to nothing and are dropped.
     /// </summary>

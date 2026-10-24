@@ -83,7 +83,7 @@ public class DeviceTrackerProvisionerTests
     public async Task ATrackerTheTenantAlreadyHasIsNotCreatedAgain()
     {
         _trackers.Setup(t => t.GetAllDefinitionsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new TrackerDefinitionEntity { UserId = UserId, Name = "omnipod dash POD" }]);
+            .ReturnsAsync([new TrackerDefinitionEntity { CreatedBy = UserId, Name = "omnipod dash POD" }]);
 
         var created = await _provisioner.ProvisionAsync(Device("omnipod-dash", DeviceCategory.InsulinPump), UserId);
 
@@ -95,7 +95,7 @@ public class DeviceTrackerProvisionerTests
     public async Task ATrackerAnotherMemberCreatedIsNotDuplicatedForASecondMember()
     {
         _trackers.Setup(t => t.GetAllDefinitionsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new TrackerDefinitionEntity { UserId = "another-member", Name = "Omnipod DASH pod" }]);
+            .ReturnsAsync([new TrackerDefinitionEntity { CreatedBy = "another-member", Name = "Omnipod DASH pod" }]);
 
         var created = await _provisioner.ProvisionAsync(Device("omnipod-dash", DeviceCategory.InsulinPump), UserId);
 
@@ -129,7 +129,7 @@ public class DeviceTrackerProvisionerTests
     {
         await _provisioner.ProvisionAsync(Device("omnipod-dash", DeviceCategory.InsulinPump), UserId);
 
-        _created.Single().UserId.Should().Be(UserId);
+        _created.Single().CreatedBy.Should().Be(UserId);
     }
 
     [Theory]

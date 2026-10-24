@@ -114,18 +114,6 @@ public class TrackersController : ControllerBase, IWriteScopedController
             HttpContext.RequestAborted
         );
 
-    private static List<string> StoredTriggers(TrackerDefinitionEntity definition)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<List<string>>(definition.TriggerEventTypes) ?? [];
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -287,12 +275,12 @@ public class TrackersController : ControllerBase, IWriteScopedController
         if (lowReservoirError != null)
             return Problem(detail: lowReservoirError, statusCode: 400, title: "Bad Request");
 
-        if (!TrackerTriggerService.TryNormaliseTriggers(request.TriggerEventTypes, [], out var triggers, out var triggerError))
+        if (!TrackerTriggerService.TryNormaliseTriggers(request.TriggerEventTypes, out var triggers, out var triggerError))
             return Problem(detail: triggerError, statusCode: 400, title: "Bad Request");
 
         var entity = new TrackerDefinitionEntity
         {
-            UserId = userId,
+            CreatedBy = userId,
             Name = request.Name,
             Description = request.Description,
             Category = request.Category,
@@ -304,7 +292,6 @@ public class TrackersController : ControllerBase, IWriteScopedController
             LowReservoirUrgency = request.LowReservoirUrgency,
             IsFavorite = request.IsFavorite,
             DashboardVisibility = request.DashboardVisibility,
-            Visibility = request.Visibility,
             StartEventType = request.StartEventType,
             CompletionEventType = request.CompletionEventType,
             Mode = request.Mode,
@@ -322,12 +309,6 @@ public class TrackersController : ControllerBase, IWriteScopedController
                         Hours = threshold.Hours,
                         Description = threshold.Description,
                         DisplayOrder = threshold.DisplayOrder,
-                        // Alert configuration
-                        PushEnabled = threshold.PushEnabled,
-                        AudioEnabled = threshold.AudioEnabled,
-                        AudioSound = threshold.AudioSound,
-                        VibrateEnabled = threshold.VibrateEnabled,
-                        RespectQuietHours = threshold.RespectQuietHours,
                     }
                 );
             }
@@ -390,8 +371,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
         if (lowReservoirError != null)
             return Problem(detail: lowReservoirError, statusCode: 400, title: "Bad Request");
 
-        var storedTriggers = request.TriggerEventTypes is null ? [] : StoredTriggers(existing);
-        if (!TrackerTriggerService.TryNormaliseTriggers(request.TriggerEventTypes, storedTriggers, out var triggers, out var triggerError))
+        if (!TrackerTriggerService.TryNormaliseTriggers(request.TriggerEventTypes, out var triggers, out var triggerError))
             return Problem(detail: triggerError, statusCode: 400, title: "Bad Request");
 
         existing.Name = request.Name ?? existing.Name;
@@ -418,7 +398,6 @@ public class TrackersController : ControllerBase, IWriteScopedController
         existing.LowReservoirUrgency = request.LowReservoirUrgency ?? existing.LowReservoirUrgency;
         existing.IsFavorite = request.IsFavorite ?? existing.IsFavorite;
         existing.DashboardVisibility = request.DashboardVisibility ?? existing.DashboardVisibility;
-        existing.Visibility = request.Visibility ?? existing.Visibility;
         existing.StartEventType = request.StartEventType ?? existing.StartEventType;
         existing.CompletionEventType = request.CompletionEventType ?? existing.CompletionEventType;
         existing.Mode = request.Mode ?? existing.Mode;
@@ -436,12 +415,6 @@ public class TrackersController : ControllerBase, IWriteScopedController
                         Hours = t.Hours,
                         Description = t.Description,
                         DisplayOrder = t.DisplayOrder,
-                        // Alert configuration
-                        PushEnabled = t.PushEnabled,
-                        AudioEnabled = t.AudioEnabled,
-                        AudioSound = t.AudioSound,
-                        VibrateEnabled = t.VibrateEnabled,
-                        RespectQuietHours = t.RespectQuietHours,
                     })
                     .ToList(),
                 HttpContext.RequestAborted
@@ -657,8 +630,8 @@ public class TrackersController : ControllerBase, IWriteScopedController
     }
 
     /// <summary>
-    /// Acknowledge a tracker notification. <c>SnoozeMins</c> is stored on the instance
-    /// (pill display/legacy clients); the alert-engine side is a plain acknowledgement of
+    /// Acknowledge a tracker notification. <c>SnoozeMins</c> is stored on the instance and
+    /// broadcast to the tenant's clients; the alert-engine side is a plain acknowledgement of
     /// the managed rules' open excursions — re-notification is the threshold ladder's and
     /// alert_state escalation rules' job, not a snooze re-fire.
     /// </summary>
@@ -761,7 +734,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
 
         var entity = new TrackerPresetEntity
         {
-            UserId = userId,
+            CreatedBy = userId,
             Name = request.Name,
             DefinitionId = request.DefinitionId,
             DefaultStartNotes = request.DefaultStartNotes,
@@ -849,12 +822,6 @@ public class NotificationThresholdDto
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
 
-    // Alert configuration
-    public bool PushEnabled { get; set; }
-    public bool AudioEnabled { get; set; }
-    public string? AudioSound { get; set; }
-    public bool VibrateEnabled { get; set; }
-    public bool RespectQuietHours { get; set; }
 
     /// <summary>
     /// The managed alert rule that delivers this threshold. Null until the sync service
@@ -878,12 +845,6 @@ public class NotificationThresholdDto
             Hours = entity.Hours,
             Description = entity.Description,
             DisplayOrder = entity.DisplayOrder,
-            // Alert configuration
-            PushEnabled = entity.PushEnabled,
-            AudioEnabled = entity.AudioEnabled,
-            AudioSound = entity.AudioSound,
-            VibrateEnabled = entity.VibrateEnabled,
-            RespectQuietHours = entity.RespectQuietHours,
             AlertRuleId = entity.AlertRuleId,
             OffsetMinutes = TrackerSchedule.OffsetMinutes(definition.Mode, definition.LifespanHours, entity.Hours),
         };
@@ -921,9 +882,6 @@ public class TrackerDefinitionDto
     /// </summary>
     public DashboardVisibility DashboardVisibility { get; set; } = DashboardVisibility.Always;
 
-    /// <inheritdoc cref="TrackerDefinitionEntity.Visibility"/>
-    public TrackerVisibility Visibility { get; set; } = TrackerVisibility.Private;
-
     /// <summary>
     /// Event type to create when tracker is started (for Nightscout compatibility)
     /// </summary>
@@ -953,7 +911,8 @@ public class TrackerDefinitionDto
             TriggerEventTypes =
             [
                 .. (JsonSerializer.Deserialize<List<string>>(entity.TriggerEventTypes) ?? [])
-                    .Select(n => TrackerTriggerService.CanonicalTrigger(n) ?? n),
+                    .Select(TrackerTriggerService.CanonicalTrigger)
+                    .OfType<string>(),
             ],
             TriggerNotesContains = entity.TriggerNotesContains,
             LifespanHours = entity.LifespanHours,
@@ -967,7 +926,6 @@ public class TrackerDefinitionDto
                     .ToList() ?? [],
             IsFavorite = entity.IsFavorite,
             DashboardVisibility = entity.DashboardVisibility,
-            Visibility = entity.Visibility,
             StartEventType = entity.StartEventType,
             CompletionEventType = entity.CompletionEventType,
             Mode = entity.Mode,
@@ -1033,12 +991,6 @@ public class CreateTrackerDefinitionRequest
     public DashboardVisibility DashboardVisibility { get; set; } = DashboardVisibility.Always;
 
     /// <summary>
-    /// Stored and returned for older clients; it restricts nothing (see
-    /// <see cref="TrackerDefinitionEntity.Visibility"/>). RoleRestricted is rejected.
-    /// </summary>
-    public TrackerVisibility Visibility { get; set; } = TrackerVisibility.Private;
-
-    /// <summary>
     /// Event type to create when tracker is started (for Nightscout compatibility)
     /// </summary>
     public string? StartEventType { get; set; }
@@ -1087,13 +1039,6 @@ public class UpdateTrackerDefinitionRequest
     public DashboardVisibility? DashboardVisibility { get; set; }
 
     /// <summary>
-    /// Stored and returned for older clients; it restricts nothing (see
-    /// <see cref="TrackerDefinitionEntity.Visibility"/>). Null keeps the current value.
-    /// RoleRestricted is rejected.
-    /// </summary>
-    public TrackerVisibility? Visibility { get; set; }
-
-    /// <summary>
     /// Event type to create when tracker is started (for Nightscout compatibility)
     /// </summary>
     public string? StartEventType { get; set; }
@@ -1116,12 +1061,6 @@ public class CreateNotificationThresholdRequest
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
 
-    // Alert configuration (optional, defaults to disabled)
-    public bool PushEnabled { get; set; }
-    public bool AudioEnabled { get; set; }
-    public string? AudioSound { get; set; }
-    public bool VibrateEnabled { get; set; }
-    public bool RespectQuietHours { get; set; } = true;
 }
 
 public class StartTrackerInstanceRequest
@@ -1158,12 +1097,6 @@ public class CompleteTrackerInstanceRequest
 public class AckTrackerRequest
 {
     public int SnoozeMins { get; set; } = 30;
-
-    /// <summary>
-    /// Accepted for older clients and ignored: the snooze is stored on the tenant's instance, so
-    /// every ack is broadcast to the tenant's clients.
-    /// </summary>
-    public bool Global { get; set; } = false;
 }
 
 public class CreateTrackerPresetRequest

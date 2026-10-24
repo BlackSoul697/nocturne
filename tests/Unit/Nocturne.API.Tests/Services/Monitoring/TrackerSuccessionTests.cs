@@ -41,7 +41,7 @@ public class TrackerSuccessionTests
     {
         Id = Guid.NewGuid(),
         Name = "Infusion Site",
-        UserId = "owner",
+        CreatedBy = "owner",
         Mode = mode,
         LifespanHours = 72,
     };
@@ -52,7 +52,7 @@ public class TrackerSuccessionTests
         {
             Id = Guid.NewGuid(),
             DefinitionId = definition.Id,
-            UserId = definition.UserId,
+            CreatedBy = definition.CreatedBy,
             StartedAt = startedAt,
             Definition = definition,
         };
@@ -71,7 +71,7 @@ public class TrackerSuccessionTests
     {
         Id = Guid.NewGuid(),
         DefinitionId = definition.Id,
-        UserId = definition.UserId,
+        CreatedBy = definition.CreatedBy,
         StartedAt = T0,
         Definition = definition,
     };

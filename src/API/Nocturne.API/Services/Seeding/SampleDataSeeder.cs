@@ -493,7 +493,7 @@ public class SampleDataSeeder
                 {
                     Id = Guid.CreateVersion7(),
                     TenantId = db.TenantId,
-                    UserId = userId,
+                    CreatedBy = userId,
                     Name = spec.Name,
                     Category = spec.Category,
                     Icon = spec.Icon,

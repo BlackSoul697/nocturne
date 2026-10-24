@@ -19,8 +19,8 @@ using Xunit;
 namespace Nocturne.API.Tests.Controllers.V4.Monitoring;
 
 /// <summary>
-/// Pins that trackers are the tenant's: every member reads every tracker whoever created it and
-/// whatever its visibility, provided they hold <c>alerts.read</c>; any member holding the write
+/// Pins that trackers are the tenant's: every member reads every tracker whoever created it,
+/// provided they hold <c>alerts.read</c>; any member holding the write
 /// scope changes any of them; and a viewer without an account (a guest link, a public share, no
 /// credential) reads none even when it holds <c>alerts.read</c>.
 /// </summary>
@@ -104,15 +104,13 @@ public class TrackersControllerTenantAccessTests
         return Controller(httpContext);
     }
 
-    private TrackerDefinitionEntity Definition(
-        TrackerVisibility visibility = TrackerVisibility.Private, string createdBy = CreatorId)
+    private TrackerDefinitionEntity Definition(string createdBy = CreatorId)
     {
         var definition = new TrackerDefinitionEntity
         {
             Id = Guid.NewGuid(),
-            UserId = createdBy,
+            CreatedBy = createdBy,
             Name = "Sensor",
-            Visibility = visibility,
             LifespanHours = 240,
         };
         _repository
@@ -126,7 +124,7 @@ public class TrackersControllerTenantAccessTests
         var instance = new TrackerInstanceEntity
         {
             Id = Guid.NewGuid(),
-            UserId = CreatorId,
+            CreatedBy = CreatorId,
             DefinitionId = definition.Id,
             Definition = definition,
             StartedAt = DateTime.UtcNow.AddDays(-1),
@@ -142,7 +140,7 @@ public class TrackersControllerTenantAccessTests
         var preset = new TrackerPresetEntity
         {
             Id = Guid.NewGuid(),
-            UserId = CreatorId,
+            CreatedBy = CreatorId,
             Name = "Preset",
             DefinitionId = definition.Id,
             Definition = definition,
@@ -156,13 +154,13 @@ public class TrackersControllerTenantAccessTests
     // ── Reads ───────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetDefinitions_MemberSeesEveryTracker_WhoeverCreatedIt_AtEveryVisibility()
+    public async Task GetDefinitions_MemberSeesEveryTracker_WhoeverCreatedIt()
     {
         var definitions = new List<TrackerDefinitionEntity>
         {
-            Definition(TrackerVisibility.Private, createdBy: CreatorId),
-            Definition(TrackerVisibility.Public, createdBy: CreatorId),
-            Definition(TrackerVisibility.RoleRestricted, createdBy: CreatorId),
+            Definition(createdBy: CreatorId),
+            Definition(createdBy: MemberId),
+            Definition(createdBy: "33333333-3333-3333-3333-333333333333"),
         };
         _repository.Setup(r => r.GetAllDefinitionsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(definitions);
 
@@ -187,13 +185,10 @@ public class TrackersControllerTenantAccessTests
             .Which.Value.Should().BeOfType<TrackerDefinitionDto[]>().Which.Should().ContainSingle();
     }
 
-    [Theory]
-    [InlineData(TrackerVisibility.Public)]
-    [InlineData(TrackerVisibility.Private)]
-    [InlineData(TrackerVisibility.RoleRestricted)]
-    public async Task GetDefinition_MemberReadsATrackerTheyDidNotCreate(TrackerVisibility visibility)
+    [Fact]
+    public async Task GetDefinition_MemberReadsATrackerTheyDidNotCreate()
     {
-        var definition = Definition(visibility);
+        var definition = Definition();
 
         var result = await AsMember().GetDefinition(definition.Id);
 
@@ -226,7 +221,7 @@ public class TrackersControllerTenantAccessTests
 
     private async Task ReadsNothing(TrackersController controller)
     {
-        var definition = Definition(TrackerVisibility.Public);
+        var definition = Definition();
 
         (await controller.GetDefinitions()).Result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<TrackerDefinitionDto[]>().Which.Should().BeEmpty();
@@ -258,7 +253,7 @@ public class TrackersControllerTenantAccessTests
 
         result.Result.Should().BeOfType<OkObjectResult>();
         _repository.Verify(r => r.UpdateDefinitionAsync(
-            definition.Id, It.Is<TrackerDefinitionEntity>(e => e.Name == "Renamed" && e.UserId == CreatorId),
+            definition.Id, It.Is<TrackerDefinitionEntity>(e => e.Name == "Renamed" && e.CreatedBy == CreatorId),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -285,11 +280,11 @@ public class TrackersControllerTenantAccessTests
     }
 
     [Fact]
-    public async Task AckInstance_WithoutGlobal_StillBroadcastsTheAck()
+    public async Task AckInstance_BroadcastsTheAck()
     {
         var instance = Instance(Definition());
 
-        await AsMember().AckInstance(instance.Id, new AckTrackerRequest { SnoozeMins = 30, Global = false });
+        await AsMember().AckInstance(instance.Id, new AckTrackerRequest { SnoozeMins = 30 });
 
         _broadcast.Verify(b => b.BroadcastTrackerUpdateAsync(
             TrackerRealtimeAction.Ack, It.Is<TrackerInstanceDto>(d => d.Id == instance.Id)), Times.Once);

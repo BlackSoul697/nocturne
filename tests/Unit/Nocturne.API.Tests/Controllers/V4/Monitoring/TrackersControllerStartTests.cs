@@ -63,19 +63,14 @@ public class TrackersControllerStartTests
         return controller;
     }
 
-    private TrackerDefinitionEntity ArrangeDefinition(TrackerMode mode, params TrackerInstanceEntity[] running) =>
-        ArrangeDefinition(mode, TrackerVisibility.Private, running);
-
-    private TrackerDefinitionEntity ArrangeDefinition(
-        TrackerMode mode, TrackerVisibility visibility, params TrackerInstanceEntity[] running)
+    private TrackerDefinitionEntity ArrangeDefinition(TrackerMode mode, params TrackerInstanceEntity[] running)
     {
         var definition = new TrackerDefinitionEntity
         {
             Id = Guid.NewGuid(),
-            UserId = OwnerId,
+            CreatedBy = OwnerId,
             Name = "Sensor",
             Mode = mode,
-            Visibility = visibility,
             LifespanHours = mode == TrackerMode.Duration ? 240 : null,
         };
         foreach (var instance in running)
@@ -106,7 +101,7 @@ public class TrackersControllerStartTests
                     Id = Guid.NewGuid(),
                     DefinitionId = definition.Id,
                     Definition = definition,
-                    UserId = userId,
+                    CreatedBy = userId,
                     StartedAt = startedAt ?? Now,
                     ScheduledAt = scheduledAt,
                 });
@@ -114,7 +109,7 @@ public class TrackersControllerStartTests
     }
 
     private static TrackerInstanceEntity Running(DateTime startedAt) =>
-        new() { Id = Guid.NewGuid(), UserId = OwnerId, StartedAt = startedAt };
+        new() { Id = Guid.NewGuid(), CreatedBy = OwnerId, StartedAt = startedAt };
 
     [Fact]
     public async Task StartInstance_CompletesTheRunningRunAtTheNewStart()
@@ -143,13 +138,11 @@ public class TrackersControllerStartTests
         return sent;
     }
 
-    [Theory]
-    [InlineData(TrackerVisibility.Private)]
-    [InlineData(TrackerVisibility.Public)]
-    public async Task StartInstance_ByAnotherMember_ReplacesTheRunAndBroadcastsBoth(TrackerVisibility visibility)
+    [Fact]
+    public async Task StartInstance_ByAnotherMember_ReplacesTheRunAndBroadcastsBoth()
     {
         var old = Running(Now.AddDays(-3));
-        var definition = ArrangeDefinition(TrackerMode.Duration, visibility, old);
+        var definition = ArrangeDefinition(TrackerMode.Duration, old);
         var sent = RecordBroadcasts();
 
         var result = await CreateController(MemberId).StartInstance(
@@ -164,7 +157,7 @@ public class TrackersControllerStartTests
 
     private TrackerInstanceEntity ArrangeAdminStartedRun()
     {
-        var run = new TrackerInstanceEntity { Id = Guid.NewGuid(), UserId = AdminId, StartedAt = Now.AddDays(-1) };
+        var run = new TrackerInstanceEntity { Id = Guid.NewGuid(), CreatedBy = AdminId, StartedAt = Now.AddDays(-1) };
         var definition = ArrangeDefinition(TrackerMode.Duration, run);
         _repository
             .Setup(r => r.GetInstanceByIdAsync(run.Id, It.IsAny<CancellationToken>()))
@@ -290,7 +283,7 @@ public class TrackersControllerStartTests
         var preset = new TrackerPresetEntity
         {
             Id = Guid.NewGuid(),
-            UserId = MemberId,
+            CreatedBy = MemberId,
             DefinitionId = definition.Id,
             Definition = definition,
         };
@@ -347,7 +340,7 @@ public class TrackersControllerStartTests
         var existing = new TrackerDefinitionEntity
         {
             Id = Guid.NewGuid(),
-            UserId = OwnerId,
+            CreatedBy = OwnerId,
             Name = "Sensor",
             TriggerEventTypes = triggers,
             TriggerNotesContains = notes,
@@ -404,16 +397,27 @@ public class TrackersControllerStartTests
     }
 
     [Fact]
-    public async Task UpdateDefinition_DropsAStoredTriggerThatPredatesTheList_InsteadOfRejectingTheSave()
+    public async Task UpdateDefinition_RejectsATriggerNotInTheList()
     {
-        var existing = ArrangeStored("[\"Pump Suspend\",\"Sensor Start\"]", null);
+        var existing = ArrangeStored("[\"Sensor Start\"]", null);
 
         var result = await CreateController().UpdateDefinition(existing.Id, new UpdateTrackerDefinitionRequest
         {
             TriggerEventTypes = ["Pump Suspend", "Sensor Start"],
         });
 
-        result.Result.Should().BeOfType<OkObjectResult>();
-        existing.TriggerEventTypes.Should().Be("[\"Sensor Start\"]");
+        result.Result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact]
+    public void Dto_ListsOnlyTriggersInTheList()
+    {
+        var dto = TrackerDefinitionDto.FromEntity(new TrackerDefinitionEntity
+        {
+            TriggerEventTypes = "[\"Pump Suspend\",\"sensor start\"]",
+        });
+
+        dto.TriggerEventTypes.Should().Equal("Sensor Start");
     }
 }

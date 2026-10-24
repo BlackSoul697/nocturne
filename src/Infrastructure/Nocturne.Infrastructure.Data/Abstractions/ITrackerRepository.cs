@@ -8,7 +8,7 @@ namespace Nocturne.Infrastructure.Data.Abstractions;
 /// </summary>
 /// <remarks>
 /// Trackers are the tenant's, not a member's: every read returns the whole tenant's rows, scoped
-/// by the tenant filter and RLS alone. The <c>UserId</c> a row carries records who created it.
+/// by the tenant filter and RLS alone. The <c>CreatedBy</c> a row carries records who created it.
 /// </remarks>
 public interface ITrackerRepository
 {
@@ -118,7 +118,7 @@ public interface ITrackerRepository
     /// </summary>
     Task<TrackerInstanceEntity> StartInstanceAsync(
         Guid definitionId,
-        string userId,
+        string createdBy,
         string? startNotes = null,
         string? startTreatmentId = null,
         DateTime? startedAt = null,

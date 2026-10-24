@@ -60,7 +60,7 @@ internal sealed class DeviceTrackerProvisioner(ITrackerRepository trackers, ISig
 
             var definition = await trackers.CreateDefinitionAsync(new TrackerDefinitionEntity
             {
-                UserId = userId,
+                CreatedBy = userId,
                 Name = spec.Name,
                 Category = spec.Category,
                 Icon = spec.Icon,

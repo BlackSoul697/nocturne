@@ -135,7 +135,6 @@ public class TrackerRepository : ITrackerRepository
         existing.LifespanHours = updated.LifespanHours;
         existing.IsFavorite = updated.IsFavorite;
         existing.DashboardVisibility = updated.DashboardVisibility;
-        existing.Visibility = updated.Visibility;
         existing.StartEventType = updated.StartEventType;
         existing.CompletionEventType = updated.CompletionEventType;
         existing.UpdatedAt = DateTime.UtcNow;
@@ -360,7 +359,7 @@ public class TrackerRepository : ITrackerRepository
     /// Start a new tracker instance
     /// </summary>
     /// <param name="definitionId">The identifier of the definition to instantiate.</param>
-    /// <param name="userId">The user ID.</param>
+    /// <param name="createdBy">The subject starting the instance.</param>
     /// <param name="startNotes">Optional initial notes.</param>
     /// <param name="startTreatmentId">Optional starting treatment ID.</param>
     /// <param name="startedAt">Optional start timestamp.</param>
@@ -369,7 +368,7 @@ public class TrackerRepository : ITrackerRepository
     /// <returns>The newly started tracker instance.</returns>
     public virtual async Task<TrackerInstanceEntity> StartInstanceAsync(
         Guid definitionId,
-        string userId,
+        string createdBy,
         string? startNotes = null,
         string? startTreatmentId = null,
         DateTime? startedAt = null,
@@ -382,7 +381,7 @@ public class TrackerRepository : ITrackerRepository
         var instance = new TrackerInstanceEntity
         {
             Id = Guid.CreateVersion7(),
-            UserId = userId,
+            CreatedBy = createdBy,
             DefinitionId = definitionId,
             StartedAt = startedAt ?? DateTime.UtcNow,
             StartNotes = startNotes,

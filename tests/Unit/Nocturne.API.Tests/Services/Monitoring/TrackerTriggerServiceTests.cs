@@ -55,7 +55,7 @@ public class TrackerTriggerServiceTests
                 {
                     Id = Guid.NewGuid(),
                     DefinitionId = definitionId,
-                    UserId = userId,
+                    CreatedBy = userId,
                     StartNotes = startNotes,
                     StartTreatmentId = startTreatmentId,
                     StartedAt = startedAt ?? DateTime.UtcNow,
@@ -112,7 +112,7 @@ public class TrackerTriggerServiceTests
         {
             Id = Guid.NewGuid(),
             Name = "Infusion Site",
-            UserId = userId,
+            CreatedBy = userId,
             LifespanHours = lifespanHours,
             Mode = mode,
             TriggerNotesContains = triggerNotesContains,
@@ -129,7 +129,7 @@ public class TrackerTriggerServiceTests
         {
             Id = Guid.NewGuid(),
             DefinitionId = definition.Id,
-            UserId = definition.UserId,
+            CreatedBy = definition.CreatedBy,
             StartedAt = startedAt,
             StartTreatmentId = startTreatmentId,
         };
@@ -218,7 +218,7 @@ public class TrackerTriggerServiceTests
         await _sut.OnCreatedAsync([Event(new DateTime(2026, 9, 11, 10, 43, 30, DateTimeKind.Utc))]);
 
         // A connector-ingested event carries no user, so ownership can only come from the definition.
-        _started.Should().ContainSingle().Which.UserId.Should().Be("someone-else");
+        _started.Should().ContainSingle().Which.CreatedBy.Should().Be("someone-else");
     }
 
     [Fact]
@@ -428,7 +428,7 @@ public class TrackerTriggerServiceTests
         {
             Id = Guid.NewGuid(),
             DefinitionId = definition.Id,
-            UserId = definition.UserId,
+            CreatedBy = definition.CreatedBy,
             Definition = definition,
             StartTreatmentId = startedBy?.Id.ToString(),
             StartedAt = startedAt,

@@ -131,8 +131,8 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
         {
             if (minutes is null)
             {
-                // Misconfigured (negative threshold without lifespan) — matches the legacy
-                // evaluator's skip. Leave any previously synced rule in place untouched.
+                // A negative threshold without a lifespan can never fire. Leave any previously
+                // synced rule in place untouched.
                 if (threshold.AlertRuleId is { } existingId) keptRuleIds.Add(existingId);
                 continue;
             }
@@ -178,10 +178,7 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
                     Severity = severity,
                     ManagedBy = tag,
                     IsEnabled = true,
-                    // Quiet-hours opt-out on the threshold maps onto the alert engine's DND
-                    // bypass. Create-time seed only — the rule editor owns it afterwards.
-                    AllowThroughDnd = !threshold.RespectQuietHours,
-                    ClientConfiguration = BuildClientConfiguration(threshold),
+                    ClientConfiguration = "{}",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                 };
@@ -353,7 +350,7 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
     private static async Task<string> InAppRecipientOfAsync(
         NocturneDbContext db, Guid tenantId, TrackerDefinitionEntity definition, CancellationToken ct)
     {
-        var recipient = await InAppRecipients.ResolveAsync(db, tenantId, definition.UserId, ct)
+        var recipient = await InAppRecipients.ResolveAsync(db, tenantId, definition.CreatedBy, ct)
             ?? await InAppRecipients.EarliestOwnerAsync(db, tenantId, ct);
         return recipient?.ToString() ?? string.Empty;
     }
@@ -415,23 +412,6 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
         NotificationUrgency.Warn => AlertRuleSeverity.Warning,
         _ => AlertRuleSeverity.Info,
     };
-
-    /// <summary>
-    /// Seeds the rule's client presentation config from the threshold's legacy audio
-    /// settings. Create-time seed only — the rule editor owns it afterwards.
-    /// </summary>
-    private static string BuildClientConfiguration(TrackerNotificationThresholdEntity threshold)
-    {
-        if (!threshold.AudioEnabled && !threshold.VibrateEnabled)
-            return "{}";
-
-        return JsonSerializer.Serialize(new
-        {
-            audioEnabled = threshold.AudioEnabled,
-            audioSound = threshold.AudioSound,
-            vibrateEnabled = threshold.VibrateEnabled,
-        });
-    }
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max];
