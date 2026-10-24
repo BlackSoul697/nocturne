@@ -2547,7 +2547,8 @@ public partial class StatisticsService : IStatisticsService
     /// with each <paramref name="userTimeZone"/>-local hour-of-day bucket: a TempBasal that runs
     /// 13:55–14:25 local contributes 5 minutes to bucket 13 and 25 minutes to bucket 14. When
     /// <paramref name="userTimeZone"/> is null there is no local hour to bucket on, so the hourly
-    /// percentiles are empty and every other figure is unaffected.
+    /// percentiles are empty and every other figure is unaffected. <see cref="BasalStats.AvgRate"/>
+    /// weights each delivered piece by the time it ran.
     /// </summary>
     public BasalAnalysisResponse CalculateBasalAnalysis(
         IEnumerable<TempBasal> tempBasals,
@@ -2562,6 +2563,8 @@ public partial class StatisticsService : IStatisticsService
 
         var allRates = new List<double>();
         double totalDelivered = 0;
+        double rateTimeMs = 0;
+        long totalDurationMs = 0;
         int tempBasalCount = 0;
         int highTempCount = 0;
         int lowTempCount = 0;
@@ -2577,6 +2580,9 @@ public partial class StatisticsService : IStatisticsService
                 continue;
             allRates.Add(rate);
             totalDelivered += GetTempBasalInsulin(tb) ?? 0;
+            var durationMs = tb.EndMills!.Value - tb.StartMills;
+            rateTimeMs += rate * durationMs;
+            totalDurationMs += durationMs;
 
             if (userTimeZone is not null)
                 DistributeAcrossHourOfDay(tb.StartMills, tb.EndMills!.Value, rate, userTimeZone, hourlyRates);
@@ -2600,7 +2606,7 @@ public partial class StatisticsService : IStatisticsService
         var basalStats = new BasalStats
         {
             Count = tempBasalList.Count,
-            AvgRate = allRates.Count > 0 ? Math.Round(allRates.Average() * 100) / 100 : 0,
+            AvgRate = totalDurationMs > 0 ? Math.Round(rateTimeMs / totalDurationMs * 100) / 100 : 0,
             MinRate = allRates.Count > 0 ? Math.Round(allRates.Min() * 100) / 100 : 0,
             MaxRate = allRates.Count > 0 ? Math.Round(allRates.Max() * 100) / 100 : 0,
             TotalDelivered = Math.Round(totalDelivered * 100) / 100,

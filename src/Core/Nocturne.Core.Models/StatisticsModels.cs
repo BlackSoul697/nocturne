@@ -1888,7 +1888,7 @@ public class BasalStats
     public int Count { get; set; }
 
     /// <summary>
-    /// Average basal rate in U/hr
+    /// Time-weighted average basal rate in U/hr
     /// </summary>
     public double AvgRate { get; set; }
 
