@@ -39,30 +39,6 @@ public class CobCalculator(
         CancellationToken ct = default
     )
     {
-        var hasData = await therapySettingsResolver.HasDataAsync(ct);
-
-        if (hasData)
-        {
-            try
-            {
-                var sens = await GetSensitivityOrDefaultAsync(time, ct);
-                var carbRatio = await GetCarbRatioOrDefaultAsync(time, ct);
-                if (sens <= 0 || carbRatio <= 0)
-                {
-                    logger.LogWarning(
-                        "For the COB plugin to function your treatment profile must have both sens and carbratio fields. Using defaults."
-                    );
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(
-                    ex,
-                    "For the COB plugin to function your treatment profile must have both sens and carbratio fields. Using defaults."
-                );
-            }
-        }
-
         // A reported COB of exactly zero is a real value ("no carbs on board"), not a missing one.
         if (await GetDeviceCobAsync(time, live, ct) is { } deviceCob)
         {
@@ -90,8 +66,7 @@ public class CobCalculator(
         return AddDisplay(result);
     }
 
-    /// <inheritdoc />
-    public async Task<CobResult> FromCarbIntakesAsync(
+    internal async Task<CobResult> FromCarbIntakesAsync(
         List<CarbIntake> carbIntakes,
         List<Bolus>? boluses,
         List<TempBasal>? tempBasals,
@@ -197,80 +172,6 @@ public class CobCalculator(
         }
 
         return ToResult(acc, SensitivityAt(time), CarbRatioAt(time), CarbAbsorptionAt(time));
-    }
-
-    /// <inheritdoc />
-    public async Task<CarbCobContribution> CalcCarbIntakeAsync(
-        CarbIntake carbIntake,
-        long time,
-        CancellationToken ct = default
-    )
-    {
-        var currentTime = time;
-
-        var hasData = await therapySettingsResolver.HasDataAsync(ct);
-        if (!hasData)
-        {
-            logger.LogWarning("For the COB plugin to function you need a treatment profile");
-            return new CarbCobContribution();
-        }
-
-        double carbRatio;
-        try
-        {
-            var sens = await GetSensitivityOrDefaultAsync(currentTime, ct);
-            carbRatio = await GetCarbRatioOrDefaultAsync(currentTime, ct);
-            if (sens <= 0 || carbRatio <= 0)
-            {
-                logger.LogWarning(
-                    "For the COB plugin to function your treatment profile must have both sens and carbratio fields"
-                );
-                return new CarbCobContribution();
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(
-                ex,
-                "For the COB plugin to function your treatment profile must have both sens and carbratio fields"
-            );
-            return new CarbCobContribution();
-        }
-
-        var cobContrib = 0.0;
-        var activityContrib = 0.0;
-        long? decayedBy = null;
-        var isDecaying = false;
-        if (IsOnBoard(carbIntake, currentTime))
-        {
-            var profileRate = await GetCarbAbsorptionRateOrDefaultAsync(carbIntake.Mills, ct);
-            var cCalc = CobCalc(carbIntake, 0, currentTime, profileRate);
-            if (cCalc != null)
-            {
-                var decayedByTime = cCalc.DecayedBy.ToUnixTimeMilliseconds();
-                var decaysinHr = HoursUntil(decayedByTime, currentTime);
-                cobContrib =
-                    decaysinHr > 0
-                        ? Math.Min(carbIntake.Carbs, decaysinHr * CarbsPerHour(carbIntake, profileRate))
-                        : 0;
-
-                decayedBy = decayedByTime;
-                isDecaying = cCalc.IsDecaying > 0;
-            }
-        }
-
-        if (cobContrib > 0 && carbRatio > 0)
-        {
-            activityContrib = cobContrib / carbRatio;
-        }
-
-        return new CarbCobContribution
-        {
-            CobContrib = cobContrib,
-            ActivityContrib = activityContrib,
-            DecayedBy = decayedBy,
-            IsDecaying = isDecaying,
-        };
     }
 
     #region Private Helpers

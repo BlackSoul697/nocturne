@@ -48,9 +48,6 @@ public class CobCalculatorParityTests
 
         var therapySettings = new Mock<ITherapySettingsResolver>();
         therapySettings
-            .Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        therapySettings
             .Setup(t => t.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(DefaultCarbAbsorptionRate);
         therapySettings
@@ -96,13 +93,12 @@ public class CobCalculatorParityTests
         );
     }
 
-    private static CarbIntake MakeCarbIntake(long mills, double carbs, int? absorptionTime = null)
+    private static CarbIntake MakeCarbIntake(long mills, double carbs)
     {
         return new CarbIntake
         {
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime,
             Carbs = carbs,
-            AbsorptionTime = absorptionTime,
         };
     }
 
@@ -165,55 +161,6 @@ public class CobCalculatorParityTests
         Assert.Equal(0.0, result3.Cob, 1);
         Assert.Equal(0.0, result4.Cob, 1);
         Assert.Equal(0.0, result5.Cob, 1);
-    }
-
-    #endregion
-
-    #region CobServiceTests Parity — CalcTreatment tests mapped to CalcCarbIntake
-
-    [Fact]
-    public async Task CalcCarbIntake_NoCarbs_ShouldReturnZero()
-    {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var carbIntake = MakeCarbIntake(now, 0);
-
-        var result = await _calculator.CalcCarbIntakeAsync(carbIntake, now);
-
-        Assert.Equal(0.0, result.CobContrib);
-        Assert.Equal(0.0, result.ActivityContrib);
-    }
-
-    [Fact]
-    public async Task CalcCarbIntake_LinearAbsorption_ShouldDecreaseOverTime()
-    {
-        var startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var carbIntake = MakeCarbIntake(startTime, 60);
-
-        var rightAfter = await _calculator.CalcCarbIntakeAsync(carbIntake, startTime + 1000);
-        var after30Min = await _calculator.CalcCarbIntakeAsync(carbIntake, startTime + 30 * 60 * 1000);
-        var after60Min = await _calculator.CalcCarbIntakeAsync(carbIntake, startTime + 60 * 60 * 1000);
-        var after120Min = await _calculator.CalcCarbIntakeAsync(carbIntake, startTime + 120 * 60 * 1000);
-
-        Assert.True(rightAfter.CobContrib > after30Min.CobContrib);
-        Assert.True(after30Min.CobContrib > after60Min.CobContrib);
-        Assert.True(after60Min.CobContrib > after120Min.CobContrib);
-        Assert.True(after120Min.CobContrib >= 0);
-    }
-
-    [Fact]
-    public async Task CalcCarbIntake_WithCustomAbsorptionTime_ShouldUseCustomTime()
-    {
-        var startTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var fastIntake = MakeCarbIntake(startTime, 30, absorptionTime: 60);
-        var slowIntake = MakeCarbIntake(startTime, 30, absorptionTime: 240);
-
-        var testTime = startTime + 90 * 60 * 1000;
-
-        var fastResult = await _calculator.CalcCarbIntakeAsync(fastIntake, testTime);
-        var slowResult = await _calculator.CalcCarbIntakeAsync(slowIntake, testTime);
-
-        Assert.True(slowResult.CobContrib > fastResult.CobContrib);
-        Assert.Equal(0.0, fastResult.CobContrib, 1);
     }
 
     #endregion
