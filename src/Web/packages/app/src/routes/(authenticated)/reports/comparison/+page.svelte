@@ -86,11 +86,11 @@
       const lastMonthEnd = thisMonthStart.subtract({ days: 1 });
       return {
         a: {
-          label: "Last Month",
+          label: "Last month",
           from: lastMonthStart.toString(),
           to: lastMonthEnd.toString(),
         },
-        b: { label: "This Month", from: thisMonthStart.toString(), to: today },
+        b: { label: "This month", from: thisMonthStart.toString(), to: today },
       };
     }
 
@@ -105,10 +105,10 @@
   }
 
   const presetOptions: { value: Preset; label: string }[] = [
-    { value: "last7-prior7", label: "Last 7 vs Prior 7 days" },
-    { value: "last14-prior14", label: "Last 14 vs Prior 14 days" },
-    { value: "last30-prior30", label: "Last 30 vs Prior 30 days" },
-    { value: "thisMonth-lastMonth", label: "This Month vs Last Month" },
+    { value: "last7-prior7", label: "Last 7 vs prior 7 days" },
+    { value: "last14-prior14", label: "Last 14 vs prior 14 days" },
+    { value: "last30-prior30", label: "Last 30 vs prior 30 days" },
+    { value: "thisMonth-lastMonth", label: "This month vs last month" },
     { value: "custom", label: "Custom" },
   ];
 
@@ -205,10 +205,10 @@
   // Both periods register with the layout's ResourceContext, which merges them:
   // either side's failure surfaces and Retry refetches both.
   const queryA = contextResource(() => getReportsAnalysis(inputA), {
-    errorTitle: "Error Loading Comparison",
+    errorTitle: "Error loading comparison",
   });
   const queryB = contextResource(() => getReportsAnalysis(inputB), {
-    errorTitle: "Error Loading Comparison",
+    errorTitle: "Error loading comparison",
   });
 
   type MetricKey =
@@ -246,7 +246,7 @@
     }
   > = {
     tirTarget: {
-      label: "Time in Range",
+      label: "Time in range",
       format: (v) => `${v.toFixed(1)}%`,
       formatDelta: (d) => `${signed(d)} pp`,
     },
@@ -261,32 +261,32 @@
       formatDelta: (d) => `${signed(d)} pp`,
     },
     gri: {
-      label: "Glycemic Risk Index",
+      label: "Glycemic risk index",
       format: (v) => v.toFixed(0),
       formatDelta: (d) => signed(d, 0),
     },
     mean: {
-      label: "Mean Glucose",
+      label: "Mean glucose",
       format: (v) => `${bg(v)} ${bgLabel()}`,
       formatDelta: (d) => `${bgDelta(d)} ${bgLabel()}`,
     },
     hyperMinutesPerDay: {
-      label: "Hyper Time / Day",
+      label: "Hyper time / day",
       format: formatMinutesDuration,
       formatDelta: signedDuration,
     },
     hyperEventsPerDay: {
-      label: "Hyper Events / Day",
+      label: "Hyper events / day",
       format: (v) => v.toFixed(2),
       formatDelta: (d) => signed(d, 2, 0.005),
     },
     hypoMinutesPerDay: {
-      label: "Hypo Time / Day",
+      label: "Hypo time / day",
       format: formatMinutesDuration,
       formatDelta: signedDuration,
     },
     hypoEventsPerDay: {
-      label: "Hypo Events / Day",
+      label: "Hypo events / day",
       format: (v) => v.toFixed(2),
       formatDelta: (d) => signed(d, 2, 0.005),
     },
@@ -630,7 +630,7 @@
 
   <Card.Root>
     <Card.Header>
-      <Card.Title>Time in Range: stacked comparison</Card.Title>
+      <Card.Title>Time in range: stacked comparison</Card.Title>
       <Card.Description>
         Vertical stacked bars showing the full TIR breakdown for each period.
       </Card.Description>

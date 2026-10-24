@@ -56,21 +56,21 @@ describe("hypo comparison rows", () => {
 
   it("shows per-day time and events and a positive change from a measured zero", async () => {
     render(ComparisonPage);
-    const duration = await cells("Hypo Time / Day");
+    const duration = await cells("Hypo time / day");
     expect(duration.slice(1, 3)).toEqual(["0m", "30m"]);
     expect(duration[4]).toBe("+30m");
-    const events = await cells("Hypo Events / Day");
+    const events = await cells("Hypo events / day");
     expect(events.slice(1, 3)).toEqual(["0.00", "1.50"]);
     expect(events[4]).toBe("+1.50");
-    expect((await cells("Hyper Time / Day"))[4]).toBe("±0m");
-    expect((await cells("Hyper Events / Day"))[4]).toBe("±0");
+    expect((await cells("Hyper time / day"))[4]).toBe("±0m");
+    expect((await cells("Hyper events / day"))[4]).toBe("±0");
   });
 
   it("shows a low rate that one decimal would round to zero", async () => {
     periodA = analysis(0, 0.03);
     periodB = analysis(0, 0.04);
     render(ComparisonPage);
-    const events = await cells("Hypo Events / Day");
+    const events = await cells("Hypo events / day");
     expect(events.slice(1, 3)).toEqual(["0.03", "0.04"]);
     expect(events[4]).toBe("+0.01");
   });
@@ -78,18 +78,18 @@ describe("hypo comparison rows", () => {
   it("shows a negative change when the second period has fewer lows", async () => {
     periodA = analysis(90, 3);
     render(ComparisonPage);
-    expect((await cells("Hypo Time / Day"))[4]).toBe("−1h");
-    expect((await cells("Hypo Events / Day"))[4]).toBe("−1.50");
+    expect((await cells("Hypo time / day"))[4]).toBe("−1h");
+    expect((await cells("Hypo events / day"))[4]).toBe("−1.50");
   });
 
   it("shows no data instead of comparing a missing period against zero", async () => {
     periodA = { basicStats: { count: 0 } };
     periodB = analysis(0, 0);
     render(ComparisonPage);
-    const duration = await cells("Hypo Time / Day");
+    const duration = await cells("Hypo time / day");
     expect(duration.slice(1, 3)).toEqual(["No data", "0m"]);
     expect(duration[4]).toBe("—");
-    const events = await cells("Hypo Events / Day");
+    const events = await cells("Hypo events / day");
     expect(events.slice(1, 3)).toEqual(["No data", "0.00"]);
     expect(events[4]).toBe("—");
   });
