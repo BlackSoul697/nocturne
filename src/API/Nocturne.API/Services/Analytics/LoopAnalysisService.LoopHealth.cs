@@ -105,25 +105,20 @@ internal sealed partial class LoopAnalysisService
         IReadOnlyList<ProfileSpan> profiles, long to, CancellationToken ct)
     {
         var versions = await VersionsByProfileAsync(profiles, therapySettingsRepository, ct);
+        return MaximumBasalRateSteps(profiles, versions, to);
+    }
 
+    internal static StepTimeline<double> MaximumBasalRateSteps(
+        IReadOnlyList<ProfileSpan> profiles, IReadOnlyDictionary<string, TherapySettings[]> versions, long to)
+    {
         var steps = new List<Step<double>>();
         foreach (var profile in profiles)
         {
-            var start = profile.StartMills;
-            var end = profile.EndMills ?? to;
-            var bounds = versions[profile.ProfileName]
-                .Select(v => v.Timestamp.ToMills())
-                .Where(m => m > start && m < end)
-                .Append(start)
-                .Append(end)
-                .Distinct()
-                .Order()
-                .ToList();
-            for (var i = 0; i + 1 < bounds.Count; i++)
+            foreach (var slice in ProfileVersionCache.Slice(
+                versions[profile.ProfileName], profile.StartMills, profile.EndMills ?? to))
             {
-                var settings = ProfileVersionCache.ActiveAt(versions[profile.ProfileName], ToUtc(bounds[i]));
-                if (settings?.LoopSettings?.MaximumBasalRatePerHour is { } maximum)
-                    steps.Add(new Step<double>(bounds[i], bounds[i + 1], maximum));
+                if (slice.Version.LoopSettings?.MaximumBasalRatePerHour is { } maximum)
+                    steps.Add(new Step<double>(slice.StartMills, slice.EndMills, maximum));
             }
         }
         return StepTimeline<double>.LatestStartedWins(steps);
