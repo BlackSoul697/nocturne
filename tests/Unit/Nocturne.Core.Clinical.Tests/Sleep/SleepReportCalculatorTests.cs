@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Models;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Models.Sleep.Report;
@@ -904,7 +905,7 @@ public class SleepReportCalculatorTests
         };
 
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 11), to: new DateTime(2026, 5, 24), DayOfWeek.Monday);
+            nights, from: new DateOnly(2026, 5, 11), to: new DateOnly(2026, 5, 24), DayOfWeek.Monday);
 
         result.Should().HaveCount(2);
 
@@ -934,9 +935,9 @@ public class SleepReportCalculatorTests
         };
 
         var sunday = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 10), to: new DateTime(2026, 5, 23), DayOfWeek.Sunday);
+            nights, from: new DateOnly(2026, 5, 10), to: new DateOnly(2026, 5, 23), DayOfWeek.Sunday);
         var monday = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 11), to: new DateTime(2026, 5, 24), DayOfWeek.Monday);
+            nights, from: new DateOnly(2026, 5, 11), to: new DateOnly(2026, 5, 24), DayOfWeek.Monday);
 
         sunday.Select(w => (w.WeekStart, w.WeekEnd, w.NightCount)).Should().Equal(
             (new DateTime(2026, 5, 10), new DateTime(2026, 5, 16), 1),
@@ -956,7 +957,7 @@ public class SleepReportCalculatorTests
         };
 
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 4), to: new DateTime(2026, 5, 24), DayOfWeek.Monday);
+            nights, from: new DateOnly(2026, 5, 4), to: new DateOnly(2026, 5, 24), DayOfWeek.Monday);
 
         result.Should().HaveCount(3);
         result[1].WeekStart.Should().Be(new DateTime(2026, 5, 11));
@@ -970,7 +971,7 @@ public class SleepReportCalculatorTests
     {
         // Range Wed May 13 – Tue May 19: 5 days of the first week, 2 of the second.
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            [], from: new DateTime(2026, 5, 13), to: new DateTime(2026, 5, 19), DayOfWeek.Monday);
+            [], from: new DateOnly(2026, 5, 13), to: new DateOnly(2026, 5, 19), DayOfWeek.Monday);
 
         result.Should().HaveCount(2);
         result[0].DaysInRange.Should().Be(5);
@@ -984,7 +985,7 @@ public class SleepReportCalculatorTests
         var nights = new[] { MakeNight(new DateTime(2026, 5, 18, 1, 0, 0, DateTimeKind.Utc)) };
 
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 11), to: new DateTime(2026, 5, 24), DayOfWeek.Monday);
+            nights, from: new DateOnly(2026, 5, 11), to: new DateOnly(2026, 5, 24), DayOfWeek.Monday);
 
         result[0].WeekStart.Should().Be(new DateTime(2026, 5, 11));
         result[0].NightCount.Should().Be(1);
@@ -999,7 +1000,7 @@ public class SleepReportCalculatorTests
         var nights = new[] { MakeNight(new DateTime(2026, 5, 18, 0, 30, 0, DateTimeKind.Utc)) };
 
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            nights, from: new DateTime(2026, 5, 18), to: new DateTime(2026, 5, 24), DayOfWeek.Monday);
+            nights, from: new DateOnly(2026, 5, 18), to: new DateOnly(2026, 5, 24), DayOfWeek.Monday);
 
         result.Should().HaveCount(2);
         result[0].WeekStart.Should().Be(new DateTime(2026, 5, 11));
@@ -1011,8 +1012,26 @@ public class SleepReportCalculatorTests
     public void ComputeWeekSummaries_EmptyRange_ReturnsEmpty()
     {
         var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
-            [], from: new DateTime(2026, 5, 18), to: new DateTime(2026, 5, 11), DayOfWeek.Monday);
+            [], from: new DateOnly(2026, 5, 18), to: new DateOnly(2026, 5, 11), DayOfWeek.Monday);
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_RangeStartingOnTheWeeksFirstDayEastOfUtc_HasNoEarlierWeek()
+    {
+        // Sydney Mon 12 Jan 2026 00:00 is Sun 11 Jan 13:00 UTC, so the UTC date falls in the week before.
+        var sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+        var days = LocalSlotBinning.LocalDays(
+            new DateTime(2026, 1, 11, 13, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 18, 12, 59, 59, 999, DateTimeKind.Utc),
+            sydney);
+
+        var result = Clinical.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            [], from: days[0], to: days[^1], DayOfWeek.Monday);
+
+        result.Should().ContainSingle();
+        result[0].WeekStart.Should().Be(new DateTime(2026, 1, 12));
+        result[0].DaysInRange.Should().Be(7);
     }
 }

@@ -19,7 +19,7 @@ public class SleepReportControllerTests
     {
         _service
             .Setup(s => s.GetTrendsReportAsync(
-                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<SleepSource?>(), It.IsAny<TimeZoneInfo?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SleepTrendsReport());
 
         _controller = new SleepReportController(_service.Object, TenantClockDoubles.In("Europe/London"));
@@ -28,7 +28,7 @@ public class SleepReportControllerTests
     private void VerifyNotBuilt() =>
         _service.Verify(
             s => s.GetTrendsReportAsync(
-                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()),
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<SleepSource?>(), It.IsAny<TimeZoneInfo?>(), It.IsAny<CancellationToken>()),
             Times.Never);
 
     [Fact]
@@ -77,5 +77,17 @@ public class SleepReportControllerTests
 
         result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(400);
         VerifyNotBuilt();
+    }
+
+    [Fact]
+    public async Task GetTrends_builds_the_report_in_the_tenants_zone()
+    {
+        await _controller.GetTrends(From, From.AddDays(3));
+
+        _service.Verify(
+            s => s.GetTrendsReportAsync(
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<SleepSource?>(),
+                It.Is<TimeZoneInfo?>(z => z != null && z.Id == "Europe/London"), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }
