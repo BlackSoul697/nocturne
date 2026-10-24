@@ -1109,7 +1109,7 @@ public class TddCalculationTests
         result.Stats.Count.Should().Be(4);
         result.Stats.MinRate.Should().Be(0.8);
         result.Stats.MaxRate.Should().Be(1.5);
-        result.Stats.AvgRate.Should().Be(1.1); // (0.8 + 1.2 + 1.5 + 0.9) / 4
+        result.Stats.AvgRate.Should().Be(1.1); // four equal 60-minute segments, so the time-weighted mean is the plain mean
 
         // Total delivered: 0.8 + 1.2 + 1.5 + 0.9 = 4.4 U (each is rate * 60min / 60)
         result.Stats.TotalDelivered.Should().Be(4.4);
