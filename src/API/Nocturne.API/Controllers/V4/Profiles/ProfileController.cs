@@ -191,12 +191,9 @@ public class ProfileController : ControllerBase, IWriteScopedController
         if (this.RejectDateSpan(from, to) is { } overlong)
             return overlong;
 
-        var profiles = await activeSchedules.GetForRangeAsync(ToMills(from), ToMills(to), ct);
+        var profiles = await activeSchedules.GetForRangeAsync(from.ToMills(), to.ToMills(), ct);
         return Ok(profiles.ToList());
     }
-
-    private static long ToMills(DateTime instant) =>
-        new DateTimeOffset(DateTime.SpecifyKind(instant, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
     /// <summary>
     /// Make the newest settings row of <paramref name="profileName"/> (exact name) the tenant's only default profile.

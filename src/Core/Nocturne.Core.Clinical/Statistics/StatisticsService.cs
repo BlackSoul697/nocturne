@@ -2352,7 +2352,7 @@ public partial class StatisticsService : IStatisticsService
     public static List<TempBasal> DeliveredWithin(
         IEnumerable<TempBasal> tempBasals, DateTime startDate, long untilMills)
     {
-        var startMills = new DateTimeOffset(startDate.AsUtc()).ToUnixTimeMilliseconds();
+        var startMills = startDate.ToMills();
         var result = new List<TempBasal>();
         foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
         {

@@ -2082,7 +2082,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
                 continue;
             }
 
-            var storedAt = rows.Select(r => ToMills(r.At)).ToHashSet();
+            var storedAt = rows.Select(r => r.At.ToMills()).ToHashSet();
             var target = group.FirstOrDefault(t => storedAt.Contains(t.Mills)) ?? group[0];
             if (!held.Contains(target.Id!))
                 moves.Add((rows.Key, target.Id!));
@@ -2123,9 +2123,6 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         await _profileActivationWriter.InvalidateAsync(ct);
         return rekeyed;
     }
-
-    private static long ToMills(DateTime at) =>
-        new DateTimeOffset(DateTime.SpecifyKind(at, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
     /// <summary>Stages a user tombstone like each of <paramref name="tombstones"/> under each of <paramref name="keys"/>.</summary>
     private static void AddTombstoneCopies<T>(
