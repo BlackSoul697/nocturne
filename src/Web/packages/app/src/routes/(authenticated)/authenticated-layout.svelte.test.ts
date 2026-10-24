@@ -60,6 +60,7 @@ function layoutData(overrides: Partial<LayoutData> = {}): LayoutData {
     isShareHost: false,
     canViewRealtimeData: false,
     showBackupSignInPrompt: false,
+    tenantTargets: [],
     isDemo: false,
     isGuestSession: false,
     isPlatformAdmin: false,
