@@ -10,6 +10,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Services;
+using Nocturne.API.Authorization;
 
 namespace Nocturne.API.Controllers.V4.Monitoring;
 
@@ -29,6 +30,7 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 [ApiController]
 [Authorize]
 [Route("api/v4/tenant-alert-settings")]
+[DenyNoAccountViewer]
 [Tags("Monitoring")]
 public class TenantAlertSettingsController : ControllerBase
 {

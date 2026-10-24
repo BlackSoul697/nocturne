@@ -303,6 +303,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The alarm configuration</returns>
     [HttpGet("notifications/alarms")]
+    [DenyNoAccountViewer]
     [RequireScope(Scope.AlertsRead)]
     [ProducesResponseType(typeof(UserAlarmConfiguration), 200)]
     [ProducesResponseType(500)]

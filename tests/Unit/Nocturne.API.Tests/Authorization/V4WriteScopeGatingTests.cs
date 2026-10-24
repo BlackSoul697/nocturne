@@ -448,7 +448,7 @@ public class V4WriteScopeGatingTests
     public void ReadOnlyGuestLinkScopes_CannotWriteGlucose()
     {
         // The maximum a guest link can hold: GuestLinkService.AllowedGuestScopes is read-only.
-        var guestScopes = Scope.Normalize([Scope.HealthRead, Scope.TherapyRead, Scope.ReportsRead]);
+        var guestScopes = Scope.Normalize([Scope.HealthRead, Scope.TherapyRead, Scope.ReportsRead, Scope.AlertsRead]);
 
         var result = Evaluate(NewSensorGlucoseController(), authenticated: true, guestScopes.ToArray());
 
@@ -844,7 +844,7 @@ public class V4WriteScopeGatingTests
         var controller = ApiAssembly.GetType(controllerTypeName)!;
 
         // The maximum a guest link holds (GuestLinkService.AllowedGuestScopes, read-only).
-        var guestScopes = Scope.Normalize([Scope.HealthRead, Scope.TherapyRead, Scope.ReportsRead]);
+        var guestScopes = Scope.Normalize([Scope.HealthRead, Scope.TherapyRead, Scope.ReportsRead, Scope.AlertsRead]);
 
         EvaluateAction(controller, actionName, authenticated: true, guestScopes.ToArray())
             .Should().BeOfType<ForbidResult>("a read-only session must not reach this write action");

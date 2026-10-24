@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
+using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.Core.Contracts.Alerts;
@@ -95,6 +96,7 @@ public class AlertsController : ControllerBase
                 .ToHashSetAsync(ct)
             : new HashSet<Guid>();
 
+        var namesAcknowledger = NamesMembers();
         var now = DateTime.UtcNow;
         var result = excursions.Select(e => new ActiveExcursionResponse
         {
@@ -105,7 +107,7 @@ public class AlertsController : ControllerBase
             Severity = e.AlertRule?.Severity ?? AlertRuleSeverity.Warning,
             StartedAt = e.StartedAt,
             AcknowledgedAt = e.AcknowledgedAt,
-            AcknowledgedBy = e.AcknowledgedBy,
+            AcknowledgedBy = namesAcknowledger ? e.AcknowledgedBy : null,
             MutedByCaller = mutedByCaller.Contains(e.Id),
             HysteresisStartedAt = e.HysteresisStartedAt,
             SnoozedUntil = e.Instances
@@ -139,6 +141,7 @@ public class AlertsController : ControllerBase
     /// <see cref="V4ReadLimits.MaxPageSize"/>; both are clamped rather than rejected.
     /// </remarks>
     [HttpGet("history")]
+    [DenyNoAccountViewer(AllowGuest = true)]
     [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(AlertHistoryResponse), StatusCodes.Status200OK)]
@@ -193,6 +196,7 @@ public class AlertsController : ControllerBase
             })
             .ToListAsync(ct);
 
+        var namesAcknowledger = NamesMembers();
         var result = new AlertHistoryResponse
         {
             Page = page,
@@ -209,13 +213,19 @@ public class AlertsController : ControllerBase
                 StartedAt = e.StartedAt,
                 EndedAt = e.EndedAt,
                 AcknowledgedAt = e.AcknowledgedAt,
-                AcknowledgedBy = e.AcknowledgedBy,
+                AcknowledgedBy = namesAcknowledger ? e.AcknowledgedBy : null,
                 IsTest = e.IsTest,
             }).ToList(),
         };
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Whether the caller may see which member acknowledged an alert. A share or a guest link may see
+    /// that an alert was acknowledged, not by whom.
+    /// </summary>
+    private bool NamesMembers() => !DenyNoAccountViewerAttribute.Refuses(HttpContext);
 
     /// <inheritdoc cref="IAlertAcknowledgementService.AcknowledgeAllAsync"/>
     [HttpPost("acknowledge")]
