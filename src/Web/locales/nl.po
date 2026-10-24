@@ -271,6 +271,7 @@ msgstr ""
 #: src/lib/components/food/GiLabel.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/lib/components/reports/sleep/single-night/OvernightLowsCard.svelte
+#: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/stores/alarm-state.svelte.ts
@@ -282,6 +283,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "Low"
 msgstr ""
 
@@ -290,6 +292,7 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
 #: src/lib/components/food/GiLabel.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
+#: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/stores/alarm-state.svelte.ts
@@ -299,6 +302,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "High"
 msgstr ""
 
@@ -602,6 +606,7 @@ msgstr ""
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Cancel"
 msgstr ""
 
@@ -905,6 +910,7 @@ msgstr ""
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/food/Composer.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Save"
 msgstr ""
 
@@ -1200,7 +1206,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
-#: src/lib/components/alerts/FiringToast.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/alerts/conditionLabel.svelte.ts
 #: src/lib/components/clock/ClockAlertBand.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -1211,6 +1217,7 @@ msgid "Alert"
 msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 msgid "<0/> Acknowledge"
 msgstr ""
 
@@ -1238,6 +1245,7 @@ msgstr ""
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
 msgid "Default"
 msgstr ""
 
@@ -1388,6 +1396,7 @@ msgstr ""
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
 msgid "Timezone"
 msgstr ""
 
@@ -1990,7 +1999,7 @@ msgstr ""
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/routes/(unauthenticated)/clock/[id]/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "<0/> Back"
 msgstr ""
 
@@ -2099,8 +2108,12 @@ msgstr ""
 msgid "Minutes ahead"
 msgstr ""
 
+#. 0: minutes
+#. 0: minutes
 #. 0: element.minutesAhead || 30
 #. 0: minutes
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/clock-builder/ElementInspector.svelte
 #: src/lib/components/settings/alarm-profile/AlarmSnoozeTab.svelte
 msgid "{0}m"
@@ -2895,7 +2908,7 @@ msgid "Choose a cloud service or phone app to start sending glucose and treatmen
 msgstr ""
 
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
-#: src/routes/(fullscreen)/setup/connect/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/connect-data/+page.svelte
 msgid "Failed to load data sources"
 msgstr ""
 
@@ -2939,7 +2952,9 @@ msgid "There are no data sources available at this time."
 msgstr ""
 
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Skip for now"
 msgstr ""
 
@@ -3129,8 +3144,8 @@ msgstr ""
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Done"
 msgstr ""
 
@@ -3298,7 +3313,6 @@ msgstr ""
 msgid "Continue to Dashboard"
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
 #: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Waiting for data"
@@ -3415,6 +3429,7 @@ msgid "({0} min)"
 msgstr ""
 
 #: src/lib/components/settings/ClientDevices.svelte
+#: src/lib/setup-hub/items.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
 #: src/routes/(authenticated)/settings/patient/+page.svelte
 msgid "Devices"
@@ -3427,8 +3442,8 @@ msgstr ""
 #: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/constants/scope-labels.svelte.ts
 #: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/setup-hub/items.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Alerts"
 msgstr ""
 
@@ -3623,6 +3638,7 @@ msgstr ""
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
 msgid "Saving..."
 msgstr ""
 
@@ -3778,6 +3794,8 @@ msgstr ""
 #: src/lib/components/treatments/edit-dialog/BGCheckFormFields.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Units"
 msgstr ""
 
@@ -4445,7 +4463,7 @@ msgid "Settings"
 msgstr ""
 
 #: src/lib/navigation/app-navigation.svelte.ts
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Setup"
 msgstr ""
 
@@ -4454,7 +4472,7 @@ msgstr ""
 #: src/lib/components/settings/TokenScopeSelector.svelte
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/account/+page.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Account"
 msgstr ""
 
@@ -4645,6 +4663,7 @@ msgid "Add Bolus"
 msgstr ""
 
 #: src/lib/components/meals/MealBolusDialog.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
 msgid "<0/> Insulin"
 msgstr ""
 
@@ -5078,8 +5097,9 @@ msgstr ""
 msgid "Manufacturer"
 msgstr ""
 
-#~ msgid "Model"
-#~ msgstr ""
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Model"
+msgstr ""
 
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
@@ -5401,7 +5421,7 @@ msgid "Carbs Absorption Rate (g/hr)"
 msgstr ""
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "Basal Rates"
 msgstr ""
 
@@ -5411,13 +5431,14 @@ msgstr ""
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/reports/RetrospectiveStats.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 #: src/routes/(authenticated)/reports/basal-analysis/BasalAnalysisContent.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
 msgid "U/hr"
 msgstr ""
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "Carb Ratios (I:C)"
 msgstr ""
 
@@ -6077,6 +6098,7 @@ msgstr ""
 #: src/lib/components/reports/ResourceGuard.svelte
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Try again"
 msgstr ""
 
@@ -6337,15 +6359,11 @@ msgid "{0} treatment events"
 msgstr ""
 
 #. 0: unit
-#. 0: unit
-#: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/schedule/ScheduleView.svelte
 msgid "Low ({0})"
 msgstr ""
 
 #. 0: unit
-#. 0: unit
-#: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/schedule/ScheduleView.svelte
 msgid "High ({0})"
 msgstr ""
@@ -7053,6 +7071,7 @@ msgid "Platform"
 msgstr ""
 
 #: src/lib/constants/scope-labels.svelte.ts
+#: src/lib/setup-hub/items.svelte.ts
 msgid "Sharing"
 msgstr ""
 
@@ -7098,7 +7117,7 @@ msgstr ""
 #: src/lib/components/status-pills/COBPill.svelte
 #: src/lib/components/status-pills/IOBPill.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Source"
 msgstr ""
 
@@ -7133,8 +7152,10 @@ msgid "Loop"
 msgstr ""
 
 #: src/lib/components/admin/IntegrationsTabContent.svelte
+#: src/lib/components/patient/PatientClinicalForm.svelte
 #: src/lib/components/status-pills/TrackerPill.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
 msgid "Not set"
 msgstr ""
 
@@ -8296,8 +8317,8 @@ msgid "Recent Requests ({0}{1})"
 msgstr ""
 
 #: src/routes/(authenticated)/compatibility/+page.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Path"
 msgstr ""
 
@@ -9652,144 +9673,135 @@ msgstr ""
 msgid "<0/> Tools"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Name your instance"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Instance"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Create your account"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Choose your path"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Connect a data source"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Configure & sync"
 msgstr ""
 
 #~ msgid "You’re in"
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Connect your Nightscout"
-msgstr ""
+#~ msgid "Connect your Nightscout"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Connect"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Import your history"
 msgstr ""
 
 #: src/routes/(authenticated)/settings/connectors/google-health/GoogleHealthCategoryTable.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Import"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Welcome home"
-msgstr ""
+#~ msgid "Welcome home"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Get Started - Nocturne"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupChrome.svelte
 msgid "nocturne"
 msgstr ""
 
-#. 0: setupStepIndex + 1; 1: SETUP_STEPS.length
-#. 0: stepIndex + 1; 1: steps.length
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#. 0: activeIndex + 1; 1: activeSteps.length
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Step {0} of {1}"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Save & exit"
-msgstr ""
+#~ msgid "Save & exit"
+#~ msgstr ""
 
-#. 0: String(setupStepIndex + 1).padStart(2, "0"); 1: String( SETUP_STEPS.length ).padStart(2, "0")
-#. 0: String(stepIndex + 1).padStart(2, "0"); 1: String( steps.length ).padStart(2, "0")
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#. 0: String(activeIndex + 1).padStart(2, "0"); 1: String( activeSteps.length ).padStart(2, "0")
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Step {0} / {1}"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "<0/> Nightscout Migration"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "<0/> Fresh Start"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Connect a <0>data source</0> ."
-msgstr ""
+#~ msgid "Connect a <0>data source</0> ."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Configure your <0>connection</0> ."
-msgstr ""
+#~ msgid "Configure your <0>connection</0> ."
+#~ msgstr ""
 
 #~ msgid "Enter your credentials and we'll start syncing your data."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Set up your <0>app</0> ."
-msgstr ""
+#~ msgid "Set up your <0>app</0> ."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "No data source selected. Go back to choose one."
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Just pick a starting point."
-msgstr ""
+#~ msgid "Just pick a starting point."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Enter Nocturne <0/>"
-msgstr ""
+#~ msgid "Enter Nocturne <0/>"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Save and continue <0/>"
-msgstr ""
+#~ msgid "Save and continue <0/>"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/lib/components/setup-hub/SetupStrip.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Continue <0/>"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupChrome.svelte
 msgid "© 2026 Nocturne"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupChrome.svelte
 msgid "Privacy"
 msgstr ""
 
 #: ../portal/src/lib/components/SiteHeader.svelte
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupChrome.svelte
 msgid "Docs"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "v1.4.2"
-msgstr ""
+#~ msgid "v1.4.2"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupChrome.svelte
 msgid "<0/> Source"
 msgstr ""
 
@@ -9805,9 +9817,8 @@ msgstr ""
 #~ msgid "Let's get your data <0>flowing.</0>"
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
-msgid "Bring your <0>decade</0> of data with you."
-msgstr ""
+#~ msgid "Bring your <0>decade</0> of data with you."
+#~ msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/ZoomIndicator.svelte
 msgid "Zoomed view"
@@ -13741,19 +13752,19 @@ msgstr ""
 msgid "{0} g/hr"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "Background insulin delivery rates"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "Grams of carbs per unit of insulin"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "Insulin Sensitivity (ISF)"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/lib/components/schedule/ProfileSchedules.svelte
 msgid "BG drop per unit of insulin"
 msgstr ""
 
@@ -13927,9 +13938,8 @@ msgstr ""
 msgid "<0/> Download xDrip+"
 msgstr ""
 
-#: src/routes/(fullscreen)/setup/connect/+page.svelte
-msgid "Connect a Data Source - Setup - Nocturne"
-msgstr ""
+#~ msgid "Connect a Data Source - Setup - Nocturne"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/auth/error/+page.svelte
 msgid "An authentication error occurred"
@@ -14175,33 +14185,26 @@ msgstr ""
 msgid "3-32 characters: letters, numbers, dots, underscores, and hyphens."
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Invite a caretaker"
-msgstr ""
+#~ msgid "Invite a caretaker"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Add follower access with one link"
-msgstr ""
+#~ msgid "Add follower access with one link"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Set up alerts"
-msgstr ""
+#~ msgid "Set up alerts"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Your first report"
-msgstr ""
+#~ msgid "Your first report"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Generate an AGP for your next clinic visit"
-msgstr ""
+#~ msgid "Generate an AGP for your next clinic visit"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Connect another source"
-msgstr ""
+#~ msgid "Connect another source"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Add another device or service"
-msgstr ""
+#~ msgid "Add another device or service"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Your data is <0>home.</0>"
@@ -14210,17 +14213,15 @@ msgstr ""
 #~ msgid "You're <0>in.</0>"
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "<0/> Open my dashboard"
-msgstr ""
+#~ msgid "<0/> Open my dashboard"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Take the 60-second tour"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "A few next things"
-msgstr ""
+#~ msgid "A few next things"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/NightscoutConnect.svelte
 msgid "Point us at your <0>Nightscout</0>."
@@ -14238,17 +14239,14 @@ msgstr ""
 msgid "Start with a blank slate"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Pick your glucose units and target range"
-msgstr ""
+#~ msgid "<0/> Pick your glucose units and target range"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Connect a CGM, pump, or uploader"
-msgstr ""
+#~ msgid "<0/> Connect a CGM, pump, or uploader"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Land on a dashboard in about two minutes"
-msgstr ""
+#~ msgid "<0/> Land on a dashboard in about two minutes"
+#~ msgstr ""
 
 #: ../portal/src/routes/features/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
@@ -14259,17 +14257,14 @@ msgstr ""
 msgid "Migrate my Nightscout data"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Point at your existing Nightscout URL"
-msgstr ""
+#~ msgid "<0/> Point at your existing Nightscout URL"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Import entries, treatments, profiles"
-msgstr ""
+#~ msgid "<0/> Import entries, treatments, profiles"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "<0/> Run side-by-side during the switchover"
-msgstr ""
+#~ msgid "<0/> Run side-by-side during the switchover"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
 msgid "Entries"
@@ -14336,9 +14331,8 @@ msgstr ""
 #~ msgid "Failed to create tenant."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
-msgid "Name your <0>instance</0> ."
-msgstr ""
+#~ msgid "Name your <0>instance</0> ."
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Lowercase letters, numbers, and hyphens. At least 3 characters."
@@ -15071,6 +15065,7 @@ msgstr ""
 
 #: src/lib/components/alerts/DndPanel.svelte
 #: src/lib/components/tenants/TenantsOverview.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/+page.svelte
 msgid "Loading…"
 msgstr ""
 
@@ -15090,29 +15085,23 @@ msgstr ""
 msgid "<0/> Configure…"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Fresh alerts"
-msgstr ""
+#~ msgid "Fresh alerts"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "5m"
-msgstr ""
+#~ msgid "5m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "15m"
-msgstr ""
+#~ msgid "15m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "30m"
-msgstr ""
+#~ msgid "30m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "1h"
-msgstr ""
+#~ msgid "1h"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Acknowledge"
-msgstr ""
+#~ msgid "Acknowledge"
+#~ msgstr ""
 
 #~ msgid "Mute the rule"
 #~ msgstr ""
@@ -16224,6 +16213,7 @@ msgstr ""
 
 #: src/lib/components/patient/PatientClinicalForm.svelte
 #: src/lib/components/patient/TimezoneCombobox.svelte
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
 msgid "Search timezones..."
 msgstr ""
 
@@ -16279,17 +16269,14 @@ msgstr ""
 #~ msgid "I'm new to open-source diabetes data, or I'd rather not bring old data with me."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "I already run Nightscout. Pull my history across and keep my uploaders working."
-msgstr ""
+#~ msgid "I already run Nightscout. Pull my history across and keep my uploaders working."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Choose a cloud service or phone app to start sending glucose and treatment data to Nocturne. You can connect more later."
-msgstr ""
+#~ msgid "Choose a cloud service or phone app to start sending glucose and treatment data to Nocturne. You can connect more later."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Follow the steps below to connect your phone app to Nocturne."
-msgstr ""
+#~ msgid "Follow the steps below to connect your phone app to Nocturne."
+#~ msgstr ""
 
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: ../portal/src/routes/changelog/+page.svelte
@@ -16535,15 +16522,15 @@ msgstr ""
 msgid "Onboarding"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "HTTPS Required"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Nocturne requires a secure connection. Please access this site using <0>https://</0> instead of http://."
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Passkey authentication and secure cookies require HTTPS to function."
 msgstr ""
 
@@ -16559,9 +16546,8 @@ msgstr ""
 #~ msgid "<0/> <1/>. Create an account or sign in to accept."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
-msgid "Four short steps. Nothing to uninstall later, nothing sent off-server. You can change every choice in Settings afterwards."
-msgstr ""
+#~ msgid "Four short steps. Nothing to uninstall later, nothing sent off-server. You can change every choice in Settings afterwards."
+#~ msgstr ""
 
 #~ msgid "We'll connect to your Nightscout instance, copy your entries over, and keep your uploaders pointing at the new host. No data loss, no downtime."
 #~ msgstr ""
@@ -17058,9 +17044,8 @@ msgstr ""
 msgid "Are you sure you want to delete this insulin? This action cannot be undone."
 msgstr ""
 
-#: src/lib/components/patient/state.svelte.ts
-msgid "Diabetes type is required"
-msgstr ""
+#~ msgid "Diabetes type is required"
+#~ msgstr ""
 
 #: src/lib/components/patient/state.svelte.ts
 msgid "You have unsaved changes. Leave anyway?"
@@ -17513,6 +17498,8 @@ msgid "Unknown device"
 msgstr ""
 
 #: src/lib/components/settings/ActiveSessions.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "This device"
 msgstr ""
 
@@ -18592,24 +18579,20 @@ msgstr ""
 #~ msgid "All your entries, treatments, and profiles are in Nocturne. Your existing uploaders keep working — you don't need to change them until you're ready."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Your CGM is connected, your target range is set, and the dashboard is waiting. The next reading will land any minute."
-msgstr ""
+#~ msgid "Your CGM is connected, your target range is set, and the dashboard is waiting. The next reading will land any minute."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Create a public share link"
-msgstr ""
+#~ msgid "Create a public share link"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Anyone with the link can view your glucose data without signing in. Copy, rotate, or disable it later in Members settings."
-msgstr ""
+#~ msgid "Anyone with the link can view your glucose data without signing in. Copy, rotate, or disable it later in Members settings."
+#~ msgstr ""
 
 #~ msgid "Enter the URL and API secret for the Nightscout instance you want to copy across. We read only — your existing site isn't modified."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
-msgid "Both roads end in the same place. We just want to know whether to carry your existing Nightscout data over, or give you a clean notebook to start in."
-msgstr ""
+#~ msgid "Both roads end in the same place. We just want to know whether to carry your existing Nightscout data over, or give you a clean notebook to start in."
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Choose a slug and display name for your Nocturne instance. The slug is a short, URL-friendly identifier that cannot be changed later."
@@ -18630,9 +18613,8 @@ msgstr ""
 msgid "Migration {0}"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
-msgid "Lost connection to migration status"
-msgstr ""
+#~ msgid "Lost connection to migration status"
+#~ msgstr ""
 
 #~ msgid "We're streaming entries, treatments, and profiles from your Nightscout into Nocturne's store. You can navigate away — this continues in the background."
 #~ msgstr ""
@@ -21154,18 +21136,14 @@ msgstr ""
 msgid "Set this to have Nocturne sign each request with an <0/> header your receiver can verify. Leave blank if your receiver does not check signatures.<1/>"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Open this rule's settings"
-msgstr ""
+#~ msgid "Open this rule's settings"
+#~ msgstr ""
 
-#. 0: a.ruleName ?? 'this rule'
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Open settings for {0}"
-msgstr ""
+#~ msgid "Open settings for {0}"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Close this notification without acknowledging"
-msgstr ""
+#~ msgid "Close this notification without acknowledging"
+#~ msgstr ""
 
 #: src/lib/components/auth/RecoveryCodes.svelte
 msgid "<0/> Codes downloaded"
@@ -21550,8 +21528,10 @@ msgstr ""
 
 #. 0: formatMediumDateTime(new Date(lastUpdated))
 #. 0: formatMediumDateTime(new Date(lastUpdated))
+#. 0: formatLongDate(review.lastUpdated)
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
 msgid "Last updated {0}."
 msgstr ""
 
@@ -23485,6 +23465,8 @@ msgid "Metric"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Change"
 msgstr ""
 
@@ -24780,10 +24762,12 @@ msgid "In range"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/hourly-stats/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "Below"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/hourly-stats/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "Above"
 msgstr ""
 
@@ -24906,10 +24890,10 @@ msgid "Lab result"
 msgstr "Labresultaat"
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 msgid "<0/> Mute for me"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
 #: src/lib/components/layout/NotificationItem.svelte
 msgid "Mute for me"
 msgstr ""
@@ -25021,6 +25005,7 @@ msgid "<0/> Condition"
 msgstr ""
 
 #: src/lib/navigation/app-navigation.svelte.ts
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenants"
 msgstr ""
 
@@ -25583,6 +25568,7 @@ msgstr "Ja ({0})"
 
 #: src/lib/components/reports/loop-analysis/EventList.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "No"
 msgstr "Nee"
 
@@ -26703,6 +26689,7 @@ msgstr ""
 
 #: src/lib/components/alerts/ChannelsSection.svelte
 #: src/lib/components/alerts/ChannelsSection.svelte
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
 msgid "Me"
 msgstr ""
 
@@ -27446,78 +27433,62 @@ msgstr ""
 msgid "Drag to reorder your dashboard widgets."
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Start with Executive Summary"
-msgstr ""
+#~ msgid "Start with Executive Summary"
+#~ msgstr ""
 
 #~ msgid "It combines your key metrics into a single page — great for clinic visits or sharing with your endo."
 #~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Once you set up an uploader app or cloud connector below, your data source will appear here automatically."
-msgstr ""
+#~ msgid "Once you set up an uploader app or cloud connector below, your data source will appear here automatically."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Cloud connectors"
-msgstr ""
+#~ msgid "Cloud connectors"
+#~ msgstr ""
 
 #~ msgid "Pull data directly from Dexcom, LibreLink, or Glooko — no uploader app needed."
 #~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Share with a caretaker"
-msgstr ""
+#~ msgid "Share with a caretaker"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Share your glucose data with a parent, partner, or clinician."
-msgstr ""
+#~ msgid "Share your glucose data with a parent, partner, or clinician."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Start here"
-msgstr ""
+#~ msgid "Start here"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Create a shareable link to invite a caretaker, partner, or clinician."
-msgstr ""
+#~ msgid "Create a shareable link to invite a caretaker, partner, or clinician."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Choose their access"
-msgstr ""
+#~ msgid "Choose their access"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Roles control what they can see and do. Viewer for a quick glance, Caretaker if they help manage your diabetes."
-msgstr ""
+#~ msgid "Roles control what they can see and do. Viewer for a quick glance, Caretaker if they help manage your diabetes."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Why this matters"
-msgstr ""
+#~ msgid "Why this matters"
+#~ msgstr ""
 
 #~ msgid "Your diabetes type determines how Nocturne calculates bolus suggestions and categorises treatments. Select your type and save."
 #~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Add your current device"
-msgstr ""
+#~ msgid "Add your current device"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Add the CGM, pump, or meter you use right now and mark it as current. Historical devices can be added later."
-msgstr ""
+#~ msgid "Add the CGM, pump, or meter you use right now and mark it as current. Historical devices can be added later."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Add your current insulin"
-msgstr ""
+#~ msgid "Add your current insulin"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Add at least one insulin and mark it as current. The brand and type help Nocturne estimate active insulin curves."
-msgstr ""
+#~ msgid "Add at least one insulin and mark it as current. The brand and type help Nocturne estimate active insulin curves."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Automatically synced"
-msgstr ""
+#~ msgid "Automatically synced"
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Your basal rates, carb ratios, and sensitivity factors are imported from your uploader (AAPS, Loop, xDrip+). No manual entry needed."
-msgstr ""
+#~ msgid "Your basal rates, carb ratios, and sensitivity factors are imported from your uploader (AAPS, Loop, xDrip+). No manual entry needed."
+#~ msgstr ""
 
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "Pages and filters"
@@ -27671,9 +27642,8 @@ msgstr ""
 msgid "Each row shows the observed value, the profile value, the number of days or events and the confidence. Select a row to see the days or events for that figure."
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Send the link"
-msgstr ""
+#~ msgid "Send the link"
+#~ msgstr ""
 
 #~ msgid "The link expires in {0}. They'll need to sign in or create an account to accept."
 #~ msgstr ""
@@ -28264,6 +28234,7 @@ msgid ", in {0}"
 msgstr ""
 
 #: src/lib/components/reports/loop-analysis/EventList.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "Yes"
 msgstr ""
 
@@ -30210,13 +30181,13 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/clock/ClockAlertBand.svelte
 msgid "<0/> Seen"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Seen"
-msgstr ""
+#~ msgid "Seen"
+#~ msgstr ""
 
 #: src/lib/components/clock/ClockAlertBand.svelte
 msgid "<0/> Seen here"
@@ -30283,17 +30254,14 @@ msgstr ""
 msgid "Nocturne suggests food matches based on your history. Review them here."
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "It combines your key metrics into a single page. Use it for clinic visits or to share with your endo."
-msgstr ""
+#~ msgid "It combines your key metrics into a single page. Use it for clinic visits or to share with your endo."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Pull data directly from Dexcom, LibreLink, or Glooko. No uploader app is necessary."
-msgstr ""
+#~ msgid "Pull data directly from Dexcom, LibreLink, or Glooko. No uploader app is necessary."
+#~ msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Your diabetes type determines how Nocturne calculates bolus suggestions and categorizes treatments. Select your type and save."
-msgstr ""
+#~ msgid "Your diabetes type determines how Nocturne calculates bolus suggestions and categorizes treatments. Select your type and save."
+#~ msgstr ""
 
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "The charts align all the events of a cohort at 0. The dashed line at 0 is the time of the event. Each color is one cohort. The line is the median of its events."
@@ -30303,10 +30271,8 @@ msgstr ""
 msgid "Each row is one hour of the day. Each column is one horizon. The color of a cell shows if the predictions from that hour were too high or too low. If there is more than one curve, select a curve at the top of By hour and context."
 msgstr ""
 
-#. 0: expiryLabel
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "The link expires in {0}. They must sign in or create an account to accept."
-msgstr ""
+#~ msgid "The link expires in {0}. They must sign in or create an account to accept."
+#~ msgstr ""
 
 #: src/lib/components/XdripQuickConnect.svelte
 msgid "<0/> Connected. Data is flowing from xDrip+."
@@ -30409,17 +30375,14 @@ msgstr ""
 msgid "Get your data <0>flowing.</0>"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
-msgid "We will connect to your Nightscout instance, copy your entries over, and keep your uploaders pointing at the new host. No data loss, no downtime."
-msgstr ""
+#~ msgid "We will connect to your Nightscout instance, copy your entries over, and keep your uploaders pointing at the new host. No data loss, no downtime."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Setup complete"
-msgstr ""
+#~ msgid "Setup complete"
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/+page@.svelte
-msgid "Enter your credentials. Nocturne then starts to sync your data."
-msgstr ""
+#~ msgid "Enter your credentials. Nocturne then starts to sync your data."
+#~ msgstr ""
 
 #: src/routes/(legal)/privacy/+page.svelte
 msgid "<0>No tracking:</0> We do not track your usage, browsing, or behavior."
@@ -31193,13 +31156,11 @@ msgstr ""
 msgid "You are <0>in.</0>"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "All your entries, treatments, and profiles are in Nocturne. Your existing uploaders keep working. You do not need to change them until you are ready."
-msgstr ""
+#~ msgid "All your entries, treatments, and profiles are in Nocturne. Your existing uploaders keep working. You do not need to change them until you are ready."
+#~ msgstr ""
 
-#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
-msgid "We are streaming entries, treatments, and profiles from your Nightscout into Nocturne's store. You can leave this page. The import continues in the background."
-msgstr ""
+#~ msgid "We are streaming entries, treatments, and profiles from your Nightscout into Nocturne's store. You can leave this page. The import continues in the background."
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
 msgid "I am new to open-source diabetes data, or I prefer not to bring old data with me."
@@ -32180,4 +32141,1566 @@ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Allow through Do not disturb"
+msgstr ""
+
+#: src/lib/components/alerts/AlertBanner.svelte
+msgid "Active alerts"
+msgstr ""
+
+#. 0: minutes
+#. 0: minutes
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Snooze for {0} minutes"
+msgstr ""
+
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Snooze"
+msgstr ""
+
+#. 0: critical.length - 1; 1: critical.length === 2 ? "alert" \\: "alerts"
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "{0} more critical {1}"
+msgstr ""
+
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Critical alert"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/[item]/+page.ts
+msgid "Not found"
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Connect data"
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Bring in your glucose readings from a CGM app, a cloud service or an uploader."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Bring in {0}'s glucose readings from a CGM app, a cloud service or an uploader."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Bring in glucose readings from a CGM app, a cloud service or an uploader."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose when Nocturne alerts you about your glucose."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose when Nocturne alerts you about {0}'s glucose."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose when Nocturne sends glucose alerts."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Record the sensor, pump and insulins you use."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Record the sensor, pump and insulins {0} uses."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Record the sensor, pump and insulins in use."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Therapy settings"
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Check the basal rates, carb ratios and targets your care team set."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Check the basal rates, carb ratios and targets {0}'s care team set."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Check the basal rates, carb ratios and targets the care team set."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "I do not use these settings"
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose who else can see your data."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose who else can see {0}'s data."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Choose who else can see this data."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "About"
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Add your diabetes type and diagnosis date for your reports."
+msgstr ""
+
+#. 0: voice.name
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Add {0}'s diabetes type and diagnosis date for their reports."
+msgstr ""
+
+#: src/lib/setup-hub/items.svelte.ts
+msgid "Add the diabetes type and diagnosis date for reports."
+msgstr ""
+
+#: src/lib/test-stubs/Complete.test-stub.svelte
+msgid "Stub: complete"
+msgstr ""
+
+#: src/lib/test-stubs/ImportProgress.test-stub.svelte
+msgid "Stub: settle"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Import {0}'s history"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Import the history"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Who it is for"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Who"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Units and timezone"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Finish"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Connect Nightscout"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "We could not save your answer."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "We could not save your units and timezone."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Your Nightscout connection is not saved yet."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Could not start the import. Try again."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Exit setup"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Setup progress"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Choose a cloud service or phone app to start sending your glucose and treatment data to Nocturne. You can connect more later."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Choose a cloud service or phone app to start sending {0}'s glucose and treatment data to Nocturne. You can connect more later."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Choose a cloud service or phone app to start sending the glucose and treatment data to Nocturne. You can connect more later."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Connect a <0>data source</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Enter your credentials and we will start syncing your data."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Enter the service's sign-in details and we will start syncing {0}'s data."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Enter the service's sign-in details and we will start syncing the data."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Configure your <0>connection</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Set up the <0>app</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/SetupWizard.svelte
+msgid "Follow the steps below to connect the phone app to Nocturne."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "Get {0}'s data <0>flowing.</0>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "Get the data <0>flowing.</0>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "Bring your <0>history</0> across."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "Bring {0}'s <0>history</0> across."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "Bring the <0>history</0> across."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "A few short steps. Skip anything you are not ready for. You can change every choice in Settings afterwards."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "We will connect to your Nightscout site and copy your history across. Your Nightscout site is not changed, and your uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "We will connect to the Nightscout site and copy {0}'s history across. The site is not changed, and its uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/StepSidebar.svelte
+msgid "We will connect to the Nightscout site and copy its history across. The site is not changed, and its uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#: src/lib/components/members/CreateInviteCard.svelte
+msgid "What can they do?"
+msgstr ""
+
+#. 0: insulin; 1: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time of {0}, {1} hours, for insulin on board and predictions, in place of the value in your profile. It does not change your pump or AID app. You can change the time in <0>patient settings</0>. Check it with your care team."
+msgstr ""
+
+#. 0: insulin; 1: hours; 2: voice.name; 3: voice.name
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time of {0}, {1} hours, for insulin on board and predictions, in place of the value in {2}'s profile. It does not change {3}'s pump or AID app. You can change the time in <0>patient settings</0>. Check it with the care team."
+msgstr ""
+
+#. 0: insulin; 1: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time of {0}, {1} hours, for insulin on board and predictions, in place of the profile's value. It does not change the pump or AID app. You can change the time in <0>patient settings</0>. Check it with the care team."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Your profile is managed by another app, so Nocturne uses its action time, {0} hours, for insulin on board and predictions."
+msgstr ""
+
+#. 0: voice.name; 1: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "{0}'s profile is managed by another app, so Nocturne uses its action time, {1} hours, for insulin on board and predictions."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "The profile is managed by another app, so Nocturne uses its action time, {0} hours, for insulin on board and predictions."
+msgstr ""
+
+#. 0: insulin
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "That value is used instead of the action time of {0}."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "No action time is set in your profile, so Nocturne uses the default of {0} hours for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: voice.name; 1: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "No action time is set in {0}'s profile, so Nocturne uses the default of {1} hours for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "No action time is set in the profile, so Nocturne uses the default of {0} hours for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time in your profile, {0} hours, for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: voice.name; 1: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time in {0}'s profile, {1} hours, for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Nocturne uses the action time in the profile, {0} hours, for insulin on board and predictions. Once a rapid-acting insulin is set in Devices, its action time is used instead."
+msgstr ""
+
+#. 0: hours; 1: insulin
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Until your therapy settings are set up, Nocturne uses the default of {0} hours for insulin on board and predictions, not the action time of {1}."
+msgstr ""
+
+#. 0: voice.name; 1: hours; 2: insulin
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Until {0}'s therapy settings are set up, Nocturne uses the default of {1} hours for insulin on board and predictions, not the action time of {2}."
+msgstr ""
+
+#. 0: hours; 1: insulin
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "Until therapy settings are set up, Nocturne uses the default of {0} hours for insulin on board and predictions, not the action time of {1}."
+msgstr ""
+
+#. 0: hours
+#: src/lib/components/patient/InsulinActionTimeNote.svelte
+msgid "No action time is set, so Nocturne uses the default of {0} hours for insulin on board and predictions."
+msgstr ""
+
+#. 0: unit
+#: src/lib/components/schedule/ScheduleView.svelte
+msgid "Low and high ({0})"
+msgstr ""
+
+#. 0: entry.time
+#: src/lib/components/schedule/ScheduleView.svelte
+msgid "Low from {0}"
+msgstr ""
+
+#. 0: entry.time
+#: src/lib/components/schedule/ScheduleView.svelte
+msgid "High from {0}"
+msgstr ""
+
+#. 0: title; 1: entry.time
+#: src/lib/components/schedule/ScheduleView.svelte
+msgid "{0} from {1}"
+msgstr ""
+
+#: src/lib/components/setup-hub/SetupStrip.svelte
+msgid "Dismiss setup reminder"
+msgstr ""
+
+#. 0: hub.resolvedCount; 1: hub.totalCount
+#: src/lib/components/setup-hub/SetupStrip.svelte
+msgid "{0} of {1} set up"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/+page.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "We could not save that."
+msgstr ""
+
+#. 0: view.title
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+msgid "{0} - Setup - Nocturne"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+msgid "<0/> Back to setup"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubItemRow.svelte
+msgid "<0/>Done"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+msgid "Put it back on the list"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubItemRow.svelte
+msgid "Not for me"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Basics"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "What you told us at the start. You can change these any time."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "You"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "{0}, someone you care for"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Someone you care for"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "{0}, who you are setting it up for"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Someone you are setting it up for"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Not answered yet"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Not chosen yet"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "No timezone yet"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Glucose units and timezone"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Therapy settings, like targets and insulin sensitivity, are entered in this unit."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
+msgid "Changing units changes how readings are shown to you and to anyone who has not picked their own. Therapy settings, like targets and insulin sensitivity, are entered in the unit chosen here. Settings already saved keep the unit they were entered in."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Setup - Nocturne"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Go to dashboard"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Setup is complete"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Everything here is done or set aside. You can change any of it below."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Make Nocturne <0>yours</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Set Nocturne up for <0/>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Finish setting up <0>Nocturne</0>."
+msgstr ""
+
+#. 0: hub.resolvedCount; 1: hub.totalCount
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "{0} of {1} set up. Each of these is optional: do what helps, and mark the rest \"not for me\"."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/hub/SetupHub.svelte
+msgid "Go to dashboard <0/>"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "{0}'s data is <0>home.</0>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "The data is <0>home.</0>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Your Nightscout history has been copied into Nocturne. Your Nightscout site has not been changed, and your uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#. 0: voice.name; 1: voice.name
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "{0}'s Nightscout history has been copied into Nocturne. The Nightscout site has not been changed, and {1}'s uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "The Nightscout history has been copied into Nocturne. The Nightscout site has not been changed, and its uploaders keep sending to it until you choose to move them."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Some of the Nightscout history was copied, but not all of it. You can see what was missed and run the import again from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "The import from Nightscout stopped before it finished, so some or all of the history is missing. You can see what arrived and try again from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "We lost track of your import before it finished. It may still be running. Check Settings to see how it ended."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "The Nightscout history has not been imported yet. You can start the import from Settings whenever you are ready."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "The phone app is sending readings to Nocturne, so the dashboard is ready."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Your data source is saved and switched on. Readings will appear on the dashboard after its first sync."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "You have not connected a data source yet, so the dashboard will be empty until you do. You can connect one from Settings at any time."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "We could not finish setup"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Nocturne did not record that setup is finished, so it cannot move on yet. Check your connection and try again."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Continue setting up"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "We could not start the import from Nightscout. You can continue and run it later from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "No import from Nightscout is running. You can continue and start one later from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "We lost track of the import's progress. It may still be running. Check Settings to see how it ended."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "Bringing {0}'s <0>history</0> across."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "Bringing the <0>history</0> across."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
+msgid "We are streaming entries, treatments, and profiles from Nightscout into Nocturne's store. This keeps running on the server even if you close this page."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Connect a CGM, pump, or phone app"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Skip anything and set it up later"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Land on your dashboard"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Land on {0}'s dashboard"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Land on the dashboard"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Migrate {0}'s Nightscout data"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Migrate Nightscout data"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "I already run Nightscout. Copy my history across without changing my Nightscout site."
+msgstr ""
+
+#. 0: voice.name; 1: voice.name
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "{0} already has a Nightscout site. Copy {1}'s history across without changing that site."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "There's already a Nightscout site. Copy its history across without changing that site."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Point at the existing Nightscout address"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Import entries, treatments, and profiles"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Keep Nightscout running while you try Nocturne"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
+msgid "Both roads end in the same place. We just want to know whether to carry existing Nightscout data over, or give you a clean notebook to start in."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "Name your <0>instance</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Milligrams per deciliter"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Millimoles per liter"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Pick the unit your meter or sensor app shows."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Pick the unit {0}'s meter or sensor app shows."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Pick the unit the meter or sensor app shows."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Glucose units and <0>time</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "<0/> The same reading looks very different in each, so check the example matches what you are used to."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "We have filled these in from your Nightscout. Check they are right."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "We could not read your Nightscout's settings, so check these match what it uses."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Example reading"
+msgstr ""
+
+#. 0: formatGlucoseRange( EXAMPLE_RANGE_MGDL[0], EXAMPLE_RANGE_MGDL[1], option.value )
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Example range: {0}"
+msgstr ""
+
+#. 0: getUnitLabel(profileUnits)
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Your Nightscout profile uses {0}"
+msgstr ""
+
+#. 0: getUnitLabel(profileUnits); 1: getUnitLabel(units); 2: getUnitLabel(units)
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Its targets and insulin sensitivity were entered in {0}, but you have chosen {1}. Nocturne will show them in {2}, so the numbers will look different from Nightscout. Nothing in Nightscout, the pump or the loop app is changed."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Detected from this device. Change it if you usually live somewhere else."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Times of day, like overnight alerts and daily reports, follow your timezone."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Times of day, like overnight alerts and daily reports, follow {0}'s timezone."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/UnitsAndTimezone.svelte
+msgid "Times of day, like overnight alerts and daily reports, follow this timezone."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "I have diabetes."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "Someone I care for"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "A child, partner, or parent."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "I'm setting it up for someone else"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "I will hand it over to them when it is ready."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "Who is Nocturne <0>for</0>?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "We will use your answer to word the rest of setup, so it talks about the right person."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "What's their name?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/steps/WhoFor.svelte
+msgid "Setup will say things like “Sam's glucose”. It is saved as their preferred name, and you can change it later in Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/[item]/+page.svelte
+msgid "A guided version of this step is on its way. Until then, you can set it up on its settings page. It is marked done here once it is working."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/[item]/+page.svelte
+msgid "Open settings <0/>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/+page.svelte
+msgid "We could not load your alerts."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "Printed reports show your name and date of birth from here, and sleep reports use your age and sex to show what is typical. Everything here is optional."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "Your timezone is already filled in from earlier."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "Printed reports show {0}'s name and date of birth from here, and sleep reports use their age and sex to show what is typical. Everything here is optional."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "The name and timezone you gave earlier are already filled in."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "Printed reports show the name and date of birth from here, and sleep reports use age and sex to show what is typical. Everything here is optional."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/about/+page.svelte
+msgid "The timezone you chose earlier is already filled in."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Urgent low"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "No readings for 20 minutes"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "We could not save your alerts."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "We could not send a test alert."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "We could not record that."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "We could not change that."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "The person you hand this over to will choose where alerts go"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alerts about {0}'s glucose come to you, including overnight."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alerts about {0}'s glucose come to you."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alerts come to you, including overnight."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alerts come to you."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are common starting points. Set them to what you and {0}'s care team agreed."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are common starting points. Set them to what you and the care team agreed."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are common starting points. Set them to what you and your care team agreed."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "<0/> You will not be alerted to urgent lows"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "When to alert"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alerts need to reach you while Nocturne is closed, so send them to an app such as Telegram, WhatsApp or email."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Send to this device instead"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Notifications in this browser."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Nocturne cannot wake you with this. Browser notifications only show while a signed-in Nocturne page is open and the device is awake. To be alerted overnight or when Nocturne is closed, send alerts somewhere else."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Send somewhere else"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Where alerts go"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "<0/> The test alert arrived. Alerts are set up."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "To finish, send alerts somewhere that works while Nocturne is closed, then send another test."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "I understand these alerts only show while Nocturne is open and the device is awake."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Did it arrive?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Notifications are allowed in this browser."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Notifications are blocked for this site. Allow them in your browser's site settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "This browser cannot show notifications. Try another browser, or send alerts somewhere else."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Notifications are not allowed in this browser yet. <0>Allow notifications</0>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Nocturne sent it."
+msgstr ""
+
+#. 0: delivery.lastError ? ` (${delivery.lastError})` \\: ""
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Nocturne could not send it{0}."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "still sending."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Check that Do Not Disturb or Focus is off on the device you expected it on."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Things to check"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Send another test"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Send a test alert"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Save changes"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Switch on at least one alert to send a test."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "They will see your urgent low alerts, including your glucose value, in Nocturne on their own account. Like this device, those only show while they have Nocturne open. Ask them to set up their own way to be alerted, such as Telegram or WhatsApp, in <0>Alerts</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Invite them from Sharing. Once they join, they appear here to add."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Go to Sharing <0/>"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Alert someone else to urgent lows"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Set quiet hours"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "Open the full rule builder"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/+page.svelte
+msgid "Choose as many as you like. Each one you choose opens below."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/+page.svelte
+msgid "The link stays off until you turn it on. Once it is on, the card spells out exactly what the link shows, and it shows only the last 24 hours unless you choose all history. Anyone who gets hold of the link can open it, so send it only to people you trust."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/+page.svelte
+msgid "Keep it to just me"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/+page.svelte
+msgid "Nothing is shared until you choose to. You can share any time from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "We could not save that. Please try again."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Connected account"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Pump status"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "App status"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Reading label"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Sensor changes"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Pod changes"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Infusion set changes"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Reservoir changes"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0} sensor"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0} pod"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0} infusion set"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0} reservoir"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: no typical wear time, so it counts the days since the last change"
+msgstr ""
+
+#. 0: offer.deviceName
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: typically worn for 1 day"
+msgstr ""
+
+#. 0: offer.deviceName; 1: days
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: typically worn for {1} days"
+msgstr ""
+
+#. 0: offer.deviceName; 1: hours
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: typically worn for {1} hours"
+msgstr ""
+
+#. 0: offer.deviceName; 1: days; 2: hours
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: typically worn for {1} days and {2} hours"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Looking at what's connected..."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "We looked at what's connected and think you use these. Is that right?"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "We looked at what's connected and think {0} uses these. Is that right?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "We looked at what's connected and think these are in use. Is that right?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Pick the sensor and pump you use."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Pick the sensor and pump {0} uses."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Pick the sensor and pump in use."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Sensor and pump"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Insulin pump"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Sensor (CGM, continuous glucose monitor)"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "We could only tell the brand, so please check the model."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Seen in"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Nothing connected names a pump. Pick one, or leave this if no pump is used."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Nothing connected names a sensor yet. Pick one from the list."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Or pick another model"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Choose a model"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "None (manual mode)"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Automated insulin delivery (AID) app"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "That's right"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Use this one"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "AID app seen in"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "On record"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Which insulins do you use? Pick every one that applies."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Which insulins does {0} use? Pick every one that applies."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Which insulins are used? Pick every one that applies."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Rapid-acting (mealtime and pump insulin)"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Long-acting (background insulin taken once or twice a day)"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Already on record. Change it in patient settings."
+msgstr ""
+
+#. 0: (setup.otherInsulins ?? []).map((i) => i.name).join(", ")
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Also on record: {0}"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "You do not take insulin"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0} does not take insulin"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "No insulin is taken"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Using an insulin not listed here?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "<0/> Trackers"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "A tracker counts how long a sensor, pod, infusion set or reservoir has been in use, so it is easy to see when the next change is due. It restarts when a change is logged. These are optional, and the wear time can be changed in <0>tracker settings</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Trackers do not send alerts on their own yet. Alerts for changes can be set up in <0>Alerts</0>."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Already tracked"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "Tracker settings"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "This is a record of equipment, not medical advice. Follow the instructions that came with each device and the care team's advice."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Who else can see your data?"
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Who else can see {0}'s data?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Who else can see this data?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Family or carers"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "People who help look after you. Each signs in with their own account, and you choose what they can do."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "People who help look after {0}. Each signs in with their own account, and you choose what they can do."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "People who help with day-to-day care. Each signs in with their own account, and you choose what they can do."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "A school, clinic or someone temporary"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "A code that lets a teacher, nurse or doctor see your data without an account. It cannot change anything, and it stops working on its own."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "A code that lets a teacher, nurse or doctor see {0}'s data without an account. It cannot change anything, and it stops working on its own."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "A code that lets a teacher, nurse or doctor see the data without an account. It cannot change anything, and it stops working on its own."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Anyone with a link"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "A read-only page that anyone with the link can open. It stays off until you turn it on, and shows only the last 24 hours unless you choose more."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Just me for now"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Keep your data to yourself. You can share it later from Settings."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Keep {0}'s data to yourself for now. You can share it later from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Keep this data to yourself for now. You can share it later from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Can see everything"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Readings, treatments, devices and reports. They cannot change anything."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Can see and log treatments"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "They can also log insulin and carbs, and change alerts."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "Can manage settings"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/sharing/audiences.svelte.ts
+msgid "They can also change settings, therapy settings included, edit or delete readings and device data, manage roles, and choose who else has access."
+msgstr ""
+
+#. 0: otherUnitLabel; 1: unitLabel
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "This looks like a value in {0}, but these fields are in {1}. Check which unit the number from the care team is in."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "We could not save these settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Nocturne uses your basal rates, carb ratios, insulin sensitivity and target range to estimate insulin on board, carbs on board and where your glucose may be heading. Apps connected to Nocturne may show those estimates."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Enter the values your care team set. Nocturne never suggests or adjusts doses."
+msgstr ""
+
+#. 0: voice.name; 1: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Nocturne uses {0}'s basal rates, carb ratios, insulin sensitivity and target range to estimate insulin on board, carbs on board and where {1}'s glucose may be heading. Apps connected to Nocturne may show those estimates."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Enter the values {0}'s care team set. Nocturne never suggests or adjusts doses."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Nocturne uses the basal rates, carb ratios, insulin sensitivity and target range to estimate insulin on board, carbs on board and where glucose may be heading. Apps connected to Nocturne may show those estimates."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Enter the values the care team set. Nocturne never suggests or adjusts doses."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Any schedule left out uses Nocturne's built-in default instead. If you use any of these settings, enter your insulin sensitivity and target range as well."
+msgstr ""
+
+#. 0: voice.name; 1: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Any schedule left out uses Nocturne's built-in default instead. If {0} uses any of these settings, enter {1}'s insulin sensitivity and target range as well."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Any schedule left out uses Nocturne's built-in default instead. If any of these settings are in use, enter the insulin sensitivity and target range as well."
+msgstr ""
+
+#. 0: unitLabel
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "This is optional. Glucose values here are in {0}, the unit chosen during setup."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "<0>Open Devices in a new tab</0> to set the insulins in use."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Basal rates"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Background insulin per hour."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Carb ratios"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Grams of carb one unit of insulin covers."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Insulin sensitivity"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "How far one unit of insulin lowers glucose."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Target range"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "The glucose range the settings aim for."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/TherapyEntry.svelte
+msgid "Save these settings"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "We could not load the therapy settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Loading therapy settings..."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Therapy settings arrived while you were filling in the form, so what you typed was not saved. Here is what arrived."
+msgstr ""
+
+#. 0: app
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "This is what Nocturne received from {0}."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "This is what Nocturne received from the app that sends these settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Check each schedule against the app. Nocturne shows these settings as they arrive and does not change them."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Settings change over time. Check these against your app today, or the plan your care team gave you."
+msgstr ""
+
+#. 0: voice.name; 1: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Settings change over time. Check these against {0}'s app today, or the plan {1}'s care team gave you."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Settings change over time. Check these against the app in use today, or the plan from the care team."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "This is what Nocturne imported from your Nightscout site."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "These are the settings you entered."
+msgstr ""
+
+#. 0: app; 1: app
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If something here does not match, change it in {0}. If {1} sends its settings again, they replace these, so a change made here would not last."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If something here does not match, change it in the app that sent these settings. If that app sends its settings again, they replace these."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If something here does not match, change it in the app {0} uses now. If that app sends its settings to Nocturne, they replace these."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If something here does not match, change it in the app you use now. If that app sends its settings to Nocturne, they replace these."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If something here does not match, change it in the app in use now. If that app sends its settings to Nocturne, they replace these."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If no app sends your settings to Nocturne, you can find them on the <0>profile page</0> and change the target range there. Basal rates, carb ratios and insulin sensitivity cannot be changed in Nocturne yet."
+msgstr ""
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If no app sends {0}'s settings to Nocturne, you can find them on the <0>profile page</0> and change the target range there. Basal rates, carb ratios and insulin sensitivity cannot be changed in Nocturne yet."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "If no app sends these settings to Nocturne, you can find them on the <0>profile page</0> and change the target range there. Basal rates, carb ratios and insulin sensitivity cannot be changed in Nocturne yet."
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Where to fix it"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Something does not match"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "<0/> This matches my app"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/therapy/+page.svelte
+msgid "Open the full profile page <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Database size"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Average per tenant"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Largest tenant"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Used"
+msgstr ""
+
+#. 0: formatNumber(capacity.usedPercent); 1: formatFileSize( capacity.budgetBytes ?? 0, )
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "{0}% of {1}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Database capacity"
 msgstr ""
