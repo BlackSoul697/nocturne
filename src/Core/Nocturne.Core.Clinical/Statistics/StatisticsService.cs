@@ -1303,6 +1303,15 @@ public partial class StatisticsService : IStatisticsService
     public TimeInRangeMetrics CalculateTimeInRange(
         IEnumerable<SensorGlucose> entries,
         GlycemicThresholds? thresholds = null
+    ) => TimeInRangeOverCoverage(entries, thresholds).Metrics;
+
+    /// <summary>
+    /// <see cref="CalculateTimeInRange"/> with the minutes the readings cover, the denominator of
+    /// its percentages, for a caller that combines several windows.
+    /// </summary>
+    private (TimeInRangeMetrics Metrics, double CoveredMinutes) TimeInRangeOverCoverage(
+        IEnumerable<SensorGlucose> entries,
+        GlycemicThresholds? thresholds = null
     )
     {
         thresholds ??= new GlycemicThresholds();
@@ -1320,7 +1329,7 @@ public partial class StatisticsService : IStatisticsService
 
         if (totalReadings == 0)
         {
-            return new TimeInRangeMetrics
+            return (new TimeInRangeMetrics
             {
                 Thresholds = CopyOf(thresholds),
                 Percentages = new TimeInRangePercentages(),
@@ -1329,16 +1338,14 @@ public partial class StatisticsService : IStatisticsService
                 RangeStats = new TimeInRangeDetailedStats(),
                 AverageDailyMinutes = new AverageDailyMinutes(),
                 AverageDailyEpisodes = new AverageDailyEpisodes(),
-            };
+            }, 0);
         }
 
         // The target and tight-target bands overlap each other, and overlap the excluding zones
         // whenever Low and TargetBottom are configured apart, so they are counted alongside the
         // scale rather than read off it.
         var zones = GlucoseStatistics.ExcludingZones(thresholds);
-        var zoneCounts = new int[zones.ZoneCount];
         var zoneMinutes = new double[zones.ZoneCount];
-        int targetCount = 0, tightTargetCount = 0;
         double targetMinutes = 0, tightTargetMinutes = 0;
         var (instantMinutes, _) = GlucoseCadence.ReadingMinutes(instants);
         for (var i = 0; i < totalReadings; i++)
@@ -1346,36 +1353,12 @@ public partial class StatisticsService : IStatisticsService
             var v = glucoseValues[i];
             var minutes = instantMinutes[i];
 
-            var zone = zones.Classify(v);
-            zoneCounts[zone]++;
-            zoneMinutes[zone] += minutes;
+            zoneMinutes[zones.Classify(v)] += minutes;
             if (v >= thresholds.TargetBottom && v <= thresholds.TargetTop)
-            {
-                targetCount++;
                 targetMinutes += minutes;
-            }
             if (v >= thresholds.TightTargetBottom && v <= thresholds.TightTargetTop)
-            {
-                tightTargetCount++;
                 tightTargetMinutes += minutes;
-            }
         }
-
-        var veryLowCount = zoneCounts[(int)ExcludingZone.VeryLow];
-        var lowCount = zoneCounts[(int)ExcludingZone.Low];
-        var highCount = zoneCounts[(int)ExcludingZone.High];
-        var veryHighCount = zoneCounts[(int)ExcludingZone.VeryHigh];
-
-        // Calculate percentages
-        var percentages = new TimeInRangePercentages
-        {
-            VeryLow = (double)veryLowCount / totalReadings * 100,
-            Low = (double)lowCount / totalReadings * 100,
-            Target = (double)targetCount / totalReadings * 100,
-            TightTarget = (double)tightTargetCount / totalReadings * 100,
-            High = (double)highCount / totalReadings * 100,
-            VeryHigh = (double)veryHighCount / totalReadings * 100,
-        };
 
         var durations = new TimeInRangeDurations
         {
@@ -1392,22 +1375,37 @@ public partial class StatisticsService : IStatisticsService
         };
 
         var episodes = CalculateEpisodes(entriesList, thresholds);
-        var coveredDays = instantMinutes.Sum() / 1440.0;
+        var coveredMinutes = instantMinutes.Sum();
+        var coveredDays = coveredMinutes / 1440.0;
+
+        var percentages = new TimeInRangePercentages
+        {
+            VeryLow = GlucoseCadence.PercentOfCovered(durations.VeryLow, coveredMinutes),
+            Low = GlucoseCadence.PercentOfCovered(durations.Low, coveredMinutes),
+            Target = GlucoseCadence.PercentOfCovered(durations.Target, coveredMinutes),
+            TightTarget = GlucoseCadence.PercentOfCovered(durations.TightTarget, coveredMinutes),
+            High = GlucoseCadence.PercentOfCovered(durations.High, coveredMinutes),
+            VeryHigh = GlucoseCadence.PercentOfCovered(durations.VeryHigh, coveredMinutes),
+        };
 
         // Calculate per-range detailed statistics
         var rangeZones = RangeStatZones(thresholds);
-        var lowValues = new List<double>(veryLowCount + lowCount);
-        var targetValues = new List<double>(targetCount);
-        var highValues = new List<double>(highCount + veryHighCount);
-        foreach (var v in glucoseValues)
+        var lowValues = new List<double>();
+        var targetValues = new List<double>();
+        var highValues = new List<double>();
+        double lowMinutes = 0, highMinutes = 0;
+        for (var i = 0; i < totalReadings; i++)
         {
+            var v = glucoseValues[i];
             switch ((RangeStatZone)rangeZones.Classify(v))
             {
                 case RangeStatZone.Low:
                     lowValues.Add(v);
+                    lowMinutes += instantMinutes[i];
                     break;
                 case RangeStatZone.High:
                     highValues.Add(v);
+                    highMinutes += instantMinutes[i];
                     break;
             }
 
@@ -1416,12 +1414,12 @@ public partial class StatisticsService : IStatisticsService
 
         var rangeStats = new TimeInRangeDetailedStats
         {
-            Low = CalculateRangeMetrics("Low", lowValues, totalReadings),
-            Target = CalculateRangeMetrics("In Range", targetValues, totalReadings),
-            High = CalculateRangeMetrics("High", highValues, totalReadings),
+            Low = CalculateRangeMetrics("Low", lowValues, lowMinutes, coveredMinutes),
+            Target = CalculateRangeMetrics("In Range", targetValues, targetMinutes, coveredMinutes),
+            High = CalculateRangeMetrics("High", highValues, highMinutes, coveredMinutes),
         };
 
-        return new TimeInRangeMetrics
+        return (new TimeInRangeMetrics
         {
             Thresholds = CopyOf(thresholds),
             Percentages = percentages,
@@ -1430,7 +1428,7 @@ public partial class StatisticsService : IStatisticsService
             RangeStats = rangeStats,
             AverageDailyMinutes = AverageDailyMinutesFrom(durations, coveredDays),
             AverageDailyEpisodes = AverageDailyEpisodesFrom(episodes, coveredDays),
-        };
+        }, coveredMinutes);
     }
 
     private static AverageDailyEpisodes AverageDailyEpisodesFrom(
@@ -1480,22 +1478,34 @@ public partial class StatisticsService : IStatisticsService
         // so each of the at-most-1440 minutes is resolved once instead of per reading.
         var rangeByMinute = new (double Low, double High)?[1440];
 
-        int below = 0, within = 0, above = 0;
-        foreach (var entry in entries)
+        (double Low, double High) RangeAt(SensorGlucose reading)
         {
-            var value = entry.Mgdl;
-            if (!IsPlausibleReading(value))
-                continue;
-
             var minute =
-                ScheduleTimeHelper.GetSecondsFromMidnight(entry.Mills, tenantTimeZone) / 60;
-            var range = rangeByMinute[minute] ??= ScheduleResolution
+                ScheduleTimeHelper.GetSecondsFromMidnight(reading.Mills, tenantTimeZone) / 60;
+            return rangeByMinute[minute] ??= ScheduleResolution
                 .FindRangeAtTime(scheduleEntries, minute * 60)!
                 .Value;
+        }
 
-            if (value < range.Low) below++;
-            else if (value > range.High) above++;
-            else within++;
+        var readings = GlucoseCadence.Instants(
+            InTimeOrder(entries.Where(IsPlausibleReading)),
+            reading => RangeAt(reading) switch
+            {
+                var range when reading.Mgdl < range.Low => RangeSide.Below,
+                var range when reading.Mgdl > range.High => RangeSide.Above,
+                _ => RangeSide.Within,
+            });
+        var (readingMinutes, _) = GlucoseCadence.ReadingMinutes(readings);
+
+        double below = 0, within = 0, above = 0;
+        for (var i = 0; i < readings.Count; i++)
+        {
+            var reading = readings[i];
+            var range = RangeAt(reading);
+
+            if (reading.Mgdl < range.Low) below += readingMinutes[i];
+            else if (reading.Mgdl > range.High) above += readingMinutes[i];
+            else within += readingMinutes[i];
         }
 
         var total = below + within + above;
@@ -1504,9 +1514,9 @@ public partial class StatisticsService : IStatisticsService
 
         return new PersonalRangeTimeInRange
         {
-            BelowRangePercent = (double)below / total * 100,
-            InRangePercent = (double)within / total * 100,
-            AboveRangePercent = (double)above / total * 100,
+            BelowRangePercent = GlucoseCadence.PercentOfCovered(below, total),
+            InRangePercent = GlucoseCadence.PercentOfCovered(within, total),
+            AboveRangePercent = GlucoseCadence.PercentOfCovered(above, total),
             Entries = scheduleEntries,
         };
     }
@@ -1517,7 +1527,8 @@ public partial class StatisticsService : IStatisticsService
     private PeriodMetrics CalculateRangeMetrics(
         string rangeName,
         List<double> values,
-        int totalReadings
+        double rangeMinutes,
+        double coveredMinutes
     )
     {
         if (values.Count == 0)
@@ -1536,7 +1547,7 @@ public partial class StatisticsService : IStatisticsService
             Mean = Math.Round(mean, 1),
             Median = Math.Round(median, 1),
             StandardDeviation = Math.Round(stdDev, 1),
-            TimeInRange = Math.Round((double)values.Count / totalReadings * 100, 1),
+            TimeInRange = Math.Round(GlucoseCadence.PercentOfCovered(rangeMinutes, coveredMinutes), 1),
             Min = values.Min(),
             Max = values.Max(),
         };

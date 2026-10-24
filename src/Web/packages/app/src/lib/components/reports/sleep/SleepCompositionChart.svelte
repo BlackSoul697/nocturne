@@ -14,15 +14,16 @@
   import { SLEEP_COMPOSITION_SEGMENTS, laneTexture } from "$lib/utils/sleep-stages";
   import { patternClass } from "$lib/components/charts/print/chart-print-patterns";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
-  import { dayKeyFor, buildNightsByDayKey } from "$lib/utils/sleep-night-mapping";
+  import { localDayStart } from "$lib/utils/timezone";
+  import { indexBy } from "$lib/utils/collections";
   import { formatMinutesDuration } from "$lib/utils/duration";
   import type { SleepNightSummary, SleepStageReferenceRangeSet } from "$lib/api";
 
   interface Props {
     /** Nights already filtered to the selected date range / source. */
     nights: SleepNightSummary[];
-    /** Every calendar day in the selected (unpadded) range — including gaps. */
-    days: Date[];
+    /** Every `YYYY-MM-DD` day the report covers, as the API served it, including gaps. */
+    days: string[];
     meanDeepPct?: number | undefined;
     meanRemPct?: number | undefined;
     referenceRanges?: SleepStageReferenceRangeSet | undefined;
@@ -52,11 +53,18 @@
     totalMinutes: number;
   }
 
-  const nightsByDayKey = $derived(buildNightsByDayKey(nights));
+  // indexBy keeps the last night per day; reversing keeps the first.
+  const nightsByDay = $derived(
+    indexBy(
+      [...nights].reverse(),
+      (night) => night.displayDate,
+      (night) => night
+    )
+  );
 
   const dayRows = $derived.by<DayRow[]>(() => {
-    return days.map((date) => {
-      const night = nightsByDayKey.get(dayKeyFor(date));
+    return days.map((day) => {
+      const night = nightsByDay.get(day);
       let cumulative = 0;
       const segments: DaySegment[] = SLEEP_COMPOSITION_SEGMENTS.map((seg) => {
         const minutes = night?.[seg.key] ?? 0;
@@ -65,8 +73,8 @@
         return { key: seg.key, label: seg.label, lane: seg.lane, minutes, y0, y1: cumulative };
       });
       return {
-        dayKey: dayKeyFor(date).toString(),
-        date,
+        dayKey: day,
+        date: localDayStart(day),
         night,
         segments,
         totalMinutes: cumulative,

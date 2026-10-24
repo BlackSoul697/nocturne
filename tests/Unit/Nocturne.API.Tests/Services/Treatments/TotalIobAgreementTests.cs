@@ -40,6 +40,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Infrastructure.Data.Services;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Treatments;
@@ -354,7 +355,8 @@ public class TotalIobAgreementTests
         var service = new WidgetSummaryService(
             entries.Object, Reader(now),
             _aps.Object, trackers.Object, Mock.Of<INotificationV1Service>(),
-            Mock.Of<IGlucoseStatusClassifier>(), Mock.Of<INocturneDbContextFactory>(),
+            Mock.Of<IGlucoseStatusClassifier>(), Mock.Of<IAlertRepository>(),
+            MockTenantAccessor.Create().Object, Mock.Of<ICategoryReadContext>(),
             NullLogger<WidgetSummaryService>.Instance);
 
         var summary = await service.GetSummaryAsync("user");
