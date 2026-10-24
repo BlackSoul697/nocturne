@@ -34,7 +34,6 @@ public sealed class GoogleHealthService(
     IGoogleHealthReadingWriter writer,
     ILogger<GoogleHealthService> logger) : IGoogleHealthService
 {
-    private const string ConnectorName = "GoogleHealth";
     private const string InventoryKey = "inventory";
     private static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan PreviewWindow = TimeSpan.FromDays(7);
@@ -46,7 +45,7 @@ public sealed class GoogleHealthService(
     private GoogleHealthPlatformOptions Platform => platformOptions.Value;
 
     private async Task<GoogleHealthConnectorConfiguration?> StoredConfigurationOrNullAsync(CancellationToken ct) =>
-        await connectorConfigurations.GetConfigurationAsync(ConnectorName, ct) is null
+        await connectorConfigurations.GetConfigurationAsync(GoogleHealthConnectorService.ConnectorName, ct) is null
             ? null
             : await configurationLoader.LoadForTenantAsync(ct);
 
@@ -68,7 +67,7 @@ public sealed class GoogleHealthService(
 
     private async Task SaveOptionsAsync(GoogleHealthOptions options, Guid subject, CancellationToken ct)
     {
-        var stored = await connectorConfigurations.GetConfigurationAsync(ConnectorName, ct);
+        var stored = await connectorConfigurations.GetConfigurationAsync(GoogleHealthConnectorService.ConnectorName, ct);
         var configuration = stored?.Configuration.RootElement.Deserialize<JsonObject>(Json) ?? new JsonObject();
         configuration.Remove("callbackUrl");
         configuration.Remove("enabled");
@@ -81,14 +80,14 @@ public sealed class GoogleHealthService(
         configuration["syncSleep"] = options.DataTypes.Contains("sleep", StringComparer.Ordinal);
         using var document = JsonDocument.Parse(configuration.ToJsonString(Json));
         await connectorConfigurations.SaveConfigurationAsync(
-            ConnectorName, document, subject.ToString(), ct);
+            GoogleHealthConnectorService.ConnectorName, document, subject.ToString(), ct);
     }
 
     public async Task<GoogleHealthStatus> StatusAsync(CancellationToken ct)
     {
         try
         {
-            var stored = await connectorConfigurations.GetConfigurationAsync(ConnectorName, ct);
+            var stored = await connectorConfigurations.GetConfigurationAsync(GoogleHealthConnectorService.ConnectorName, ct);
             if (stored is null)
                 return await WithProgressAsync(new GoogleHealthStatus());
 
@@ -196,9 +195,9 @@ public sealed class GoogleHealthService(
         var expires = DateTimeOffset.UtcNow.Add(FlowLifetime);
         var state = oauthState.Protect(tenantSlug, expires);
         var flow = new GoogleHealthCoordinator.Flow(state, verifier, subject, expires);
-        var secrets = await connectorConfigurations.GetSecretsAsync(ConnectorName, ct);
+        var secrets = await connectorConfigurations.GetSecretsAsync(GoogleHealthConnectorService.ConnectorName, ct);
         secrets["oauthFlow"] = JsonSerializer.Serialize(flow, Json);
-        await connectorConfigurations.SaveSecretsAsync(ConnectorName, secrets, subject.ToString(), ct);
+        await connectorConfigurations.SaveSecretsAsync(GoogleHealthConnectorService.ConnectorName, secrets, subject.ToString(), ct);
         var parameters = new Dictionary<string, string?>
         {
             ["client_id"] = Platform.ClientId,
@@ -226,7 +225,7 @@ public sealed class GoogleHealthService(
         await using var gate = await coordinator.AcquireAsync(TenantId, ct);
         try
         {
-            var flowSecrets = await connectorConfigurations.GetSecretsAsync(ConnectorName, ct);
+            var flowSecrets = await connectorConfigurations.GetSecretsAsync(GoogleHealthConnectorService.ConnectorName, ct);
             var flowJson = flowSecrets.GetValueOrDefault("oauthFlow");
             var flow = flowJson is null ? null : JsonSerializer.Deserialize<GoogleHealthCoordinator.Flow>(flowJson, Json);
             if (flow is null ||
@@ -269,7 +268,7 @@ public sealed class GoogleHealthService(
                 stage: ex is JsonException ? "token_response" : "network");
             LogFailure(ex, error);
             await connectorConfigurations.UpdateHealthStateAsync(
-                ConnectorName,
+                GoogleHealthConnectorService.ConnectorName,
                 lastErrorMessage: GoogleHealthErrorCode.Encode(
                     error.Message, error.DataType is null ? null : [error.DataType]),
                 lastErrorAt: DateTime.UtcNow,
@@ -290,7 +289,7 @@ public sealed class GoogleHealthService(
             await sessions.CacheAsync(token);
             await ForgetInventoryAsync(ct);
             await connectorConfigurations.UpdateHealthStateAsync(
-                ConnectorName,
+                GoogleHealthConnectorService.ConnectorName,
                 lastErrorMessage: string.Empty,
                 lastErrorAt: DateTime.MinValue,
                 isHealthy: true,
@@ -300,7 +299,7 @@ public sealed class GoogleHealthService(
         {
             logger.LogWarning(ex, "Google Health could not finish activating the stored grant of tenant {TenantId}", TenantId);
             await connectorConfigurations.UpdateHealthStateAsync(
-                ConnectorName,
+                GoogleHealthConnectorService.ConnectorName,
                 lastErrorMessage: GoogleHealthErrorCode.Encode("activation_failed"),
                 lastErrorAt: DateTime.UtcNow,
                 isHealthy: false,
@@ -344,7 +343,7 @@ public sealed class GoogleHealthService(
         var revokeFailed = !string.IsNullOrWhiteSpace(refreshToken) &&
             await sessions.RevokeAsync(refreshToken, account, CancellationToken.None) == GoogleHealthRevocation.Failed;
         await connectorConfigurations.UpdateHealthStateAsync(
-            ConnectorName,
+            GoogleHealthConnectorService.ConnectorName,
             lastErrorMessage: revokeFailed ? "revoke_in_google" : string.Empty,
             lastErrorAt: revokeFailed ? DateTime.UtcNow : DateTime.MinValue,
             isHealthy: !revokeFailed,
@@ -360,8 +359,8 @@ public sealed class GoogleHealthService(
         await ClearFlowAsync(ct);
         await coordinator.CompleteAsync(TenantId);
         await writer.PurgeAsync(ct);
-        await cursorStore.SetAsync(ConnectorName, GoogleHealthConnectorService.RuntimeStateResource, new(null, null), ct);
-        var stored = await connectorConfigurations.GetConfigurationAsync(ConnectorName, ct);
+        await cursorStore.SetAsync(GoogleHealthConnectorService.ConnectorName, GoogleHealthConnectorService.RuntimeStateResource, new(null, null), ct);
+        var stored = await connectorConfigurations.GetConfigurationAsync(GoogleHealthConnectorService.ConnectorName, ct);
         if (stored?.Configuration is not null)
         {
             var configuration = JsonNode.Parse(stored.Configuration.RootElement.GetRawText())!.AsObject();
@@ -369,7 +368,7 @@ public sealed class GoogleHealthService(
                          "backfillComplete", "backfillChunkDays" })
                 configuration.Remove(key);
             using var document = JsonDocument.Parse(configuration.ToJsonString(Json));
-            await connectorConfigurations.SaveConfigurationAsync(ConnectorName, document, subject.ToString(), ct);
+            await connectorConfigurations.SaveConfigurationAsync(GoogleHealthConnectorService.ConnectorName, document, subject.ToString(), ct);
         }
         await sessions.ClearAsync(removeAccount: true, subject, revoke: false, ct);
     }
@@ -416,7 +415,7 @@ public sealed class GoogleHealthService(
         catch (GoogleHealthException ex) when (ex.RequiresReconnect)
         {
             await sessions.ClearAsync(removeAccount: false, subject, revoke: ex.Message == "client_changed", ct);
-            await connectorConfigurations.UpdateHealthStateAsync(ConnectorName,
+            await connectorConfigurations.UpdateHealthStateAsync(GoogleHealthConnectorService.ConnectorName,
                 lastErrorMessage: GoogleHealthErrorCode.Encode(ex.Message, ex.DataType is null ? null : [ex.DataType]),
                 lastErrorAt: DateTime.UtcNow, isHealthy: false, ct: ct);
             throw;
@@ -501,10 +500,10 @@ public sealed class GoogleHealthService(
 
     private async Task<Dictionary<string, JsonElement>> RuntimeStateAsync(CancellationToken ct) =>
         GoogleHealthConnectorService.ParseRuntimeState(
-            (await cursorStore.GetAsync(ConnectorName, GoogleHealthConnectorService.RuntimeStateResource, ct))?.LastGuid);
+            (await cursorStore.GetAsync(GoogleHealthConnectorService.ConnectorName, GoogleHealthConnectorService.RuntimeStateResource, ct))?.LastGuid);
 
     private Task SaveRuntimeStateAsync(Dictionary<string, JsonElement> state, CancellationToken ct) =>
-        cursorStore.SetAsync(ConnectorName, GoogleHealthConnectorService.RuntimeStateResource,
+        cursorStore.SetAsync(GoogleHealthConnectorService.ConnectorName, GoogleHealthConnectorService.RuntimeStateResource,
             new(null, JsonSerializer.Serialize(state, Json)), ct);
 
     /// <summary>A scan belongs to the session that ran it; a new or ended session has none.</summary>
@@ -523,9 +522,9 @@ public sealed class GoogleHealthService(
 
     private async Task ClearFlowAsync(CancellationToken ct)
     {
-        var secrets = await connectorConfigurations.GetSecretsAsync(ConnectorName, ct);
+        var secrets = await connectorConfigurations.GetSecretsAsync(GoogleHealthConnectorService.ConnectorName, ct);
         if (!secrets.Remove("oauthFlow")) return;
-        await connectorConfigurations.SaveSecretsAsync(ConnectorName, secrets, ct: ct);
+        await connectorConfigurations.SaveSecretsAsync(GoogleHealthConnectorService.ConnectorName, secrets, ct: ct);
     }
 
     private void LogFailure(Exception ex, GoogleHealthException error) => logger.LogError(ex,
