@@ -130,7 +130,7 @@ public class MealMatchingController : ControllerBase
     /// </remarks>
     [HttpPost("accept")]
     [RequireScope(Scope.TreatmentsReadWrite)]
-    [RemoteCommand(Invalidates = ["GetSuggestions"])]
+    [RemoteCommand(Invalidates = ["GetSuggestions", "Nutrition_GetMeals"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult> AcceptMatch([FromBody] AcceptMatchRequest request)

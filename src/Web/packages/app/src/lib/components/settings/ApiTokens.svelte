@@ -111,7 +111,6 @@
         limitTo24Hours: newTokenLimitTo24Hours,
       });
       createdToken = data.token ?? null;
-      await grantsQuery.refresh();
     } catch (err) {
       mutationError = describeSubmitError(err, "Failed to create token.");
       closeCreateDialog();
@@ -154,7 +153,6 @@
 
     try {
       await revokeGrant(revokeTarget.id!);
-      await grantsQuery.refresh();
       successMessage = "API token revoked.";
       clearMessages();
     } catch (err) {

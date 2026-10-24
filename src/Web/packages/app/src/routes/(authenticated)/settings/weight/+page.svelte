@@ -13,9 +13,6 @@
   import { describeSubmitError } from "$lib/forms/submit-error";
   import type { BodyWeight } from "$api";
 
-  // create/deleteBodyWeight declare a GetBodyWeights invalidation, but it refreshes
-  // getBodyWeights(undefined) — a different cache key from this subscription — so each
-  // mutation below refreshes this query itself.
   const weightsQuery = bw.getBodyWeights({ count: 100, skip: 0 });
   const entries = $derived<BodyWeight[]>(weightsQuery.current ?? []);
 
@@ -37,11 +34,12 @@
     saving = true;
     errorMessage = null;
     try {
-      await bw.create({
-        weightKg: kg,
-        mills: newDate ? new Date(newDate).getTime() : Date.now(),
-      });
-      await weightsQuery.refresh();
+      await bw
+        .create({
+          weightKg: kg,
+          mills: newDate ? new Date(newDate).getTime() : Date.now(),
+        })
+        .updates(bw.getBodyWeights);
       newWeightKg = "";
       newDate = "";
     } catch (e) {
@@ -56,8 +54,7 @@
     pendingDelete = null;
     if (!entry?._id) return;
     try {
-      await bw.deleteBodyWeight(entry._id);
-      await weightsQuery.refresh();
+      await bw.deleteBodyWeight(entry._id).updates(bw.getBodyWeights);
     } catch (e) {
       errorMessage = describeSubmitError(e, "Failed to delete entry");
     }

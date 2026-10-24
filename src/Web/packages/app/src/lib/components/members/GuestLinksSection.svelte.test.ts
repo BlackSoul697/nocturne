@@ -3,7 +3,7 @@ import { page } from "vitest/browser";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { error } from "@sveltejs/kit";
 import { GuestLinkStatus, type GuestLinkInfo } from "$api-clients";
-import { remoteQuery } from "$lib/test-stubs/remote-resource";
+import { remoteCommand, remoteQuery } from "$lib/test-stubs/remote-resource";
 
 let createImpl: () => Promise<unknown>;
 let links: GuestLinkInfo[];
@@ -14,9 +14,9 @@ vi.mock("$app/state", () => ({
 
 vi.mock("$api/generated/guestLinks.generated.remote", () => ({
   getGuestLinks: () => remoteQuery(() => links),
-  createGuestLink: () => createImpl(),
-  revokeGuestLink: () => Promise.resolve(),
-  dismissGuestLink: () => Promise.resolve(),
+  createGuestLink: remoteCommand(() => createImpl()),
+  revokeGuestLink: remoteCommand(() => Promise.resolve()),
+  dismissGuestLink: remoteCommand(() => Promise.resolve()),
 }));
 
 import GuestLinksSection from "./GuestLinksSection.svelte";

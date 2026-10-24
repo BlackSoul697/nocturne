@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatDayTime } from "$lib/utils/formatting";
   import { page } from "$app/state";
+  import type { RemoteCommand } from "@sveltejs/kit";
   import { satisfiesScope } from "$lib/authorization/scopes";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
@@ -154,10 +155,11 @@
     isCreating = true;
     createError = null;
     try {
-      const result = await createGuestLink({ label: label.trim() });
+      const result = await createGuestLink({ label: label.trim() }).updates(
+        getGuestLinks
+      );
       createdCode = result.code ?? null;
       createdUrl = result.fullUrl ? normalizeCreatedUrl(result.fullUrl) : null;
-      await guestLinksQuery?.refresh();
     } catch (err) {
       createError = describeSubmitError(
         err,
@@ -172,17 +174,10 @@
     await copy.copy(text, type);
   }
 
-  /**
-   * Run a guest-link mutation and pull the updated list. The commands' declared
-   * GetGuestLinks invalidation refreshes `getGuestLinks(undefined)`, which is a
-   * different cache key from the `{ includeDismissed: true }` this component
-   * subscribes with, so the refresh has to be issued here.
-   */
-  async function mutateLink(id: string, run: (id: string) => Promise<unknown>) {
+  async function mutateLink(id: string, run: RemoteCommand<string, unknown>) {
     pendingIds = new Set([...pendingIds, id]);
     try {
-      await run(id);
-      await guestLinksQuery?.refresh();
+      await run(id).updates(getGuestLinks);
     } finally {
       pendingIds = new Set([...pendingIds].filter((x) => x !== id));
     }
@@ -209,11 +204,10 @@
       const result = await createGuestLink({
         label: link.label || "Untitled",
         scopes: link.scopes,
-      });
+      }).updates(getGuestLinks);
       createdCode = result.code ?? null;
       createdUrl = result.fullUrl ? normalizeCreatedUrl(result.fullUrl) : null;
       showCreateForm = true;
-      await guestLinksQuery?.refresh();
     } catch (err) {
       createError = describeSubmitError(
         err,
