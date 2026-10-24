@@ -15844,21 +15844,17 @@ msgstr ""
 msgid "Mean Glucose"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hyper Duration"
-msgstr ""
+#~ msgid "Hyper Duration"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hyper Events"
-msgstr ""
+#~ msgid "Hyper Events"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hypo Duration"
-msgstr ""
+#~ msgid "Hypo Duration"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hypo Events"
-msgstr ""
+#~ msgid "Hypo Events"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "Preset"
@@ -18123,17 +18119,9 @@ msgstr ""
 #. 0: minutes / 60
 #. 0: minutesAfter == null ? "–" \\: minutesAfter / 60
 #. 0: e.event.timeToNadirHours.toFixed(1)
-#. 0: v.toFixed(1)
-#. 0: signed(d)
-#. 0: v.toFixed(1)
-#. 0: signed(d)
 #: src/lib/components/reports/loop-analysis/EventCohortBuilder.svelte
 #: src/lib/components/reports/loop-analysis/EventCohortBuilder.svelte
 #: src/lib/components/reports/sensor-integrity/HypoAfterNoiseLog.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "{0} h"
 msgstr ""
 
@@ -30699,4 +30687,20 @@ msgstr ""
 
 #: src/lib/components/alerts/conditionIssues.svelte.ts
 msgid "Part of this rule's conditions is malformed, so the rule can't run as set. Edit its conditions and save it."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hyper Time / Day"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hyper Events / Day"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hypo Time / Day"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hypo Events / Day"
 msgstr ""
