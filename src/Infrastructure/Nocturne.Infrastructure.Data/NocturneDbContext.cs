@@ -572,6 +572,28 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     ];
 
     /// <summary>
+    /// <c>SET NULL</c> foreign keys on the high-volume record tables that most rows leave empty.
+    /// The index only serves the referential action when a device, bolus calculation or APS
+    /// snapshot is deleted, which never looks for a null, so it is filtered to the non-null rows.
+    /// On production the columns are 67-100% null.
+    /// </summary>
+    internal static readonly (Type Entity, string Property)[] SparseForeignKeys =
+    [
+        (typeof(ApsSnapshotEntity), nameof(ApsSnapshotEntity.DeviceId)),
+        (typeof(ApsSnapshotEntity), nameof(ApsSnapshotEntity.PatientDeviceId)),
+        (typeof(PumpSnapshotEntity), nameof(PumpSnapshotEntity.DeviceId)),
+        (typeof(PumpSnapshotEntity), nameof(PumpSnapshotEntity.PatientDeviceId)),
+        (typeof(UploaderSnapshotEntity), nameof(UploaderSnapshotEntity.DeviceId)),
+        (typeof(TempBasalEntity), nameof(TempBasalEntity.DeviceId)),
+        (typeof(TempBasalEntity), nameof(TempBasalEntity.PatientDeviceId)),
+        (typeof(TempBasalEntity), nameof(TempBasalEntity.ApsSnapshotId)),
+        (typeof(BolusEntity), nameof(BolusEntity.DeviceId)),
+        (typeof(BolusEntity), nameof(BolusEntity.PatientDeviceId)),
+        (typeof(BolusEntity), nameof(BolusEntity.ApsSnapshotId)),
+        (typeof(BolusEntity), nameof(BolusEntity.BolusCalculationId)),
+    ];
+
+    /// <summary>
     /// Profile-decomposition schedule tables, read as (tenant, profile, newest-first).
     /// </summary>
     internal static readonly Type[] V4ProfileScheduleEntities =
@@ -803,6 +825,15 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.HasIndex(nameof(ITenantScoped.TenantId))
                 .HasDatabaseName($"IX_{entity.Metadata.GetTableName()}_tenant_id");
+        }
+
+        foreach (var (type, property) in SparseForeignKeys)
+        {
+            var entity = modelBuilder.Entity(type);
+            var column = entity.Property(property).Metadata.GetColumnName();
+            entity.HasIndex(property)
+                .HasDatabaseName($"ix_{entity.Metadata.GetTableName()}_{column}")
+                .HasFilter($"{column} IS NOT NULL");
         }
 
         foreach (var entity in V4ProfileNamedEntities.Select(t => modelBuilder.Entity(t)))
