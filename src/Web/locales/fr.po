@@ -24707,7 +24707,6 @@ msgid "Part of this rule's conditions is malformed, so it can't be saved."
 msgstr ""
 
 #: src/lib/components/alerts/conditionIssues.svelte.ts
-#: src/lib/components/alerts/conditionIssues.svelte.ts
 msgid "Every group needs at least one condition."
 msgstr ""
 
@@ -25312,7 +25311,7 @@ msgstr ""
 #~ msgid "Alerting"
 #~ msgstr ""
 
-#. 0: issues[index].map((i) => issueText[i.reason] ?? i.reason).join(", ")
+#. 0: issues[index].map(describeIssue).join(", ")
 #: ../portal/src/lib/components/docs/alert-simulator/AlertSimulator.svelte
 msgid "A save would be refused: this rule needs {0}."
 msgstr ""
@@ -27136,9 +27135,8 @@ msgstr ""
 msgid "Needs review"
 msgstr ""
 
-#: src/lib/components/alerts/conditionIssues.svelte.ts
-msgid "Part of this rule's conditions is malformed, so the rule may not alert as set. Edit its conditions and save it."
-msgstr ""
+#~ msgid "Part of this rule's conditions is malformed, so the rule may not alert as set. Edit its conditions and save it."
+#~ msgstr ""
 
 #. 0: needsReview
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -30697,4 +30695,8 @@ msgstr ""
 #. 0: formatList( categoriesIn(link.scopes).map((c) => c.name.toLowerCase()) )
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Sees {0}"
+msgstr ""
+
+#: src/lib/components/alerts/conditionIssues.svelte.ts
+msgid "Part of this rule's conditions is malformed, so the rule can't run as set. Edit its conditions and save it."
 msgstr ""
