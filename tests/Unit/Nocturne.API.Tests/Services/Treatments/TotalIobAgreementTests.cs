@@ -418,7 +418,7 @@ public class TotalIobAgreementTests
         ddata.Setup(d => d.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>())).ReturnsAsync(new DData());
         var service = new PropertiesService(
             ddata.Object, NullLogger<PropertiesService>.Instance, Reader(now),
-            Mock.Of<IAr2Service>(), Mock.Of<IDeviceAgeService>());
+            Mock.Of<IAr2Service>(), Mock.Of<IDeviceAgeService>(), Mock.Of<ITherapySettingsResolver>(), TimeProvider.System);
 
         var properties = await service.GetPropertiesAsync(["iob"], CancellationToken.None);
 
