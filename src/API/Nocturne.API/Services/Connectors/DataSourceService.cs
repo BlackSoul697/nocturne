@@ -45,6 +45,7 @@ public class DataSourceService : IDataSourceService
     private readonly IConnectorConfigurationService _connectorConfiguration;
     private readonly ProfileActivationWriter _profileActivationWriter;
     private readonly IEnumerable<IConnectorPurgeGuard> _purgeGuards;
+    private readonly IEnumerable<IConnectorDataPurge> _dataPurges;
     private readonly ILogger<DataSourceService> _logger;
 
     public DataSourceService(
@@ -56,6 +57,7 @@ public class DataSourceService : IDataSourceService
         IConnectorConfigurationService connectorConfiguration,
         ProfileActivationWriter profileActivationWriter,
         IEnumerable<IConnectorPurgeGuard> purgeGuards,
+        IEnumerable<IConnectorDataPurge> dataPurges,
         ILogger<DataSourceService> logger
     )
     {
@@ -67,6 +69,7 @@ public class DataSourceService : IDataSourceService
         _auditContext = auditContext;
         _connectorConfiguration = connectorConfiguration;
         _purgeGuards = purgeGuards;
+        _dataPurges = dataPurges;
         _logger = logger;
     }
 
@@ -914,63 +917,13 @@ public class DataSourceService : IDataSourceService
                     $"Connector not found: {connectorId}");
             }
 
-            // Connector's DataSourceId is what we use in the database (e.g. "dexcom-connector")
-            // This is also what the connector uses as the Device field when writing entries
-            var deviceId = metadata.DataSourceId;
             _logger.LogInformation(
                 "Resolved connector {ConnectorId} to device ID {DeviceId}",
                 connectorId,
-                deviceId
+                metadata.DataSourceId
             );
 
-            Dictionary<string, long> deletedCounts;
-            var guard = _purgeGuards.FirstOrDefault(g =>
-                g.ConnectorName.Equals(metadata.ConnectorName, StringComparison.OrdinalIgnoreCase));
-            if (guard is not null)
-            {
-                await using var paused = await guard.PauseSyncsAsync(cancellationToken);
-                if (paused is null)
-                {
-                    return DataSourceDeleteResult.Failed(
-                        connectorId,
-                        DataSourceDeleteError.SyncRunning,
-                        $"A sync of connector {connectorId} is running");
-                }
-
-                deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
-            }
-            else
-            {
-                var reEnable = allowReimport
-                    && (await _connectorConfiguration.GetConfigurationAsync(connectorId, cancellationToken))?.IsActive == true;
-
-                // Disable the connector before purging so a scheduled or in-flight sync cannot
-                // re-import the data we are about to delete.
-                await _connectorConfiguration.SetActiveAsync(
-                    connectorId, isActive: false, _auditContext.SubjectName, cancellationToken);
-
-                deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
-
-                // With nothing of the source left stored, the connector's next sync imports its
-                // history from the start.
-                if (reEnable)
-                    await _connectorConfiguration.SetActiveAsync(
-                        connectorId, isActive: true, _auditContext.SubjectName, cancellationToken);
-            }
-
-            _logger.LogInformation(
-                "Deleted data for connector {ConnectorId} (device {DeviceId}): {DeletedCounts}",
-                connectorId,
-                deviceId,
-                string.Join(", ", deletedCounts.Select(kv => $"{kv.Value} {kv.Key}"))
-            );
-
-            return new DataSourceDeleteResult
-            {
-                Success = true,
-                DataSource = deviceId,
-                DeletedCounts = deletedCounts,
-            };
+            return await PurgeConnectorDataAsync(db, metadata, connectorId, allowReimport, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -980,6 +933,88 @@ public class DataSourceService : IDataSourceService
                 DataSourceDeleteError.DeleteFailed,
                 "Failed to delete connector data");
         }
+    }
+
+    /// <summary>
+    /// The one purge of a connector's data: holds its syncs off (its purge guard, else the persisted
+    /// active flag), deletes everything attributable to its data source, then what it wrote to tables
+    /// the source filter cannot reach (<see cref="IConnectorDataPurge"/>).
+    /// </summary>
+    private async Task<DataSourceDeleteResult> PurgeConnectorDataAsync(
+        NocturneDbContext db,
+        ConnectorMetadataService.ConnectorDisplayInfo metadata,
+        string configurationName,
+        bool allowReimport,
+        CancellationToken cancellationToken
+    )
+    {
+        var deviceId = metadata.DataSourceId;
+        Dictionary<string, long> deletedCounts;
+        var guard = _purgeGuards.FirstOrDefault(g =>
+            g.ConnectorName.Equals(metadata.ConnectorName, StringComparison.OrdinalIgnoreCase));
+        if (guard is not null)
+        {
+            await using var paused = await guard.PauseSyncsAsync(cancellationToken);
+            if (paused is null)
+            {
+                return DataSourceDeleteResult.Failed(
+                    configurationName,
+                    DataSourceDeleteError.SyncRunning,
+                    $"A sync of connector {configurationName} is running");
+            }
+
+            deletedCounts = await DeleteConnectorSourceDataAsync(db, metadata, allowReimport, cancellationToken);
+        }
+        else
+        {
+            var reEnable = allowReimport
+                && (await _connectorConfiguration.GetConfigurationAsync(configurationName, cancellationToken))?.IsActive == true;
+
+            // Disable the connector before purging so a scheduled or in-flight sync cannot
+            // re-import the data we are about to delete.
+            await _connectorConfiguration.SetActiveAsync(
+                configurationName, isActive: false, _auditContext.SubjectName, cancellationToken);
+
+            deletedCounts = await DeleteConnectorSourceDataAsync(db, metadata, allowReimport, cancellationToken);
+
+            // With nothing of the source left stored, the connector's next sync imports its
+            // history from the start.
+            if (reEnable)
+                await _connectorConfiguration.SetActiveAsync(
+                    configurationName, isActive: true, _auditContext.SubjectName, cancellationToken);
+        }
+
+        _logger.LogInformation(
+            "Deleted data for connector {ConnectorId} (device {DeviceId}): {DeletedCounts}",
+            configurationName,
+            deviceId,
+            string.Join(", ", deletedCounts.Select(kv => $"{kv.Value} {kv.Key}"))
+        );
+
+        return new DataSourceDeleteResult
+        {
+            Success = true,
+            DataSource = deviceId,
+            DeletedCounts = deletedCounts,
+        };
+    }
+
+    private async Task<Dictionary<string, long>> DeleteConnectorSourceDataAsync(
+        NocturneDbContext db,
+        ConnectorMetadataService.ConnectorDisplayInfo metadata,
+        bool allowReimport,
+        CancellationToken cancellationToken
+    )
+    {
+        var deletedCounts = await DeleteAllSourceDataAsync(db, metadata.DataSourceId, allowReimport, cancellationToken);
+        foreach (var purge in _dataPurges.Where(p =>
+                     p.ConnectorName.Equals(metadata.ConnectorName, StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var (type, count) in await purge.PurgeAsync(allowReimport, _auditContext, cancellationToken))
+                deletedCounts[type] = deletedCounts.GetValueOrDefault(type) + count;
+        }
+
+        return deletedCounts;
     }
 
     /// <summary>
@@ -995,6 +1030,9 @@ public class DataSourceService : IDataSourceService
     ///   DeviceEvent, BGCheck, Note, ApsSnapshot, TempBasal, StateSpan, ProfileActivation) take the audited soft-delete path,
     ///   which stamps the <c>deleted_by_user</c> flag the soft-delete dedup reads to block re-import
     ///   (<see cref="SoftDeleteDedupExtensions"/>).</item>
+    /// <item>Heart rate, step counts and body weights are soft-deletable but not auditable: the same
+    ///   path soft-deletes and stamps them and records the bulk summary. Their create path does not
+    ///   read the stamp, so it does not block their re-import.</item>
     /// </list>
     /// </remarks>
     private async Task<Dictionary<string, long>> DeleteAllSourceDataAsync(
@@ -1034,6 +1072,13 @@ public class DataSourceService : IDataSourceService
             db.ProfileActivations.FromSource(source), _auditContext, scope, cancellationToken);
         await _profileActivationWriter.AfterBulkRemovalAsync(cancellationToken);
 
+        var heartRatesDeleted = await db.AuditedSoftDeleteAsync(
+            db.HeartRates.FromSource(source), _auditContext, scope, cancellationToken);
+        var stepCountsDeleted = await db.AuditedSoftDeleteAsync(
+            db.StepCounts.FromSource(source), _auditContext, scope, cancellationToken);
+        var bodyWeightsDeleted = await db.AuditedSoftDeleteAsync(
+            db.BodyWeights.FromSource(source), _auditContext, scope, cancellationToken);
+
         if (allowReimport)
             await AllowSourceReimportAsync(db, source, scope, cancellationToken);
 
@@ -1050,6 +1095,9 @@ public class DataSourceService : IDataSourceService
         if (deviceStatusDeleted > 0) deletedCounts[nameof(SyncDataType.DeviceStatus)] = deviceStatusDeleted;
         if (tempBasalsDeleted > 0) deletedCounts[nameof(SyncDataType.TempBasals)] = tempBasalsDeleted;
         if (stateSpansDeleted > 0) deletedCounts[nameof(SyncDataType.StateSpans)] = stateSpansDeleted;
+        if (heartRatesDeleted > 0) deletedCounts[nameof(SyncDataType.HeartRate)] = heartRatesDeleted;
+        if (stepCountsDeleted > 0) deletedCounts[nameof(SyncDataType.Steps)] = stepCountsDeleted;
+        if (bodyWeightsDeleted > 0) deletedCounts[nameof(SyncDataType.BodyWeight)] = bodyWeightsDeleted;
 
         return deletedCounts;
     }
@@ -1079,6 +1127,9 @@ public class DataSourceService : IDataSourceService
         await db.AuditedAllowReimportAsync(db.TargetRangeSchedules.FromSource(source), _auditContext, scope, ct);
         await db.AuditedAllowReimportAsync(
             db.StateSpans.Where(s => s.Source == source), _auditContext, scope, ct);
+        await db.AuditedAllowReimportAsync(db.HeartRates.FromSource(source), _auditContext, scope, ct);
+        await db.AuditedAllowReimportAsync(db.StepCounts.FromSource(source), _auditContext, scope, ct);
+        await db.AuditedAllowReimportAsync(db.BodyWeights.FromSource(source), _auditContext, scope, ct);
     }
 
     internal static string GenerateId(string deviceId) => $"ds-{HashUtils.Sha256Hex(deviceId)[..8]}";
@@ -1112,6 +1163,10 @@ public class DataSourceService : IDataSourceService
 
         try
         {
+            var owner = ConnectorMetadataService.GetByDataSourceId(dataSourceId);
+            if (owner is not null)
+                return await PurgeConnectorDataAsync(db, owner, owner.ConnectorName, allowReimport, cancellationToken);
+
             var sources = await GetActiveDataSourcesAsync(cancellationToken);
             var source = sources.FirstOrDefault(s =>
                 s.Id == dataSourceId || s.DeviceId == dataSourceId
@@ -1127,6 +1182,10 @@ public class DataSourceService : IDataSourceService
             }
 
             var deviceId = source.DeviceId;
+
+            var connector = ConnectorMetadataService.GetByDataSourceId(deviceId);
+            if (connector is not null)
+                return await PurgeConnectorDataAsync(db, connector, connector.ConnectorName, allowReimport, cancellationToken);
 
             var deletedCounts = await DeleteAllSourceDataAsync(db, deviceId, allowReimport, cancellationToken);
 

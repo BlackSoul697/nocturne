@@ -1,3 +1,4 @@
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Models.Health;
 using Nocturne.Core.Models;
 
@@ -58,5 +59,16 @@ public interface IGoogleHealthReadingWriter
         IReadOnlyCollection<SleepSession> sleepSessions,
         int batchSize,
         CancellationToken ct);
+    /// <summary>
+    /// Erases every Google Health record of the tenant, user tombstones included, for a disconnect: the
+    /// account is gone, so nothing is kept to block or allow a re-import. A user-requested data delete
+    /// goes through the connector purge and <see cref="DeleteSleepAsync"/> instead.
+    /// </summary>
     Task PurgeAsync(CancellationToken ct);
+    /// <summary>
+    /// Soft-deletes the tenant's Google Health sleep sessions for <paramref name="auditContext"/>, so a
+    /// sync cannot re-create them, or with <paramref name="allowReimport"/> so it can. Returns the
+    /// number deleted.
+    /// </summary>
+    Task<int> DeleteSleepAsync(bool allowReimport, IAuditContext auditContext, CancellationToken ct);
 }

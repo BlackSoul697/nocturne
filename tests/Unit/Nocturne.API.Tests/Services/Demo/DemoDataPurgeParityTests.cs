@@ -74,6 +74,7 @@ public class DemoDataPurgeParityTests : IDisposable
         _connectorConfig.Object,
         Nocturne.API.Tests.Infrastructure.ProfileActivationTestDeps.Writer(context),
         [],
+        [],
         NullLogger<DataSourceService>.Instance);
 
     /// <summary>One demo row in every table the demo seeder and the realtime tick write to.</summary>

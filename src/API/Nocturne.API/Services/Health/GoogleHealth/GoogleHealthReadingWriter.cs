@@ -1,3 +1,4 @@
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Sleep;
@@ -9,6 +10,7 @@ using Nocturne.Core.Models.Health;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Health.GoogleHealth;
@@ -272,5 +274,17 @@ public sealed class GoogleHealthReadingWriter(
                 .ExecuteDeleteAsync(ct);
             await transaction.CommitAsync(ct);
         });
+    }
+
+    public async Task<int> DeleteSleepAsync(bool allowReimport, IAuditContext auditContext, CancellationToken ct)
+    {
+        await using var db = await contexts.CreateAsync(ct);
+        var sessions = db.SleepSessions.Where(session =>
+            session.Source == SleepSource.Google.ToString() && session.SourceApp == SourceApp);
+        var scope = $"data_source={Source}";
+        var deleted = await db.AuditedSoftDeleteAsync(sessions, auditContext, scope, ct);
+        if (allowReimport)
+            await db.AuditedAllowReimportAsync(sessions, auditContext, scope, ct);
+        return deleted;
     }
 }

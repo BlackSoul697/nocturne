@@ -7,9 +7,11 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Nocturne.Connectors.Core.Interfaces;
+using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.GoogleHealth.Configurations;
 using Nocturne.Connectors.GoogleHealth.Models;
 using Nocturne.Connectors.GoogleHealth.Services;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -32,7 +34,7 @@ public sealed class GoogleHealthService(
     IOptions<GoogleHealthPlatformOptions> platformOptions,
     GoogleHealthOAuthState oauthState,
     IGoogleHealthReadingWriter writer,
-    ILogger<GoogleHealthService> logger) : IGoogleHealthService
+    ILogger<GoogleHealthService> logger) : IGoogleHealthService, IConnectorDataPurge
 {
     private const string InventoryKey = "inventory";
     private static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
@@ -359,6 +361,30 @@ public sealed class GoogleHealthService(
         await ClearFlowAsync(ct);
         await coordinator.CompleteAsync(TenantId);
         await writer.PurgeAsync(ct);
+        await ResetSyncPositionAsync(subject.ToString(), ct);
+        await sessions.ClearAsync(removeAccount: true, subject, revoke: false, ct);
+    }
+
+    public string ConnectorName => GoogleHealthConnectorService.ConnectorName;
+
+    /// <remarks>
+    /// The caller holds the tenant's sync gate (<see cref="GoogleHealthPurgeGuard"/>), so this does
+    /// not take it. Heart rate, steps and body weight carry the data source id and go with the
+    /// source purge; only sleep is left to this.
+    /// </remarks>
+    async Task<IReadOnlyDictionary<string, long>> IConnectorDataPurge.PurgeAsync(
+        bool allowReimport, IAuditContext auditContext, CancellationToken ct)
+    {
+        var sleep = await writer.DeleteSleepAsync(allowReimport, auditContext, ct);
+        if (allowReimport)
+            await ResetSyncPositionAsync(auditContext.SubjectName, ct);
+        return sleep > 0
+            ? new Dictionary<string, long> { [nameof(SyncDataType.Sleep)] = sleep }
+            : new Dictionary<string, long>();
+    }
+
+    private async Task ResetSyncPositionAsync(string? modifiedBy, CancellationToken ct)
+    {
         await cursorStore.SetAsync(GoogleHealthConnectorService.ConnectorName, GoogleHealthConnectorService.RuntimeStateResource, new(null, null), ct);
         var stored = await connectorConfigurations.GetConfigurationAsync(GoogleHealthConnectorService.ConnectorName, ct);
         if (stored?.Configuration is not null)
@@ -368,9 +394,8 @@ public sealed class GoogleHealthService(
                          "backfillComplete", "backfillChunkDays" })
                 configuration.Remove(key);
             using var document = JsonDocument.Parse(configuration.ToJsonString(Json));
-            await connectorConfigurations.SaveConfigurationAsync(GoogleHealthConnectorService.ConnectorName, document, subject.ToString(), ct);
+            await connectorConfigurations.SaveConfigurationAsync(GoogleHealthConnectorService.ConnectorName, document, modifiedBy, ct);
         }
-        await sessions.ClearAsync(removeAccount: true, subject, revoke: false, ct);
     }
 
     public async Task<GoogleHealthStatus> PreviewAsync(Guid subject, CancellationToken ct)
