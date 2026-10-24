@@ -14,7 +14,7 @@
         installPrintFitFallback,
         printReport,
     } from "$lib/components/reports/print/report-print.svelte";
-    import {reportCategories, reportSubRouteTitle, reportTitle} from "$lib/navigation/report-navigation.svelte";
+    import {reportCategories, reportDescription, reportSubRouteTitle, reportTitle} from "$lib/navigation/report-navigation.svelte";
     import Filter from "@lucide/svelte/icons/funnel";
     import Calendar from "@lucide/svelte/icons/calendar";
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
@@ -114,6 +114,8 @@
         );
     });
 
+    const description = $derived(reportDescription(page.url.pathname));
+
     // Show the range control only where the report actually reads the range
     const showFilters = $derived(
         page.url.pathname !== "/reports" && sharedRangeUse.consumed
@@ -136,6 +138,9 @@
 
 <svelte:head>
     <title>{reportName} - Nocturne</title>
+    {#if description}
+        <meta name="description" content={description}/>
+    {/if}
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </svelte:head>
 
