@@ -485,6 +485,36 @@ public class TotalIobAgreementTests
             ChartDataService.TempBasalQueryLimit, It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task V1Hourly_ReadsNothingStartingAfterTheLastSlot()
+    {
+        DateTime? bolusTo = null, tempTo = null;
+        var boluses = new Mock<IBolusRepository>();
+        boluses
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<BolusKind?>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Callback((DateTime? _, DateTime? to, string? _, string? _, int _, int _, bool _, bool _, BolusKind? _, DateTime? _, Guid? _, CancellationToken _) => bolusTo = to)
+            .ReturnsAsync([]);
+        var temps = new Mock<ITempBasalRepository>();
+        temps
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback((DateTime? _, DateTime? to, string? _, string? _, int _, int _, bool _, CancellationToken _) => tempTo = to)
+            .ReturnsAsync([]);
+        var controller = new IobController(
+            _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, boluses.Object, temps.Object,
+            Reader(ReadingMills), NullLogger<IobController>.Instance);
+
+        await controller.GetHourlyIob(intervalMinutes: 5, hours: 1, startTime: ReadingMills - 55 * Minute);
+
+        var lastSlot = DateTimeOffset.FromUnixTimeMilliseconds(ReadingMills).UtcDateTime;
+        bolusTo.Should().Be(lastSlot);
+        tempTo.Should().Be(lastSlot);
+    }
+
     private async Task<(IobResult Current, HourlyIobData Reading)> V1Async()
     {
         var controller = new IobController(

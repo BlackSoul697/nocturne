@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -1723,7 +1724,7 @@ public class ChartDataServiceTests
 
             var series = await Service(repository.Object, TimeProvider.System).GetBasalSeriesAsync(Start, End);
 
-            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - ChartDataService.BufferMs).UtcDateTime);
+            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - DailyProfileCalculator.ActingMs).UtcDateTime);
             series.Should().ContainSingle();
             series[0].Timestamp.Should().Be(Start);
             series[0].Rate.Should().BeApproximately(0.4, 0.001);
@@ -1841,7 +1842,7 @@ public class ChartDataServiceTests
 
             var spans = await service.GetBasalDeliverySpansAsync(Start, End);
 
-            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - ChartDataService.BufferMs).UtcDateTime);
+            requestedFrom.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(Start - DailyProfileCalculator.ActingMs).UtcDateTime);
             spans.Select(s => (s.Origin, s.Rate)).Should().Equal(
                 (BasalDeliveryOrigin.Manual, 0.4),
                 (BasalDeliveryOrigin.Suspended, 0.0),

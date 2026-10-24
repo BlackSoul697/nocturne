@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,8 +23,7 @@ public class DataFetchStageTests
     // Common test timestamps: 24-hour window
     private const long StartTime = 1700000000000L;
     private const long EndTime = 1700086400000L;
-    private const long BufferMs = 8L * 60 * 60 * 1000;
-    private const long BufferStartTime = StartTime - BufferMs;
+    private const long BufferStartTime = StartTime - DailyProfileCalculator.ActingMs;
 
     private readonly Mock<ISensorGlucoseRepository> _mockSensorGlucoseRepo = new();
     private readonly Mock<IBolusRepository> _mockBolusRepo = new();
