@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.API.Controllers.V1;
 using Nocturne.API.Services.Auth;
-using Nocturne.API.Services.Treatments;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Repositories;
@@ -25,7 +25,7 @@ public class PebbleControllerTests
     private readonly Mock<IEntryService> _entryService = new();
     private static readonly Guid TenantId = Guid.NewGuid();
     private readonly Mock<ITenantAppearanceReader> _appearance = new();
-    private readonly Mock<ICurrentIobCobReader> _iobCob = new();
+    private readonly Mock<IIobCobReader> _iobCob = new();
     private readonly Mock<IUploaderSnapshotRepository> _uploaders = new();
     private List<UploaderSnapshot> _uploaderSnapshotsNewestFirst = [];
     private int _requestedSgvCount;
@@ -107,21 +107,24 @@ public class PebbleControllerTests
     public async Task IobAndCob_ComeFromTheReader()
     {
         _iobCob
-            .Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CurrentIobCob(1.25, "1.25", "OpenAPS", 23, "OpenAPS"));
+            .Setup(r => r.ReadTotalAsync(It.IsAny<long>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IobCobReading(
+                new IobResult { Iob = 1.254, Source = "OpenAPS" },
+                new CobResult { Cob = 17.8333333, Source = "OpenAPS" },
+                new IobCobInputs([], [], [])));
         var controller = NewController("mg/dl", Sgv(113, 0));
 
         var bg = FirstBg(await Get(controller));
 
         bg.GetProperty("iob").GetString().Should().Be("1.25");
-        bg.GetProperty("cob").GetDouble().Should().Be(23);
+        bg.GetProperty("cob").GetDouble().Should().Be(17.8);
     }
 
     [Fact]
     public async Task WhenTheReaderFails_TheGlucoseStillReturns()
     {
         _iobCob
-            .Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.ReadTotalAsync(It.IsAny<long>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException());
         var controller = NewController("mg/dl", Sgv(113, 0));
 

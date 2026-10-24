@@ -1,3 +1,5 @@
+using Nocturne.API.Tests.Infrastructure;
+using Nocturne.Core.Clinical.Treatments;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,11 +75,11 @@ public class AlertReplayServicePagingTests
     private AlertReplayService CreateSut(int pageSize, TimeSpan? maxWindow = null)
     {
         var enricherDeps = new SensorContextEnricherDependencies(
+            new IobCobReader(_iobCalculator.Object, _cobCalculator.Object, _bolusRepository.Object,
+                _tempBasalRepository.Object, _carbIntakeRepository.Object, TestTenantCache.Create(partition: null), NullLogger<IobCobReader>.Instance),
             _iobCalculator.Object,
             _cobCalculator.Object,
             _treatmentService.Object,
-            _bolusRepository.Object,
-            _carbIntakeRepository.Object,
             _deviceEventRepository.Object,
             _pumpSnapshotRepository.Object,
             _apsSnapshotRepository.Object,

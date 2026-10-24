@@ -337,7 +337,7 @@ public static class ServiceRegistrationExtensions
 
         services.AddScoped<IDDataService, DDataService>();
         services.AddScoped<IPropertiesService, PropertiesService>();
-        services.AddScoped<ICurrentIobCobReader, CurrentIobCobReader>();
+        services.AddScoped<IIobCobReader, IobCobReader>();
         services.AddScoped<ISummaryService, SummaryService>();
         // Prediction service — configurable via Predictions:Source (None, DeviceStatus, OrefWasm)
         var predictionSource = PredictionOptions.ResolveSource(configuration);
