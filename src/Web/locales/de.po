@@ -3473,7 +3473,6 @@ msgstr "Teilen & Datenschutz"
 #: ../portal/src/routes/studio/+page.svelte
 #: src/lib/coach-marks/copy.svelte.ts
 #: src/lib/components/layout/BackupSignInPrompt.svelte
-#: src/lib/components/layout/SessionExpiryWarning.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
 #: src/lib/components/meals/MealSuggestionRow.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
@@ -4602,17 +4601,14 @@ msgstr "<0/> Zurücksetzen"
 msgid "Apply Filters"
 msgstr "Filter anwenden"
 
-#: src/lib/components/layout/SessionExpiryWarning.svelte
-msgid "Session Expiring"
-msgstr "Sitzung läuft ab"
+#~ msgid "Session Expiring"
+#~ msgstr "Sitzung läuft ab"
 
-#: src/lib/components/layout/SessionExpiryWarning.svelte
-msgid "Refreshing..."
-msgstr "Wird aktualisiert..."
+#~ msgid "Refreshing..."
+#~ msgstr "Wird aktualisiert..."
 
-#: src/lib/components/layout/SessionExpiryWarning.svelte
-msgid "Refresh Session"
-msgstr "Sitzung aktualisieren"
+#~ msgid "Refresh Session"
+#~ msgstr "Sitzung aktualisieren"
 
 #: src/lib/components/layout/SidebarNotifications.svelte
 #: src/lib/components/layout/SidebarNotifications.svelte
@@ -17229,10 +17225,8 @@ msgstr ""
 msgid "<0/> Platform admin access"
 msgstr ""
 
-#. 0: formatSessionExpiry(timeUntilExpiry)
-#: src/lib/components/layout/SessionExpiryWarning.svelte
-msgid "Your session will expire in {0}. Click refresh to extend your session."
-msgstr ""
+#~ msgid "Your session will expire in {0}. Click refresh to extend your session."
+#~ msgstr ""
 
 #: src/lib/components/layout/UserMenu.svelte
 #: src/lib/components/members/RequestMembershipDialog.svelte
@@ -22827,6 +22821,7 @@ msgstr ""
 
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: ../portal/src/lib/components/SiteFooter.svelte
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
 #: ../portal/src/routes/demo/+page.svelte
 #: ../portal/src/routes/get-involved/+page.svelte
 #: ../portal/src/routes/get-involved/+page.svelte
@@ -22843,6 +22838,7 @@ msgstr ""
 msgid "Get Involved Lane"
 msgstr ""
 
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
 #: ../portal/src/lib/components/docs/SupportNocturne.svelte
 #: ../portal/src/routes/get-involved/+page.svelte
 msgid "Donate Click"
@@ -30550,4 +30546,49 @@ msgstr ""
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
 msgid "Google Health is connected, but Nocturne could not finish the set-up. Imports continue. Check the server log if this message stays."
+msgstr ""
+
+#. 0: page.url.pathname
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Docs: {0}"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Docs Feedback"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Page feedback"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "<0/> Yes"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "<0/> No"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Was this helpful?"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Thanks! Please consider <0>donating<0/></0> to help support our work."
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsFeedback.svelte
+msgid "Thanks for telling us. <0>Tell us what was missing<0/></0>"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsInstallSteps.svelte
+msgid "Install Step"
+msgstr ""
+
+#: ../portal/src/lib/components/docs/DocsReadTime.svelte
+msgid "Docs Read"
+msgstr ""
+
+#: ../portal/src/routes/docs/installation/+page.svelte
+msgid "Install Platform"
 msgstr ""
