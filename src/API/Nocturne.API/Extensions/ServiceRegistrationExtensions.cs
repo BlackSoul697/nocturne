@@ -283,6 +283,29 @@ public static class ServiceRegistrationExtensions
     }
 
     /// <summary>
+    /// Every rate-limit policy's partition key, by policy name. The registration reads its keys from
+    /// here, and <c>RateLimitPartitionKeyGuardTests</c> calls each entry and fails a registered
+    /// policy that has none.
+    /// </summary>
+    /// <remarks>
+    /// The limiter runs before <c>AuthenticationMiddleware</c>, so a key that reads the auth
+    /// context sees nothing and collapses into one shared bucket.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, Func<HttpContext, string>> RateLimitPartitionKeys(
+        ClientRateLimitKey clientRateLimitKey)
+    {
+        var keys = new Dictionary<string, Func<HttpContext, string>>
+        {
+            [StatisticsComputeRateLimitPolicy] = StatisticsComputePartitionKey,
+            [TranslationDraftsRateLimitPolicy] = TranslationDraftPartitionKey,
+            [NoAccountAlertsRateLimitPolicy] = NoAccountAlertsPartitionKey,
+        };
+        foreach (var (policy, _, _) in ClientAddressPolicies)
+            keys[policy] = clientRateLimitKey.Resolve;
+        return keys;
+    }
+
+    /// <summary>
     /// Reduces the Authorization header and <c>?token=</c> query parameter to
     /// the one token the handlers would authenticate on, collapsing the
     /// spellings they treat as one credential — hashing each separately would
@@ -383,6 +406,109 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<ITranslationContributionService, GitHubTranslationService>();
         services.AddSingleton<IContentContributionService, GitHubContentService>();
         services.AddScoped<ITranslationDraftService, TranslationDraftService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers every rate-limit policy, each partitioned by its entry in <see cref="RateLimitPartitionKeys"/>.
+    /// </summary>
+    internal static IServiceCollection AddApiRateLimiting(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
+    {
+        var partitionKeys = RateLimitPartitionKeys(new ClientRateLimitKey(configuration));
+
+        services.AddRateLimiter(options =>
+        {
+            foreach (var (policy, permitLimit, window) in ClientAddressPolicies)
+            {
+                options.AddPolicy(
+                    policy,
+                    context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: partitionKeys[policy](context),
+                            factory: _ => new FixedWindowRateLimiterOptions
+                            {
+                                PermitLimit = permitLimit,
+                                Window = window,
+                                QueueLimit = 0,
+                            }
+                        )
+                );
+            }
+
+            // Statistics compute POSTs: 60 per tenant host per minute. These actions compute over a
+            // caller-supplied body rather than over stored data, and reports.read — the scope
+            // gating them — is held by every public share link, so an anonymous viewer can post
+            // them. The partition is the Host rather than the client because what this bounds is one
+            // tenant's compute across all of its viewers, and the limiter runs before tenant
+            // resolution while the tenant (or share token) is already the subdomain.
+            options.AddPolicy(
+                StatisticsComputeRateLimitPolicy,
+                context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: partitionKeys[StatisticsComputeRateLimitPolicy](context),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 60,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            // Translation drafts: 60 per session per minute, sliding. Autosave
+            // batches every 800ms while typing, so the ceiling has to clear
+            // normal editing while still bounding the per-call database work an
+            // editor session can force. Partitioned by credential rather than
+            // IP because the caller controls X-Forwarded-For; see
+            // TranslationDraftPartitionKey.
+            options.AddPolicy(
+                TranslationDraftsRateLimitPolicy,
+                context =>
+                    RateLimitPartition.GetSlidingWindowLimiter(
+                        partitionKey: partitionKeys[TranslationDraftsRateLimitPolicy](context),
+                        factory: _ => new SlidingWindowRateLimiterOptions
+                        {
+                            PermitLimit = 60,
+                            Window = TimeSpan.FromMinutes(1),
+                            SegmentsPerWindow = 6,
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            // A clock polls its alerts every 10 seconds from each screen it is open on, so a face on
+            // a few dozen screens shares one bucket; a receipt is one press per alarm.
+            options.AddPolicy(
+                NoAccountAlertsRateLimitPolicy,
+                context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: partitionKeys[NoAccountAlertsRateLimitPolicy](context),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 300,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            options.OnRejected = async (context, ct) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    new
+                    {
+                        error = "rate_limit_exceeded",
+                        error_description = "Too many requests. Please try again later.",
+                    },
+                    ct
+                );
+            };
+        });
 
         return services;
     }
@@ -544,97 +670,7 @@ public static class ServiceRegistrationExtensions
             ConnectCallback = new PinnedConnector(OutboundAddressPolicy.NotLinkLocal).ConnectAsync,
         });
 
-        var clientRateLimitKey = new ClientRateLimitKey(configuration);
-
-        services.AddRateLimiter(options =>
-        {
-            foreach (var (policy, permitLimit, window) in ClientAddressPolicies)
-            {
-                options.AddPolicy(
-                    policy,
-                    context =>
-                        RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey: clientRateLimitKey.Resolve(context),
-                            factory: _ => new FixedWindowRateLimiterOptions
-                            {
-                                PermitLimit = permitLimit,
-                                Window = window,
-                                QueueLimit = 0,
-                            }
-                        )
-                );
-            }
-
-            // Statistics compute POSTs: 60 per tenant host per minute. These actions compute over a
-            // caller-supplied body rather than over stored data, and reports.read — the scope
-            // gating them — is held by every public share link, so an anonymous viewer can post
-            // them. The partition is the Host rather than the client because what this bounds is one
-            // tenant's compute across all of its viewers, and the limiter runs before tenant
-            // resolution while the tenant (or share token) is already the subdomain.
-            options.AddPolicy(
-                StatisticsComputeRateLimitPolicy,
-                context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: StatisticsComputePartitionKey(context),
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 60,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0,
-                        }
-                    )
-            );
-
-            // Translation drafts: 60 per session per minute, sliding. Autosave
-            // batches every 800ms while typing, so the ceiling has to clear
-            // normal editing while still bounding the per-call database work an
-            // editor session can force. Partitioned by credential rather than
-            // IP because the caller controls X-Forwarded-For; see
-            // TranslationDraftPartitionKey.
-            options.AddPolicy(
-                TranslationDraftsRateLimitPolicy,
-                context =>
-                    RateLimitPartition.GetSlidingWindowLimiter(
-                        partitionKey: TranslationDraftPartitionKey(context),
-                        factory: _ => new SlidingWindowRateLimiterOptions
-                        {
-                            PermitLimit = 60,
-                            Window = TimeSpan.FromMinutes(1),
-                            SegmentsPerWindow = 6,
-                            QueueLimit = 0,
-                        }
-                    )
-            );
-
-            // A clock polls its alerts every 10 seconds from each screen it is open on, so a face on
-            // a few dozen screens shares one bucket; a receipt is one press per alarm.
-            options.AddPolicy(
-                NoAccountAlertsRateLimitPolicy,
-                context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: NoAccountAlertsPartitionKey(context),
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 300,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0,
-                        }
-                    )
-            );
-
-            options.OnRejected = async (context, ct) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.HttpContext.Response.WriteAsJsonAsync(
-                    new
-                    {
-                        error = "rate_limit_exceeded",
-                        error_description = "Too many requests. Please try again later.",
-                    },
-                    ct
-                );
-            };
-        });
+        services.AddApiRateLimiting(configuration);
 
         return services;
     }
