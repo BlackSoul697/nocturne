@@ -148,18 +148,9 @@ public sealed class TherapySnapshot
 
     private static double? LookupAt(IReadOnlyList<TimedValue> sortedEntries, int secondsFromMidnight)
     {
-        if (sortedEntries.Count == 0)
-            return null;
-
-        var result = sortedEntries[0].Value;
-        foreach (var entry in sortedEntries)
-        {
-            if (secondsFromMidnight >= entry.Seconds)
-                result = entry.Value;
-            else
-                break;
-        }
-        return result;
+        return ScheduleEntryTime.TryEntryAt(sortedEntries, secondsFromMidnight, e => e.Seconds, out var entry)
+            ? entry.Value
+            : null;
     }
 
     private double ApplyInverseCcp(double value) =>

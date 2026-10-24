@@ -26,4 +26,44 @@ public static class ScheduleEntryTime
         seconds = 0;
         return false;
     }
+
+    /// <summary>
+    /// The entry in force at <paramref name="secondsFromMidnight"/>: the last entry starting at or before it,
+    /// or the earliest entry when it precedes them all. Entries need no order. Of entries that start
+    /// together, the last one listed wins when they are in force and the first one listed wins when they
+    /// are the earliest.
+    /// </summary>
+    /// <returns>False when <paramref name="entries"/> is empty.</returns>
+    public static bool TryEntryAt<T>(
+        IEnumerable<T> entries, int secondsFromMidnight, Func<T, int> secondsOf, out T entry)
+    {
+        var earliest = default(T);
+        var earliestSeconds = 0;
+        var inForce = default(T);
+        var inForceSeconds = 0;
+        var any = false;
+        var anyInForce = false;
+
+        foreach (var candidate in entries)
+        {
+            var seconds = secondsOf(candidate);
+            if (!any || seconds < earliestSeconds)
+            {
+                earliest = candidate;
+                earliestSeconds = seconds;
+            }
+
+            if (seconds <= secondsFromMidnight && (!anyInForce || seconds >= inForceSeconds))
+            {
+                inForce = candidate;
+                inForceSeconds = seconds;
+                anyInForce = true;
+            }
+
+            any = true;
+        }
+
+        entry = (anyInForce ? inForce : earliest)!;
+        return any;
+    }
 }

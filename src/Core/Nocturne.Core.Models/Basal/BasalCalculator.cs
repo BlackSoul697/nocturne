@@ -140,19 +140,9 @@ public static class BasalCalculator
         double percentage)
     {
         var localTod = LocalSecondsFromMidnight(atMills + timeshiftMs, tz);
-        var scheduled = FindEntryAt(sortedEntries, localTod);
+        ScheduleEntryTime.TryEntryAt(sortedEntries, localTod, e => e.Seconds, out var entry);
+        var scheduled = entry.Value;
         return (scheduled * (percentage / 100.0), scheduled);
-    }
-
-    private static double FindEntryAt(List<(int Seconds, double Value)> sortedEntries, int secondsFromMidnight)
-    {
-        var result = sortedEntries[0].Value;
-        foreach (var entry in sortedEntries)
-        {
-            if (secondsFromMidnight >= entry.Seconds) result = entry.Value;
-            else break;
-        }
-        return result;
     }
 
     private static int LocalSecondsFromMidnight(long timeMills, TimeZoneInfo tz)
