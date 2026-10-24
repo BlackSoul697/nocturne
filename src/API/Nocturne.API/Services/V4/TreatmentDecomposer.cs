@@ -2028,7 +2028,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// <inheritdoc />
     /// <remarks>
     /// A connector's rows can sit under an uploader's <c>id</c> where its <c>_id</c> belongs (see
-    /// <see cref="UploaderIdJsonModifier"/>); read by <c>_id</c>, the same treatments would otherwise be
+    /// <see cref="IgnoredBasePropertyModifier"/>); read by <c>_id</c>, the same treatments would otherwise be
     /// stored a second time beside them. Equivalents sharing that <c>id</c> were merged into the row of
     /// the last one written, so the row moves to the equivalent at its time. A row the user deleted
     /// stays under the client id and its tombstone is copied onto every equivalent, because
