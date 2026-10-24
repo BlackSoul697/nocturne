@@ -7,6 +7,7 @@
   import MapPin from "@lucide/svelte/icons/map-pin";
   import SystemRequirements from "$lib/components/docs/SystemRequirements.svelte";
   import PikaPodsVoteCard from "$lib/components/PikaPodsVoteCard.svelte";
+  import { campaignUrl, track } from "$lib/analytics";
 
   let showListingRequirements = $state(false);
 
@@ -21,28 +22,33 @@
 
   const PLATFORMS = [
     {
+      id: "docker-compose",
       href: resolve("/docs/installation/docker-compose"),
       logo: "/logos/docker-compose.png",
       title: "Docker Compose",
       desc: "Deploy directly on any Linux server, VPS, or Raspberry Pi using Docker Compose from the command line.",
     },
     {
+      id: "portainer",
       href: resolve("/docs/installation/portainer"),
       logo: "/logos/portainer.jpg",
       title: "Portainer",
       desc: "Deploy using the Portainer web interface. Great for managing your stack visually without SSH access.",
     },
     {
+      id: "oracle-cloud",
       href: resolve("/docs/installation/oracle-cloud"),
       title: "Oracle Cloud",
       desc: "One command in the browser sets up a free server, HTTPS and Nocturne. No SSH or Docker knowledge needed.",
     },
     {
+      id: "byo-postgres",
       href: resolve("/docs/installation/byo-postgres"),
       title: "Bring Your Own PostgreSQL",
       desc: "Use a managed PostgreSQL service (RDS, Cloud SQL, Supabase, Neon) or an existing shared database instance. Requires a one-time role bootstrap.",
     },
     {
+      id: "reverse-proxy",
       href: resolve("/docs/installation/reverse-proxy"),
       title: "Bring Your Own Reverse Proxy",
       desc: "Terminate TLS with nginx, Traefik, or an existing edge instead of the bundled Caddy. Covers the forwarded headers Nocturne requires.",
@@ -76,7 +82,7 @@
     {#each PLATFORMS as platform (platform.title)}
       <li class="border-b border-border">
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- platform.href is resolve()d in PLATFORMS -->
-        <a href={platform.href} class="group flex items-start gap-4 py-5 no-underline text-inherit">
+        <a href={platform.href} onclick={() => track("Install Platform", { platform: platform.id })} class="group flex items-start gap-4 py-5 no-underline text-inherit">
           {#if platform.logo}
             <img src={platform.logo} alt="" class="size-8 rounded-md object-contain shrink-0 mt-0.5" />
           {:else}
@@ -104,7 +110,7 @@
     {#each managedProviders as provider (provider.url)}
       <li class="border-b border-border">
         <a
-          href={provider.url}
+          href={campaignUrl(provider.url, "managed-instances")}
           target="_blank"
           rel="external noopener noreferrer"
           class="group flex items-start gap-4 py-5 no-underline text-inherit"

@@ -129,7 +129,7 @@
         </p>
     </details>
 
-    <h2 id="step-1" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 1: Open Cloud Shell</h2>
+    <h2 id="step-1" data-install-step="1" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 1: Open Cloud Shell</h2>
     <p class="text-muted-foreground mb-8">
         Sign in to the <a href="https://cloud.oracle.com" class="text-primary hover:underline">Oracle Cloud console</a>
         and click the terminal icon in the top-right toolbar, labelled <strong>Developer tools</strong>,
@@ -137,7 +137,7 @@
         signed in as you, so there is nothing to install or configure.
     </p>
 
-    <h2 id="step-2" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 2: Run the installer</h2>
+    <h2 id="step-2" data-install-step="2" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 2: Run the installer</h2>
     <p class="text-muted-foreground mb-4">
         Paste this into Cloud Shell, replacing
         <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">nocturne.example.com</code>
@@ -204,7 +204,7 @@
         </p>
     </Callout>
 
-    <h2 id="step-3" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 3: Add the DNS records</h2>
+    <h2 id="step-3" data-install-step="3" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 3: Add the DNS records</h2>
     <p class="text-muted-foreground mb-4">
         Skip this step if you gave the installer a DuckDNS token. For a DuckDNS name without one,
         sign in at duckdns.org, put the IP address the script printed into the
@@ -219,7 +219,7 @@
         Cloudflare's proxy cannot carry the certificates Nocturne issues for its own subdomains.
     </p>
 
-    <h2 id="step-4" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 4: Create your first site</h2>
+    <h2 id="step-4" data-install-step="4" class="text-2xl font-bold mt-8 mb-4 scroll-mt-24">Step 4: Create your first site</h2>
     <p class="text-muted-foreground mb-8">
         Once the script reports that Nocturne is answering, open
         <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">https://your-domain</code>
@@ -266,7 +266,7 @@
         </li>
     </ul>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
+    <h2 data-install-step="next-steps" class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
     <NextSteps />
 
     <SupportNocturne />

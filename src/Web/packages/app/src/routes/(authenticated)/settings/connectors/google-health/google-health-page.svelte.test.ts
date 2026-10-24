@@ -340,7 +340,10 @@ describe("Google Health connector page", () => {
       .toBeVisible();
     await expect
       .element(page.getByRole("link", { name: "How Google Health is enabled" }))
-      .toHaveAttribute("href", "https://getnocturne.dev/docs/data-sources/google-health");
+      .toHaveAttribute(
+        "href",
+        "https://getnocturne.dev/docs/data-sources/google-health?utm_source=nocturne-app&utm_medium=app&utm_content=google-health-unavailable"
+      );
     await expect
       .element(page.getByRole("button", { name: "Connect Google Health" }))
       .not.toBeInTheDocument();

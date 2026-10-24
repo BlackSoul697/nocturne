@@ -42,7 +42,7 @@
         a guided form for all configuration values.
     </p>
 
-    <h3 class="text-xl font-semibold mt-6 mb-3">Step 1: Add the template URL</h3>
+    <h3 data-install-step="1" class="text-xl font-semibold mt-6 mb-3">Step 1: Add the template URL</h3>
     <p class="text-muted-foreground mb-4">
         In Portainer, go to <strong class="text-foreground">Settings &rsaquo; App Templates</strong> and
         set the URL to:
@@ -52,7 +52,7 @@
         Click <strong class="text-foreground">Save settings</strong>.
     </p>
 
-    <h3 class="text-xl font-semibold mt-6 mb-3">Step 2: Deploy from the template</h3>
+    <h3 data-install-step="2" class="text-xl font-semibold mt-6 mb-3">Step 2: Deploy from the template</h3>
     <ol class="list-decimal list-inside space-y-3 text-muted-foreground mb-8">
         <li>
             Navigate to <strong class="text-foreground">App Templates</strong> in the sidebar.
@@ -92,7 +92,7 @@
         </p>
     </Callout>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Option 2: Manual deployment</h2>
+    <h2 data-install-step="manual" class="text-2xl font-bold mt-8 mb-4">Option 2: Manual deployment</h2>
     <p class="text-muted-foreground mb-4">
         If you prefer to configure the stack manually, download
         <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">docker-compose.yaml</code>
@@ -122,7 +122,7 @@
         </li>
     </ol>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Verify the installation</h2>
+    <h2 data-install-step="verify" class="text-2xl font-bold mt-8 mb-4">Verify the installation</h2>
     <p class="text-muted-foreground mb-4">
         In Portainer, navigate to your <strong class="text-foreground">nocturne</strong> stack.
         All containers should show as <strong class="text-foreground">Running</strong>. Click any
@@ -163,7 +163,7 @@
         Nocturne UI after deployment; no compose changes are required.
     </p>
 
-    <h2 class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
+    <h2 data-install-step="next-steps" class="text-2xl font-bold mt-8 mb-4">Next Steps</h2>
     <NextSteps />
 
     <SupportNocturne />

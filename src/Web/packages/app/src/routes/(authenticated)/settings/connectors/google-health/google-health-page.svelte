@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { docsUrl } from "$lib/docs-url";
   import { resolve } from "$app/paths";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import HeartPulse from "@lucide/svelte/icons/heart-pulse";
@@ -281,14 +282,16 @@
         <p>Loading connection status…</p>
       {:else if unavailable && !status.connected}
         <p>Your Nocturne operator hasn't enabled Google Health on this server.</p>
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- an absolute URL to the docs site, not an app route -->
         <a
           class="inline-block text-sm underline"
-          href="https://getnocturne.dev/docs/data-sources/google-health"
+          href={docsUrl("/docs/data-sources/google-health", "google-health-unavailable")}
           target="_blank"
           rel="noreferrer"
         >
           How Google Health is enabled
         </a>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {:else if !status.connected}
         <p>
           Link Google Health in the Google Health app first, then connect. Google
