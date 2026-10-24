@@ -632,6 +632,7 @@ public class GoogleHealthTests : IDisposable
         store.SetConfiguration("""{"lastSyncedTo":"2026-09-01T00:00:00Z","backfillComplete":true,"dataTypes":["sleep"]}""");
         await store.Cursors.SetAsync("GoogleHealth", "health", new(null, "{}"));
         IConnectorDataPurge purge = Service(store, new StubHandler(_ => Json("{}")), tenantId, writer: writer);
+        Assert.Equal(GoogleHealthConnectorService.ConnectorName, purge.ConnectorName);
 
         var deleted = await purge.PurgeAsync(allowReimport,
             new AuditContext { SubjectId = Guid.NewGuid(), SubjectName = "owner", AuthType = "Session" }, default);
