@@ -27,6 +27,7 @@ is read with:
 
 - property naming: **snake_case lower** (`JsonNamingPolicy.SnakeCaseLower`)
 - property name matching: **case-insensitive**
+- a property name that repeats, in the same case or another, binds its **last** occurrence (`System.Text.Json`)
 - `System.DayOfWeek` accepts **string names** (`"monday"`, case-insensitive) **and**
   integer indices (0 = Sunday … 6 = Saturday); canonical output form is the string
 - enums with `JsonStringEnumMemberName` use their snake_case wire names
