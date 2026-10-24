@@ -3,7 +3,11 @@ import { page } from "vitest/browser";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { error } from "@sveltejs/kit";
 import { GuestLinkStatus, type GuestLinkInfo } from "$api-clients";
-import { remoteQuery } from "$lib/test-stubs/remote-resource";
+import {
+  remoteCommand,
+  remoteQuery,
+  updatedBy,
+} from "$lib/test-stubs/remote-resource";
 
 let createImpl: () => Promise<unknown>;
 let links: GuestLinkInfo[];
@@ -14,11 +18,17 @@ vi.mock("$app/state", () => ({
 
 vi.mock("$api/generated/guestLinks.generated.remote", () => ({
   getGuestLinks: () => remoteQuery(() => links),
-  createGuestLink: () => createImpl(),
-  revokeGuestLink: () => Promise.resolve(),
-  dismissGuestLink: () => Promise.resolve(),
+  createGuestLink: remoteCommand(() => createImpl()),
+  revokeGuestLink: remoteCommand(() => Promise.resolve()),
+  dismissGuestLink: remoteCommand(() => Promise.resolve()),
 }));
 
+import {
+  getGuestLinks,
+  createGuestLink,
+  revokeGuestLink,
+  dismissGuestLink,
+} from "$api/generated/guestLinks.generated.remote";
 import GuestLinksSection from "./GuestLinksSection.svelte";
 
 const FALLBACK = "Failed to create guest link. Please try again.";
@@ -105,6 +115,50 @@ describe("GuestLinksSection", () => {
     await expect.element(page.getByText(REISSUE_FALLBACK)).toBeInTheDocument();
     expect(page.getByText("npgsql: connection reset").elements()).toHaveLength(
       0
+    );
+  });
+
+  it("refreshes the guest links the section reads when a link is revoked", async () => {
+    links = [existingLink];
+    updatedBy(revokeGuestLink).length = 0;
+    render(GuestLinksSection);
+
+    await page.getByRole("button", { name: "Revoke" }).click();
+
+    await vi.waitFor(() =>
+      expect(updatedBy(revokeGuestLink)).toEqual([[getGuestLinks]])
+    );
+  });
+
+  it("refreshes the guest links the section reads when a finished link is dismissed", async () => {
+    links = [{ ...existingLink, status: GuestLinkStatus.Revoked }];
+    updatedBy(dismissGuestLink).length = 0;
+    render(GuestLinksSection);
+
+    await page.getByRole("button", { name: "Dismiss" }).click();
+
+    await vi.waitFor(() =>
+      expect(updatedBy(dismissGuestLink)).toEqual([[getGuestLinks]])
+    );
+  });
+
+  it("refreshes the guest links the section reads when a code is created", async () => {
+    updatedBy(createGuestLink).length = 0;
+
+    await attemptCreate();
+
+    await vi.waitFor(() =>
+      expect(updatedBy(createGuestLink)).toEqual([[getGuestLinks]])
+    );
+  });
+
+  it("refreshes the guest links the section reads when a code is reissued", async () => {
+    updatedBy(createGuestLink).length = 0;
+
+    await attemptReissue();
+
+    await vi.waitFor(() =>
+      expect(updatedBy(createGuestLink)).toEqual([[getGuestLinks]])
     );
   });
 });

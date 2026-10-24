@@ -81,7 +81,6 @@
     togglingRuleId = ruleId;
     try {
       await toggleRule(ruleId);
-      await rulesQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
@@ -93,7 +92,6 @@
     deletingRuleId = ruleId;
     try {
       await deleteRule(ruleId);
-      await rulesQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
@@ -126,7 +124,6 @@
         dndScheduleStart: current.dndScheduleStart,
         dndScheduleEnd: current.dndScheduleEnd,
       });
-      await dndQuery.refresh();
     } catch (err) {
       toast.error(mutationError(err));
     } finally {
