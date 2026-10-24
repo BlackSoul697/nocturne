@@ -1486,7 +1486,7 @@ public partial class StatisticsService : IStatisticsService
         {
             var minute = isFlat
                 ? 0
-                : ScheduleTimeHelper.GetSecondsFromMidnight(reading.Mills, tenantTimeZone!) / 60;
+                : ScheduleEntryTime.SecondsOfDay(reading.Mills, tenantTimeZone) / 60;
             return rangeByMinute[minute] ??= ScheduleResolution
                 .FindRangeAtTime(scheduleEntries, minute * 60)!
                 .Value;

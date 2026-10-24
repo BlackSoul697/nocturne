@@ -105,4 +105,28 @@ public class ScheduleEntryTimeTests
         ScheduleEntryTime.TryEntryAt(Array.Empty<(int Seconds, double Value)>(), 50000, e => e.Seconds, out _)
             .Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData("2026-10-03T15:30:00Z", 5400)]
+    [InlineData("2026-10-03T15:59:59Z", 7199)]
+    [InlineData("2026-10-03T16:00:00Z", 10800)]
+    [InlineData("2027-04-03T15:30:00Z", 9000)]
+    [InlineData("2027-04-03T15:59:59Z", 10799)]
+    [InlineData("2027-04-03T16:00:00Z", 7200)]
+    public void SecondsOfDay_FollowsTheZoneAcrossDst(string instant, int seconds)
+    {
+        var sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+        var mills = DateTimeOffset.Parse(instant).ToUnixTimeMilliseconds();
+
+        ScheduleEntryTime.SecondsOfDay(mills, sydney).Should().Be(seconds);
+    }
+
+    [Fact]
+    public void SecondsOfDay_ReadsANullZoneAsUtc()
+    {
+        var mills = DateTimeOffset.Parse("2026-10-03T15:30:00Z").ToUnixTimeMilliseconds();
+
+        ScheduleEntryTime.SecondsOfDay(mills, null).Should().Be(15 * 3600 + 1800);
+        ScheduleEntryTime.SecondsOfDay(mills, TimeZoneInfo.Utc).Should().Be(15 * 3600 + 1800);
+    }
 }

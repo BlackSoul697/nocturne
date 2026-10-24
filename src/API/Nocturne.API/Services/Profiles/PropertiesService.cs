@@ -772,7 +772,7 @@ public class PropertiesService : IPropertiesService
         var entries = basalSchedule
             .Select(b => new ScheduleEntry { Time = b.Time, Value = b.Value, TimeAsSeconds = b.TimeAsSeconds })
             .ToList();
-        return ScheduleResolution.FindValueAtTime(entries, ScheduleTimeHelper.GetSecondsFromMidnight(time, zone))
+        return ScheduleResolution.FindValueAtTime(entries, ScheduleEntryTime.SecondsOfDay(time, zone))
             ?? 0.0;
     }
 

@@ -386,18 +386,11 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
                 null);
         }
 
-        // Pick the entry active at the tenant's local time-of-day. `at` is always UTC; the
-        // schedule's time-of-day entries are local wall-clock so we must convert. An
-        // unparseable tenant tz swallows to UTC (as the engine's day_of_week does) so a
+        // An unparseable tenant tz swallows to UTC (as the engine's day_of_week does) so a
         // misconfigured tenant tz field still produces a deterministic bucket rather than no
         // bucket at all.
-        var atUtc = DateTime.SpecifyKind(at, DateTimeKind.Utc);
-        var atLocal = atUtc;
-        if (!string.IsNullOrEmpty(tenantTimeZoneId))
-            atLocal = TimeZoneInfo.ConvertTimeFromUtc(atUtc, TimeZoneHelper.GetTimeZoneInfoFromId(tenantTimeZoneId));
-
-        var localTime = TimeOnly.FromDateTime(atLocal);
-        var secondsFromMidnight = (localTime.Hour * 3600) + (localTime.Minute * 60) + localTime.Second;
+        var zone = string.IsNullOrEmpty(tenantTimeZoneId) ? null : TimeZoneHelper.GetTimeZoneInfoFromId(tenantTimeZoneId);
+        var secondsFromMidnight = ScheduleEntryTime.SecondsOfDay(at.ToMills(), zone);
         ScheduleEntryTime.TryEntryAt(
             schedule.Entries, secondsFromMidnight, e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time), out var active);
 
