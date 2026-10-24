@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Nocturne.API.Services.Alerts.Conditions;
 
 namespace Nocturne.API.Services.Alerts;
 
@@ -81,6 +82,15 @@ internal sealed record SmartSnoozeConfig(
             return null;
         }
     }
+
+    /// <summary>
+    /// Whether two <see cref="StoredConditions"/> lists are the same tree
+    /// (<see cref="ConditionTreeEquality"/>). A rule edit that changes them prunes the rule's
+    /// timers (<see cref="AlertRuleRearm.SaveAndPruneAsync"/>), and a snooze evaluation of the old
+    /// list is then dropped.
+    /// </summary>
+    public static bool SameConditions(JsonElement? stored, JsonElement? other) =>
+        ConditionTreeEquality.Same(stored?.GetRawText(), other?.GetRawText());
 
     /// <summary>The payload-only body of the <c>composite{and}</c> <paramref name="conditions"/> evaluate as.</summary>
     public static string AndBody(JsonElement conditions) =>

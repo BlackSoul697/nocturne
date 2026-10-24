@@ -14,8 +14,8 @@ namespace Nocturne.API.Services.Alerts.Engines;
 /// via <see cref="IAlertTrackerRepository"/>) and threads it through the envelope. A rule
 /// evaluation and an auto-resolve pass persist their tracker decision and timer deltas together
 /// through <see cref="ExcursionTransitionWriter"/>, which drops both when the rule changed since it
-/// was read. <see cref="EvaluateNodeAsync(Guid, ConditionNode, SensorContext, string, CancellationToken)"/>
-/// makes no tracker decision and writes its timer deltas directly, with no lock and no such check.
+/// was read. <see cref="EvaluateSnoozeAsync"/> makes no tracker decision, and the writer drops its
+/// timer deltas when the rule's snooze conditions changed since it read them.
 /// </summary>
 /// <remarks>
 /// Excursion identity: the FFI tracker uses opaque ordinals and this host owns the GUIDs, so
@@ -103,13 +103,23 @@ internal sealed class RustBackedAlertEngine(
     }
 
     /// <inheritdoc/>
-    public Task<bool> EvaluateNodeAsync(
+    public async Task<bool> EvaluateSnoozeAsync(
         Guid ruleId,
-        JsonElement node,
+        JsonElement conditions,
         SensorContext context,
-        string pathRoot,
-        CancellationToken ct) =>
-        EvaluateNodeAsync(ruleId, node, pathRoot, context, ct);
+        CancellationToken ct)
+    {
+        using var lease = await gate.AcquireAsync(ruleId, ct);
+
+        var response = RustAuxiliaryEvaluation.EvaluateNode(
+            errors, ruleId, SmartSnoozeConfig.ConditionTree(conditions), Conditions.AlertConditionTypeNames.SnoozePathRoot,
+            context, timeProvider.GetUtcNow().UtcDateTime, await trackerRepository.Timers.GetAllForRuleAsync(ruleId, ct));
+        var held = await ExcursionTransitionWriter.ApplyTimerOpsAsync(
+            trackerRepository, logger, ruleId,
+            rule => SmartSnoozeConfig.SameConditions(SmartSnoozeConfig.StoredConditions(rule.ClientConfiguration), conditions),
+            response.TimerOps, ct);
+        return held && response.Value!.Value;
+    }
 
     /// <inheritdoc/>
     public async Task<ExcursionTransition> EvaluateAutoResolveAsync(
@@ -149,20 +159,6 @@ internal sealed class RustBackedAlertEngine(
         var response = RustAuxiliaryEvaluation.EvaluateNode(
             errors, rule.Id, node, wire, context, timeProvider.GetUtcNow().UtcDateTime,
             new Dictionary<string, DateTime>());
-        return response.Value!.Value;
-    }
-
-    /// <summary>
-    /// Evaluates one full condition node through <c>evaluate_node</c> against the rule's persisted
-    /// timers, and persists the timer deltas the engine reports.
-    /// </summary>
-    private async Task<bool> EvaluateNodeAsync(
-        Guid ruleId, JsonElement node, string pathRoot, SensorContext context, CancellationToken ct)
-    {
-        var response = RustAuxiliaryEvaluation.EvaluateNode(
-            errors, ruleId, node, pathRoot, context,
-            timeProvider.GetUtcNow().UtcDateTime, await trackerRepository.Timers.GetAllForRuleAsync(ruleId, ct));
-        await ExcursionTransitionWriter.ApplyTimerOpsAsync(trackerRepository.Timers, ruleId, response.TimerOps, ct);
         return response.Value!.Value;
     }
 }
