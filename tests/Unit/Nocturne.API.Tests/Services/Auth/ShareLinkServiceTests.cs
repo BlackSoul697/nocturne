@@ -450,7 +450,7 @@ public sealed class ShareLinkServiceTests : IDisposable
         {
             GlucoseUnits = "mmol",
             DashboardTopWidgets = [WidgetId.Tdd, WidgetId.Meals],
-            DashboardRail = [RailItemId.Trackers, RailItemId.Reservoir],
+            DashboardRail = new DashboardRailPreference { Order = [RailItemId.Trackers, RailItemId.Reservoir] },
             NightModeSchedule = true,
         });
 
