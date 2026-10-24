@@ -27,6 +27,15 @@ public static class ScheduleEntryTime
         return false;
     }
 
+    /// <summary>Seconds since local midnight at <paramref name="mills"/> in <paramref name="zone"/>; a null zone reads as UTC.</summary>
+    public static int SecondsOfDay(long mills, TimeZoneInfo? zone)
+    {
+        var instant = DateTimeOffset.FromUnixTimeMilliseconds(mills);
+        if (zone is not null)
+            instant = TimeZoneInfo.ConvertTime(instant, zone);
+        return (int)instant.TimeOfDay.TotalSeconds;
+    }
+
     /// <summary>
     /// The entry in force at <paramref name="secondsFromMidnight"/>: the last entry starting at or before it,
     /// or the earliest entry when it precedes them all. Entries need no order. Of entries that start

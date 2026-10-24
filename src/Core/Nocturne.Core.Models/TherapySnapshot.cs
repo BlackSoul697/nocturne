@@ -137,14 +137,8 @@ public sealed class TherapySnapshot
             sb.Append(entry.Seconds).Append('=').Append(entry.Value).Append(',');
     }
 
-    private int ShiftedSecondsFromMidnight(long timeMills)
-    {
-        var shifted = timeMills + CcpTimeshiftMs;
-        var dto = DateTimeOffset.FromUnixTimeMilliseconds(shifted);
-        if (Timezone is not null)
-            dto = TimeZoneInfo.ConvertTime(dto, Timezone);
-        return (int)dto.TimeOfDay.TotalSeconds;
-    }
+    private int ShiftedSecondsFromMidnight(long timeMills) =>
+        ScheduleEntryTime.SecondsOfDay(timeMills + CcpTimeshiftMs, Timezone);
 
     private static double? LookupAt(IReadOnlyList<TimedValue> sortedEntries, int secondsFromMidnight)
     {

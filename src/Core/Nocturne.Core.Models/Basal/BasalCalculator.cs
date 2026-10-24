@@ -139,17 +139,10 @@ public static class BasalCalculator
         long timeshiftMs,
         double percentage)
     {
-        var localTod = LocalSecondsFromMidnight(atMills + timeshiftMs, tz);
+        var localTod = ScheduleEntryTime.SecondsOfDay(atMills + timeshiftMs, tz);
         ScheduleEntryTime.TryEntryAt(sortedEntries, localTod, e => e.Seconds, out var entry);
         var scheduled = entry.Value;
         return (scheduled * (percentage / 100.0), scheduled);
-    }
-
-    private static int LocalSecondsFromMidnight(long timeMills, TimeZoneInfo tz)
-    {
-        var dto = DateTimeOffset.FromUnixTimeMilliseconds(timeMills);
-        var local = TimeZoneInfo.ConvertTime(dto, tz);
-        return (int)local.TimeOfDay.TotalSeconds;
     }
 
     private static TimeZoneInfo ResolveTimeZone(string? timezoneId)
