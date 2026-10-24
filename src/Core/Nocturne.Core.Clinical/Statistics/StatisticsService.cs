@@ -1265,17 +1265,19 @@ public partial class StatisticsService : IStatisticsService
     /// A fresh copy of <see cref="Consensus"/>. The model is mutable and the instance is shared by
     /// every tenant, so it never leaves the service itself.
     /// </summary>
-    private static GlycemicThresholds CopyOfConsensus() =>
+    private static GlycemicThresholds CopyOfConsensus() => CopyOf(Consensus);
+
+    private static GlycemicThresholds CopyOf(GlycemicThresholds source) =>
         new()
         {
-            VeryLow = Consensus.VeryLow,
-            Low = Consensus.Low,
-            TargetBottom = Consensus.TargetBottom,
-            TargetTop = Consensus.TargetTop,
-            TightTargetBottom = Consensus.TightTargetBottom,
-            TightTargetTop = Consensus.TightTargetTop,
-            High = Consensus.High,
-            VeryHigh = Consensus.VeryHigh,
+            VeryLow = source.VeryLow,
+            Low = source.Low,
+            TargetBottom = source.TargetBottom,
+            TargetTop = source.TargetTop,
+            TightTargetBottom = source.TightTargetBottom,
+            TightTargetTop = source.TightTargetTop,
+            High = source.High,
+            VeryHigh = source.VeryHigh,
         };
 
     /// <summary>The widest UTC offset any zone uses; a recorded offset beyond it is treated as none.</summary>
@@ -1320,6 +1322,7 @@ public partial class StatisticsService : IStatisticsService
         {
             return new TimeInRangeMetrics
             {
+                Thresholds = CopyOf(thresholds),
                 Percentages = new TimeInRangePercentages(),
                 Durations = new TimeInRangeDurations(),
                 Episodes = new TimeInRangeEpisodes(),
@@ -1420,6 +1423,7 @@ public partial class StatisticsService : IStatisticsService
 
         return new TimeInRangeMetrics
         {
+            Thresholds = CopyOf(thresholds),
             Percentages = percentages,
             Durations = durations,
             Episodes = episodes,
@@ -3056,7 +3060,7 @@ public partial class StatisticsService : IStatisticsService
                     TimeOfAnalysis = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 },
                 BasicStats = new BasicGlucoseStats(),
-                TimeInRange = new TimeInRangeMetrics(),
+                TimeInRange = new TimeInRangeMetrics { Thresholds = CopyOf(config.Thresholds) },
                 DataQuality = new DataQuality(),
             };
         }
@@ -3258,6 +3262,7 @@ public partial class StatisticsService : IStatisticsService
     {
         var result = new SiteChangeImpactAnalysis
         {
+            Thresholds = CopyOfConsensus(),
             HoursBeforeChange = hoursBeforeChange,
             HoursAfterChange = hoursAfterChange,
             BucketSizeMinutes = bucketSizeMinutes,
