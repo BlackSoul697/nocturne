@@ -27,7 +27,7 @@ public static class NightscoutJsonOptions
             WriteIndented = false,
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
-                Modifiers = { IgnoredBasePropertyModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, OmitIndefiniteDuration }
+                Modifiers = { IgnoredBasePropertyModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, HideIdBesideUnderscoreId, OmitIndefiniteDuration }
             }
         };
     }
@@ -50,6 +50,20 @@ public static class NightscoutJsonOptions
                 property.ShouldSerialize = (_, _) => false;
             }
         }
+    }
+
+    /// <summary>
+    /// Hides a camelCase <c>id</c> on a type that also declares a literal <c>_id</c> property, as the
+    /// legacy <see cref="Role"/> and <see cref="Subject"/> do, so the v2 authorization responses keep
+    /// Nightscout's single <c>_id</c>.
+    /// </summary>
+    public static void HideIdBesideUnderscoreId(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Kind != JsonTypeInfoKind.Object || typeInfo.Properties.All(p => p.Name != "_id"))
+            return;
+
+        if (typeInfo.Properties.FirstOrDefault(p => p.Name == "id") is { } id)
+            id.ShouldSerialize = (_, _) => false;
     }
 
     /// <summary>
