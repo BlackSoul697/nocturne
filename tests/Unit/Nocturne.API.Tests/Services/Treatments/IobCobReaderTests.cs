@@ -64,7 +64,6 @@ public class IobCobReaderTests
             .ReturnsAsync(Enumerable.Empty<PumpSnapshot>());
 
         var therapy = new Mock<ITherapySettingsResolver>();
-        therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
         therapy.Setup(t => t.GetDIAAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(4.0);
         therapy.Setup(t => t.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(30.0);
         var sensitivity = new Mock<ISensitivityResolver>();

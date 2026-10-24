@@ -42,9 +42,6 @@ public class CobCalculatorTests
 
         var therapySettings = new Mock<ITherapySettingsResolver>();
         therapySettings
-            .Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        therapySettings
             .Setup(t => t.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(DefaultCarbAbsorptionRate);
         therapySettings
@@ -175,6 +172,40 @@ public class CobCalculatorTests
         Assert.Equal(endedAsync.DecayedBy, runningAsync.DecayedBy);
         Assert.True(endedAsync.DecayedBy > withoutTemp.DecayedBy, "the temp's insulin must reach the carb delay");
         Assert.True(endedSnapshot.DecayedBy > withoutTemp.DecayedBy, "the temp's insulin must reach the carb delay");
+    }
+
+    [Fact]
+    public async Task CalculateTotal_WithoutCarbs_MakesNoResolverRead()
+    {
+        var sensitivityResolver = new Mock<ISensitivityResolver>(MockBehavior.Strict);
+        var carbRatioResolver = new Mock<ICarbRatioResolver>(MockBehavior.Strict);
+        var therapySettings = new Mock<ITherapySettingsResolver>(MockBehavior.Strict);
+        var apsSnapshotRepo = new Mock<IApsSnapshotRepository>();
+        apsSnapshotRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var iobCalculator = new IobCalculator(
+            therapySettings.Object,
+            sensitivityResolver.Object,
+            Mock.Of<IBasalRateResolver>(MockBehavior.Strict),
+            Mock.Of<IApsSnapshotRepository>(MockBehavior.Strict),
+            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict));
+        var calculator = new CobCalculator(
+            Mock.Of<ILogger<CobCalculator>>(),
+            iobCalculator,
+            sensitivityResolver.Object,
+            carbRatioResolver.Object,
+            therapySettings.Object,
+            apsSnapshotRepo.Object);
+
+        var result = await calculator.CalculateTotalAsync([], null, null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+        Assert.Equal(0, result.Cob);
+        therapySettings.VerifyNoOtherCalls();
+        sensitivityResolver.VerifyNoOtherCalls();
+        carbRatioResolver.VerifyNoOtherCalls();
     }
 
     [Fact]
