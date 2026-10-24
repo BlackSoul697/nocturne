@@ -25826,10 +25826,8 @@ msgstr "Progression de l’importation historique"
 #~ msgid "Synchronized back through {0}."
 #~ msgstr "Synchronisé jusqu’au {0}."
 
-#. 0: day(status.backfillSyncedThrough)
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Synchronized back through {0}. <0/>"
-msgstr "Synchronisé jusqu’au {0}. <0/>"
+#~ msgid "Synchronized back through {0}. <0/>"
+#~ msgstr "Synchronisé jusqu’au {0}. <0/>"
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "The requested history is complete."
@@ -25998,9 +25996,8 @@ msgstr "Enregistrer les paramètres d'importation"
 msgid "Save selection and import"
 msgstr "Enregistrer la sélection et importer"
 
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Choose an earlier date to import older data shared with Google Health. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
-msgstr "Choisissez une date antérieure pour importer des données plus anciennes partagées avec Google Health. Les résultats vides ne sont pas des erreurs. Effacez toutes les sélections et enregistrez pour suspendre les importations ; les données précédemment importées sont conservées."
+#~ msgid "Choose an earlier date to import older data shared with Google Health. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
+#~ msgstr "Choisissez une date antérieure pour importer des données plus anciennes partagées avec Google Health. Les résultats vides ne sont pas des erreurs. Effacez toutes les sélections et enregistrez pour suspendre les importations ; les données précédemment importées sont conservées."
 
 #~ msgid "Enable the Google Health API and create an OAuth Web application client."
 #~ msgstr "Activez l'API Google Health et créez un client d'application Web OAuth."
@@ -30638,4 +30635,24 @@ msgstr ""
 #. 0: paused ? "Imports resume when your Nocturne operator turns Google Health back on." \\: "Automatic sync imports it on its next scheduled run."
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "Save import settings: confirms the selection without requesting an import. {0}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "While the field is empty, a new import covers the last # day."
+msgid_plural "While the field is empty, a new import covers the last # days."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "While the field is empty, a new import covers the configured history lookback."
+msgstr ""
+
+#. 0: day(status.backfillSyncedThrough)
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Synchronized back through {0}. <0/> Imported history is kept."
+msgstr ""
+
+#. 0: lookbackSentence(status.historyDays)
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "A date requests a one-time import of older data shared with Google Health, back to that day. Choose an earlier date and save to request more history. The field clears once the requested history is complete. {0} Automatic sync does not re-import that period each time, and an empty field does not remove older records. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
 msgstr ""

@@ -25823,10 +25823,8 @@ msgstr "履歴インポートの進捗"
 #~ msgid "Synchronized back through {0}."
 #~ msgstr "{0}まで同期済み。"
 
-#. 0: day(status.backfillSyncedThrough)
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Synchronized back through {0}. <0/>"
-msgstr "{0}まで同期済み。 <0/>"
+#~ msgid "Synchronized back through {0}. <0/>"
+#~ msgstr "{0}まで同期済み。 <0/>"
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "The requested history is complete."
@@ -25995,9 +25993,8 @@ msgstr "インポート設定を保存する"
 msgid "Save selection and import"
 msgstr "選択内容を保存してインポートする"
 
-#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
-msgid "Choose an earlier date to import older data shared with Google Health. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
-msgstr "Google Health と共有されている古いデータをインポートするには、より早い日付を選択してください。空の結果はエラーではありません。すべての選択をクリアして保存し、インポートを一時停止します。以前にインポートされたデータは保持されます。"
+#~ msgid "Choose an earlier date to import older data shared with Google Health. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
+#~ msgstr "Google Health と共有されている古いデータをインポートするには、より早い日付を選択してください。空の結果はエラーではありません。すべての選択をクリアして保存し、インポートを一時停止します。以前にインポートされたデータは保持されます。"
 
 #~ msgid "Enable the Google Health API and create an OAuth Web application client."
 #~ msgstr "Google Health API を有効にし、OAuth Web アプリケーション クライアントを作成します。"
@@ -30635,4 +30632,24 @@ msgstr ""
 #. 0: paused ? "Imports resume when your Nocturne operator turns Google Health back on." \\: "Automatic sync imports it on its next scheduled run."
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "Save import settings: confirms the selection without requesting an import. {0}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "While the field is empty, a new import covers the last # day."
+msgid_plural "While the field is empty, a new import covers the last # days."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
+msgid "While the field is empty, a new import covers the configured history lookback."
+msgstr ""
+
+#. 0: day(status.backfillSyncedThrough)
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "Synchronized back through {0}. <0/> Imported history is kept."
+msgstr ""
+
+#. 0: lookbackSentence(status.historyDays)
+#: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
+msgid "A date requests a one-time import of older data shared with Google Health, back to that day. Choose an earlier date and save to request more history. The field clears once the requested history is complete. {0} Automatic sync does not re-import that period each time, and an empty field does not remove older records. Empty results are not errors. Clear all selections and save to pause imports; previously imported data is kept."
 msgstr ""
