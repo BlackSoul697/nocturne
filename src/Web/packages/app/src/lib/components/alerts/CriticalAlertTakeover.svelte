@@ -41,15 +41,31 @@
   $effect(() => {
     if (currentId) primaryAction?.focus();
   });
+
+  // A modal dialog sits in the browser's top layer, above every z-index (the coach-mark
+  // tour draws at 9999), and makes the page behind it inert. Escape must not close it;
+  // Chrome closes it anyway on a second Escape with no click between, so it reopens.
+  function modal(dialog: HTMLDialogElement) {
+    const keepOpen = () => {
+      if (!dialog.open) dialog.showModal();
+    };
+    keepOpen();
+    dialog.addEventListener("close", keepOpen);
+    return () => {
+      dialog.removeEventListener("close", keepOpen);
+      dialog.close();
+    };
+  }
 </script>
 
 {#if current}
-  <div
+  <dialog
+    {@attach modal}
+    oncancel={(e) => e.preventDefault()}
     role="alertdialog"
-    aria-modal="true"
     aria-labelledby="critical-alert-title"
     aria-describedby="critical-alert-time"
-    class="fixed inset-0 z-[1001] flex flex-col items-center justify-center gap-8 bg-status-critical p-6 text-white print:hidden"
+    class="m-0 hidden open:flex h-dvh max-h-none w-screen max-w-none flex-col items-center justify-center gap-8 border-0 bg-status-critical p-6 text-white print:hidden"
   >
     <div class="flex flex-col items-center gap-3 text-center">
       <CircleAlert class="h-16 w-16" />
@@ -116,5 +132,5 @@
         </div>
       {/if}
     </div>
-  </div>
+  </dialog>
 {/if}

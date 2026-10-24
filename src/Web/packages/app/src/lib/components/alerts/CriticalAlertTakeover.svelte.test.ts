@@ -1,5 +1,5 @@
 import { render } from "vitest-browser-svelte";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushSync } from "svelte";
 import { page as pageState } from "$app/state";
@@ -166,5 +166,17 @@ describe("CriticalAlertTakeover", () => {
 		render(CriticalAlertTakeover);
 
 		await expect.element(page.getByText("2 more critical alerts")).toBeVisible();
+	});
+
+	it("stays up when Escape is pressed", async () => {
+		activeAlerts = [excursion("a")];
+
+		render(CriticalAlertTakeover);
+		await expect.element(page.getByRole("alertdialog")).toBeVisible();
+
+		await userEvent.keyboard("{Escape}");
+		await userEvent.keyboard("{Escape}");
+
+		await expect.element(page.getByRole("alertdialog")).toBeVisible();
 	});
 });
