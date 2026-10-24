@@ -261,7 +261,7 @@
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <AlertTriangle class="w-5 h-5 text-glucose-very-low" />
-              Low Blood Sugar Events
+              Low Glucose Events
             </CardTitle>
             <CardDescription>
               Time spent below {bgOr(edges?.low)} {bgLabel()} (target: &lt;4%)
@@ -304,7 +304,7 @@
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <TrendingUp class="w-5 h-5 text-glucose-high" />
-              High Blood Sugar Events
+              High Glucose Events
             </CardTitle>
             <CardDescription>
               Time spent above {bgOr(edges?.high)} {bgLabel()} (target: &lt;25%)
@@ -425,7 +425,7 @@
               </div>
             {/if}
             <p class="text-xs text-muted-foreground">
-              Target: at least 70% CGM active time over 14 days; the statistics
+              Target: at least 70% CGM active time over 14 days. The statistics
               on this page are most reliable at 90% or above.
             </p>
 

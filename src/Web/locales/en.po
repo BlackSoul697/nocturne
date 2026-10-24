@@ -15841,21 +15841,17 @@ msgstr "Glycemic Risk Index"
 msgid "Mean Glucose"
 msgstr "Mean Glucose"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hyper Duration"
-msgstr "Hyper Duration"
+#~ msgid "Hyper Duration"
+#~ msgstr "Hyper Duration"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hyper Events"
-msgstr "Hyper Events"
+#~ msgid "Hyper Events"
+#~ msgstr "Hyper Events"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hypo Duration"
-msgstr "Hypo Duration"
+#~ msgid "Hypo Duration"
+#~ msgstr "Hypo Duration"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Hypo Events"
-msgstr "Hypo Events"
+#~ msgid "Hypo Events"
+#~ msgstr "Hypo Events"
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "Preset"
@@ -18120,17 +18116,9 @@ msgstr "{0} pp"
 #. 0: minutes / 60
 #. 0: minutesAfter == null ? "–" \\: minutesAfter / 60
 #. 0: e.event.timeToNadirHours.toFixed(1)
-#. 0: v.toFixed(1)
-#. 0: signed(d)
-#. 0: v.toFixed(1)
-#. 0: signed(d)
 #: src/lib/components/reports/loop-analysis/EventCohortBuilder.svelte
 #: src/lib/components/reports/loop-analysis/EventCohortBuilder.svelte
 #: src/lib/components/reports/sensor-integrity/HypoAfterNoiseLog.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
 msgid "{0} h"
 msgstr "{0} h"
 
@@ -30697,3 +30685,19 @@ msgstr "Sees {0}"
 #: src/lib/components/alerts/conditionIssues.svelte.ts
 msgid "Part of this rule's conditions is malformed, so the rule can't run as set. Edit its conditions and save it."
 msgstr "Part of this rule's conditions is malformed, so the rule can't run as set. Edit its conditions and save it."
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hyper Time / Day"
+msgstr "Hyper Time / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hyper Events / Day"
+msgstr "Hyper Events / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hypo Time / Day"
+msgstr "Hypo Time / Day"
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "Hypo Events / Day"
+msgstr "Hypo Events / Day"
