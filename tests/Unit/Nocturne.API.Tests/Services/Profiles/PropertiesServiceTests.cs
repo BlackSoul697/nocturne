@@ -127,13 +127,11 @@ public class PropertiesServiceTests
         new(
             _mockDDataService.Object,
             _mockLogger.Object,
-            Mock.Of<IIobCalculator>(),
-            Mock.Of<ICobCalculator>(),
-            Mock.Of<IBolusRepository>(),
-            Mock.Of<ICarbIntakeRepository>(),
-            Mock.Of<ITempBasalRepository>(),
+            TestIobCobReader.Empty(),
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
+            _therapySettings.Object,
+            TimeProvider.System,
             Options.Create(budget)
         );
 
@@ -728,7 +726,8 @@ public class PropertiesServiceTests
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
-            new FakeTimeProvider(now)
+            new FakeTimeProvider(now),
+            Options.Create(new DbSizeOptions())
         );
 
     private async Task<double> CurrentBasalAt(DateTimeOffset now, List<TimeValue> schedule)
