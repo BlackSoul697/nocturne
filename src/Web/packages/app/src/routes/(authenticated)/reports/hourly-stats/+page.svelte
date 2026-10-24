@@ -57,13 +57,6 @@
   const hourList = (list: HourlyPattern[]) => list.map((h) => hourSpan(h.hour ?? 0)).join(", ");
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Which hours of the day spend the most and least time in the glucose target range"
-  />
-</svelte:head>
-
 {#if report}
   <div class="@container space-y-6">
     <header class="max-w-3xl space-y-2">

@@ -58,13 +58,6 @@
   );
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Step count actogram with glucose overlay"
-  />
-</svelte:head>
-
 <div class="@container space-y-6">
   <div class="print:hidden">
     <p class="text-muted-foreground">

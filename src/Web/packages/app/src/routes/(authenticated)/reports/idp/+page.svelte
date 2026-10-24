@@ -69,13 +69,6 @@
   const dayCount = $derived(reportsResource.date.dayCount);
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Insulin Dosing Profile report with delivery statistics, glucose metrics, basal analysis, and bolus distribution"
-  />
-</svelte:head>
-
 {#if reportsResource.current}
 <div class="@container space-y-8">
   <div class="space-y-4">

@@ -3,6 +3,7 @@ import {
   reportCategories,
   visibleReportCategories,
   getSidebarReportItems,
+  reportDescription,
   reportSubRouteTitle,
   reportTitle,
   type ReportViewer,
@@ -179,5 +180,38 @@ describe("reportSubRouteTitle", () => {
   it("has no name for an unknown path", () => {
     expect(reportSubRouteTitle("/reports/unknown")).toBeUndefined();
     expect(reportSubRouteTitle("/reports/sleep")).toBeUndefined();
+  });
+});
+
+const reportPages = import.meta.glob("/src/routes/*/reports/**/+page.svelte", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const reportPathnames = Object.keys(reportPages).map((file) =>
+  file
+    .replace("/src/routes/(authenticated)", "")
+    .replace("/+page.svelte", "")
+    .replace("[date]", "2026-10-01")
+);
+
+describe("reportDescription", () => {
+  it("finds the report pages on disk", () => {
+    expect(reportPathnames.length).toBeGreaterThan(20);
+  });
+
+  it.each(reportPathnames)("gives %s a description", (pathname) => {
+    expect(reportDescription(pathname)?.trim()).toBeTruthy();
+  });
+
+  it("is the only place a report page sets a description", () => {
+    for (const source of Object.values(reportPages)) {
+      expect(source).not.toMatch(/name="description"/);
+    }
+  });
+
+  it("has none for a path that is not a report", () => {
+    expect(reportDescription("/reports/unknown")).toBeUndefined();
   });
 });

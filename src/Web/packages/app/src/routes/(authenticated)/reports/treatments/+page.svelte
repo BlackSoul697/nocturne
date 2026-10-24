@@ -327,13 +327,6 @@
   }
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="View and manage your diabetes treatments, insulin doses, and carb entries"
-  />
-</svelte:head>
-
 {#if reportsResource.current}
 <div class="@container space-y-6">
   <!-- Header -->
