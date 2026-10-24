@@ -23,6 +23,7 @@ public sealed class RetireUiSettingsAggregateFixture : IAsyncLifetime
     internal static readonly Guid AggregateOnly = Guid.Parse("a1111111-1111-7111-8111-111111112605");
     internal static readonly Guid PartlyOwned = Guid.Parse("b2222222-2222-7222-8222-222222222605");
     internal static readonly Guid Corrupt = Guid.Parse("c3333333-3333-7333-8333-333333332605");
+    internal static readonly Guid NulEscape = Guid.Parse("d4444444-4444-7444-8444-444444442605");
 
     private const string Aggregate = """
         {"devices": {"autoConnect": false},
@@ -68,7 +69,8 @@ public sealed class RetireUiSettingsAggregateFixture : IAsyncLifetime
             INSERT INTO tenants (id, slug, display_name, is_active, sys_created_at, sys_updated_at) VALUES
               ('{AggregateOnly}', 'aggregate-only', 'Aggregate only', true, now(), now()),
               ('{PartlyOwned}', 'partly-owned', 'Partly owned', true, now(), now()),
-              ('{Corrupt}', 'corrupt', 'Corrupt', true, now(), now());
+              ('{Corrupt}', 'corrupt', 'Corrupt', true, now(), now()),
+              ('{NulEscape}', 'nul-escape', 'Nul escape', true, now(), now());
             """);
 
         await Seed(conn, AggregateOnly, ("ui:settings:complete", Aggregate, true));
@@ -77,8 +79,11 @@ public sealed class RetireUiSettingsAggregateFixture : IAsyncLifetime
             ("ui:settings:features", """{"display": {"units": "mg/dL"}}""", true),
             ("ui:settings:devices", """{"autoConnect": true}""", false),
             ("ui:settings:algorithm", "null", true),
-            ("ui:settings:notifications", """{"alarmsEnabled": false}""", true));
+            ("ui:settings:notifications", """{"alarmsEnabled": false}""", true),
+            ("ui:settings:dataquality", "\tnull\n", true));
         await Seed(conn, Corrupt, ("ui:settings:complete", "not json", true));
+        await Seed(conn, NulEscape,
+            ("ui:settings:complete", """{"devices": {"autoConnect": false, "name": "a\u0000b"}}""", true));
     }
 
     private static async Task Seed(
@@ -105,7 +110,7 @@ public sealed class RetireUiSettingsAggregateFixture : IAsyncLifetime
     {
         await using var conn = new NpgsqlConnection(_migrator);
         await conn.OpenAsync();
-        foreach (var tenant in new[] { AggregateOnly, PartlyOwned, Corrupt })
+        foreach (var tenant in new[] { AggregateOnly, PartlyOwned, Corrupt, NulEscape })
         {
             await Execute(conn, $"SELECT set_config('app.current_tenant_id', '{tenant}', false);");
             await using var cmd = conn.CreateCommand();
@@ -191,6 +196,21 @@ public class RetireUiSettingsAggregateTests : IClassFixture<RetireUiSettingsAggr
         var tenant = RetireUiSettingsAggregateFixture.PartlyOwned;
         Row(tenant, "ui:settings:devices")["autoConnect"]!.GetValue<bool>().Should().BeFalse();
         Row(tenant, "ui:settings:algorithm")["prediction"]!["minutes"]!.GetValue<int>().Should().Be(45);
+    }
+
+    [Fact]
+    public void A_row_of_json_null_padded_with_whitespace_takes_the_aggregate_section()
+    {
+        Row(RetireUiSettingsAggregateFixture.PartlyOwned, "ui:settings:dataquality")["sleepSchedule"]!["bedtimeHour"]!
+            .GetValue<int>().Should().Be(1);
+    }
+
+    [Fact]
+    public void A_nul_escape_jsonb_would_refuse_moves_as_a_replacement_character()
+    {
+        var devices = Row(RetireUiSettingsAggregateFixture.NulEscape, "ui:settings:devices");
+        devices["autoConnect"]!.GetValue<bool>().Should().BeFalse();
+        devices["name"]!.GetValue<string>().Should().Be("a�b");
     }
 
     [Fact]
