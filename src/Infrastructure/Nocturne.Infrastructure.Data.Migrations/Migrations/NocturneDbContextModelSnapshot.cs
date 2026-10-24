@@ -6015,9 +6015,13 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_aps_snapshots_correlation_id");
 
-                    b.HasIndex("DeviceId");
+                    b.HasIndex("DeviceId")
+                        .HasDatabaseName("ix_aps_snapshots_device_id")
+                        .HasFilter("device_id IS NOT NULL");
 
-                    b.HasIndex("PatientDeviceId");
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_aps_snapshots_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
@@ -6722,16 +6726,24 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApsSnapshotId");
+                    b.HasIndex("ApsSnapshotId")
+                        .HasDatabaseName("ix_boluses_aps_snapshot_id")
+                        .HasFilter("aps_snapshot_id IS NOT NULL");
 
-                    b.HasIndex("BolusCalculationId");
+                    b.HasIndex("BolusCalculationId")
+                        .HasDatabaseName("ix_boluses_bolus_calculation_id")
+                        .HasFilter("bolus_calculation_id IS NOT NULL");
 
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_boluses_correlation_id");
 
-                    b.HasIndex("DeviceId");
+                    b.HasIndex("DeviceId")
+                        .HasDatabaseName("ix_boluses_device_id")
+                        .HasFilter("device_id IS NOT NULL");
 
-                    b.HasIndex("PatientDeviceId");
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_boluses_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
@@ -8244,9 +8256,13 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_pump_snapshots_correlation_id");
 
-                    b.HasIndex("DeviceId");
+                    b.HasIndex("DeviceId")
+                        .HasDatabaseName("ix_pump_snapshots_device_id")
+                        .HasFilter("device_id IS NOT NULL");
 
-                    b.HasIndex("PatientDeviceId");
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_pump_snapshots_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
@@ -8812,14 +8828,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApsSnapshotId");
+                    b.HasIndex("ApsSnapshotId")
+                        .HasDatabaseName("ix_temp_basals_aps_snapshot_id")
+                        .HasFilter("aps_snapshot_id IS NOT NULL");
 
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_temp_basals_correlation_id");
 
-                    b.HasIndex("DeviceId");
+                    b.HasIndex("DeviceId")
+                        .HasDatabaseName("ix_temp_basals_device_id")
+                        .HasFilter("device_id IS NOT NULL");
 
-                    b.HasIndex("PatientDeviceId");
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_temp_basals_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
@@ -9149,7 +9171,9 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_uploader_snapshots_correlation_id");
 
-                    b.HasIndex("DeviceId");
+                    b.HasIndex("DeviceId")
+                        .HasDatabaseName("ix_uploader_snapshots_device_id")
+                        .HasFilter("device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
