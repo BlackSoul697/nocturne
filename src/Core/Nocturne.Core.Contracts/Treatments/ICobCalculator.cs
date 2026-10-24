@@ -14,11 +14,12 @@ public interface ICobCalculator
         bool live = false,
         CancellationToken ct = default);
 
-    CobResult FromCarbIntakes(
+    Task<CobResult> FromCarbIntakesAsync(
         List<CarbIntake> carbIntakes,
         List<Bolus>? boluses,
         List<TempBasal>? tempBasals,
-        long time);
+        long time,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Async-free overload for the chart COB tick loop. Resolves carb absorption, sensitivity and
@@ -37,5 +38,5 @@ public interface ICobCalculator
         Func<long, double> scheduledBasalAt,
         long time);
 
-    CarbCobContribution CalcCarbIntake(CarbIntake carbIntake, long time);
+    Task<CarbCobContribution> CalcCarbIntakeAsync(CarbIntake carbIntake, long time, CancellationToken ct = default);
 }
