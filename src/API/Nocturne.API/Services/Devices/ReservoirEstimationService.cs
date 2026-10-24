@@ -150,10 +150,10 @@ internal sealed class ReservoirEstimationService(
         var anyTempBasalDelivery = false;
         foreach (var tb in StatisticsService.DeliveredWithin(tempBasalRecords, from, toMs))
         {
-            if (tb.Rate is not { } rate)
+            if (StatisticsService.GetTempBasalInsulin(tb) is not { } insulin)
                 continue;
             anyTempBasalDelivery = true;
-            total += rate * ((tb.EndMills!.Value - tb.StartMills) / (1000.0 * 60 * 60));
+            total += insulin;
         }
 
         // No temp basal delivery and no algorithm boluses means basal isn't recorded

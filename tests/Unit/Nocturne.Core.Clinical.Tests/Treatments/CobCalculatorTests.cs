@@ -177,6 +177,97 @@ public class CobCalculatorTests
         Assert.True(endedSnapshot.DecayedBy > withoutTemp.DecayedBy, "the temp's insulin must reach the carb delay");
     }
 
+    [Fact]
+    public void FromCarbIntakes_SnapshotOverload_MakesNoResolverCall()
+    {
+        var sensitivityResolver = new Mock<ISensitivityResolver>(MockBehavior.Strict);
+        var carbRatioResolver = new Mock<ICarbRatioResolver>(MockBehavior.Strict);
+        var therapySettings = new Mock<ITherapySettingsResolver>(MockBehavior.Strict);
+        var iobCalculator = new IobCalculator(
+            therapySettings.Object,
+            sensitivityResolver.Object,
+            Mock.Of<IBasalRateResolver>(MockBehavior.Strict),
+            Mock.Of<IApsSnapshotRepository>(MockBehavior.Strict),
+            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict));
+        var calculator = new CobCalculator(
+            Mock.Of<ILogger<CobCalculator>>(),
+            iobCalculator,
+            sensitivityResolver.Object,
+            carbRatioResolver.Object,
+            therapySettings.Object,
+            Mock.Of<IApsSnapshotRepository>(MockBehavior.Strict));
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var carbs = new List<CarbIntake>
+        {
+            new() { Carbs = 40, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 30 * 60 * 1000).UtcDateTime },
+            new() { Carbs = 20, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 10 * 60 * 1000).UtcDateTime },
+        };
+        var boluses = new List<Bolus>
+        {
+            new() { Insulin = 2.0, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 25 * 60 * 1000).UtcDateTime },
+        };
+
+        var result = calculator.FromCarbIntakes(carbs, boluses, [], MatchingSnapshot(), _ => DefaultBasalRate, now);
+
+        Assert.True(result.Cob > 0);
+        therapySettings.VerifyNoOtherCalls();
+        sensitivityResolver.VerifyNoOtherCalls();
+        carbRatioResolver.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void FromCarbIntakes_FirstCarbWithNoBoluses_AsyncAndSnapshotAgree()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var carbs = new List<CarbIntake>
+        {
+            new() { Carbs = 50, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 30 * 60 * 1000).UtcDateTime },
+        };
+
+        var viaAsync = _calculator.FromCarbIntakes(carbs, null, null, now);
+        var viaSnapshot = _calculator.FromCarbIntakes(carbs, null, null, MatchingSnapshot(), _ => DefaultBasalRate, now);
+
+        Assert.Equal(viaAsync.Cob, viaSnapshot.Cob, 6);
+        Assert.Equal(viaAsync.DecayedBy, viaSnapshot.DecayedBy);
+        Assert.True(viaSnapshot.Cob > 0);
+    }
+
+    [Fact]
+    public void FromCarbIntakes_MissingInsulinActivity_DelaysCarbsAsZeroActivityDoes()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var carbs = new List<CarbIntake>
+        {
+            new() { Carbs = 30, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 180 * 60 * 1000).UtcDateTime },
+            new() { Carbs = 30, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 30 * 60 * 1000).UtcDateTime },
+        };
+
+        CobCalculator WithActivity(Func<long, double?> activityAt)
+        {
+            var iob = new Mock<IIobCalculator>();
+            iob.Setup(i => i.CalculateTotalAsync(
+                    It.IsAny<List<Bolus>>(), It.IsAny<List<TempBasal>?>(), It.IsAny<long>(),
+                    It.IsAny<long?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((List<Bolus> _, List<TempBasal>? _, long t, long? _, bool _, CancellationToken _) =>
+                    new IobResult { Activity = activityAt(t) });
+            return new CobCalculator(
+                Mock.Of<ILogger<CobCalculator>>(),
+                iob.Object,
+                Mock.Of<ISensitivityResolver>(r => r.GetSensitivityAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()) == Task.FromResult(DefaultSensitivity)),
+                Mock.Of<ICarbRatioResolver>(r => r.GetCarbRatioAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()) == Task.FromResult(DefaultCarbRatio)),
+                Mock.Of<ITherapySettingsResolver>(r => r.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()) == Task.FromResult(DefaultCarbAbsorptionRate)),
+                Mock.Of<IApsSnapshotRepository>());
+        }
+
+        var missing = WithActivity(t => t > now ? null : 1.0).FromCarbIntakes(carbs, null, null, now);
+        var zero = WithActivity(t => t > now ? 0.0 : 1.0).FromCarbIntakes(carbs, null, null, now);
+        var none = WithActivity(_ => 0.0).FromCarbIntakes(carbs, null, null, now);
+
+        Assert.Equal(zero.DecayedBy, missing.DecayedBy);
+        Assert.Equal(zero.Cob, missing.Cob, 6);
+        Assert.True(missing.DecayedBy > none.DecayedBy, "sanity: the earlier activity must delay the carbs");
+    }
+
     #endregion
 
     #region CalculateTotalAsync Tests

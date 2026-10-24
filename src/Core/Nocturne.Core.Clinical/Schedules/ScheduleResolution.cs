@@ -18,12 +18,12 @@ public static class ScheduleResolution
         if (entries.Count == 0)
             return null;
 
-        var sorted = entries.OrderBy(e => e.TimeAsSeconds ?? 0).ToList();
+        var sorted = entries.OrderBy(e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time)).ToList();
         var result = sorted[0].Value;
 
         foreach (var entry in sorted)
         {
-            if (secondsFromMidnight >= (entry.TimeAsSeconds ?? 0))
+            if (secondsFromMidnight >= ScheduleEntryTime.SecondsOf(entry.TimeAsSeconds, entry.Time))
                 result = entry.Value;
             else
                 break;
@@ -44,12 +44,12 @@ public static class ScheduleResolution
         if (entries.Count == 0)
             return null;
 
-        var sorted = entries.OrderBy(e => e.TimeAsSeconds ?? 0).ToList();
+        var sorted = entries.OrderBy(e => ScheduleEntryTime.SecondsOf(e.TimeAsSeconds, e.Time)).ToList();
         var result = (sorted[0].Low, sorted[0].High);
 
         foreach (var entry in sorted)
         {
-            if (secondsFromMidnight >= (entry.TimeAsSeconds ?? 0))
+            if (secondsFromMidnight >= ScheduleEntryTime.SecondsOf(entry.TimeAsSeconds, entry.Time))
                 result = (entry.Low, entry.High);
             else
                 break;

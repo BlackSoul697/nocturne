@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -56,16 +55,10 @@ public class V4WriteScopeGatingTests
     /// </summary>
     private static class NotDataCategory
     {
-        /// <summary>Platform operator surface; the class carries [Authorize(Roles = "platform_admin")].</summary>
-        public const string PlatformAdminRole = "platform-admin role, not a data scope";
-
         /// <summary>
         /// Superuser-only surface; [RequireSuperuser] on the class or on every write action.
         /// </summary>
         public const string SuperuserAttribute = "superuser attribute, not a data scope";
-
-        /// <summary>Service-to-service surface; the class carries [RequireInstanceKeyAuth].</summary>
-        public const string InstanceKey = "instance-key service credential, not a data scope";
 
         /// <summary>Registered only when the API runs in Development.</summary>
         public const string DevelopmentOnly = "dev-only controller, absent outside Development";
@@ -177,16 +170,9 @@ public class V4WriteScopeGatingTests
     /// decides which of these it is.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> GateExemptControllers =
-        new Dictionary<string, string>(StringComparer.Ordinal)
+        new Dictionary<string, string>(V4ScopeGuardExemptions.Controllers, StringComparer.Ordinal)
         {
-            ["AccessRequestController"] = NotDataCategory.PlatformAdminRole,
-            ["ConnectorAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["DemoAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["OidcProviderAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["PlatformSettingsController"] = NotDataCategory.PlatformAdminRole,
-            ["SubjectAdminController"] = NotDataCategory.PlatformAdminRole,
-            ["TenantController"] = NotDataCategory.PlatformAdminRole,
-            ["TenantDirectGrantController"] = NotDataCategory.PlatformAdminRole,
+            ["SubjectAdminController"] = V4ScopeGuardExemptions.PlatformAdminRole,
 
             ["DeduplicationController"] = NotDataCategory.SuperuserAttribute,
             ["MigrationController"] = NotDataCategory.SuperuserAttribute,
@@ -196,8 +182,6 @@ public class V4WriteScopeGatingTests
             ["CompatibilityController"] = NotDataCategory.SuperuserAttribute,
             ["ServicesController"] = NotDataCategory.TenantSettingsScope,
             ["RejectedUploadsController"] = NotDataCategory.TenantSettingsScope,
-
-            ["ChatIdentityDirectoryController"] = NotDataCategory.InstanceKey,
 
             ["DevAdminController"] = NotDataCategory.DevelopmentOnly,
             ["DevAuthController"] = NotDataCategory.DevelopmentOnly,
@@ -789,15 +773,12 @@ public class V4WriteScopeGatingTests
 
             var holds = reason switch
             {
-                NotDataCategory.PlatformAdminRole => attributes
-                    .OfType<AuthorizeAttribute>()
-                    .Any(a => a.Roles?.Contains("platform_admin", StringComparison.Ordinal) == true),
+                _ when V4ScopeGuardExemptions.Controllers.ContainsKey(name) =>
+                    V4ScopeGuardExemptions.Carries(attributes, reason),
                 NotDataCategory.SuperuserAttribute => CarriesAttribute(controller, "RequireSuperuserAttribute"),
                 NotDataCategory.TenantSettingsScope => GovernsEveryWrite(controller,
                     a => a is RequireScopeAttribute scope
                          && scope.Scopes.Contains(Scope.TenantSettings, StringComparer.Ordinal)),
-                NotDataCategory.InstanceKey => attributes
-                    .Any(a => a.GetType().Name == "RequireInstanceKeyAuthAttribute"),
                 NotDataCategory.DevelopmentOnly => controller.Namespace == V4Namespace + ".DevOnly",
                 _ => true,
             };

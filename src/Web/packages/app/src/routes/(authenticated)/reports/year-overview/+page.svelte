@@ -593,13 +593,6 @@
   }
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Multi-year heatmap overview of all your diabetes data"
-  />
-</svelte:head>
-
 <div class="year-overview @container flex min-h-full">
   <!-- Main Content -->
   <div class="flex-1">

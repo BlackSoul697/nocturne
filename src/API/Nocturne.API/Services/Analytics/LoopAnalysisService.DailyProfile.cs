@@ -44,7 +44,7 @@ internal sealed partial class LoopAnalysisService
         var carbs = (await carbTask).ToList();
         var apsPoints = await apsTask;
         var common = await commonTask;
-        var now = ToMills(filter.Now);
+        var now = filter.Now.ToMills();
         var delivery = await DeliveryAsync(common, window, now, ct);
 
         var iobCob = IobCobSeries.Build(
@@ -60,7 +60,7 @@ internal sealed partial class LoopAnalysisService
             Carbs = [.. carbs.Where(c => c.Mills >= from && c.Mills < to).Select(c => new CarbEvent(c.Mills, c.Carbs))],
             IobCob = iobCob,
             IobCobIntervalMs = TickMs,
-            HistoryVisibleFrom = filter.HistoryVisibleFrom is { } edge ? ToMills(edge) : null,
+            HistoryVisibleFrom = filter.HistoryVisibleFrom is { } edge ? edge.ToMills() : null,
             CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
                 delivery.Evidence,
                 common.Boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)

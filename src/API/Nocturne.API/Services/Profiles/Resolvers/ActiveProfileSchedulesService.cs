@@ -1,6 +1,7 @@
 using System.Globalization;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Profiles.Resolvers;
@@ -118,11 +119,11 @@ internal sealed class ActiveProfileSchedulesService : IActiveProfileSchedulesSer
         where TRecord : class, IV4Record, IProfileScoped
     {
         var versions = (await _versions.GetVersionsAsync(repo, profileSpans[0].ProfileName, ct))
-            .Where(v => ToMills(v.Timestamp) < toMs)
+            .Where(v => v.Timestamp.ToMills() < toMs)
             .ToArray();
-        var versionStarts = versions.Select(v => ToMills(v.Timestamp)).Distinct().Order().ToArray();
+        var versionStarts = versions.Select(v => v.Timestamp.ToMills()).Distinct().Order().ToArray();
 
-        TRecord InForceAt(long mills) => versions.FirstOrDefault(v => ToMills(v.Timestamp) <= mills) ?? versions[^1];
+        TRecord InForceAt(long mills) => versions.FirstOrDefault(v => v.Timestamp.ToMills() <= mills) ?? versions[^1];
 
         string Key(List<TEntry> entries) =>
             string.Join(';', entries.Select(entryKey).OrderBy(k => k.Seconds).Select(k => $"{k.Seconds}={k.Values}"));
@@ -178,7 +179,4 @@ internal sealed class ActiveProfileSchedulesService : IActiveProfileSchedulesSer
     private static (int, string) RangeKey(TargetRangeEntry entry) =>
         (ScheduleEntryTime.SecondsOf(entry.TimeAsSeconds, entry.Time),
             string.Create(CultureInfo.InvariantCulture, $"{entry.Low:R}-{entry.High:R}"));
-
-    private static long ToMills(DateTime utc) =>
-        new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 }

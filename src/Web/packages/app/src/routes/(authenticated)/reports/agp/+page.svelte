@@ -49,13 +49,6 @@
   const dayCount = $derived(reportsResource.date.dayCount);
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
-  />
-</svelte:head>
-
 {#if reportsResource.current}
 <div class="@container space-y-8">
   <!-- Header with AGP Explanation -->

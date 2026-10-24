@@ -109,6 +109,14 @@ describe("buildAppNavigation", () => {
     expect(viewer).toContain("Settings");
   });
 
+  it("withholds Reports from a member without reports.read", () => {
+    const withoutReports = titles({ ...MEMBER, grantedScopes: ["glucose.read", "alerts.read"] });
+
+    expect(withoutReports).not.toContain("Reports");
+    expect(withoutReports).toContain("Dashboard");
+    expect(titles({ ...MEMBER, grantedScopes: ["reports.read"] })).toContain("Reports");
+  });
+
   it("offers the tenant switcher only to a member holding more than one", () => {
     expect(titles({ ...MEMBER, tenantCount: 2 })).toContain("Tenants");
     expect(titles({ ...REPORTING_SHARE, tenantCount: 2 })).not.toContain(

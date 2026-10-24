@@ -67,13 +67,6 @@
   );
 </script>
 
-<svelte:head>
-  <meta
-    name="description"
-    content="High-level overview of your diabetes management metrics"
-  />
-</svelte:head>
-
 {#snippet targetState(target: string, met: boolean | undefined)}
   <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
     <span class="text-muted-foreground">{target}</span>

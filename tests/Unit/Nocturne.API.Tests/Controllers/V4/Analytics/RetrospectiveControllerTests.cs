@@ -77,6 +77,70 @@ public class RetrospectiveControllerTests
     }
 
     [Fact]
+    public async Task GetBasalTimeline_TempStartedTwoHoursBeforeTheDay_AppearsForItsInDayPart()
+    {
+        var dayStart = new DateTime(2024, 1, 15, 0, 0, 0, DateTimeKind.Utc);
+        var straddling = new TempBasal
+        {
+            StartTimestamp = dayStart.AddHours(-2),
+            EndTimestamp = dayStart.AddHours(1),
+            Origin = TempBasalOrigin.Algorithm,
+            Rate = 0.1,
+        };
+        _basalRateResolverMock
+            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long _) => 0.8);
+        _tempBasalRepoMock
+            .Setup(s => s.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? from, DateTime? to, string? _, string? _, int _, int _, bool _, CancellationToken _) =>
+                new[] { straddling }.Where(t => t.StartTimestamp >= from && t.StartTimestamp <= to).ToList());
+
+        var result = await CreateController().GetBasalTimeline("2024-01-15", intervalMinutes: 30);
+
+        var data = ((BasalTimelineResponse)((OkObjectResult)result.Result!).Value!).Data!;
+        data.Where(p => p.Time < new DateTimeOffset(dayStart.AddHours(1)).ToUnixTimeMilliseconds())
+            .Should().OnlyContain(p => p.IsTemp && p.Rate == 0.1);
+        data.Where(p => p.Time >= new DateTimeOffset(dayStart.AddHours(1)).ToUnixTimeMilliseconds())
+            .Should().OnlyContain(p => !p.IsTemp && p.Rate == 0.8);
+    }
+
+    [Fact]
+    public async Task GetBasalTimeline_TempSupersededBeforeTheDay_DoesNotClaimItsStoredSpan()
+    {
+        var dayStart = new DateTime(2024, 1, 15, 0, 0, 0, DateTimeKind.Utc);
+        TempBasal Temp(double fromHours, double toHours, double rate) => new()
+        {
+            Device = "loop",
+            StartTimestamp = dayStart.AddHours(fromHours),
+            EndTimestamp = dayStart.AddHours(toHours),
+            Origin = TempBasalOrigin.Algorithm,
+            Rate = rate,
+        };
+        var stored = new[] { Temp(-4, 4, 0.0), Temp(-3.5, -3, 0.5), Temp(1, 2, 2.0) };
+        _basalRateResolverMock
+            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long _) => 0.8);
+        _tempBasalRepoMock
+            .Setup(s => s.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? from, DateTime? to, string? _, string? _, int _, int _, bool _, CancellationToken _) =>
+                stored.Where(t => t.StartTimestamp >= from && t.StartTimestamp <= to).ToList());
+
+        var result = await CreateController().GetBasalTimeline("2024-01-15", intervalMinutes: 60);
+
+        var data = ((BasalTimelineResponse)((OkObjectResult)result.Result!).Value!).Data!;
+        data.Single(p => p.Hour == 0).Should().Match<BasalDataPoint>(p => !p.IsTemp && p.Rate == 0.8);
+        data.Single(p => p.Hour == 1).Should().Match<BasalDataPoint>(p => p.IsTemp && p.Rate == 2.0);
+    }
+
+    [Fact]
     public async Task GetBasalTimeline_CallsBuildResolverOnceNotGetBasalRateAsync()
     {
         _basalRateResolverMock

@@ -237,17 +237,17 @@
   </svg>{/snippet}
 {#snippet hatchSwatch()}<TextureSwatch texture="basal-unreported" color="transparent" />{/snippet}
 {#snippet overrideIcon()}<div
-    class="w-3 h-2 rounded border border-(--pump-mode-boost) bg-(--pump-mode-boost) opacity-30"
+    class="w-3 h-2 rounded border border-pump-mode-boost bg-pump-mode-boost opacity-30"
   ></div>{/snippet}
 {#snippet profileIcon()}<div
     class="w-3 h-2 rounded border border-chart-1 bg-chart-1 opacity-20"
   ></div>{/snippet}
 {#snippet activityIcon()}<div class="flex items-center gap-0.5">
     <div
-      class="w-2 h-2 rounded bg-(--pump-mode-sleep)"
+      class="w-2 h-2 rounded bg-pump-mode-sleep"
     ></div>
     <div
-      class="w-2 h-2 rounded bg-(--pump-mode-exercise)"
+      class="w-2 h-2 rounded bg-pump-mode-exercise"
     ></div>
   </div>{/snippet}
 

@@ -115,7 +115,7 @@ public partial class StatisticsService
     /// </summary>
     public static long UntilMills(DateTime endUtc, DateTimeOffset now) =>
         Math.Min(
-            new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            endUtc.ToMills(),
             now.ToUnixTimeMilliseconds());
 
     /// <summary>
