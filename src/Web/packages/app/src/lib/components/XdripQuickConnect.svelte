@@ -347,7 +347,7 @@
       <form onsubmit={handleDeviceCodeSubmit} class="flex items-center gap-2">
         <Input
           type="text"
-          placeholder="XXXX-YY"
+          placeholder="XXXX-YYYY"
           maxlength={9}
           autocomplete="off"
           variant="code"
