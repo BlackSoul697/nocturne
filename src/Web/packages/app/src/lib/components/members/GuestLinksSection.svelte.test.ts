@@ -9,7 +9,7 @@ import {
   updatedBy,
 } from "$lib/test-stubs/remote-resource";
 
-let createImpl: () => Promise<unknown>;
+let createImpl: (request?: { scopes?: string[] }) => Promise<unknown>;
 let links: GuestLinkInfo[];
 
 vi.mock("$app/state", () => ({
@@ -18,7 +18,14 @@ vi.mock("$app/state", () => ({
 
 vi.mock("$api/generated/guestLinks.generated.remote", () => ({
   getGuestLinks: () => remoteQuery(() => links),
-  createGuestLink: remoteCommand(() => createImpl()),
+  getGuestLinkScopeOptions: () =>
+    remoteQuery(() => ({
+      available: ["alerts.read", "glucose.read", "therapy.read"],
+      defaults: ["alerts.read", "glucose.read"],
+    })),
+  createGuestLink: remoteCommand((request) =>
+    createImpl(request as { scopes?: string[] } | undefined)
+  ),
   revokeGuestLink: remoteCommand(() => Promise.resolve()),
   dismissGuestLink: remoteCommand(() => Promise.resolve()),
 }));
@@ -62,6 +69,37 @@ describe("GuestLinksSection", () => {
     links = [];
     createImpl = () =>
       Promise.resolve({ code: "ABCD", fullUrl: "/guest/ABCD" });
+  });
+
+  it("creates the link with the categories ticked by default", async () => {
+    let sent: string[] | undefined;
+    createImpl = async (request) => {
+      sent = request?.scopes;
+      return { code: "ABCD", fullUrl: "/guest/ABCD" };
+    };
+
+    await attemptCreate();
+
+    await expect.element(page.getByText("ABCD")).toBeInTheDocument();
+    expect(sent).toEqual(["alerts.read", "glucose.read"]);
+  });
+
+  it("creates the link with the categories the creator picks", async () => {
+    let sent: string[] | undefined;
+    createImpl = async (request) => {
+      sent = request?.scopes;
+      return { code: "ABCD", fullUrl: "/guest/ABCD" };
+    };
+    render(GuestLinksSection);
+
+    await page.getByRole("button", { name: "Create Guest Link" }).click();
+    await page.getByRole("textbox").fill("Daycare");
+    await page.getByRole("switch", { name: "Alerts" }).click();
+    await page.getByRole("switch", { name: "Therapy Settings" }).click();
+    await page.getByRole("button", { name: "Create Link" }).click();
+
+    await expect.element(page.getByText("ABCD")).toBeInTheDocument();
+    expect(sent?.toSorted()).toEqual(["glucose.read", "therapy.read"]);
   });
 
   it("shows the server's reason when the code could not be issued", async () => {

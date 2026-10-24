@@ -461,7 +461,8 @@ public class AlertRulesIntegrationTests : ApiIntegrationTestBase
         var recipients = await guest.GetAsync("/api/v4/alert-rules/in-app-recipients");
 
         // Assert
-        rules.StatusCode.Should().Be(HttpStatusCode.OK, "the guest session reads alert rules");
+        rules.StatusCode.Should().Be(HttpStatusCode.Forbidden,
+            "a guest sees a firing alarm, not the rules behind it, which name delivery channels");
         recipients.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 

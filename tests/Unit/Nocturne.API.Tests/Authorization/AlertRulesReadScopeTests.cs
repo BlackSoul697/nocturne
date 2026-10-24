@@ -57,12 +57,23 @@ public class AlertRulesReadScopeTests
         Evaluate(nameof(AlertRulesController.GetRules), authenticated: true, scopes).Should().BeNull();
     }
 
-    [Fact]
-    public void GuestLinkHoldingAlertsRead_KeepsReadingRules()
+    /// <summary>
+    /// A guest or share link holding alerts.read sees a firing alarm, not the rules behind it: a rule
+    /// names its delivery channels. <see cref="Nocturne.API.Authorization.DenyNoAccountViewerAttribute"/>.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(AlertRulesController.GetRules))]
+    [InlineData(nameof(AlertRulesController.GetRule))]
+    public void NoAccountViewerHoldingAlertsRead_IsRefused(string action)
     {
-        var scopes = Scope.Normalize([Scope.AlertsRead]).ToArray();
+        var scopes = new HashSet<string>(Scope.Normalize([Scope.AlertsRead]), StringComparer.Ordinal);
 
-        Evaluate(nameof(AlertRulesController.GetRules), authenticated: true, scopes).Should().BeNull();
+        ActionGate.Evaluate(typeof(AlertRulesController), action, scopes,
+                new AuthContext { IsAuthenticated = true, AuthType = AuthType.Guest })
+            .Should().BeOfType<ForbidResult>();
+        ActionGate.Evaluate(typeof(AlertRulesController), action, scopes,
+                new AuthContext { IsAuthenticated = false })
+            .Should().BeOfType<ForbidResult>();
     }
 
     private static IActionResult? Evaluate(string actionName, bool authenticated, string[] grantedScopes) =>
@@ -70,5 +81,5 @@ public class AlertRulesReadScopeTests
             typeof(AlertRulesController),
             actionName,
             new HashSet<string>(grantedScopes, StringComparer.Ordinal),
-            authenticated ? new AuthContext { IsAuthenticated = true } : null);
+            new AuthContext { IsAuthenticated = authenticated });
 }

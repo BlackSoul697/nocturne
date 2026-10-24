@@ -26,6 +26,7 @@
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import AlertSurfaces from "$lib/components/alerts/AlertSurfaces.svelte";
+  import { satisfiesScope } from "$lib/authorization/scopes";
   import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
   import InitialReadsPrefetch from "$lib/components/layout/InitialReadsPrefetch.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
@@ -271,7 +272,9 @@
           isAuthenticated={!!data.user}
           isGuestSession={data.isGuestSession}
         />
-        <AlertSurfaces />
+        {#if satisfiesScope(data.effectivePermissions ?? [], "alerts.read")}
+          <AlertSurfaces />
+        {/if}
       {/if}
       <main class="flex-1 overflow-x-clip">
         <svelte:boundary>

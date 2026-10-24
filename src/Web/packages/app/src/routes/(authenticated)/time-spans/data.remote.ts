@@ -12,6 +12,7 @@ import {
   type BasalDeliverySpanDto,
 } from "$lib/api";
 import { profileActivationLabel } from "$lib/utils/profile-activation-label";
+import { readable } from "$lib/server/patient-timezone";
 
 /**
  * Input schema for time spans data queries - supports date range
@@ -202,14 +203,19 @@ export const getTimeSpansData = query(
     const rangeTo = endOfRange.toISOString();
 
     try {
-      // Fetch all state span categories in parallel
+      // Each category has its own read scope, so a lane the caller may not
+      // read is left empty rather than emptying the others.
       const [pumpModeRes, profileRes, tempBasalRes, overrideRes, activityRes] =
         await Promise.all([
-          apiClient.stateSpans.getPumpModes(rangeFrom, rangeTo),
-          apiClient.profileActivations.getActivations(rangeFrom, rangeTo),
-          apiClient.chartData.getBasalDeliverySpans(startTime, endTime),
-          apiClient.stateSpans.getOverrides(rangeFrom, rangeTo),
-          apiClient.stateSpans.getActivities(rangeFrom, rangeTo),
+          readable(() => apiClient.stateSpans.getPumpModes(rangeFrom, rangeTo)),
+          readable(() =>
+            apiClient.profileActivations.getActivations(rangeFrom, rangeTo)
+          ),
+          readable(() =>
+            apiClient.chartData.getBasalDeliverySpans(startTime, endTime)
+          ),
+          readable(() => apiClient.stateSpans.getOverrides(rangeFrom, rangeTo)),
+          readable(() => apiClient.stateSpans.getActivities(rangeFrom, rangeTo)),
         ]);
 
       const pumpModeSpans = pumpModeRes?.data ?? [];

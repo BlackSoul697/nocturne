@@ -26,10 +26,7 @@
     setShareLinkFullHistory,
     setShareLinkScopes,
   } from "$api/generated/shareLinks.generated.remote";
-  import {
-    publicDataCategories,
-    formatList,
-  } from "./public-data-categories";
+  import { categoriesIn, formatList } from "./data-categories";
   import { retainQuery } from "$lib/api/retain-query.svelte";
   import { describeSubmitError } from "$lib/forms/submit-error";
 
@@ -73,11 +70,13 @@
   /** Whether there is a link to show or copy at all, as opposed to only to regenerate. */
   const recoverable = $derived(canReveal || revealedUrl != null);
 
+  const shareable = $derived(categoriesIn(share?.shareableScopes));
+
   const sharedLabels = $derived(
-    publicDataCategories.filter((c) => scopes.includes(c.scope)).map((c) => c.name.toLowerCase()),
+    shareable.filter((c) => scopes.includes(c.scope)).map((c) => c.name.toLowerCase()),
   );
   const hiddenLabels = $derived(
-    publicDataCategories.filter((c) => !scopes.includes(c.scope)).map((c) => c.name.toLowerCase()),
+    shareable.filter((c) => !scopes.includes(c.scope)).map((c) => c.name.toLowerCase()),
   );
   const windowPhrase = $derived(fullHistory ? "your entire history" : "the last 24 hours");
 
@@ -342,11 +341,11 @@
           <div class="flex items-center justify-between gap-2">
             <h3 class="text-sm font-semibold">What anonymous viewers can see</h3>
             <span class="text-xs text-muted-foreground">
-              {scopes.length} of {publicDataCategories.length} shared
+              {scopes.length} of {shareable.length} shared
             </span>
           </div>
           <div class="grid gap-2 @md:grid-cols-2">
-            {#each publicDataCategories as cat (cat.scope)}
+            {#each shareable as cat (cat.scope)}
               {@const on = scopes.includes(cat.scope)}
               {@const ScopeIcon = cat.icon}
               <label

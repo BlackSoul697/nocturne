@@ -6,6 +6,7 @@
 import { getRequestEvent, query } from "$app/server";
 import { fetchAllGlucose } from "./glucose-pagination";
 import { DateRangeSchema, resolveReportRange } from "./report-range";
+import { readable } from "$lib/server/patient-timezone";
 
 export type { DateRangeInput } from "./report-range";
 
@@ -30,7 +31,9 @@ export const getIdpData = query(DateRangeSchema.optional(), async (input) => {
   const [insulinDeliveryStats, profileSummary, rangeAnalytics, aidSystemMetrics] =
     await Promise.all([
       apiClient.statistics.getInsulinDeliveryStatistics(startDate, endDate),
-      apiClient.profile.getProfileSummary(startDate, endDate),
+      // Therapy settings need therapy.read; without it the report renders
+      // with no basal schedule rather than not at all.
+      readable(() => apiClient.profile.getProfileSummary(startDate, endDate)),
       apiClient.statistics.getRangeAnalytics(startDate, endDate),
       apiClient.statistics.getAidSystemMetrics(startDate, endDate),
     ]);

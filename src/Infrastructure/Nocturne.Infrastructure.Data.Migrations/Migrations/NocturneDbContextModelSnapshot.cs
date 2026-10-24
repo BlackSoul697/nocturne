@@ -293,6 +293,51 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("alert_excursion_mutes");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.AlertExcursionReceiptEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("actor_kind");
+
+                    b.Property<string>("ActorLabel")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("actor_label");
+
+                    b.Property<Guid>("AlertExcursionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_excursion_id");
+
+                    b.Property<DateTime>("SeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("seen_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertExcursionId");
+
+                    b.HasIndex("TenantId", "AlertExcursionId", "ActorKind", "ActorId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_alert_excursion_receipts_tenant_excursion_actor");
+
+                    b.ToTable("alert_excursion_receipts");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.AlertInstanceEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9275,6 +9320,23 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Navigation("AlertExcursion");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.AlertExcursionReceiptEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.AlertExcursionEntity", "AlertExcursion")
+                        .WithMany()
+                        .HasForeignKey("AlertExcursionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AlertExcursion");
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.AlertInstanceEntity", b =>

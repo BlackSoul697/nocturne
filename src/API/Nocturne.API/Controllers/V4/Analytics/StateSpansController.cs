@@ -59,10 +59,17 @@ public class StateSpansController : ControllerBase
     /// Query all state spans with optional filtering
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Narrowed to the categories the caller may read (<see cref="StateSpanReadScopeGuard"/>):
+    /// asking for one it may not read is refused, and leaving the category out reads every one it
+    /// may. <see cref="GetStateSpan"/> answers 404 for a span of a category the caller may not read.
+    /// </para>
+    /// <para>
     /// Never cached, per <see cref="Profiles.ProfileController.GetProfileSummary"/>: a temporary
     /// target, override, or data-exclusion window the caller just set must not be invisible until a
     /// cached list body expires — and an exclusion window decides whether readings count towards
     /// analytics, so a stale one silently changes reported statistics.
+    /// </para>
     /// </remarks>
     [HttpGet]
     [RemoteQuery]
@@ -87,11 +94,19 @@ public class StateSpansController : ControllerBase
         limit = V4ReadLimits.ClampLimit(limit);
         offset = V4ReadLimits.ClampOffset(offset);
 
+        var granted = HttpContext.GetGrantedScopes();
+        if (category is { } requested && !StateSpanReadScopeGuard.CanRead(granted, requested))
+            return this.ForbiddenForScope(StateSpanReadScopeGuard.RequiredReadScope(requested));
+
+        IReadOnlyCollection<StateSpanCategory> categories = category is { } only
+            ? [only]
+            : StateSpanReadScopeGuard.ReadableCategories(granted);
+
         var descending = sort == "timestamp_desc";
-        var data = await _stateSpanService.GetStateSpansAsync(
-            category, state, from, to, source, active, limit, offset, descending, cancellationToken);
-        var total = await _stateSpanService.CountStateSpansAsync(
-            category, state, from, to, source, active, cancellationToken);
+        var data = await _stateSpanService.GetStateSpansInCategoriesAsync(
+            categories, state, from, to, source, active, limit, offset, descending, cancellationToken);
+        var total = await _stateSpanService.CountStateSpansInCategoriesAsync(
+            categories, state, from, to, source, active, cancellationToken);
         return Ok(new PaginatedResponse<StateSpan> { Data = data, Pagination = new PaginationInfo(limit, offset, total) });
     }
 
@@ -99,6 +114,7 @@ public class StateSpansController : ControllerBase
     /// Get pump mode state spans
     /// </summary>
     [HttpGet("pump-modes")]
+    [RequireScope(Scope.DevicesRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -116,6 +132,7 @@ public class StateSpansController : ControllerBase
     /// Get connectivity state spans
     /// </summary>
     [HttpGet("connectivity")]
+    [RequireScope(Scope.DevicesRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -133,6 +150,7 @@ public class StateSpansController : ControllerBase
     /// Get override state spans
     /// </summary>
     [HttpGet("overrides")]
+    [RequireScope(Scope.TreatmentsRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -150,6 +168,7 @@ public class StateSpansController : ControllerBase
     /// Get temporary target state spans (AAPS temporary glucose targets)
     /// </summary>
     [HttpGet("temporary-targets")]
+    [RequireScope(Scope.TreatmentsRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -167,6 +186,7 @@ public class StateSpansController : ControllerBase
     /// Get exercise state spans (user-annotated activity periods)
     /// </summary>
     [HttpGet("exercise")]
+    [RequireScope(Scope.TreatmentsRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -184,6 +204,7 @@ public class StateSpansController : ControllerBase
     /// Get illness state spans (user-annotated illness periods)
     /// </summary>
     [HttpGet("illness")]
+    [RequireScope(Scope.TreatmentsRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -201,6 +222,7 @@ public class StateSpansController : ControllerBase
     /// Get travel state spans (user-annotated travel/timezone change periods)
     /// </summary>
     [HttpGet("travel")]
+    [RequireScope(Scope.TreatmentsRead)]
     [RemoteQuery]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -247,6 +269,7 @@ public class StateSpansController : ControllerBase
     /// category is fetched only as deep as the requested page reaches.
     /// </remarks>
     [HttpGet("activities")]
+    [RequireScope(Scope.TreatmentsRead)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -298,7 +321,7 @@ public class StateSpansController : ControllerBase
     public async Task<ActionResult<StateSpan>> GetStateSpan(string id, CancellationToken cancellationToken = default)
     {
         var span = await _stateSpanService.GetStateSpanByIdAsync(id, cancellationToken);
-        if (span == null)
+        if (span == null || !StateSpanReadScopeGuard.CanRead(HttpContext.GetGrantedScopes(), span.Category))
             return NotFound();
         return Ok(span);
     }
