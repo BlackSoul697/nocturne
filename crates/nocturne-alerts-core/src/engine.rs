@@ -67,7 +67,7 @@ pub fn parse_auto_resolve(params: Option<&Value>) -> Option<Node> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct WireRule {
     pub id: Uuid,
-    /// A kind's wire name, ignoring ASCII case.
+    /// Exactly a kind's wire name.
     pub condition_type: String,
     #[serde(default)]
     pub condition_params: Value,
@@ -90,7 +90,7 @@ impl TryFrom<WireRule> for Rule {
     type Error = String;
 
     fn try_from(w: WireRule) -> Result<Self, String> {
-        let condition_type = ConditionKind::from_name(&w.condition_type).ok_or_else(|| {
+        let condition_type = ConditionKind::from_wire(&w.condition_type).ok_or_else(|| {
             format!(
                 "unknown condition_type '{}'",
                 w.condition_type.escape_default()

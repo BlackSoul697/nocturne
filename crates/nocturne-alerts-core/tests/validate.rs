@@ -130,17 +130,39 @@ fn threshold_and_rate_of_change_without_a_direction_cannot_be_evaluated() {
 }
 
 #[test]
-fn a_multi_word_kind_spelled_by_its_member_name_drops_its_payload() {
-    // "RateOfChange" resolves the kind but not the payload key, so the
-    // evaluator sees the default payload, whose direction is missing.
-    let tree = composite(
-        "and",
-        json!([{ "type": "RateOfChange", "rate_of_change": { "direction": "falling", "rate": 3 } }]),
-    );
-    assert_eq!(
-        parse_error(&tree),
-        issue("composite[0].RateOfChange", Reason::DirectionMissing)
-    );
+fn a_type_that_is_not_exactly_a_wire_name_cannot_be_evaluated() {
+    for (tree, path) in [
+        (json!({ "type": "warp_drive" }), "warp_drive"),
+        (
+            json!({ "type": "RateOfChange", "rate_of_change": { "direction": "falling", "rate": 3 } }),
+            "RateOfChange",
+        ),
+        (
+            json!({ "type": "THRESHOLD", "threshold": { "direction": "below", "value": 70 } }),
+            "THRESHOLD",
+        ),
+        (
+            json!({ "type": "0", "threshold": { "direction": "below", "value": 70 } }),
+            "0",
+        ),
+        (
+            json!({ "type": "not", "not": { "child": { "type": "warp_drive" } } }),
+            "not[0].warp_drive",
+        ),
+        (
+            composite(
+                "and",
+                json!([{ "type": "PumpState", "pump_state": { "mode": "Suspended", "is_active": true } }]),
+            ),
+            "composite[0].PumpState",
+        ),
+    ] {
+        assert_eq!(
+            parse_error(&tree),
+            issue(path, Reason::UnknownKind),
+            "{tree}"
+        );
+    }
 }
 
 #[test]
@@ -169,15 +191,12 @@ fn a_fault_the_evaluation_order_would_never_reach_still_rejects_the_tree() {
 #[test]
 fn problems_that_only_evaluate_false_or_true_still_parse() {
     for tree in [
-        json!({ "type": "warp_drive" }),
-        json!({ "type": "not", "not": { "child": { "type": "warp_drive" } } }),
         json!({ "type": "not", "not": {} }),
         json!({ "type": "sustained", "sustained": { "minutes": 0, "child": low() } }),
         composite("xor", json!([low()])),
         composite("and", json!([])),
         json!({ "type": "threshold", "threshold": { "direction": "sideways", "value": 70 } }),
         json!({ "type": "iob", "iob": { "operator": "=>", "value": 1 } }),
-        json!({ "type": "PumpState", "pump_state": { "mode": "Suspended", "is_active": true } }),
     ] {
         assert!(Node::parse(&tree).is_ok(), "{tree}");
     }
@@ -270,13 +289,14 @@ fn saving_reports_every_problem_in_the_tree() {
         { "type": "not", "not": {} },
         { "type": "sustained", "sustained": { "minutes": 0 } },
         null,
-        { "type": "rate_of_change" }
+        { "type": "rate_of_change" },
+        { "type": "RateOfChange", "rate_of_change": { "direction": "falling" } }
     ]});
     assert_eq!(
         validate_rule("composite", &params),
         vec![
             issue("composite[0].warp_drive", Reason::UnknownKind),
-            issue("composite[1].Threshold", Reason::NonCanonicalType),
+            issue("composite[1].Threshold", Reason::UnknownKind),
             issue("composite[2].threshold", Reason::UnknownDirection),
             issue("composite[3].iob", Reason::UnknownOperator),
             issue(
@@ -295,6 +315,7 @@ fn saving_reports_every_problem_in_the_tree() {
             issue("composite[10].", Reason::ConditionMissing),
             issue("composite[11].rate_of_change", Reason::FieldMissing("rate")),
             issue("composite[11].rate_of_change", Reason::DirectionMissing),
+            issue("composite[12].RateOfChange", Reason::UnknownKind),
         ]
     );
 }
@@ -303,7 +324,7 @@ fn saving_reports_every_problem_in_the_tree() {
 fn saving_rejects_a_root_that_is_not_the_wire_name_or_has_no_payload() {
     assert_eq!(
         validate_rule("Threshold", &json!({ "direction": "below", "value": 70 })),
-        vec![issue("Threshold", Reason::NonCanonicalType)]
+        vec![issue("Threshold", Reason::UnknownKind)]
     );
     assert_eq!(
         validate_rule("warp_drive", &json!({})),

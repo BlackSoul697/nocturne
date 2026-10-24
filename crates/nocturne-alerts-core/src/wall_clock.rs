@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn a_root_that_is_not_a_wire_name_is_not_selected() {
-        assert!(body_references_wall_clock(
+        assert!(!body_references_wall_clock(
             "SIGNAL_LOSS",
             &json!({"timeout_minutes": 15})
         ));
@@ -145,7 +145,7 @@ mod tests {
                 { "type": "not", "not": { "child": {
                     "type": "sustained",
                     "sustained": { "minutes": 10, "child": {
-                        "type": "SignalLoss", "signal_loss": { "timeout_minutes": 15 }
+                        "type": "signal_loss", "signal_loss": { "timeout_minutes": 15 }
                     } }
                 } } }
             ]
