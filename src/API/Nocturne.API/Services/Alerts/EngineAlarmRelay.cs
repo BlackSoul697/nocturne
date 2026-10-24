@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Extensions;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Contracts.Glucose;
