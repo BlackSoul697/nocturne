@@ -21,10 +21,7 @@
   import ClusterTable from "$lib/components/reports/sensor-integrity/ClusterTable.svelte";
   import HypoMarker from "$lib/components/reports/sensor-integrity/HypoMarker.svelte";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
-  import { setReportPrintMeta } from "$lib/components/reports/print/report-print.svelte";
   import type { GlucoseCluster } from "$lib/api";
-
-  setReportPrintMeta(() => ({ title: "Signal Integrity" }));
 
   const params = requireDateParamsContext(14);
 
@@ -60,10 +57,6 @@
     if (match) selectedDateMs = match.dateMs;
   }
 </script>
-
-<svelte:head>
-  <title>Signal Integrity - Nocturne Reports</title>
-</svelte:head>
 
 {#if resource.current}
   <div class="@container space-y-6">

@@ -383,11 +383,13 @@ public interface IStatisticsService
     /// Carb intakes, when given, fill each day's <see cref="DailyBasalBolusRatioData.Carbs"/>. A day with carbs and no
     /// insulin gets a row but is not counted in <see cref="DailyBasalBolusRatioResponse.DaysWithData"/>.
     /// </summary>
+    /// <param name="startDate">Start of the window; a temp basal that began before it counts from here.</param>
     /// <param name="untilMills">As for <see cref="CalculateInsulinDeliveryStatistics"/>.</param>
     DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        DateTime startDate,
         long untilMills,
         TimeZoneInfo userTimeZone,
         IEnumerable<BasalInjection>? basalInjections = null,

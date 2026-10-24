@@ -683,9 +683,8 @@ msgstr "Glucosa"
 msgid "Actogram with keyboard navigation"
 msgstr "Actograma con navegación mediante teclado"
 
-#: src/lib/components/actogram/Actogram.svelte
-msgid "Previous week"
-msgstr "Semana anterior"
+#~ msgid "Previous week"
+#~ msgstr "Semana anterior"
 
 #. 0: String(h).padStart(2, '0')
 #. 0: hour % 24 === 0 && hour < 48 ? '0' \\: hour % 24
@@ -700,9 +699,8 @@ msgstr "Semana anterior"
 msgid "{0}h"
 msgstr "{0} h"
 
-#: src/lib/components/actogram/Actogram.svelte
-msgid "Next week"
-msgstr "Semana siguiente"
+#~ msgid "Next week"
+#~ msgstr "Semana siguiente"
 
 #: src/lib/components/admin/IdentityProvidersTabContent.svelte
 #: src/lib/components/admin/OidcProvidersTabContent.svelte
@@ -17491,10 +17489,8 @@ msgstr "Glucosa ({0})"
 msgid "{0}/U <0/>"
 msgstr "{0}/U <0/>"
 
-#. 0: bgRange(70, 180)
-#: src/lib/components/reports/SiteChangeImpactChart.svelte
-msgid "Target range ({0})"
-msgstr "Rango objetivo ({0})"
+#~ msgid "Target range ({0})"
+#~ msgstr "Rango objetivo ({0})"
 
 #~ msgid "↑ {0}% higher"
 #~ msgstr ""
@@ -18026,10 +18022,8 @@ msgstr "<0>Dosis diaria total (TDD):</0> Normalmente oscila entre 0,4 y 1,0 unid
 #~ msgid "Based on Time in Range, Glucose Variability, and Hypoglycemia Avoidance"
 #~ msgstr ""
 
-#. 0: bgRange(70, 180)
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Percentage of time in your target zone ({0})"
-msgstr "Porcentaje de tiempo en tu zona objetivo ({0})"
+#~ msgid "Percentage of time in your target zone ({0})"
+#~ msgstr "Porcentaje de tiempo en tu zona objetivo ({0})"
 
 #~ msgid "Calculated using the Nathan formula: eA1C = (GMI + 2.59) / 1.59. Based on mean glucose of {0} {1} over {2} days."
 #~ msgstr ""
@@ -18037,7 +18031,7 @@ msgstr "Porcentaje de tiempo en tu zona objetivo ({0})"
 #~ msgid "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
 #~ msgstr "Objetivo: ≤33%. Un valor menor significa una glucosa más estable, con menos subidas y bajadas."
 
-#. 0: bg(70); 1: bgLabel()
+#. 0: bgOr(edges?.low); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Time spent below {0} {1} (target: <4%)"
 msgstr "Tiempo pasado por debajo de {0} {1} (objetivo: <4%)"
@@ -18045,7 +18039,7 @@ msgstr "Tiempo pasado por debajo de {0} {1} (objetivo: <4%)"
 #~ msgid "<0>Action needed:</0> You're experiencing more lows than recommended. Discuss with your care team about adjusting your treatment."
 #~ msgstr ""
 
-#. 0: bg(180); 1: bgLabel()
+#. 0: bgOr(edges?.high); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Time spent above {0} {1} (target: <25%)"
 msgstr "Tiempo pasado por encima de {0} {1} (objetivo: <25%)"
@@ -21456,9 +21450,8 @@ msgstr "<0/> Cargando el intervalo seleccionado"
 msgid "{0}% in tight range"
 msgstr "{0}% en rango estrecho"
 
-#: src/lib/components/reports/TIRStackedChart.svelte
-msgid "Target Range:"
-msgstr "Rango objetivo:"
+#~ msgid "Target Range:"
+#~ msgstr "Rango objetivo:"
 
 #~ msgid "Couldn't publish the API reference. Please try again."
 #~ msgstr "No se pudo publicar la referencia de la API. Inténtalo de nuevo."
@@ -21587,7 +21580,7 @@ msgstr "Tiempo en rango objetivo"
 msgid "Coefficient of variation (CV)"
 msgstr "Coeficiente de variación (CV)"
 
-#. 0: bg(70); 1: bgLabel()
+#. 0: bg(edges.low); 1: bgLabel()
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 msgid "Time below {0} {1}"
 msgstr "Tiempo por debajo de {0} {1}"
@@ -21671,7 +21664,7 @@ msgstr "No hay datos para esta ventana"
 #~ msgid "Target for time below {0} {1} is under 4%. Discuss any patterns with your care team."
 #~ msgstr ""
 
-#. 0: bg(180); 1: bgLabel()
+#. 0: bgOr(edges?.high); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Target for time above {0} {1} is under 25%. The AGP report shows the times of day when highs occur most."
 msgstr "El objetivo de tiempo por encima de {0} {1} es inferior al 25%. El informe AGP muestra en qué momentos del día se producen las subidas."
@@ -23464,20 +23457,18 @@ msgstr "Imprimir"
 msgid "Glucose target range {0}"
 msgstr "Rango objetivo de glucosa {0}"
 
-#. 0: bg(thresholds.low)
+#. 0: bg(targetRange.low)
 #: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
 msgid "Low {0}"
 msgstr "Bajo {0}"
 
-#. 0: bg(thresholds.high)
+#. 0: bg(targetRange.high)
 #: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
 msgid "High {0}"
 msgstr "Alto {0}"
 
-#. 0: bgRange(thresholds.low, thresholds.high)
-#: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
-msgid "Target range {0}"
-msgstr "Rango objetivo {0}"
+#~ msgid "Target range {0}"
+#~ msgstr "Rango objetivo {0}"
 
 #. 0: zone.label; 1: zone.range
 #. 0: currentZone.label; 1: currentZone.range
@@ -23513,10 +23504,8 @@ msgstr "<0/> Cambió durante este periodo"
 msgid "Filtered by {0}"
 msgstr "Filtrado por {0}"
 
-#. 0: bgRange(70, 180)
-#: src/routes/(authenticated)/reports/agp/+page.svelte
-msgid "<0>The shaded band</0> ({0}) is the consensus target range. The consensus target is at least 70% of time in this zone."
-msgstr "<0>La banda sombreada</0> ({0}) es el rango objetivo de consenso. El objetivo de consenso es pasar al menos el 70% del tiempo en esta zona."
+#~ msgid "<0>The shaded band</0> ({0}) is the consensus target range. The consensus target is at least 70% of time in this zone."
+#~ msgstr "<0>La banda sombreada</0> ({0}) es el rango objetivo de consenso. El objetivo de consenso es pasar al menos el 70% del tiempo en esta zona."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
@@ -23910,6 +23899,7 @@ msgid "Coefficient of variation"
 msgstr "Coeficiente de variación"
 
 #: src/routes/(authenticated)/reports/+page.svelte
+#: src/routes/(authenticated)/reports/agp/+page.svelte
 msgid "Time below range"
 msgstr "Tiempo por debajo del rango"
 
@@ -24209,7 +24199,7 @@ msgstr "<0/> basales temporales al día de media."
 msgid "<0/> zero or suspend temp basals were recorded."
 msgstr "<0/> basales temporales a cero o suspendidas registradas."
 
-#. 0: bg(70); 1: bgLabel()
+#. 0: bgOr(edges?.low); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Target for time below {0} {1} is under 4%."
 msgstr "El objetivo de tiempo por debajo de {0} {1} es inferior al 4%."
@@ -31541,4 +31531,35 @@ msgstr ""
 
 #: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
 msgid "Cannot complete this link"
+msgstr ""
+
+#: src/lib/components/actogram/Actogram.svelte
+msgid "Newer week"
+msgstr ""
+
+#: src/lib/components/actogram/Actogram.svelte
+msgid "Older week"
+msgstr ""
+
+#. 0: bgRange(targetRange.low, targetRange.high)
+#: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
+msgid "Consensus target range {0}"
+msgstr ""
+
+#. 0: bgRange(targetRange.low, targetRange.high)
+#: src/lib/components/reports/SiteChangeImpactChart.svelte
+msgid "Consensus target range ({0})"
+msgstr ""
+
+#: src/lib/components/reports/TIRStackedChart.svelte
+msgid "Consensus target range:"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/agp/+page.svelte
+msgid "<0>The shaded band</0> <1/> is the consensus target range. The consensus target is at least 70% of time in this range."
+msgstr ""
+
+#. 0: bgRangeOr(edges?.targetBottom, edges?.targetTop)
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Percentage of time in the consensus target range ({0})"
 msgstr ""
