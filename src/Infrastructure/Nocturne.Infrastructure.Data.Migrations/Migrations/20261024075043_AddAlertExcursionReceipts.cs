@@ -20,7 +20,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     alert_excursion_id = table.Column<Guid>(type: "uuid", nullable: false),
                     actor_kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     actor_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    actor_label = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    actor_label = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     seen_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>

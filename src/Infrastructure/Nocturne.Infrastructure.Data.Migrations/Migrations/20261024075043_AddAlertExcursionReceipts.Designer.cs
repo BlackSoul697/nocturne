@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    [Migration("20261024065153_AddAlertExcursionReceipts")]
+    [Migration("20261024075043_AddAlertExcursionReceipts")]
     partial class AddAlertExcursionReceipts
     {
         /// <inheritdoc />
@@ -314,8 +314,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("actor_kind");
 
                     b.Property<string>("ActorLabel")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("actor_label");
 
                     b.Property<Guid>("AlertExcursionId")

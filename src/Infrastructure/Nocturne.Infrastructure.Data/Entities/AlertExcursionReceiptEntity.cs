@@ -41,7 +41,7 @@ public class AlertExcursionReceiptEntity : ITenantScoped
     /// member, named from their subject when read, and for the public link.
     /// </summary>
     [Column("actor_label")]
-    [MaxLength(200)]
+    [MaxLength(255)]
     public string? ActorLabel { get; set; }
 
     [Column("seen_at")]

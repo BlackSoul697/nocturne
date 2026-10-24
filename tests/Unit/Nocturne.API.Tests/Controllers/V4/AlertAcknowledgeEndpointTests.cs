@@ -7,7 +7,6 @@ using Moq;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
-using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Alerts;
@@ -57,7 +56,7 @@ public class AlertAcknowledgeEndpointTests
     }
 
     private AlertReceiptService Receipts =>
-        new(_contextFactoryMock.Object, Mock.Of<ISignalRBroadcastService>());
+        new(_contextFactoryMock.Object);
 
     private AlertsController CreateController()
     {

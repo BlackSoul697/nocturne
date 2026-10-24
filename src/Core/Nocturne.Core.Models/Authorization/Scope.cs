@@ -242,6 +242,16 @@ public static class Scope
         };
 
     /// <summary>
+    /// Whether a share link carries <paramref name="scope"/> given the Public membership's direct
+    /// permissions. <see cref="AlertsRead"/> counts only when granted directly, by the sharing toggle:
+    /// a Public membership that reaches it through a role or a broad grant (<c>*</c>, a legacy
+    /// read-everything permission) was set up before alerts could be shared, and must not start
+    /// showing them without its owner choosing to.
+    /// </summary>
+    public static bool SharesWithPublic(string scope, IEnumerable<string>? directPermissions) =>
+        scope != AlertsRead || directPermissions?.Contains(AlertsRead, StringComparer.Ordinal) == true;
+
+    /// <summary>
     /// Scopes granted to the Public subject when a share link is first enabled. Defaults to glucose
     /// only; the owner opts into additional categories from <see cref="PublicShareScopes"/>.
     /// </summary>

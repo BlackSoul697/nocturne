@@ -81,7 +81,12 @@ export class PublicClockStore implements ClockGlucoseSource {
 
   /** Record that someone at the clock saw an alarm, then show the face's answer. */
   async markSeen(excursionId: string): Promise<void> {
-    await clockFaceAlertsClient().markClockAlertSeen(this.clockId, excursionId);
+    try {
+      await clockFaceAlertsClient().markClockAlertSeen(this.clockId, excursionId);
+    } catch (err) {
+      // The alarm closed or the press was throttled; the poll below shows which.
+      console.error("Failed to record a clock alert as seen:", err);
+    }
     await this.pollAlerts();
   }
 

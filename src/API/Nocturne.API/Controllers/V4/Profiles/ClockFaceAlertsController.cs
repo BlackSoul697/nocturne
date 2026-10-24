@@ -5,9 +5,11 @@ using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Platform;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Controllers.V4.Profiles;
@@ -19,7 +21,8 @@ namespace Nocturne.API.Controllers.V4.Profiles;
 /// <remarks>
 /// The clock id is the capability, as for <see cref="ClockFacesController.GetGlucose"/>: a caller
 /// holding a valid id for the host's tenant gets what the face is set to show, read under tenant
-/// RLS as a reader who is not a share.
+/// RLS as a reader who is not a share. The face serves alerts only while its owner may still read
+/// them, so a member whose alert access is taken away cannot keep it through a face made earlier.
 /// </remarks>
 [ApiController]
 [Tags("Profiles")]
@@ -29,7 +32,9 @@ namespace Nocturne.API.Controllers.V4.Profiles;
 public class ClockFaceAlertsController(
     IClockFaceService clockFaces,
     INocturneDbContextFactory contexts,
-    AlertReceiptService receipts) : ControllerBase
+    AlertReceiptService receipts,
+    ITenantMemberService members,
+    ITenantAccessor tenant) : ControllerBase
 {
     /// <summary>The alarms firing now, or none when the face does not show alerts.</summary>
     [HttpGet]
@@ -43,7 +48,7 @@ public class ClockFaceAlertsController(
         if (face is null)
             return NotFound();
 
-        if (!face.Config.Settings.ShowAlerts)
+        if (!face.Config.Settings.ShowAlerts || !await OwnerReadsAlertsAsync(face, ct))
             return Ok(Array.Empty<ClockAlertDto>());
 
         await using var db = await contexts.CreateAsync(ct);
@@ -87,10 +92,22 @@ public class ClockFaceAlertsController(
     {
         var ct = HttpContext.RequestAborted;
         var face = await clockFaces.GetByIdAsync(id, ct);
-        if (face is null || !face.Config.Settings.ShowAlerts || !face.Config.Settings.AllowAcknowledge)
+        if (face is null || !face.Config.Settings.ShowAlerts || !face.Config.Settings.AllowAcknowledge
+            || !await OwnerReadsAlertsAsync(face, ct))
             return NotFound();
 
         return await receipts.RecordAsync(excursionId, Actor(face), ct) ? NoContent() : NotFound();
+    }
+
+    private async Task<bool> OwnerReadsAlertsAsync(ClockFace face, CancellationToken ct)
+    {
+        if (!Guid.TryParse(face.UserId, out var owner)
+            || await members.GetMemberAccessAsync(owner, tenant.TenantId, ct) is not { } access)
+            return false;
+
+        var scopes = MemberScopeResolver.Resolve(
+            access.EffectivePermissions, AuthType.SessionCookie, new HashSet<string>());
+        return Scope.Satisfies(scopes, Scope.AlertsRead);
     }
 
     private static AlertReceiptActor Actor(ClockFace face) =>

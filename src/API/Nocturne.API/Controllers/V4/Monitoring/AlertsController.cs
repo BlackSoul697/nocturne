@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -31,10 +32,11 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 /// </para>
 /// <para>
 /// The one alert controller without a class <c>[Authorize]</c>: a public share link is an
-/// unauthenticated principal that may hold <c>alerts.read</c> to show the alarm that is firing, and
-/// <c>[Authorize]</c> would answer it 401. Every action carries its own <c>[RequireScope]</c>, which
-/// admits an unauthenticated caller only to a read. The other alert controllers keep
-/// <c>[Authorize]</c> and <see cref="DenyNoAccountViewerAttribute"/>: they serve configuration.
+/// unauthenticated principal that may hold <c>alerts.read</c> to show the alarm that is firing and
+/// record that it saw it, and <c>[Authorize]</c> would answer it 401. The actions a share never
+/// reaches carry <c>[Authorize]</c> themselves, so they keep the authenticated default policy rather
+/// than the permission-trie fallback. The other alert controllers keep <c>[Authorize]</c> and
+/// <see cref="DenyNoAccountViewerAttribute"/>: they serve configuration.
 /// </para>
 /// </remarks>
 /// <seealso cref="IAlertAcknowledgementService"/>
@@ -279,6 +281,7 @@ public class AlertsController : ControllerBase
 
     /// <inheritdoc cref="IAlertAcknowledgementService.AcknowledgeAllAsync"/>
     [HttpPost("acknowledge")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite)]
     [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -310,6 +313,7 @@ public class AlertsController : ControllerBase
     /// <see cref="Scope.AllowedGuestScopes"/>.
     /// </remarks>
     [HttpPost("excursions/{excursionId:guid}/acknowledge")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite, Scope.DeviceNotify)]
     [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
     [ProducesResponseType(typeof(AcknowledgeExcursionResponse), StatusCodes.Status200OK)]
@@ -361,6 +365,7 @@ public class AlertsController : ControllerBase
     /// </remarks>
     /// <seealso cref="AlertSnooze"/>
     [HttpPost("instances/{instanceId:guid}/snooze")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite, Scope.AlertsAcknowledge)]
     [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -383,6 +388,7 @@ public class AlertsController : ControllerBase
 
     /// <inheritdoc cref="IAlertDeliveryService.MarkDeliveredAsync"/>
     [HttpPost("deliveries/{deliveryId:guid}/delivered")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> MarkDelivered(
@@ -395,6 +401,7 @@ public class AlertsController : ControllerBase
 
     /// <inheritdoc cref="IAlertDeliveryService.MarkFailedAsync"/>
     [HttpPost("deliveries/{deliveryId:guid}/failed")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> MarkFailed(
@@ -409,6 +416,7 @@ public class AlertsController : ControllerBase
     /// Used by bot/adapter services to poll for work.
     /// </summary>
     [HttpGet("deliveries/pending")]
+    [Authorize]
     [RequireScope(Scope.AlertsReadWrite)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<PendingDeliveryResponse>), StatusCodes.Status200OK)]

@@ -13,7 +13,7 @@ vi.mock("$api/generated/alerts.generated.remote", () => ({
 	acknowledgeExcursion: () => ({ updates: () => Promise.resolve() }),
 	markSeen: (id: unknown) => {
 		seenCalls.ids.push(id);
-		return { updates: () => Promise.resolve() };
+		return Promise.resolve();
 	},
 }));
 
@@ -61,12 +61,23 @@ describe("AlertBanner", () => {
 		expect(page.getByRole("button", { name: "Mute for me" }).elements()).toHaveLength(0);
 	});
 
-	it("leaves out an alarm a share or guest link has already seen", async () => {
-		pageState.data = { hasAccount: false, effectivePermissions: ["alerts.read"] };
-		activeAlerts = [{ ...firing, receipts: [{ seenAt: new Date().toISOString() }] }];
+	it("leaves out an alarm a guest link has already seen", async () => {
+		pageState.data = { hasAccount: false, isShareHost: false, effectivePermissions: ["alerts.read"] };
+		activeAlerts = [{ ...firing, id: "guest-seen", receipts: [{ seenAt: new Date().toISOString() }] }];
 
 		render(AlertBanner);
 
+		await expect.element(page.getByText("Low")).not.toBeInTheDocument();
+	});
+
+	it("keeps an alarm up on a public-link screen that another screen marked seen", async () => {
+		pageState.data = { hasAccount: false, isShareHost: true, effectivePermissions: ["alerts.read"] };
+		activeAlerts = [{ ...firing, id: "other-screen", receipts: [{ seenAt: new Date().toISOString() }] }];
+
+		render(AlertBanner);
+
+		await expect.element(page.getByText("Low")).toBeVisible();
+		await page.getByRole("button", { name: "Seen" }).click();
 		await expect.element(page.getByText("Low")).not.toBeInTheDocument();
 	});
 });

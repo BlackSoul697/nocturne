@@ -15,6 +15,7 @@
   import X from "@lucide/svelte/icons/x";
   import { severity } from "./severity";
   import { formatTimeSince } from "./alertTime";
+  import { markSeenOnThisDevice, seenHere } from "./seen-here.svelte";
   import { Now } from "$lib/hooks/now.svelte";
 
   /**
@@ -56,17 +57,18 @@
   const acknowledgesForEveryone = $derived(
     satisfiesScope(page.data.effectivePermissions ?? [], "alerts.readwrite")
   );
-  // A guest or share link may see the alarm but not the rule behind it.
   // A share or guest link records that it saw the alarm instead of
   // acknowledging, muting or snoozing it, none of which its scopes reach.
   const hasAccount = $derived(!!page.data.hasAccount);
+  const viewer = $derived({
+    hasAccount,
+    isShareHost: !!page.data.isShareHost,
+  });
   const canSnooze = $derived(
     satisfiesScope(page.data.effectivePermissions ?? [], "alerts.acknowledge")
   );
-  /** A viewer without an account is served only its own receipt. */
-  const seenHere = (a: ActiveExcursionResponse) =>
-    !hasAccount && !!a.receipts?.length;
 
+  // A guest or share link may see the alarm but not the rule behind it.
   const canOpenRule = $derived(
     !!page.data.hasAccount &&
       satisfiesScope(page.data.effectivePermissions ?? [], "alerts.read")
@@ -84,7 +86,7 @@
         seen.delete(id);
         continue;
       }
-      if (seen.has(id) || a.acknowledgedAt || a.mutedByCaller || seenHere(a)) continue;
+      if (seen.has(id) || a.acknowledgedAt || a.mutedByCaller || seenHere(a, viewer)) continue;
       seen.add(id);
       fresh.push(a);
     }
@@ -97,7 +99,8 @@
     const quietIds = new Set(
       list
         .filter(
-          (a) => a.acknowledgedAt || a.mutedByCaller || a.snoozedUntil || seenHere(a)
+          (a) =>
+            a.acknowledgedAt || a.mutedByCaller || a.snoozedUntil || seenHere(a, viewer)
         )
         .map((a) => a.id)
     );
@@ -158,7 +161,10 @@
   }
 
   function markAsSeen(id: string): Promise<void> {
-    return optimistic(id, () => markSeen(id));
+    return optimistic(id, async () => {
+      await markSeen(id);
+      markSeenOnThisDevice(id);
+    });
   }
 
   // "Mute the rule" used to call toggleRule, which disables the rule outright,

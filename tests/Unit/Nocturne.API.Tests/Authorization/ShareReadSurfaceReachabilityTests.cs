@@ -191,8 +191,11 @@ public class ShareReadSurfaceReachabilityTests
             if (type.GetCustomAttributes(inherit: true).OfType<IAuthorizeData>().Any())
                 offenders.Add($"{type.Name} (class)");
 
+            // A write-gated action is outside the share surface, so it may also require an
+            // authenticated caller (AlertsController's acknowledgement and delivery actions do).
             offenders.AddRange(Actions(type)
-                .Where(a => a.GetCustomAttributes(inherit: true).OfType<IAuthorizeData>().Any())
+                .Where(a => !IsWriteGated(a)
+                            && a.GetCustomAttributes(inherit: true).OfType<IAuthorizeData>().Any())
                 .Select(a => $"{type.Name}.{a.Name}"));
 
             offenders.Should().BeEmpty(
@@ -234,10 +237,8 @@ public class ShareReadSurfaceReachabilityTests
             foreach (var action in Actions(type))
             {
                 var actionAttributes = action.GetCustomAttributes(inherit: true).ToList();
-                var isWriteGated = actionAttributes.OfType<RequireDeclaredWriteScopeAttribute>().Any()
-                    || ScopesOf(actionAttributes).Any(s => !s.EndsWith(".read", StringComparison.Ordinal));
 
-                if (isWriteGated)
+                if (IsWriteGated(action))
                 {
                     if (VerbsOf(action).Overlaps(ReadVerbs) && !MemberOnlyReadActions.ContainsKey(action.Name))
                         violations.Add($"{type.Name}.{action.Name}: a write-gated read verb drops off the share "
@@ -331,6 +332,13 @@ public class ShareReadSurfaceReachabilityTests
         controller.GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Where(m => !m.IsSpecialName && m.GetCustomAttributes(inherit: true)
                 .OfType<IActionHttpMethodProvider>().Any());
+
+    private static bool IsWriteGated(MethodInfo action)
+    {
+        var attributes = action.GetCustomAttributes(inherit: true).ToList();
+        return attributes.OfType<RequireDeclaredWriteScopeAttribute>().Any()
+            || ScopesOf(attributes).Any(s => !s.EndsWith(".read", StringComparison.Ordinal));
+    }
 
     private static HashSet<string> VerbsOf(MethodInfo action) =>
         action.GetCustomAttributes(inherit: true)

@@ -15,6 +15,7 @@
   import { formatTimeSince } from "./alertTime";
   import { severity, severityLabel } from "./severity";
   import { seenBy } from "./receipts";
+  import { markSeenOnThisDevice, seenHere } from "./seen-here.svelte";
 
   // Reactive query: reading `.current` subscribes this component, so an
   // optimistic withOverride from any acknowledge (here or the fresh-fire
@@ -32,18 +33,17 @@
   // A share or guest link cannot acknowledge or mute; it records that it saw
   // the alarm, which takes it off this device and changes nothing elsewhere.
   const hasAccount = $derived(!!page.data.hasAccount);
+  const viewer = $derived({
+    hasAccount,
+    isShareHost: !!page.data.isShareHost,
+  });
 
   // Acknowledging or muting is the only way off this surface for a member. The
   // X that used to sit here hid a live, unacknowledged alert for the rest of
   // the session while recording nothing server-side and halting no escalation.
-  // A viewer without an account is served only its own receipt, so any receipt
-  // means it has seen this one.
   const visibleAlerts = $derived(
     (activeAlerts.current ?? []).filter(
-      (a) =>
-        !a.acknowledgedAt &&
-        !a.mutedByCaller &&
-        (hasAccount || !a.receipts?.length)
+      (a) => !a.acknowledgedAt && !a.mutedByCaller && !seenHere(a, viewer)
     )
   );
 
@@ -67,15 +67,12 @@
   async function handleSeen(id: string) {
     acknowledgingId = id;
     try {
-      await markSeen(id).updates(
-        activeAlerts.withOverride((current) =>
-          (current ?? []).map((a) =>
-            a.id !== id
-              ? a
-              : { ...a, receipts: [...(a.receipts ?? []), { seenAt: isoNow() }] }
-          )
-        )
-      );
+      await markSeen(id);
+      markSeenOnThisDevice(id);
+    } catch {
+      // The alarm closed, or the press was throttled: the next poll shows
+      // which, and the banner stays up until it does.
+      await activeAlerts.refresh();
     } finally {
       acknowledgingId = null;
     }

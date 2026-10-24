@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Extensions;
-using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
@@ -46,9 +45,7 @@ public sealed record AlertReceipt(
 /// Records that someone saw an alarm, and reads those records back. A receipt changes nothing about
 /// the alert: it neither acknowledges nor mutes, for the viewer or anyone else.
 /// </summary>
-public sealed class AlertReceiptService(
-    INocturneDbContextFactory contexts,
-    ISignalRBroadcastService broadcast)
+public sealed class AlertReceiptService(INocturneDbContextFactory contexts)
 {
     /// <summary>
     /// Records that <paramref name="actor"/> saw the excursion. Recording it twice keeps the first.
@@ -96,14 +93,6 @@ public sealed class AlertReceiptService(
             // A concurrent press by the same viewer won the insert; the receipt stands either way.
             return true;
         }
-
-        // Reaches members' alert subscriptions only; the payload names no one.
-        await broadcast.BroadcastAlertEventAsync("alert_seen", new
-        {
-            excursionId,
-            actorKind = actor.Kind,
-            seenAt,
-        });
 
         return true;
     }
