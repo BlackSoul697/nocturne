@@ -121,10 +121,6 @@ internal sealed class ActiveProfileSchedulesService : IActiveProfileSchedulesSer
         var versions = (await _versions.GetVersionsAsync(repo, profileSpans[0].ProfileName, ct))
             .Where(v => v.Timestamp.ToMills() < toMs)
             .ToArray();
-        var versionStarts = versions.Select(v => v.Timestamp.ToMills()).Distinct().Order().ToArray();
-
-        TRecord InForceAt(long mills) => versions.FirstOrDefault(v => v.Timestamp.ToMills() <= mills) ?? versions[^1];
-
         string Key(List<TEntry> entries) =>
             string.Join(';', entries.Select(entryKey).OrderBy(k => k.Seconds).Select(k => $"{k.Seconds}={k.Values}"));
 
@@ -139,15 +135,10 @@ internal sealed class ActiveProfileSchedulesService : IActiveProfileSchedulesSer
                 continue;
             }
 
-            if (versions.Length == 0)
-                continue;
-
-            var start = span.StartMills;
-            foreach (var cut in versionStarts.Where(t => t > span.StartMills && t < end).Append(end))
+            foreach (var slice in ProfileVersionCache.Slice(versions, span.StartMills, end, BeforeFirstVersion.Oldest))
             {
-                var stored = storedEntries(InForceAt(start));
-                slices.Add(new Slice<TEntry>(start, cut, stored, Key(stored)));
-                start = cut;
+                var stored = storedEntries(slice.Version);
+                slices.Add(new Slice<TEntry>(slice.StartMills, slice.EndMills, stored, Key(stored)));
             }
         }
 
