@@ -1200,7 +1200,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
-#: src/lib/components/alerts/FiringToast.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/alerts/conditionLabel.svelte.ts
 #: src/lib/components/clock/ClockAlertBand.svelte
 #: src/routes/(authenticated)/alerts/+page.svelte
@@ -1211,6 +1211,7 @@ msgid "Alert"
 msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 msgid "<0/> Acknowledge"
 msgstr ""
 
@@ -2099,8 +2100,12 @@ msgstr ""
 msgid "Minutes ahead"
 msgstr ""
 
+#. 0: minutes
+#. 0: minutes
 #. 0: element.minutesAhead || 30
 #. 0: minutes
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/clock-builder/ElementInspector.svelte
 #: src/lib/components/settings/alarm-profile/AlarmSnoozeTab.svelte
 msgid "{0}m"
@@ -15090,29 +15095,23 @@ msgstr ""
 msgid "<0/> Configure…"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Fresh alerts"
-msgstr ""
+#~ msgid "Fresh alerts"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "5m"
-msgstr ""
+#~ msgid "5m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "15m"
-msgstr ""
+#~ msgid "15m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "30m"
-msgstr ""
+#~ msgid "30m"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "1h"
-msgstr ""
+#~ msgid "1h"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Acknowledge"
-msgstr ""
+#~ msgid "Acknowledge"
+#~ msgstr ""
 
 #~ msgid "Mute the rule"
 #~ msgstr ""
@@ -21154,18 +21153,14 @@ msgstr ""
 msgid "Set this to have Nocturne sign each request with an <0/> header your receiver can verify. Leave blank if your receiver does not check signatures.<1/>"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Open this rule's settings"
-msgstr ""
+#~ msgid "Open this rule's settings"
+#~ msgstr ""
 
-#. 0: a.ruleName ?? 'this rule'
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Open settings for {0}"
-msgstr ""
+#~ msgid "Open settings for {0}"
+#~ msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Close this notification without acknowledging"
-msgstr ""
+#~ msgid "Close this notification without acknowledging"
+#~ msgstr ""
 
 #: src/lib/components/auth/RecoveryCodes.svelte
 msgid "<0/> Codes downloaded"
@@ -24906,10 +24901,10 @@ msgid "Lab result"
 msgstr "Risultato di laboratorio"
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 msgid "<0/> Mute for me"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
 #: src/lib/components/layout/NotificationItem.svelte
 msgid "Mute for me"
 msgstr ""
@@ -30210,13 +30205,13 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
 #: src/lib/components/clock/ClockAlertBand.svelte
 msgid "<0/> Seen"
 msgstr ""
 
-#: src/lib/components/alerts/FiringToast.svelte
-msgid "Seen"
-msgstr ""
+#~ msgid "Seen"
+#~ msgstr ""
 
 #: src/lib/components/clock/ClockAlertBand.svelte
 msgid "<0/> Seen here"
@@ -32180,4 +32175,30 @@ msgstr ""
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Allow through Do not disturb"
+msgstr ""
+
+#: src/lib/components/alerts/AlertBanner.svelte
+msgid "Active alerts"
+msgstr ""
+
+#. 0: minutes
+#. 0: minutes
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Snooze for {0} minutes"
+msgstr ""
+
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Snooze"
+msgstr ""
+
+#. 0: critical.length - 1; 1: critical.length === 2 ? "alert" \\: "alerts"
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "{0} more critical {1}"
+msgstr ""
+
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+msgid "Critical alert"
 msgstr ""
