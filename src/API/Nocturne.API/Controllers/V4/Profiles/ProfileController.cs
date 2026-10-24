@@ -82,6 +82,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Optionally provide a date range to include schedule change detection info.
     /// </summary>
     [HttpGet("summary")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     // Never cached: UseResponseCaching keys only on host + query + Cookie, so a mutation that
     // correctly invalidates its client-side query can still have the refetch answered from a body
@@ -201,6 +202,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// <see cref="Profile"/> shape (store with basal/carbratio/sens/target arrays).
     /// </summary>
     [HttpGet("records")]
+    [RequireScope(Scope.TherapyRead)]
     [ProducesResponseType(typeof(PaginatedResponse<Profile>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedResponse<Profile>>> GetProfileRecords(
         [FromQuery] int limit = 100,
@@ -231,6 +233,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get all therapy settings with optional filtering
     /// </summary>
     [HttpGet("settings")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(PaginatedResponse<TherapySettings>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -278,6 +281,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get therapy settings by profile name
     /// </summary>
     [HttpGet("settings/by-name/{profileName}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(IEnumerable<TherapySettings>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<TherapySettings>>> GetTherapySettingsByName(
@@ -293,6 +297,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get a therapy settings record by ID
     /// </summary>
     [HttpGet("settings/{id:guid}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(TherapySettings), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -411,6 +416,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get basal schedules by profile name
     /// </summary>
     [HttpGet("basal/{profileName}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(IEnumerable<BasalSchedule>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<BasalSchedule>>> GetBasalSchedulesByName(
@@ -426,6 +432,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get a basal schedule by ID
     /// </summary>
     [HttpGet("basal/by-id/{id:guid}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(BasalSchedule), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -529,6 +536,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get carb ratio schedules by profile name
     /// </summary>
     [HttpGet("carb-ratio/{profileName}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(IEnumerable<CarbRatioSchedule>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<CarbRatioSchedule>>> GetCarbRatioSchedulesByName(
@@ -544,6 +552,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get a carb ratio schedule by ID
     /// </summary>
     [HttpGet("carb-ratio/by-id/{id:guid}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(CarbRatioSchedule), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -638,6 +647,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get sensitivity schedules by profile name
     /// </summary>
     [HttpGet("sensitivity/{profileName}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(IEnumerable<SensitivitySchedule>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<SensitivitySchedule>>> GetSensitivitySchedulesByName(
@@ -653,6 +663,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get a sensitivity schedule by ID
     /// </summary>
     [HttpGet("sensitivity/by-id/{id:guid}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(SensitivitySchedule), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -754,6 +765,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get target range schedules by profile name
     /// </summary>
     [HttpGet("target-range/{profileName}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(IEnumerable<TargetRangeSchedule>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<TargetRangeSchedule>>> GetTargetRangeSchedulesByName(
@@ -769,6 +781,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// Get a target range schedule by ID
     /// </summary>
     [HttpGet("target-range/by-id/{id:guid}")]
+    [RequireScope(Scope.TherapyRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(TargetRangeSchedule), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

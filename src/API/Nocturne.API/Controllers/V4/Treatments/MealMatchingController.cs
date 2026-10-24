@@ -60,6 +60,7 @@ public class MealMatchingController : ControllerBase
     /// Get a food entry for review
     /// </summary>
     [HttpGet("food-entries/{id:guid}")]
+    [RequireScope(Scope.FoodRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(ConnectorFoodEntry), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -77,6 +78,7 @@ public class MealMatchingController : ControllerBase
     /// Get suggested meal matches for a date range
     /// </summary>
     [HttpGet("suggestions")]
+    [RequireScope(true, Scope.FoodRead, Scope.TreatmentsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(SuggestedMealMatch[]), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]

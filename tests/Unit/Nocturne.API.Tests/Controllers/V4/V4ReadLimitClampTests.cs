@@ -63,22 +63,26 @@ public class V4ReadLimitClampTests
     public async Task StateSpans_LimitAtCeiling_ReachesServiceUnchanged()
     {
         var service = new Mock<IStateSpanService>();
-        var controller = new StateSpansController(service.Object);
+        var controller = FullAccess(new StateSpansController(service.Object));
 
         await controller.GetStateSpans(limit: Ceiling, offset: 0);
 
-        VerifySpansFetched(service, Ceiling, 0, Times.Once());
+        service.Verify(s => s.GetStateSpansInCategoriesAsync(
+            It.IsAny<IReadOnlyCollection<StateSpanCategory>>(), null, null, null, null, null,
+            Ceiling, 0, true, It.IsAny<CancellationToken>()), Times.Once());
     }
 
     [Fact]
     public async Task StateSpans_LimitAboveCeiling_IsClamped()
     {
         var service = new Mock<IStateSpanService>();
-        var controller = new StateSpansController(service.Object);
+        var controller = FullAccess(new StateSpansController(service.Object));
 
         await controller.GetStateSpans(limit: AboveCeiling, offset: -1);
 
-        VerifySpansFetched(service, Ceiling, 0, Times.Once());
+        service.Verify(s => s.GetStateSpansInCategoriesAsync(
+            It.IsAny<IReadOnlyCollection<StateSpanCategory>>(), null, null, null, null, null,
+            Ceiling, 0, true, It.IsAny<CancellationToken>()), Times.Once());
     }
 
     [Fact]
@@ -187,6 +191,14 @@ public class V4ReadLimitClampTests
         await controller.GetExercise(limit: limit, offset: offset);
         await controller.GetIllness(limit: limit, offset: offset);
         await controller.GetTravel(limit: limit, offset: offset);
+    }
+
+    private static T FullAccess<T>(T controller) where T : ControllerBase
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items["GrantedScopes"] = (IReadOnlySet<string>)new HashSet<string> { "*" };
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+        return controller;
     }
 
     private static void VerifySpansFetched(Mock<IStateSpanService> service, int count, int skip, Times times) =>

@@ -71,6 +71,7 @@ public class AlertsController : ControllerBase
     /// List active (unresolved) excursions for the current tenant.
     /// </summary>
     [HttpGet("active")]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<ActiveExcursionResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<ActiveExcursionResponse>>> GetActiveAlerts(CancellationToken ct)
@@ -138,6 +139,7 @@ public class AlertsController : ControllerBase
     /// <see cref="V4ReadLimits.MaxPageSize"/>; both are clamped rather than rejected.
     /// </remarks>
     [HttpGet("history")]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(AlertHistoryResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<AlertHistoryResponse>> GetAlertHistory(

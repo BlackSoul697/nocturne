@@ -73,10 +73,11 @@ public class UISettingsService : IUISettingsService
                 }
             }
 
-            settings.Notifications.AlarmConfiguration =
+            var notifications = settings.Notifications ??= new NotificationSettings();
+            notifications.AlarmConfiguration =
                 Deserialize(Value(stored, AlarmConfigurationKey), typeof(UserAlarmConfiguration))
                     as UserAlarmConfiguration
-                ?? settings.Notifications.AlarmConfiguration;
+                ?? notifications.AlarmConfiguration;
 
             settings.Features.Widgets = WidgetCatalog.MainSectionsOf(settings.Features.Widgets);
 

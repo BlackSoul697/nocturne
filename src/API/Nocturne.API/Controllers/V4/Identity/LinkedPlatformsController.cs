@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Services.Chat;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.API.Attributes;
+using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.API.Controllers.V4.Identity;
 
@@ -25,6 +27,7 @@ public class LinkedPlatformsController(
     ITenantAccessor tenantAccessor) : ControllerBase
 {
     [HttpGet("linked-platforms")]
+    [RequireScope(Scope.AlertsRead, Scope.TenantSettings)]
     [RemoteQuery]
     [ProducesResponseType(typeof(LinkedPlatformsResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<LinkedPlatformsResponse>> GetLinkedPlatforms(

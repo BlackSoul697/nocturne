@@ -57,6 +57,7 @@ public class TenantAlertSettingsController : ControllerBase
     /// stores and a repeat call stores nothing further.
     /// </remarks>
     [HttpGet]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(TenantAlertSettingsResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<TenantAlertSettingsResponse>> Get(CancellationToken ct)

@@ -97,6 +97,7 @@ public class AlertCustomSoundsController : ControllerBase
     /// List all custom sounds for the current tenant (metadata only, no audio data).
     /// </summary>
     [HttpGet]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<AlertCustomSoundResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<AlertCustomSoundResponse>>> GetSounds(CancellationToken ct)
@@ -123,6 +124,7 @@ public class AlertCustomSoundsController : ControllerBase
     /// Stream the raw audio bytes for a custom sound.
     /// </summary>
     [HttpGet("{id:guid}/stream")]
+    [RequireScope(Scope.AlertsRead)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> StreamSound(Guid id, CancellationToken ct)

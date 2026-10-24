@@ -56,6 +56,7 @@ public class DndWindowsController : ControllerBase
     /// List the tenant's DND windows that are active right now (resolved on read).
     /// </summary>
     [HttpGet("active")]
+    [RequireScope(Scope.AlertsRead)]
     [RemoteQuery]
     [ProducesResponseType(typeof(List<DndWindowResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<DndWindowResponse>>> GetActive(CancellationToken ct)

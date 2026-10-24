@@ -108,8 +108,8 @@ public class ReadEndpointScopeEnforcementTests
         /// <summary>The row is found by a bearer token in the route, so possessing the token is the control.</summary>
         public const string CapabilityToken = "row found by a capability token in the route";
 
-        /// <summary>Tenant rows returned with no read scope: a credential holding any one scope reads all of them. Each needs the scope of its data category.</summary>
-        public const string NotYetScoped = "tenant data with no read scope applied yet";
+        /// <summary>Every caller may ask; the action drops or refuses the parts the caller's scopes do not read.</summary>
+        public const string CallerNarrowedAnswer = "answer narrowed to the caller's read scopes in the action";
 
         /// <summary>The controller carries <c>[Authorize(Roles = "platform_admin")]</c>.</summary>
         public const string PlatformAdminRole = "platform-admin role, not a data scope";
@@ -138,7 +138,7 @@ public class ReadEndpointScopeEnforcementTests
             ["ClockFacesController.List"] = V4Reason.OwnData,
             ["ClockFacesController.GetStarter"] = V4Reason.OwnData,
             ["UserPreferencesController.GetPreferences"] = V4Reason.OwnData,
-            ["TranslationsController.GetDrafts"] = V4Reason.NotYetScoped,
+            ["TranslationsController.GetDrafts"] = V4Reason.OwnData,
             ["ConnectedAppsController.List"] = V4Reason.OwnData,
             ["SessionsController.List"] = V4Reason.OwnData,
             ["GuestLinkController.GetGuestLinks"] = V4Reason.OwnData,
@@ -151,7 +151,6 @@ public class ReadEndpointScopeEnforcementTests
             ["MyTenantsController.GetOverview"] = V4Reason.ActionChecksAccess,
             ["PlatformController.GetTenants"] = V4Reason.OwnData,
             ["FoodsController.GetFavorites"] = V4Reason.OwnData,
-            ["FoodsController.GetRecentFoods"] = V4Reason.NotYetScoped,
             ["NotificationsController.GetNotifications"] = V4Reason.OwnData,
             ["TrackersController.GetPresets"] = V4Reason.OwnData,
 
@@ -191,68 +190,11 @@ public class ReadEndpointScopeEnforcementTests
 
             ["WebhookSettingsController.GetWebhookSettings"] = V4Reason.NotStored,
 
-            ["ProfileController.GetProfileSummary"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetProfileRecords"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetTherapySettings"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetTherapySettingsByName"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetTherapySettingsById"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetBasalSchedulesByName"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetBasalScheduleById"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetCarbRatioSchedulesByName"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetCarbRatioScheduleById"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetSensitivitySchedulesByName"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetSensitivityScheduleById"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetTargetRangeSchedulesByName"] = V4Reason.NotYetScoped,
-            ["ProfileController.GetTargetRangeScheduleById"] = V4Reason.NotYetScoped,
-            ["UISettingsController.GetUISettings"] = V4Reason.NotYetScoped,
-            ["UISettingsController.GetSectionSettings"] = V4Reason.NotYetScoped,
-            ["UISettingsController.GetAlarmConfiguration"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetStateSpans"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetPumpModes"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetConnectivity"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetOverrides"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetTemporaryTargets"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetExercise"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetIllness"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetTravel"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetActivities"] = V4Reason.NotYetScoped,
-            ["StateSpansController.GetStateSpan"] = V4Reason.NotYetScoped,
-            ["FoodsController.GetFoods"] = V4Reason.NotYetScoped,
-            ["FoodsController.GetFood"] = V4Reason.NotYetScoped,
-            ["FoodsController.GetFoodAttributionCount"] = V4Reason.NotYetScoped,
-            ["MealMatchingController.GetFoodEntry"] = V4Reason.NotYetScoped,
-            ["MealMatchingController.GetSuggestions"] = V4Reason.NotYetScoped,
-            ["TimezoneTimelineController.GetTimeline"] = V4Reason.NotYetScoped,
-            ["TimezoneTimelineController.GetDeviceClock"] = V4Reason.NotYetScoped,
-            ["GlucoseProcessingSettingsController.GetPreference"] = V4Reason.NotYetScoped,
-            ["GlucoseProcessingSettingsController.GetSourceDefaults"] = V4Reason.NotYetScoped,
-            ["SystemEventsController.GetSystemEvents"] = V4Reason.NotYetScoped,
-            ["SystemEventsController.GetSystemEvent"] = V4Reason.NotYetScoped,
-            ["AlertCustomSoundsController.GetSounds"] = V4Reason.NotYetScoped,
-            ["AlertCustomSoundsController.StreamSound"] = V4Reason.NotYetScoped,
-            ["AlertsController.GetActiveAlerts"] = V4Reason.NotYetScoped,
-            ["AlertsController.GetAlertHistory"] = V4Reason.NotYetScoped,
-            ["DndWindowsController.GetActive"] = V4Reason.NotYetScoped,
-            ["TenantAlertSettingsController.Get"] = V4Reason.NotYetScoped,
-            ["LinkedPlatformsController.GetLinkedPlatforms"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetServicesOverview"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetActiveDataSources"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetDataSource"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetAvailableConnectors"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetConnectorDataSummary"] = V4Reason.NotYetScoped,
-            ["ServicesController.GetConnectorSyncStatus"] = V4Reason.NotYetScoped,
-            ["BodyWeightController.GetBodyWeights"] = V4Reason.NotYetScoped,
-            ["BodyWeightController.GetBodyWeight"] = V4Reason.NotYetScoped,
-            ["PatientRecordController.GetPatientRecord"] = V4Reason.NotYetScoped,
-            ["PatientRecordController.GetDevices"] = V4Reason.NotYetScoped,
-            ["PatientRecordController.GetDiscoveredSources"] = V4Reason.NotYetScoped,
-            ["PatientRecordController.GetInsulins"] = V4Reason.NotYetScoped,
-            ["DeviceAgeController.GetCannulaAge"] = V4Reason.NotYetScoped,
-            ["DeviceAgeController.GetSensorAge"] = V4Reason.NotYetScoped,
-            ["DeviceAgeController.GetInsulinAge"] = V4Reason.NotYetScoped,
-            ["DeviceAgeController.GetBatteryAge"] = V4Reason.NotYetScoped,
-            ["DeviceAgeController.GetAllDeviceAges"] = V4Reason.NotYetScoped,
-            ["ReservoirController.GetEstimate"] = V4Reason.NotYetScoped,
+            // UISettingsSection.ReadScope per section; StateSpanReadScopeGuard per category.
+            ["UISettingsController.GetUISettings"] = V4Reason.CallerNarrowedAnswer,
+            ["UISettingsController.GetSectionSettings"] = V4Reason.CallerNarrowedAnswer,
+            ["StateSpansController.GetStateSpans"] = V4Reason.CallerNarrowedAnswer,
+            ["StateSpansController.GetStateSpan"] = V4Reason.CallerNarrowedAnswer,
         };
 
     [Fact]
