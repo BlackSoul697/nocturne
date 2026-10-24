@@ -27,7 +27,7 @@ public static class NightscoutJsonOptions
             WriteIndented = false,
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
-                Modifiers = { UploaderIdJsonModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, RemoveDuplicateIdProperty, OmitIndefiniteDuration }
+                Modifiers = { IgnoredBasePropertyModifier.RemoveIgnoredBaseProperties, ExcludeNocturneOnlyProperties, HideIdBesideUnderscoreId, OmitIndefiniteDuration }
             }
         };
     }
@@ -53,26 +53,17 @@ public static class NightscoutJsonOptions
     }
 
     /// <summary>
-    /// Modifier that removes duplicate "id" property when "_id" already exists.
-    /// This handles System.Text.Json's behavior with interface implementations where
-    /// the interface property might be serialized separately from the class override.
+    /// Hides a camelCase <c>id</c> on a type that also declares a literal <c>_id</c> property, as the
+    /// legacy <see cref="Role"/> and <see cref="Subject"/> do, so the v2 authorization responses keep
+    /// Nightscout's single <c>_id</c>.
     /// </summary>
-    public static void RemoveDuplicateIdProperty(JsonTypeInfo typeInfo)
+    public static void HideIdBesideUnderscoreId(JsonTypeInfo typeInfo)
     {
-        if (typeInfo.Kind != JsonTypeInfoKind.Object)
+        if (typeInfo.Kind != JsonTypeInfoKind.Object || typeInfo.Properties.All(p => p.Name != "_id"))
             return;
 
-        // Check if we have both "_id" and "id" properties
-        bool hasUnderscoreId = typeInfo.Properties.Any(p => p.Name == "_id");
-        if (hasUnderscoreId)
-        {
-            // Remove "id" property since we already have "_id"
-            var idProperty = typeInfo.Properties.FirstOrDefault(p => p.Name == "id");
-            if (idProperty != null)
-            {
-                idProperty.ShouldSerialize = (_, _) => false;
-            }
-        }
+        if (typeInfo.Properties.FirstOrDefault(p => p.Name == "id") is { } id)
+            id.ShouldSerialize = (_, _) => false;
     }
 
     /// <summary>

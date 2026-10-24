@@ -5,8 +5,8 @@ using System.Text.Json.Serialization.Metadata;
 namespace Nocturne.Core.Models.Serializers;
 
 /// <summary>
-/// Keeps an uploader's lowercase <c>id</c> and camelCase <c>createdAt</c> out of a document's
-/// <c>_id</c> and <c>created_at</c> when reading.
+/// Removes the ignored base <c>Id</c> and <c>CreatedAt</c> declarations from a document's
+/// properties, so an uploader's lowercase <c>id</c> and camelCase <c>createdAt</c> are kept when reading.
 /// </summary>
 /// <remarks>
 /// A document overrides <see cref="ProcessableDocumentBase.Id"/> and
@@ -19,7 +19,7 @@ namespace Nocturne.Core.Models.Serializers;
 /// <c>createdAt</c>, which is then lost. Removing them sends both to the extension data, where
 /// <see cref="TreatmentClientId"/> reads <c>id</c> as the plain field it is.
 /// </remarks>
-public static class UploaderIdJsonModifier
+public static class IgnoredBasePropertyModifier
 {
     private static readonly string[] IgnoredMembers =
     [
