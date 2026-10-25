@@ -163,7 +163,6 @@
     {#if episodes.length > 0}
       <div class="space-y-1">
         <h4 class="font-medium">{plural(episodes.length, ["# episode", "# episodes"])}</h4>
-        <Tooltip.Provider>
         <div class="overflow-x-auto rounded-md border">
           <table class="w-full text-xs tabular-nums">
             <caption class="sr-only">Episodes for the {span} figure. Open an episode in Day in review.</caption>
@@ -211,7 +210,6 @@
             </tbody>
           </table>
         </div>
-        </Tooltip.Provider>
       </div>
     {/if}
   </div>
