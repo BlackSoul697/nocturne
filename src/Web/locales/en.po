@@ -36968,3 +36968,7 @@ msgstr "Expired {0}"
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 msgid "Last 24h summary"
 msgstr "Last 24h summary"
+
+#: src/lib/components/members/MemberCard.svelte
+msgid "You cannot change a role that gives more access than you have."
+msgstr "You cannot change a role that gives more access than you have."

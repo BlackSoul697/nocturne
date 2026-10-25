@@ -36968,3 +36968,7 @@ msgstr ""
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 msgid "Last 24h summary"
 msgstr ""
+
+#: src/lib/components/members/MemberCard.svelte
+msgid "You cannot change a role that gives more access than you have."
+msgstr ""
