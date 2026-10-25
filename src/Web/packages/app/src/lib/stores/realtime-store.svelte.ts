@@ -383,7 +383,7 @@ export class RealtimeStore {
     });
   });
 
-  /** Processed pills data (COB, IOB, CAGE, SAGE, Loop, Basal) */
+  /** Processed pills data (COB, IOB, Loop, Basal) */
   pillsData = $derived.by((): ProcessedPillsData => {
     // Use hardcoded mg/dL - components handle display formatting themselves
     return processPillsData(
@@ -391,7 +391,6 @@ export class RealtimeStore {
       this.apsSnapshots,
       this.boluses,
       this.carbIntakes,
-      this.deviceEvents,
       this.profile,
       { units: "mg/dL" }
     );

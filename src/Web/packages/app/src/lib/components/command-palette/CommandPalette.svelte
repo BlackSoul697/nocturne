@@ -27,6 +27,9 @@
     recordRecent,
   } from "./command-palette-store.svelte";
   import CommandPaletteVitals from "./CommandPaletteVitals.svelte";
+  import { consumableAgeHours } from "./consumable-age";
+  import { LegacyConsumableKind, TrackerCategory } from "$lib/api";
+  import { formatAge } from "$lib/components/trackers/age.svelte";
   import Star from "@lucide/svelte/icons/star";
   import { Button } from "$lib/components/ui/button";
 
@@ -96,6 +99,19 @@
       ]);
   });
 
+  function consumableAge(
+    kind: LegacyConsumableKind,
+    category: TrackerCategory
+  ): string | undefined {
+    const hours = consumableAgeHours(
+      kind,
+      category,
+      realtimeStore.legacyFallbacks,
+      realtimeStore.trackerInstances
+    );
+    return hours === undefined ? undefined : formatAge(hours);
+  }
+
   function getStatValue(itemId: string): string | undefined {
     const pills = realtimeStore.pillsData;
     switch (itemId) {
@@ -104,9 +120,9 @@
       case "stat-cob":
         return pills.cob?.display ?? undefined;
       case "stat-cage":
-        return pills.cage?.display ?? undefined;
+        return consumableAge(LegacyConsumableKind.Site, TrackerCategory.Cannula);
       case "stat-sage":
-        return pills.sage?.display ?? undefined;
+        return consumableAge(LegacyConsumableKind.Sensor, TrackerCategory.Sensor);
       case "stat-a1c":
         return undefined;
       case "stat-tir":

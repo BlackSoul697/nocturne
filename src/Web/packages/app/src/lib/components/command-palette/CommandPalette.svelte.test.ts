@@ -3,12 +3,19 @@ import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
 
-const { goto } = vi.hoisted(() => ({ goto: vi.fn(() => Promise.resolve()) }));
+const { goto, store } = vi.hoisted(() => ({
+  goto: vi.fn(() => Promise.resolve()),
+  store: {
+    pillsData: {},
+    legacyFallbacks: [] as unknown[],
+    trackerInstances: [] as unknown[],
+  },
+}));
 
 vi.mock("$app/navigation", () => ({ goto }));
 
 vi.mock("$lib/stores/realtime-store.svelte", () => ({
-  getRealtimeStore: () => ({ pillsData: {} }),
+  getRealtimeStore: () => store,
 }));
 
 // The vitals strip reads live glucose; the palette under test only owns its items.
@@ -29,6 +36,29 @@ describe("CommandPalette", () => {
     pinnedItemIds.current = [];
     recentItemIds.current = [];
     pageState.data = { effectivePermissions: [], isPlatformAdmin: false };
+    store.legacyFallbacks = [];
+    store.trackerInstances = [];
+  });
+
+  it("shows the site age from its legacy fallback and the sensor age from its tracker", async () => {
+    store.legacyFallbacks = [{ kind: "Site", ageHours: 50 }];
+    store.trackerInstances = [{ id: "run", category: "Sensor", ageHours: 30 }];
+
+    render(CommandPalette, { open: true });
+
+    await expect.element(page.getByRole("option", { name: /^CAGE: 2d 2h/ })).toBeVisible();
+    await expect.element(page.getByRole("option", { name: /^SAGE: 1d 6h/ })).toBeVisible();
+  });
+
+  it("shows no sensor age while two running sensor trackers could each be the one meant", async () => {
+    store.trackerInstances = [
+      { id: "a", category: "Sensor", ageHours: 30 },
+      { id: "b", category: "Sensor", ageHours: 5 },
+    ];
+
+    render(CommandPalette, { open: true });
+
+    await expect.element(page.getByRole("option", { name: /^SAGE(?!:)/ })).toBeVisible();
   });
 
   it("renders no button inside an option or link", async () => {
