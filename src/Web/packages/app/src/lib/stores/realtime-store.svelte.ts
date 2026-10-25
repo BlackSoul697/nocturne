@@ -10,7 +10,7 @@ import {
   initialReadsStash,
   releaseInitialReads,
 } from "./initial-reads";
-import { toDate } from "$lib/utils/formatting";
+import { relativeAge, toDate } from "$lib/utils/formatting";
 import { afterNextPaint } from "$lib/utils/after-next-paint";
 import type {
   Entry,
@@ -357,12 +357,7 @@ export class RealtimeStore {
   });
 
   /** Human readable time since last update */
-  timeSinceReading = $derived.by(() => {
-    const mins = Math.floor(this.timeSinceUpdate / 60000);
-    if (mins < 1) return "just now";
-    if (mins === 1) return "1 min ago";
-    return `${mins} min ago`;
-  });
+  timeSinceReading = $derived(relativeAge(this.lastUpdated, { now: this.now }));
 
   /** `now` at minute resolution, so windows cut from it re-evaluate once a minute rather than every tick. */
   nowMinute = $derived(Math.floor(this.now / 60_000) * 60_000);

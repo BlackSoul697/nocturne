@@ -1,6 +1,6 @@
 <script lang="ts">
   import StatusPill from "./StatusPill.svelte";
-  import { bg, bgLabel, formatLocale } from "$lib/utils/formatting";
+  import { bg, bgLabel, formatLocale, relativeAge } from "$lib/utils/formatting";
   import type {
     LoopPillData,
     PillInfoItem,
@@ -13,22 +13,6 @@
 
   let { data }: LoopPillProps = $props();
 
-  /** Format relative time (e.g., "3m ago") */
-  function formatTimeAgo(mills: number): string {
-    const now = Date.now();
-    const diff = now - mills;
-    const mins = Math.floor(diff / 60000);
-
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  }
-
   /** Build info items for the popover */
   const info = $derived.by((): PillInfoItem[] => {
     if (!data) return [];
@@ -37,7 +21,7 @@
 
     // Last enacted action
     if (data.lastEnacted) {
-      const timeAgo = formatTimeAgo(data.lastEnacted.time);
+      const timeAgo = relativeAge(data.lastEnacted.time);
 
       let lead: string | undefined;
       let actionText = "";

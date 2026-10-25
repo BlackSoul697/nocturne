@@ -53,7 +53,7 @@ const {
 	formatDateDetailed,
 	formatDateForInput,
 	formatDateTimeCompact,
-	minutesAgo,
+	relativeAge,
 	formatInsulinDisplay,
 	formatCarbDisplay,
 	formatPercentageDisplay,
@@ -181,23 +181,98 @@ describe("Glucose conversion", () => {
 });
 
 describe("Date formatting", () => {
-	describe("minutesAgo", () => {
-		it("formats elapsed minutes with Intl relative time formatting", () => {
-			const expected = new Intl.RelativeTimeFormat("en", {
-				numeric: "always",
-				style: "short",
-			}).format(-5, "minute");
+	describe("relativeAge", () => {
+		const NOW = Date.UTC(2026, 7, 29, 14, 5);
+		const MIN = 60_000;
+		const HOUR = 60 * MIN;
+		const DAY = 24 * HOUR;
+		const narrow = (locale: string) =>
+			new Intl.RelativeTimeFormat(locale, { style: "narrow", numeric: "auto" });
+		const ago = (ms: number, opts: { fallback?: string } = {}) =>
+			relativeAge(NOW - ms, { now: NOW, ...opts });
 
-			expect(minutesAgo(1_000, 301_000)).toBe(expected);
+		it("reads under a minute as now, and a minute from 60 seconds", () => {
+			expect(ago(59_000)).toBe(narrow("en").format(0, "second"));
+			expect(ago(60_000)).toBe(narrow("en").format(-1, "minute"));
 		});
 
-		it("does not return negative elapsed minutes", () => {
-			const expected = new Intl.RelativeTimeFormat("en", {
-				numeric: "always",
-				style: "short",
-			}).format(-0, "minute");
+		it("switches from minutes to hours at 60 minutes", () => {
+			expect(ago(59 * MIN)).toBe(narrow("en").format(-59, "minute"));
+			expect(ago(60 * MIN)).toBe(narrow("en").format(-1, "hour"));
+		});
 
-			expect(minutesAgo(301_000, 1_000)).toBe(expected);
+		it("switches from hours to days at 24 hours", () => {
+			expect(ago(23 * HOUR + 59 * MIN)).toBe(narrow("en").format(-23, "hour"));
+			expect(ago(24 * HOUR)).toBe(narrow("en").format(-1, "day"));
+		});
+
+		it("names one whole unit, never a compound", () => {
+			expect(ago(3 * HOUR + 5 * MIN)).toBe(narrow("en").format(-3, "hour"));
+			expect(ago(2 * DAY + 7 * HOUR)).toBe(narrow("en").format(-2, "day"));
+		});
+
+		it("gives the absolute date from a week on", () => {
+			expect(ago(6 * DAY + 23 * HOUR)).toBe(narrow("en").format(-6, "day"));
+			expect(ago(7 * DAY)).toBe(formatNumericDate(NOW - 7 * DAY));
+		});
+
+		it("reads a future moment as now", () => {
+			expect(relativeAge(NOW + 5 * MIN, { now: NOW })).toBe(
+				narrow("en").format(0, "second")
+			);
+		});
+
+		it("accepts a Date, an ISO string and Unix milliseconds alike", () => {
+			const at = NOW - 5 * MIN;
+			const expected = narrow("en").format(-5, "minute");
+			expect(relativeAge(at, { now: NOW })).toBe(expected);
+			expect(relativeAge(new Date(at), { now: NOW })).toBe(expected);
+			expect(relativeAge(new Date(at).toISOString(), { now: NOW })).toBe(expected);
+		});
+
+		it("returns the caller's fallback for a missing or invalid moment", () => {
+			for (const bad of [undefined, null, "", 0, "not a date", new Date(NaN)]) {
+				expect(relativeAge(bad, { now: NOW, fallback: "Never" })).toBe("Never");
+				expect(relativeAge(bad, { now: NOW })).toBe("");
+			}
+		});
+
+		it("writes the words in the regional format's language", () => {
+			withRegion("de-DE", () => {
+				const de = narrow("de");
+				expect(ago(10_000)).toBe(de.format(0, "second"));
+				expect(ago(5 * MIN)).toBe(de.format(-5, "minute"));
+				expect(ago(3 * HOUR)).toBe(de.format(-3, "hour"));
+				expect(ago(2 * DAY)).toBe(de.format(-2, "day"));
+			});
+			expect(narrow("de").format(-5, "minute")).not.toBe(
+				narrow("en").format(-5, "minute")
+			);
+		});
+
+		it("builds one formatter per locale, however many times it is called", () => {
+			// ICU answers "nb-NO" with "nb", so a cache keyed on the resolved tag never matches.
+			expect(new Intl.RelativeTimeFormat("nb-NO").resolvedOptions().locale).toBe("nb");
+			const real = Intl.RelativeTimeFormat;
+			let built = 0;
+			Reflect.set(
+				Intl,
+				"RelativeTimeFormat",
+				class extends real {
+					constructor(...args: ConstructorParameters<typeof real>) {
+						built++;
+						super(...args);
+					}
+				}
+			);
+			try {
+				withRegion("nb-NO", () => {
+					for (let i = 0; i < 5; i++) ago(5 * MIN);
+				});
+			} finally {
+				Reflect.set(Intl, "RelativeTimeFormat", real);
+			}
+			expect(built).toBe(1);
 		});
 	});
 

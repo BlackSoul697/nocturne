@@ -11,9 +11,13 @@
   import BatteryMedium from "@lucide/svelte/icons/battery-medium";
   import BatteryWarning from "@lucide/svelte/icons/battery-warning";
   import Zap from "@lucide/svelte/icons/zap";
-  import { timeAgo } from "$lib/utils";
   import { Now } from "$lib/hooks/now.svelte";
-  import { formatGlucoseDelta, getUnitLabel, time } from "$lib/utils/formatting";
+  import {
+    formatGlucoseDelta,
+    getUnitLabel,
+    relativeAge,
+    time,
+  } from "$lib/utils/formatting";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import WebSocketStatus from "$lib/components/WebSocketStatus.svelte";
@@ -38,10 +42,10 @@
   const unitLabel = $derived(getUnitLabel(units));
   const displayLastUpdated = $derived(lastUpdated ?? realtimeStore.lastUpdated);
 
-  // `timeAgo` reads the clock once; re-derive it on a tick so the age
+  // `relativeAge` reads the clock once; re-derive it on a tick so the age
   // on screen keeps up with the reading it describes.
   const now = new Now();
-  const age = $derived(timeAgo(displayLastUpdated, undefined, now.current));
+  const age = $derived(relativeAge(displayLastUpdated, { now: now.current, fallback: "Unknown" }));
 
   // Battery data
   const batteryStatusPromise = $derived(

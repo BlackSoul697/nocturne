@@ -3,7 +3,7 @@
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
-  import { time } from "$lib/utils/formatting";
+  import { relativeAge, time } from "$lib/utils/formatting";
 
   const realtimeStore = getRealtimeStore();
 
@@ -50,19 +50,11 @@
     }
   });
 
-  // Format time since last update
-  const lastUpdateText = $derived.by(() => {
-    if (!timeSinceUpdate) return 'Never';
-    
-    const seconds = Math.floor(timeSinceUpdate / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
-  });
+  const lastUpdateText = $derived(
+    timeSinceUpdate
+      ? relativeAge(realtimeStore.lastUpdated, { now: realtimeStore.now })
+      : "Never"
+  );
 
   // Manual reconnect handler
   function handleReconnect() {

@@ -29,7 +29,7 @@
   import type { ConnectorStatusWithDescription } from "./ServerConnectorsCard.svelte";
   import {
     formatNumber,
-    lastSeen,
+    relativeAge,
   } from "$lib/utils/formatting";
   import { SkippedRecordsNote } from "$lib/components/shared";
 
@@ -356,7 +356,7 @@
                   Last record received
                 </span>
                 <span class="font-medium">
-                  {lastSeen(selectedConnector.lastEntryTime)}
+                  {relativeAge(selectedConnector.lastEntryTime, { fallback: "Never" })}
                 </span>
               </div>
             {/if}
@@ -366,7 +366,7 @@
                   Last successful sync
                 </span>
                 <span class="font-medium">
-                  {lastSeen(selectedConnector.lastSuccessfulSync)}
+                  {relativeAge(selectedConnector.lastSuccessfulSync, { fallback: "Never" })}
                 </span>
               </div>
             {/if}
@@ -376,7 +376,7 @@
                   Last sync attempt
                 </span>
                 <span class="font-medium text-destructive">
-                  {lastSeen(selectedConnector.lastSyncAttempt)}
+                  {relativeAge(selectedConnector.lastSyncAttempt, { fallback: "Never" })}
                 </span>
               </div>
             {/if}

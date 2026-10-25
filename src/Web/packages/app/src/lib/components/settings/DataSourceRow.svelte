@@ -14,8 +14,7 @@
   import type { SyncProgressEvent } from "$lib/websocket/types";
   import {
     formatNumber,
-    formatNumericDate,
-    lastSeen as formatAge,
+    relativeAge,
   } from "$lib/utils/formatting";
 
   export type DataSourceStatus =
@@ -132,25 +131,6 @@
       default:
         return "outline";
     }
-  }
-
-  function formatRelativeTime(date: string | undefined): string {
-    if (!date) return "Never";
-    const d = new Date(date);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60)
-      return `${diffMins} minute${diffMins !== 1 ? "s" : ""} ago`;
-    if (diffHours < 24)
-      return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
-
-    return formatNumericDate(d);
   }
 
   const iconColors = $derived(getIconColors(status));
@@ -320,7 +300,7 @@
 
             <span class="mx-1">&middot;</span>
             <Clock class="inline h-3 w-3" />
-            {formatAge(lastSuccessfulSync ?? lastSeen)}
+            {relativeAge(lastSuccessfulSync ?? lastSeen, { fallback: "Never" })}
           </p>
         {/if}
 
@@ -338,11 +318,11 @@
                 </p>
                 <p class="text-xs text-destructive/80 mt-1">
                   {#if lastSyncAttempt}
-                    Last attempted: {formatRelativeTime(lastSyncAttempt)}
+                    Last attempted: {relativeAge(lastSyncAttempt, { fallback: "Never" })}
                   {/if}
                   {#if lastSuccessfulSync}
                     {#if lastSyncAttempt}&bull;{/if}
-                    Last successful: {formatRelativeTime(lastSuccessfulSync)}
+                    Last successful: {relativeAge(lastSuccessfulSync, { fallback: "Never" })}
                   {/if}
                 </p>
               </div>

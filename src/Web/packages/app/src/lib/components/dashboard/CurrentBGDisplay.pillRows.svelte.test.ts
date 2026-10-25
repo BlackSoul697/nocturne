@@ -84,7 +84,7 @@ describe("CurrentBGDisplay pill rows", () => {
   afterEach(() => localStorage.removeItem(STORAGE_KEY));
 
   // Here the empty placeholder pills fit on one row and the loaded ones wrap onto two.
-  const WIDTH = 680;
+  const WIDTH = 600;
   const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
 
   it("records the rows the loaded pills filled, not the placeholders' one", async () => {

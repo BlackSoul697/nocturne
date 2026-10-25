@@ -5,7 +5,7 @@
   import Check from "@lucide/svelte/icons/check";
   import { playAlarmSound, stopAlarmSound } from "$lib/audio/alarm-sounds";
   import { Now } from "$lib/hooks/now.svelte";
-  import { formatTimeSince } from "./alertTime.svelte";
+  import { formatDateTimeCompact, relativeAge, toDate } from "$lib/utils/formatting";
   import { createAlertActions, SNOOZE_MINUTES } from "./alert-actions.svelte";
 
   /**
@@ -73,8 +73,12 @@
       <h2 id="critical-alert-title" class="text-4xl font-black tracking-tight sm:text-6xl">
         {current.ruleName || "Alert"}
       </h2>
-      <span id="critical-alert-time" class="text-lg opacity-90">
-        {formatTimeSince(current.startedAt, clock.current)}
+      <span
+        id="critical-alert-time"
+        class="text-lg opacity-90"
+        title={toDate(current.startedAt) ? formatDateTimeCompact(current.startedAt) : undefined}
+      >
+        {relativeAge(current.startedAt, { now: clock.current, fallback: "Unknown" })}
       </span>
       {#if critical.length > 1}
         <span class="text-sm opacity-90">

@@ -213,42 +213,53 @@ export function hourLabel(date: Date | number): string {
   });
 }
 
+const relativeAgeFormatter = (() => {
+  let formatter: Intl.RelativeTimeFormat | null = null;
+  let cachedFor: string | null = null;
+  return (locale: string) => {
+    // Keyed on the requested tag, not on `resolvedOptions().locale`: ICU answers
+    // "nb-NO" with "nb", so comparing against the resolved tag never matches and
+    // rebuilds the formatter on every call.
+    if (!formatter || locale !== cachedFor) {
+      cachedFor = locale;
+      formatter = new Intl.RelativeTimeFormat(locale, {
+        style: "narrow",
+        numeric: "auto",
+      });
+    }
+    return formatter;
+  };
+})();
+
 /**
- * Coarse relative age for a "last seen" or "last synced" field: "Just now",
- * "12m ago", "3h ago", "2d ago", then an absolute date past a week.
+ * How long ago a moment was, in the largest whole unit: "now", "5m ago", "3h ago",
+ * "2d ago", then the absolute date from a week on. The words are the regional
+ * format's own. A moment in the future reads as "now".
  *
- * This is the short form. `formatTimeSince` in the alerts folder is minute-
- * precise ("3h 5m ago") because an alert card is read while it is firing; use
- * this one everywhere else so the same age doesn't render two ways on one row.
+ * Returns `fallback` when `at` is missing or not a date. The caller owns that
+ * wording, so it is extracted for translation with the rest of its component.
  *
- * @param now Reference time. Pass a ticking value (see `Now`) where the result
- *   is rendered, or the text freezes at the age it had on first render.
+ * @param opts.now Reference time. Pass a ticking value (see `Now`) where the
+ *   result is rendered, or the text freezes at the age it had on first render.
  */
-export function lastSeen(
-  date: Date | string | undefined | null,
-  now: number = Date.now()
+export function relativeAge(
+  at: Date | string | number | null | undefined,
+  opts: { now?: number; fallback?: string } = {}
 ): string {
-  if (!date) return "Never";
-  const d = date instanceof Date ? date : new Date(date);
-  if (Number.isNaN(d.getTime())) return "Never";
+  const { now = Date.now(), fallback = "" } = opts;
+  if (!at) return fallback;
+  const d = toDate(at);
+  if (!d) return fallback;
 
-  const minutes = Math.floor((now - d.getTime()) / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  const minutes = Math.max(0, Math.floor((now - d.getTime()) / 60000));
+  const formatter = relativeAgeFormatter(formatLocale());
+  if (minutes < 1) return formatter.format(0, "second");
+  if (minutes < 60) return formatter.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return formatter.format(-hours, "hour");
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return formatter.format(-days, "day");
   return formatNumericDate(d);
-}
-
-/** Format elapsed time as minutes ago in the user's regional format. */
-export function minutesAgo(from: number, to: number = Date.now()): string {
-  const minutes = Math.max(0, Math.floor((to - from) / 60000));
-  return new Intl.RelativeTimeFormat(formatLocale(), {
-    numeric: "always",
-    style: "short",
-  }).format(-minutes, "minute");
 }
 
 // =============================================================================
@@ -261,7 +272,9 @@ export function minutesAgo(from: number, to: number = Date.now()): string {
  * null rather than an Invalid Date so callers can take their empty branch
  * instead of feeding NaN to Intl.
  */
-export function toDate(value: Date | string | undefined | null): Date | null {
+export function toDate(
+  value: Date | string | number | undefined | null
+): Date | null {
   if (value == null) return null;
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;

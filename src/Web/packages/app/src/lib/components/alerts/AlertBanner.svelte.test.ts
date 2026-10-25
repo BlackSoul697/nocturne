@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushSync } from "svelte";
 import { page as pageState } from "$app/state";
 import { AlertConditionType, AlertReceiptActorKind, type ActiveExcursionResponse } from "$api-clients";
+import { formatDateTimeCompact } from "$lib/utils/formatting";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 
 let activeAlerts = $state<ActiveExcursionResponse[]>([]);
@@ -54,6 +55,19 @@ describe("AlertBanner", () => {
 			.element(page.getByText("Seen by Public link, Grandma (guest link)"))
 			.toBeVisible();
 		await expect.element(page.getByRole("button", { name: "Acknowledge" })).toBeVisible();
+	});
+
+	it("shows the age in one unit and the start time as its title", async () => {
+		pageState.data = { hasAccount: true, effectivePermissions: ["alerts.readwrite"] };
+		const startedAt = new Date(Date.now() - (3 * 60 + 5) * 60_000);
+		activeAlerts = [{ ...firing, startedAt: startedAt.toISOString() }];
+
+		render(AlertBanner);
+
+		const age = new Intl.RelativeTimeFormat("en", { style: "narrow", numeric: "auto" }).format(-3, "hour");
+		const shown = page.getByText(age, { exact: true });
+		await expect.element(shown).toBeVisible();
+		await expect.element(shown).toHaveAttribute("title", formatDateTimeCompact(startedAt));
 	});
 
 	it("labels a threshold alert by what it watches, not its condition type", async () => {

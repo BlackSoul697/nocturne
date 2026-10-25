@@ -11,7 +11,7 @@ const store = vi.hoisted(() => {
     direction: "Flat",
     lastUpdated: now,
     now,
-    timeSinceReading: "2 min ago",
+    timeSinceReading: "2m ago",
     connectionUnavailable: false,
   };
 });
@@ -33,7 +33,7 @@ describe("CommandPaletteVitals", () => {
     render(CommandPaletteVitals);
 
     await expect.element(page.getByText("123")).toBeVisible();
-    await expect.element(page.getByText("2 min ago")).toBeVisible();
+    await expect.element(page.getByText("2m ago")).toBeVisible();
   });
 
   it("says the connection failed in place of the reading age", async () => {
@@ -42,7 +42,7 @@ describe("CommandPaletteVitals", () => {
     render(CommandPaletteVitals);
 
     await expect.element(page.getByText("Connection error")).toBeVisible();
-    expect(page.getByText("2 min ago").elements()).toHaveLength(0);
+    expect(page.getByText("2m ago").elements()).toHaveLength(0);
   });
 
   it("says there is no data before the first reading", async () => {
