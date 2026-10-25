@@ -62,15 +62,15 @@
       }}
     >
       <Select.Trigger>
-        {form.units === "MgDl"
+        {form.units === GlucoseUnit.MgDl
           ? "mg/dL"
-          : form.units === "Mmol"
+          : form.units === GlucoseUnit.Mmol
             ? "mmol/L"
             : "Select..."}
       </Select.Trigger>
       <Select.Content>
-        <Select.Item value="MgDl">mg/dL</Select.Item>
-        <Select.Item value="Mmol">mmol/L</Select.Item>
+        <Select.Item value={GlucoseUnit.MgDl}>mg/dL</Select.Item>
+        <Select.Item value={GlucoseUnit.Mmol}>mmol/L</Select.Item>
       </Select.Content>
     </Select.Root>
   </div>

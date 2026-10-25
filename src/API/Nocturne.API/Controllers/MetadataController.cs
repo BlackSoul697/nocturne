@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Models.OAuth;
+using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
@@ -111,6 +112,26 @@ public class MetadataController : ControllerBase
             {
                 AvailableActions = Enum.GetValues<TrackerRealtimeAction>(),
                 Description = "Actions a trackerUpdate realtime event can carry",
+            }
+        );
+    }
+
+    /// <summary>
+    /// Exposes the phases a connector sync reports in the <c>phase</c> of every <c>syncProgress</c>
+    /// event, which the web app validates against
+    /// </summary>
+    /// <returns>Sync phase metadata</returns>
+    [HttpGet("sync-phases")]
+    [RemoteQuery]
+    [ApiExplorerSettings(IgnoreApi = false)]
+    [ProducesResponseType(typeof(SyncPhasesMetadata), 200)]
+    public ActionResult<SyncPhasesMetadata> GetSyncPhases()
+    {
+        return Ok(
+            new SyncPhasesMetadata
+            {
+                AvailablePhases = Enum.GetValues<SyncPhase>(),
+                Description = "Phases a syncProgress realtime event can carry",
             }
         );
     }
@@ -306,6 +327,22 @@ public class TrackerRealtimeActionsMetadata
 
     /// <summary>
     /// Description of the tracker realtime actions
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Metadata about connector sync phases for NSwag generation
+/// </summary>
+public class SyncPhasesMetadata
+{
+    /// <summary>
+    /// Array of all phases a sync progress event can carry
+    /// </summary>
+    public SyncPhase[] AvailablePhases { get; set; } = [];
+
+    /// <summary>
+    /// Description of the sync phases
     /// </summary>
     public string Description { get; set; } = string.Empty;
 }

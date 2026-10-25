@@ -25,7 +25,7 @@
   import SleepCompositionChart from "$lib/components/reports/sleep/SleepCompositionChart.svelte";
   import SleepWeeklyBreakdown from "$lib/components/reports/sleep/SleepWeeklyBreakdown.svelte";
   import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
-  import { SleepSource } from "$api";
+  import { SleepScoreSource, SleepSource } from "$api";
   import { laneForStage, laneTexture } from "$lib/utils/sleep-stages";
   import { patternClass } from "$lib/components/charts/print/chart-print-patterns";
   import { useSearchParams } from "runed/kit";
@@ -151,7 +151,7 @@
 
   const scoredNightsCount = $derived(sleepNights.filter((n) => n.sleepScore != null).length);
   const hasComputedScore = $derived(
-    sleepNights.some((n) => n.sleepScore != null && n.scoreSource === "Computed")
+    sleepNights.some((n) => n.sleepScore != null && n.scoreSource === SleepScoreSource.Computed)
   );
   const scoreCaption = $derived.by(() => {
     const base = `avg of ${scoredNightsCount} scored night${scoredNightsCount === 1 ? "" : "s"}`;

@@ -324,7 +324,7 @@
 
   <TrackerNotificationEditor
     bind:notifications={formNotifications}
-    mode={formMode === TrackerMode.Duration ? "Duration" : "Event"}
+    mode={formMode}
     lifespanHours={formMode === TrackerMode.Duration
       ? formLifespanHours
       : undefined}

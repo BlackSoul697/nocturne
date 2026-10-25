@@ -52,6 +52,7 @@ import type {
   WebSocketConnectionStatus,
 } from "$lib/websocket/types";
 import {
+  SyncPhase,
   TrackerRealtimeAction,
   type SensorGlucose,
   type TrackerDefinitionDto,
@@ -884,26 +885,26 @@ describe("RealtimeStore sync progress", () => {
   it("holds an in-progress sync on screen indefinitely", () => {
     const store = makeStore();
 
-    emit(store, syncEvent("glooko", "Syncing", "FetchingData"));
+    emit(store, syncEvent("glooko", SyncPhase.Syncing, "FetchingData"));
     vi.advanceTimersByTime(60_000);
 
-    expect(store.syncProgressByConnector.glooko?.phase).toBe("Syncing");
+    expect(store.syncProgressByConnector.glooko?.phase).toBe(SyncPhase.Syncing);
 
     store.destroy();
   });
 
-  it.each(["Completed", "Failed"] as const)(
+  it.each([SyncPhase.Completed, SyncPhase.Failed] as const)(
     "clears a %s sync after the linger window",
     (phase) => {
       const store = makeStore();
 
-      emit(store, syncEvent("glooko", "Syncing", "FetchingData"));
+      emit(store, syncEvent("glooko", SyncPhase.Syncing, "FetchingData"));
       emit(
         store,
         syncEvent(
           "glooko",
           phase,
-          phase === "Completed" ? "SyncComplete" : "SyncFailed"
+          phase === SyncPhase.Completed ? "SyncComplete" : "SyncFailed"
         )
       );
 
@@ -921,12 +922,12 @@ describe("RealtimeStore sync progress", () => {
   it("keeps a new run that started inside the previous run's linger window", () => {
     const store = makeStore();
 
-    emit(store, syncEvent("glooko", "Completed", "SyncComplete"));
+    emit(store, syncEvent("glooko", SyncPhase.Completed, "SyncComplete"));
     vi.advanceTimersByTime(1_000);
-    emit(store, syncEvent("glooko", "Syncing", "FetchingData"));
+    emit(store, syncEvent("glooko", SyncPhase.Syncing, "FetchingData"));
     vi.advanceTimersByTime(1_000);
 
-    expect(store.syncProgressByConnector.glooko?.phase).toBe("Syncing");
+    expect(store.syncProgressByConnector.glooko?.phase).toBe(SyncPhase.Syncing);
 
     store.destroy();
   });
@@ -934,12 +935,12 @@ describe("RealtimeStore sync progress", () => {
   it("clears only the connector that finished", () => {
     const store = makeStore();
 
-    emit(store, syncEvent("glooko", "Syncing", "FetchingData"));
-    emit(store, syncEvent("dexcom", "Completed", "SyncComplete"));
+    emit(store, syncEvent("glooko", SyncPhase.Syncing, "FetchingData"));
+    emit(store, syncEvent("dexcom", SyncPhase.Completed, "SyncComplete"));
     vi.advanceTimersByTime(2_000);
 
     expect(store.syncProgressByConnector.dexcom).toBeUndefined();
-    expect(store.syncProgressByConnector.glooko?.phase).toBe("Syncing");
+    expect(store.syncProgressByConnector.glooko?.phase).toBe(SyncPhase.Syncing);
 
     store.destroy();
   });

@@ -59,7 +59,7 @@
   let destroyed = false;
 
   // Form state
-  let mode = $state<"Api" | "MongoDb">("Api");
+  let mode = $state<MigrationMode>(MigrationMode.Api);
   let nightscoutUrl = $state("");
   let nightscoutApiSecret = $state("");
   let mongoConnectionString = $state("");
@@ -101,8 +101,7 @@
       // Pre-populate form if pending config exists
       if (configResult?.hasPendingConfig) {
         if (configResult.mode !== undefined && configResult.mode !== null) {
-          mode =
-            configResult.mode === MigrationMode.MongoDb ? "MongoDb" : "Api";
+          mode = configResult.mode;
         }
         if (configResult.nightscoutUrl) {
           nightscoutUrl = configResult.nightscoutUrl;
@@ -137,9 +136,6 @@
       activePoll = null;
     };
   });
-
-  // Derived: mode as integer for form submission
-  const modeInt = $derived(mode === "MongoDb" ? MigrationMode.MongoDb : MigrationMode.Api);
 
   // Poll migration status
   async function pollMigrationStatus(jobId: string) {
@@ -222,7 +218,7 @@
 
   // Derived: form valid
   const isFormValid = $derived(
-    mode === "Api"
+    mode === MigrationMode.Api
       ? nightscoutUrl.trim() !== "" && nightscoutApiSecret.trim() !== ""
       : mongoConnectionString.trim() !== "" && mongoDatabaseName.trim() !== ""
   );
@@ -306,16 +302,20 @@
             <!-- Mode Selector -->
             <div class="space-y-3">
               <Label>Migration source</Label>
-              <RadioGroup.Root bind:value={mode} class="flex gap-4">
+              <RadioGroup.Root
+                value={String(mode)}
+                onValueChange={(value) => (mode = Number(value))}
+                class="flex gap-4"
+              >
                 <div class="flex items-center space-x-2">
-                  <RadioGroup.Item value="Api" id="mode-api" />
+                  <RadioGroup.Item value={String(MigrationMode.Api)} id="mode-api" />
                   <Label for="mode-api" class="flex items-center">
                     <Globe class="h-4 w-4" />
                     Nightscout API
                   </Label>
                 </div>
                 <div class="flex items-center space-x-2">
-                  <RadioGroup.Item value="MongoDb" id="mode-mongodb" />
+                  <RadioGroup.Item value={String(MigrationMode.MongoDb)} id="mode-mongodb" />
                   <Label for="mode-mongodb" class="flex items-center">
                     <Database class="h-4 w-4" />
                     MongoDB (advanced)
@@ -325,7 +325,7 @@
             </div>
 
             <!-- API Mode Fields -->
-            {#if mode === "Api"}
+            {#if mode === MigrationMode.Api}
               <div class="grid gap-4 @lg:grid-cols-2">
                 <div class="space-y-2">
                   <Label for="nightscout-url">Nightscout URL</Label>
@@ -440,8 +440,8 @@
                   }
                 })}
               >
-                <input type="hidden" name="n:mode" value={modeInt} />
-                {#if mode === "Api"}
+                <input type="hidden" name="n:mode" value={mode} />
+                {#if mode === MigrationMode.Api}
                   <input type="hidden" name="nightscoutUrl" value={nightscoutUrl} />
                   <input type="hidden" name="nightscoutApiSecret" value={nightscoutApiSecret} />
                 {:else}
@@ -476,8 +476,8 @@
                   }
                 })}
               >
-                <input type="hidden" name="n:mode" value={modeInt} />
-                {#if mode === "Api"}
+                <input type="hidden" name="n:mode" value={mode} />
+                {#if mode === MigrationMode.Api}
                   <input type="hidden" name="nightscoutUrl" value={nightscoutUrl} />
                   <input type="hidden" name="nightscoutApiSecret" value={nightscoutApiSecret} />
                 {:else}

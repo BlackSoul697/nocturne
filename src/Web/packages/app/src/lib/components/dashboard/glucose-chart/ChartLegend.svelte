@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { DeviceEventType } from "$lib/api";
   import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
   import type { Snippet } from "svelte";
   import { cn } from "$lib/utils";
@@ -292,16 +293,16 @@
   {@render legendToggle(showCarbs, onToggleCarbs, "Carbs", carbsIconSnippet)}
 
   <!-- Device event legend items (only show if present in current view) -->
-  {#if deviceEventMarkers.some((m) => m.eventType === "SensorStart" || m.eventType === "SensorChange")}
+  {#if deviceEventMarkers.some((m) => m.eventType === DeviceEventType.SensorStart || m.eventType === DeviceEventType.SensorChange)}
     {@render legendIndicator(sensorIcon, "Sensor")}
   {/if}
-  {#if deviceEventMarkers.some((m) => m.eventType === "SiteChange")}
+  {#if deviceEventMarkers.some((m) => m.eventType === DeviceEventType.SiteChange)}
     {@render legendIndicator(siteIcon, "Site")}
   {/if}
-  {#if deviceEventMarkers.some((m) => m.eventType === "InsulinChange")}
+  {#if deviceEventMarkers.some((m) => m.eventType === DeviceEventType.InsulinChange)}
     {@render legendIndicator(reservoirIcon, "Reservoir")}
   {/if}
-  {#if deviceEventMarkers.some((m) => m.eventType === "PumpBatteryChange")}
+  {#if deviceEventMarkers.some((m) => m.eventType === DeviceEventType.PumpBatteryChange)}
     {@render legendIndicator(batteryIcon, "Battery")}
   {/if}
 
