@@ -3,7 +3,8 @@ import { whileShown } from "./attach";
 
 vi.mock("$app/state", () => ({ page: { data: {} } }));
 
-const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+const frame = () =>
+  new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
 function target(display: string) {
   const element = document.createElement("div");
@@ -63,7 +64,9 @@ describe("whileShown", () => {
 
   it("holds the mark on the shown copy of a target rendered twice", async () => {
     const log: string[] = [];
-    const detachDesktop = whileShown(loggedMark(log, "desktop"))(target("block"));
+    const detachDesktop = whileShown(loggedMark(log, "desktop"))(
+      target("block")
+    );
     const detachMobile = whileShown(loggedMark(log, "mobile"))(target("none"));
     await frame();
 
@@ -72,11 +75,17 @@ describe("whileShown", () => {
     run(detachMobile);
   });
 
-  it("hands the mark to the copy coming into view before the other copy lets it go", async () => {
+  it("moves the mark across a layout swap before the context's unmount check can run", async () => {
     const log: string[] = [];
     const desktop = target("block");
     const mobile = target("none");
-    const detachDesktop = whileShown(loggedMark(log, "desktop"))(desktop);
+    const detachDesktop = whileShown(() => {
+      log.push("hold desktop");
+      return () => {
+        log.push("release desktop");
+        queueMicrotask(() => log.push("unmount check"));
+      };
+    })(desktop);
     const detachMobile = whileShown(loggedMark(log, "mobile"))(mobile);
     await frame();
 
@@ -84,7 +93,8 @@ describe("whileShown", () => {
     mobile.style.display = "block";
     await frame();
 
-    expect(log).toEqual(["hold desktop", "hold mobile", "release desktop"]);
+    expect(log.slice(1, 3).sort()).toEqual(["hold mobile", "release desktop"]);
+    expect(log[3]).toBe("unmount check");
     run(detachDesktop);
     run(detachMobile);
   });

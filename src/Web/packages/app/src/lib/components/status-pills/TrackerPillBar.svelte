@@ -12,14 +12,20 @@
   import { coachmark } from "@nocturne/coach";
   import { coachFor } from "$lib/coach-marks/copy.svelte";
   import { toured, whileShown } from "$lib/coach-marks/attach";
-  import { trackerDefinition, visibleTrackerInstances } from "./tracker-pill-visibility";
+  import {
+    trackerDefinition,
+    visibleTrackerInstances,
+  } from "./tracker-pill-visibility";
 
   interface TrackerPillBarProps {
     /** Active tracker instances */
     instances: TrackerInstanceDto[];
     /** Tracker definitions for metadata */
     definitions: TrackerDefinitionDto[];
-    /** The legacy ages to show after the trackers, already narrowed to the visible ones. */
+    /**
+     * The legacy ages to show after the trackers, already narrowed to the
+     * visible ones.
+     */
     fallbacks?: LegacyFallbackDto[];
     /** Epoch milliseconds the reached level is judged against. */
     now: number;
@@ -47,9 +53,13 @@
     onCreateTracker,
   }: TrackerPillBarProps = $props();
 
-  const visibleInstances = $derived(visibleTrackerInstances(instances, definitions, now));
+  const visibleInstances = $derived(
+    visibleTrackerInstances(instances, definitions, now)
+  );
 
-  const hasVisiblePills = $derived(visibleInstances.length > 0 || fallbacks.length > 0);
+  const hasVisiblePills = $derived(
+    visibleInstances.length > 0 || fallbacks.length > 0
+  );
 </script>
 
 {#snippet pill(instance: TrackerInstanceDto)}
@@ -69,7 +79,8 @@
     {#each visibleInstances as instance, index (instance.id)}
       {#if index === 0}
         <div
-          class="flex"          {@attach toured()
+          class="flex"
+          {@attach toured()
             ? whileShown(
                 coachmark([
                   { ...coachFor("tracker-intro.pill") },
