@@ -15,6 +15,10 @@
          multi-arch publish (ContainerRuntimeIdentifiers) can run inner
          per-RID publishes without a separate restore. -->
     <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+    <!-- Precompiles the app's own assemblies (the base image's framework already is), so a
+         restarted container answers about a second sooner and spends less memory on the JIT;
+         tiered compilation still rejits hot code. Applies only to a publish for a runtime. -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
     <ContainerRepository>nocturne-api</ContainerRepository>
     <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
     <ContainerWorkingDirectory>/app/</ContainerWorkingDirectory>
