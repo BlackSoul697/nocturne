@@ -12,6 +12,7 @@
   import Plus from "@lucide/svelte/icons/plus";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import { Artwork } from "@nocturne/watercolour";
   import { toast } from "svelte-sonner";
   import { useToastSubmission } from "$lib/forms";
   import { remoteErrorMessage } from "$lib/api/remote-error";
@@ -35,7 +36,7 @@
   async function handleCreate() {
     creating = true;
     try {
-      const result = await createClockFace({ name: "New Clock Face" });
+      const result = await createClockFace({ name: "New clock face" });
       if (result.id) {
         goto(resolve("/(authenticated)/clock/config/[id]", { id: result.id }));
       } else {
@@ -68,14 +69,14 @@
 </script>
 
 <svelte:head>
-  <title>Clock Faces - Nocturne</title>
+  <title>Clock faces - Nocturne</title>
 </svelte:head>
 
 <div class="min-h-dvh overflow-y-auto bg-background p-4 text-foreground sm:p-6 md:p-8">
   <div class="mx-auto max-w-4xl">
     <div class="mb-8 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold sm:text-3xl">Clock Faces</h1>
+        <h1 class="text-2xl font-bold sm:text-3xl">Clock faces</h1>
         <p class="mt-1 text-muted-foreground">
           {canManage ? "Create and manage your custom clock displays" : "Your clock displays"}
         </p>
@@ -87,7 +88,7 @@
           {:else}
             <Plus class="size-4" />
           {/if}
-          New Clock
+          New clock
         </Button>
       {/if}
     </div>
@@ -115,9 +116,13 @@
         <!-- Empty State -->
         <Card.Root variant="dashed">
           <Card.Content class="flex flex-col items-center justify-center py-12">
-            <div class="mb-4 rounded-full bg-muted p-4">
-              <ClockIcon class="size-8 text-muted-foreground" />
-            </div>
+            <Artwork
+              artwork="clock"
+              palette="slate"
+              motion="auto"
+              autoplay="once"
+              class="mb-4 size-48"
+            />
             <h3 class="mb-2 text-lg font-semibold">No clock faces yet</h3>
             {#if canManage}
               <p class="mb-6 max-w-sm text-center text-muted-foreground">
@@ -130,7 +135,7 @@
                 {:else}
                   <Plus class="size-4" />
                 {/if}
-                Create Clock Face
+                Create clock face
               </Button>
             {/if}
           </Card.Content>
@@ -206,7 +211,7 @@
 <!-- Delete Confirmation Dialog -->
 <ConfirmDialog
   bind:open={deleteDialogOpen}
-  title="Delete Clock Face"
+  title="Delete clock face"
   confirmLabel="Delete"
   destructive
   busy={deletion.busy}

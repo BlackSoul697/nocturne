@@ -8,6 +8,8 @@
   import { DurationInput } from "$lib/components/ui/duration-input";
   import { TrackerNotificationEditor, type TrackerNotification } from "$lib/components/trackers";
   import EventTypeCombobox from "$lib/components/treatments/EventTypeCombobox.svelte";
+  import { Artwork } from "@nocturne/watercolour";
+  import { batteryArtwork, sensorArtwork } from "$lib/watercolour-icons";
   import * as trackersRemote from "$api/generated/trackers.generated.remote";
   import { tick } from "svelte";
   import {
@@ -135,6 +137,30 @@
     </div>
   </div>
 
+  {#if formCategory === TrackerCategory.Battery ||
+    formCategory === TrackerCategory.Sensor ||
+    formCategory === TrackerCategory.Cannula}
+    <div class="flex justify-center py-2">
+      {#if formCategory === TrackerCategory.Battery}
+        <Artwork
+          icon={batteryArtwork}
+          palette="water"
+          motion="auto"
+          autoplay="once"
+          class="size-56"
+        />
+      {:else}
+        <Artwork
+          icon={sensorArtwork}
+          palette="slate"
+          motion="auto"
+          autoplay="once"
+          class="size-56"
+        />
+      {/if}
+    </div>
+  {/if}
+
   <div class="space-y-2">
     <Label for="description">Description (optional)</Label>
     <Input
@@ -146,7 +172,7 @@
   </div>
 
   <div class="space-y-2">
-    <Label>Tracker Mode</Label>
+    <Label>Tracker mode</Label>
     <Select.Root type="single" name="{prefix}mode" bind:value={formMode}>
       <Select.Trigger>
         {#if formMode === TrackerMode.Duration}
@@ -177,7 +203,7 @@
 
   {#if formMode === TrackerMode.Duration}
     <div class="space-y-2">
-      <Label for="lifespan">Expected Lifespan</Label>
+      <Label for="lifespan">Expected lifespan</Label>
       <DurationInput
         id="lifespan"
         bind:value={formLifespanHours}
@@ -345,7 +371,7 @@
   />
 
   <div class="space-y-2">
-    <Label for="dashboardVisibility">Dashboard Visibility</Label>
+    <Label for="dashboardVisibility">Dashboard visibility</Label>
     <Select.Root
       type="single"
       name="{prefix}dashboardVisibility"
@@ -398,7 +424,7 @@
   </div>
 
   <div class="space-y-3 pt-2 border-t">
-    <Label>Event Integration (Nightscout)</Label>
+    <Label>Event integration (Nightscout)</Label>
     <p class="text-xs text-muted-foreground -mt-1">
       Optionally create treatment events when this tracker starts or completes.
       This maintains compatibility with existing CAGE/SAGE pills.
@@ -433,7 +459,7 @@
   >
     <Dialog.Header>
       <Dialog.Title>
-        {isNewDefinition ? "New Tracker Definition" : "Edit Definition"}
+        {isNewDefinition ? "New tracker definition" : "Edit definition"}
       </Dialog.Title>
     </Dialog.Header>
 

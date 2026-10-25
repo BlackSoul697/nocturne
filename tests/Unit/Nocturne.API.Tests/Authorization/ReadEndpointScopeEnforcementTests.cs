@@ -172,6 +172,8 @@ public class ReadEndpointScopeEnforcementTests
             ["ServicesController.GetApiInfo"] = V4Reason.StaticReference,
             ["SupportController.GetFallbackUrl"] = V4Reason.StaticReference,
 
+            ["DatabaseCapacityController.Get"] = V4ScopeGuardExemptions.PlatformAdminRole,
+
             ["WebhookSettingsController.GetWebhookSettings"] = V4Reason.NotStored,
 
             // UISettingsSection.ReadScope per section; StateSpanReadScopeGuard per category.

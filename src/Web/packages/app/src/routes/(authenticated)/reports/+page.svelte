@@ -28,8 +28,6 @@
   import ReportsSkeleton from "$lib/components/reports/ReportsSkeleton.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { remoteErrorMessage } from "$lib/api/remote-error";
-  import { coachmark } from "@nocturne/coach";
-  import { coachFor } from "$lib/coach-marks/copy.svelte";
 
   // Get shared date params from context (set by reports layout)
   // Default: 14 days is standard for reports overview
@@ -58,7 +56,7 @@
       canLoadSummary
         ? getReportsData(reportsParams.dateRangeInput)
         : { loading: false, error: null, current: undefined, refresh: () => {} },
-    { errorTitle: "Error Loading Reports", dateParams: reportsParams }
+    { errorTitle: "Error loading reports", dateParams: reportsParams }
   );
 
   const isLoading = $derived(reportsResource.loading);
@@ -148,13 +146,13 @@
         {#if visibleHrefs.has("/reports/executive-summary")}
           <Button href="/reports/executive-summary">
             <Gauge />
-            Executive Summary
+            Executive summary
           </Button>
         {/if}
         {#if visibleHrefs.has("/reports/agp")}
           <Button href="/reports/agp" variant="outline">
             <BarChart3 />
-            AGP Report
+            AGP report
           </Button>
         {/if}
         {#if visibleHrefs.has("/reports/readings")}
@@ -250,10 +248,6 @@
     <section
       class="grid gap-x-12 gap-y-10 @3xl:grid-cols-2"
       aria-label="All reports"
-      {@attach coachmark({
-        ...coachFor("setup-reports.categories"),
-        completeOn: { event: "click" },
-      })}
     >
       {#each categories as category (category.id)}
         {@const CategoryIcon = category.icon}

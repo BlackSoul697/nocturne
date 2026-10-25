@@ -26,7 +26,7 @@ describe("clock page", () => {
 
     await expect.element(browserPage.getByText("Bedside")).toBeVisible();
     await expect.element(browserPage.getByRole("button", { name: "Open" })).toBeVisible();
-    expect(browserPage.getByRole("button", { name: "New Clock" }).query()).toBeNull();
+    expect(browserPage.getByRole("button", { name: "New clock" }).query()).toBeNull();
     expect(browserPage.getByRole("button", { name: "Edit" }).query()).toBeNull();
     expect(browserPage.getByRole("button", { name: "Delete clock face" }).query()).toBeNull();
   });
@@ -35,7 +35,7 @@ describe("clock page", () => {
     page.data.effectivePermissions = ["sharing.manage"];
     render(ClockPage);
 
-    await expect.element(browserPage.getByRole("button", { name: "New Clock" })).toBeVisible();
+    await expect.element(browserPage.getByRole("button", { name: "New clock" })).toBeVisible();
     await expect.element(browserPage.getByRole("button", { name: "Edit" })).toBeVisible();
     await expect.element(browserPage.getByRole("button", { name: "Delete clock face" })).toBeInTheDocument();
   });

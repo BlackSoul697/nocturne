@@ -97,7 +97,7 @@ export function channelDestinationHelper(
     case ChannelType.DiscordDm:
       return "Sent to the Discord account you linked.";
     case ChannelType.DiscordChannel:
-      return "In Discord, turn on Settings → Advanced → Developer Mode, then right-click the channel and choose Copy Channel ID.";
+      return "In Discord, turn on Settings → Advanced → Developer Mode, then open the channel's menu and choose Copy Channel ID.";
     case ChannelType.SlackDm:
       return "Sent to the Slack account you linked.";
     case ChannelType.SlackChannel:
