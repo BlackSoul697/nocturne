@@ -10,6 +10,7 @@
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import { reachedUrgency } from "$lib/components/trackers/schedule";
+  import { formatAge, formatLifespan } from "$lib/components/trackers/age.svelte";
 
   type AlertLevel = "none" | "info" | "warn" | "hazard" | "urgent";
 
@@ -41,24 +42,6 @@
   }: TrackerPillProps = $props();
 
   let popoverOpen = $state(false);
-
-  // Format age display
-  function formatAge(hours: number | undefined): string {
-    if (hours === undefined || hours === null) return "n/a";
-    if (hours < 1) return `${Math.floor(hours * 60)}m`;
-    if (hours < 24) return `${Math.floor(hours)}h`;
-    const days = Math.floor(hours / 24);
-    const h = Math.floor(hours % 24);
-    return h > 0 ? `${days}d ${h}h` : `${days}d`;
-  }
-
-  // Format lifespan display
-  function formatLifespan(hours: number | undefined): string {
-    if (hours === undefined || hours === null) return "Not set";
-    if (hours < 24) return `${hours} hours`;
-    const days = Math.floor(hours / 24);
-    return days === 1 ? "1 day" : `${days} days`;
-  }
 
   // Calculate time remaining
   const timeRemaining = $derived.by(() => {
