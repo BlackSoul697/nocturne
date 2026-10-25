@@ -68,6 +68,10 @@ export interface CoachRouter {
   /** Registers a callback run before every client-side navigation. Called once, at provider init. */
   beforeNavigate(callback: (navigation: CoachNavigation) => void): void;
   goto(url: URL): Promise<unknown>;
+  /** Pushes a shallow entry on the current URL whose page state carries the coach marker. */
+  pushMarkedEntry(): void;
+  /** Whether the current entry's page state carries the coach marker. */
+  isMarkedEntry(): boolean;
 }
 
 /** The popover's control text. The app supplies it so the package carries no language of its own. */
