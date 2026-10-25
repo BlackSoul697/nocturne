@@ -237,24 +237,44 @@ public partial class DeviceSetupService(
     /// lifespan and restarting on the matching device events, recording <paramref name="createdBy"/>
     /// as its creator. Does nothing when the tenant already has one.
     /// </summary>
+    /// <remarks>
+    /// The check and the create run under the consumable lock the legacy conversion and the device
+    /// provisioner take (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), so
+    /// none of them adds a second tracker for a consumable another has just added.
+    /// </remarks>
     /// <exception cref="ArgumentException">No tracker of that kind is offered for the recorded devices.</exception>
     public async Task AddTrackerAsync(TrackerOfferKind kind, string name, string createdBy, CancellationToken ct)
     {
-        var (offer, hours) = await OfferAsync(kind, ct);
-        if (offer.State != TrackerOfferState.Off)
-            return;
+        var created = await trackers.ExecuteUnderConsumableLockAsync(
+            async (tx, unit, token) =>
+            {
+                var (offer, hours) = await OfferAsync(kind, token);
+                if (offer.State != TrackerOfferState.Off)
+                    return (Guid?)null;
 
-        var created = await trackers.CreateDefinitionAsync(new TrackerDefinitionEntity
-        {
-            CreatedBy = createdBy,
-            Name = name,
-            Category = TrackerCategoryOf(kind),
-            LifespanHours = hours,
-            TriggerEventTypes = JsonSerializer.Serialize(TriggersOf(kind)),
-            Mode = TrackerMode.Duration,
-        }, ct);
-        await trackerRuleSync.SyncDefinitionAsync(created.Id, CancellationToken.None);
-        await RecordAdditionAsync(SetupHubRecordKind.Tracker, created.Id, ct);
+                var definition = await tx.CreateDefinitionAsync(new TrackerDefinitionEntity
+                {
+                    CreatedBy = createdBy,
+                    Name = name,
+                    Category = TrackerCategoryOf(kind),
+                    LifespanHours = hours,
+                    TriggerEventTypes = JsonSerializer.Serialize(TriggersOf(kind)),
+                    Mode = TrackerMode.Duration,
+                }, token);
+                unit.Context.SetupHubAdditions.Add(new SetupHubAdditionEntity
+                {
+                    Id = Guid.CreateVersion7(),
+                    ItemKey = SetupHubItemKey.Devices,
+                    RecordKind = SetupHubRecordKind.Tracker,
+                    RecordId = definition.Id,
+                });
+                await unit.Context.SaveChangesAsync(token);
+                return definition.Id;
+            },
+            async (tx, attempt, token) => attempt is not { } id || await tx.GetDefinitionByIdAsync(id, token) is not null,
+            ct);
+        if (created is { } id)
+            await trackerRuleSync.SyncDefinitionAsync(id, CancellationToken.None);
     }
 
     /// <summary>Deletes a tracker this item created. A tracker the owner had before is never touched.</summary>
@@ -398,7 +418,8 @@ public partial class DeviceSetupService(
     /// <summary>
     /// Whether an existing tracker already follows what an offer of <paramref name="kind"/> would.
     /// A site tracker restarting on pod changes is a pod tracker, one restarting on anything else
-    /// an infusion-set tracker, and one with no triggers could be either.
+    /// an infusion-set tracker, one with no triggers could be either, and one restarting on every
+    /// infusion-set change, as the legacy conversion's site tracker does, is both.
     /// </summary>
     private static bool Covers(TrackerOfferKind kind, TrackerCategory category, IReadOnlyCollection<string> triggers) => kind switch
     {
@@ -406,7 +427,9 @@ public partial class DeviceSetupService(
         TrackerOfferKind.Reservoir => category == TrackerCategory.Reservoir,
         TrackerOfferKind.Pod => category == TrackerCategory.Cannula
             && (triggers.Count == 0 || triggers.Contains(TreatmentTypes.PodChange)),
-        _ => category == TrackerCategory.Cannula && !triggers.Contains(TreatmentTypes.PodChange),
+        _ => category == TrackerCategory.Cannula
+            && (!triggers.Contains(TreatmentTypes.PodChange)
+                || TriggersOf(TrackerOfferKind.InfusionSet).All(triggers.Contains)),
     };
 
     private static IReadOnlyCollection<string> ParseTriggers(string json)

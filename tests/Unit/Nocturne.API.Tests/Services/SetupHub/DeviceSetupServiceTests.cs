@@ -469,6 +469,20 @@ public class DeviceSetupServiceTests
     }
 
     [Fact]
+    public async Task ASiteTrackerFollowingEverySiteChange_CoversAnInfusionSetAsWellAsAPod()
+    {
+        await _service.ConfirmDeviceAsync("tandem-mobi", null, CancellationToken.None);
+        var converted = ExistingTracker(TrackerCategory.Cannula, "Site Change", "Cannula Change", "Pod Change");
+
+        await _service.AddTrackerAsync(TrackerOfferKind.InfusionSet, "Mobi set", Owner, CancellationToken.None);
+
+        (await Setup()).Trackers.First(t => t.Kind == TrackerOfferKind.InfusionSet).State
+            .Should().Be(TrackerOfferState.AlreadyTracked);
+        _db.TrackerDefinitions.Where(d => d.Category == TrackerCategory.Cannula).Should().ContainSingle()
+            .Which.Id.Should().Be(converted.Id);
+    }
+
+    [Fact]
     public async Task ATrackerForADeviceNotOnRecord_IsRefused()
     {
         await _service.Invoking(s => s.AddTrackerAsync(TrackerOfferKind.Pod, "Pod", Owner, CancellationToken.None))
