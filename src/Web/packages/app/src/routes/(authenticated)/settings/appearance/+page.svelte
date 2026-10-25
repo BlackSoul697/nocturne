@@ -949,10 +949,7 @@
       />
     </div>
 
-    <div
-      data-testid="tracker-intro-rail-target"
-      {@attach coachmark({ ...coachFor("tracker-intro.rail") })}
-    >
+    <div {@attach coachmark({ ...coachFor("tracker-intro.rail") })}>
       <DashboardRailConfigurator
         value={dashboardRail.current}
         {trackerPillsEnabled}

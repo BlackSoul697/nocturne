@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
-import { coachCopy } from "./copy.svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CoachMarkContext, type CoachMarkAdapter } from "@nocturne/coach";
+import { coachCopy, coachLabels } from "./copy.svelte";
 import { ONBOARDING_CORE_GATE, sequences } from "./sequences";
 
 vi.mock("$app/paths", () => ({ resolve: (path: string) => path }));
@@ -26,6 +27,9 @@ const attachedIn = (file: string, key: string) =>
 
 describe("tracker introduction tour", () => {
   it("is registered under the name the legacy conversion dialog starts", () => {
+    const dialog = readFileSync(join(SRC, "lib", "components", "trackers", "CreateTrackersFromLegacyDialog.svelte"), "utf8");
+
+    expect(dialog).toContain(`const TRACKER_INTRO = "${TOUR}";`);
     expect(sequences).toHaveProperty(TOUR);
   });
 
@@ -33,9 +37,8 @@ describe("tracker introduction tour", () => {
     expect(steps).toEqual(Object.keys(TARGETS));
   });
 
-  it("waits for the onboarding core and gives way to the setup and feature tours", () => {
-    expect(sequences[TOUR].prerequisite).toBe(ONBOARDING_CORE_GATE);
-    expect(sequences[TOUR].priority).toBeLessThan(sequences["feature-intro"].priority);
+  it("runs only when started", () => {
+    expect(sequences[TOUR].startOnly).toBe(true);
   });
 
   it.each(Object.entries(TARGETS))("attaches %s in %s", (key, file) => {
@@ -65,5 +68,98 @@ describe("tracker introduction tour", () => {
     expect(copy["tracker-intro.settings"].description).toContain(
       "Warning and Hazard alerts come from the notification thresholds."
     );
+  });
+});
+
+describe("a run of the tracker introduction", () => {
+  const SETTLE = 10;
+  const settle = () => vi.advanceTimersByTime(SETTLE * 2);
+  const [PILL, COMPLETE, SETTINGS, RAIL] = steps;
+
+  /** Registers each key on one page; the returned function navigates away from it. */
+  function visit(context: CoachMarkContext, ...keys: string[]): () => void {
+    const unregister = keys.map((key) =>
+      context.register({ key, step: 0, title: key, description: key, priority: 0, element: {} as HTMLElement })
+    );
+    return () => {
+      context.clearQuiet();
+      for (const leave of unregister) leave();
+    };
+  }
+
+  async function started() {
+    const adapter: CoachMarkAdapter = { fetchAll: async () => [], update: async () => {} };
+    const context = new CoachMarkContext(adapter, coachLabels(), sequences, SETTLE, 2000, () => ({
+      [ONBOARDING_CORE_GATE]: true,
+    }));
+    await context.initialize();
+    return context;
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("is never chosen on its own, and its hotspots raise nothing", async () => {
+    const context = await started();
+    visit(context, PILL, COMPLETE, SETTINGS, RAIL);
+    settle();
+
+    expect(context.activeKey).toBeNull();
+    expect(context.isMarkEligible(PILL)).toBe(false);
+    context.activate(PILL, 0);
+    expect(context.activeKey).toBeNull();
+  });
+
+  it("waits for each settings page once started, and ends after its last step", async () => {
+    const context = await started();
+    const leaveDashboard = visit(context, PILL, COMPLETE);
+    context.startSequence(TOUR);
+
+    expect(context.activeKey).toBe(PILL);
+    context.complete(PILL);
+    expect(context.activeKey).toBe(COMPLETE);
+    context.complete(COMPLETE);
+    expect(context.activeKey).toBeNull();
+
+    leaveDashboard();
+    const leaveTrackers = visit(context, SETTINGS);
+    expect(context.activeKey).toBe(SETTINGS);
+    context.complete(SETTINGS);
+
+    leaveTrackers();
+    visit(context, RAIL);
+    expect(context.activeKey).toBe(RAIL);
+    context.complete(RAIL);
+
+    expect(context.activeKey).toBeNull();
+    expect(context.isMarkEligible(PILL)).toBe(false);
+  });
+
+  it("ends on a dismissal, and no later page raises its steps", async () => {
+    const context = await started();
+    const leaveDashboard = visit(context, PILL, COMPLETE);
+    context.startSequence(TOUR);
+    context.dismiss(PILL);
+
+    leaveDashboard();
+    visit(context, SETTINGS);
+    settle();
+
+    expect(context.activeKey).toBeNull();
+    expect(context.getStatus(SETTINGS)).toBe("dismissed");
+  });
+
+  it("replays only the steps on the page, as any replay does", async () => {
+    const context = await started();
+    const leaveDashboard = visit(context, PILL, COMPLETE);
+    context.replaySequence(TOUR);
+    context.complete(PILL);
+    context.complete(COMPLETE);
+
+    leaveDashboard();
+    visit(context, SETTINGS);
+    settle();
+
+    expect(context.activeKey).toBeNull();
   });
 });

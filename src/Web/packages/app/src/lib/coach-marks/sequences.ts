@@ -24,11 +24,12 @@ export const sequences: SequenceConfig = {
       "quick-tour.widgets",
     ],
   },
-  // Started when a legacy age becomes a tracker. Its settings steps wait on their pages: a forced
-  // start passes over a step whose target is absent, and organic selection raises it there.
+  // Started by the legacy age conversion dialog once it closes, never organically: shown on its own,
+  // it would open over that dialog as the new pill mounts, and show its settings steps to users with
+  // no trackers.
   "tracker-intro": {
     priority: 40,
-    prerequisite: ONBOARDING_CORE_GATE,
+    startOnly: true,
     steps: [
       "tracker-intro.pill",
       "tracker-intro.complete",

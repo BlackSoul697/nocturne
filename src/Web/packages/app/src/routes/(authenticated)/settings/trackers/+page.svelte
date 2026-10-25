@@ -482,11 +482,7 @@
           <History class="h-4 w-4" />
           History
         </Tabs.Trigger>
-        <div
-          class="flex"
-          data-testid="tracker-intro-settings-target"
-          {@attach coachmark({ ...coachFor("tracker-intro.settings") })}
-        >
+        <div class="flex" {@attach coachmark({ ...coachFor("tracker-intro.settings") })}>
           <Tabs.Trigger value="definitions">
             <Settings2 class="h-4 w-4" />
             Definitions
