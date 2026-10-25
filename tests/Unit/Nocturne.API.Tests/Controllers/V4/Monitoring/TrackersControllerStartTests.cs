@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Monitoring;
@@ -51,7 +52,8 @@ public class TrackersControllerStartTests
             Mock.Of<IAlertRepository>(),
             Mock.Of<ITenantAccessor>(),
             Mock.Of<IAlertAcknowledgementService>(),
-            Mock.Of<ILogger<TrackersController>>()
+            Mock.Of<ILogger<TrackersController>>(),
+            new FakeTimeProvider(Now)
         );
         var httpContext = new DefaultHttpContext();
         httpContext.Items["AuthContext"] = new AuthContext
@@ -123,6 +125,18 @@ public class TrackersControllerStartTests
         result.Result.Should().BeOfType<CreatedAtActionResult>();
         _repository.Verify(r => r.CompleteInstanceAsync(
             old.Id, CompletionReason.ReplacedEarly, null, null, Now, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartInstance_WithNoStartTime_StartsAtTheInjectedClocksTime()
+    {
+        var definition = ArrangeDefinition(TrackerMode.Duration);
+
+        await CreateController().StartInstance(new StartTrackerInstanceRequest { DefinitionId = definition.Id });
+
+        _repository.Verify(r => r.StartInstanceAsync(
+            definition.Id, It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), Now,
+            It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>A member who neither created the tracker nor started its run.</summary>
@@ -370,6 +384,7 @@ public class TrackersControllerStartTests
         existing.TriggerEventTypes.Should().Be("[]");
         existing.TriggerNotesContains.Should().BeNull();
     }
+
 
     [Fact]
     public async Task UpdateDefinition_ClearingOnlyTheNotesFilter_KeepsTheTriggers()

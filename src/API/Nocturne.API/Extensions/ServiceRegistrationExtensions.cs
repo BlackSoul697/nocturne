@@ -821,6 +821,8 @@ public static class ServiceRegistrationExtensions
         // definitions (and self-healing if a managed rule is ever lost).
         services.AddScoped<ITrackerAlertRuleSyncService, TrackerAlertRuleSyncService>();
         services.AddHostedService<TrackerAlertRuleBackfillService>();
+        services.AddScoped<ConsumableTrackerWriter>();
+        services.AddScoped<ILegacyFallbackService, LegacyFallbackService>();
         services.AddScoped<IDeviceAgeService, DeviceAgeService>();
         services.AddScoped<ISensorSessionInferenceService, SensorSessionInferenceService>();
         services.AddSingleton<ISensorSessionInferenceRunner, SensorSessionInferenceRunner>();

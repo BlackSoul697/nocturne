@@ -84,6 +84,9 @@ public class ControllerAuthorizationCoverageTests
             // policy hides the tracker tables, which are not in ShareDataCategories. The write
             // actions carry [Authorize] + [RequireDeclaredWriteScope] and are gated explicitly.
             ["Nocturne.API.Controllers.V4.Monitoring.TrackersController"] = "tracker reads gated by fallback trie (rejects bare anonymous); not share-governed",
+            // The legacy-age fallbacks read as the tracker reads above, empty for a share or guest
+            // link (TrackerReadAccess) and for a caller without devices.read.
+            ["Nocturne.API.Controllers.V4.Monitoring.TrackerLegacyFallbacksController"] = "tracker reads gated by fallback trie (rejects bare anonymous); not share-governed",
 
             // ── Legacy Nightscout v1 surfaces (authorize via OAuth scope in the fallback trie) ──
             // v1 endpoints authenticate via the api-secret / token trie and are gated by the

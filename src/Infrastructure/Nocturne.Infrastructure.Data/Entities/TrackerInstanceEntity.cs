@@ -44,6 +44,14 @@ public class TrackerInstanceEntity : ITenantScoped
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// When this run was recorded. A run is often entered after the fact, and a notification
+    /// threshold already due by then does not alert for it. Null on a run recorded before the
+    /// time was kept, which holds nothing back.
+    /// </summary>
+    [Column("recorded_at")]
+    public DateTime? RecordedAt { get; set; }
+
+    /// <summary>
     /// When the tracker was completed (null = still active)
     /// </summary>
     [Column("completed_at")]

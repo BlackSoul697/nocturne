@@ -86,7 +86,10 @@ public class SetupDevicesController(DeviceSetupService deviceSetup) : Controller
     public Task<ActionResult<DeviceSetup>> SetTakesNoInsulin([FromBody] SetTakesNoInsulinRequest request, CancellationToken ct) =>
         Write(() => deviceSetup.SetTakesNoInsulinAsync(request.TakesNoInsulin, ct), ct);
 
-    /// <summary>Creates an offered tracker with the catalogue's rated wear time.</summary>
+    /// <summary>
+    /// Creates an offered tracker with the catalogue's rated wear time, or the kind's typical one
+    /// when the catalogue rates none.
+    /// </summary>
     [DenyDemoSubject]
     [HttpPost("trackers")]
     [RequireScope(Scope.AlertsReadWrite)]

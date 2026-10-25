@@ -269,7 +269,7 @@ public class TrackerTriggerService : IDeviceEventReactor
     /// ones in <see cref="TriggerableEventTypes"/> (through <see cref="CanonicalTrigger"/>, as the
     /// definition DTO does) to their device event types. Any other stored name is ignored.
     /// </summary>
-    private static HashSet<DeviceEventType> ParseTriggerEventTypes(string? json)
+    internal static HashSet<DeviceEventType> ParseTriggerEventTypes(string? json)
     {
         if (string.IsNullOrEmpty(json))
             return [];
@@ -284,15 +284,16 @@ public class TrackerTriggerService : IDeviceEventReactor
             return [];
         }
 
-        if (eventTypes is null)
-            return [];
+        return eventTypes is null ? [] : ParseTriggerEventTypes(eventTypes);
+    }
 
-        return [.. eventTypes
+    /// <inheritdoc cref="ParseTriggerEventTypes(string?)"/>
+    internal static HashSet<DeviceEventType> ParseTriggerEventTypes(IEnumerable<string> eventTypes) =>
+        [.. eventTypes
             .Select(CanonicalTrigger)
             .OfType<string>()
             .Select(name => TreatmentTypes.DeviceEventTypeMap.TryGetValue(name, out var parsed)
                 ? parsed
                 : (DeviceEventType?)null)
             .OfType<DeviceEventType>()];
-    }
 }

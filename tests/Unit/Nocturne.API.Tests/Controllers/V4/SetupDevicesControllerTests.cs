@@ -6,11 +6,14 @@ using Moq;
 using Nocturne.API.Controllers.V4.Identity;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Monitoring;
+using Nocturne.API.Services.Realtime;
 using Nocturne.API.Services.SetupHub;
+using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Authorization;
-using Nocturne.Core.Models.V4;
 using Nocturne.Core.Models.SetupHub;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Infrastructure.Data.Repositories.V4;
@@ -37,7 +40,12 @@ public class SetupDevicesControllerTests
             Mock.Of<ITrackerAlertRuleSyncService>(),
             Mock.Of<ITherapySettingsResolver>(t =>
                 t.GetActionTimeAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>())
-                    == Task.FromResult(new InsulinActionTime(InsulinActionTimeSource.Default, 3, null))));
+                    == Task.FromResult(new InsulinActionTime(InsulinActionTimeSource.Default, 3, null))),
+            new ConsumableTrackerWriter(
+                Mock.Of<IDeviceEventRepository>(), Mock.Of<ITrackerAlertRuleSyncService>(),
+                Mock.Of<IDeviceEventReactor>(), Mock.Of<ISignalRBroadcastService>(), TimeProvider.System,
+                NullLogger<ConsumableTrackerWriter>.Instance),
+            NullLogger<DeviceSetupService>.Instance);
 
         var httpContext = new DefaultHttpContext();
         httpContext.Items["GrantedScopes"] = (IReadOnlySet<string>)new HashSet<string>(grantedScopes);

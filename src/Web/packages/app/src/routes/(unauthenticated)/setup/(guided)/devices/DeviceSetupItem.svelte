@@ -178,8 +178,8 @@
 {#snippet wearTime(offer: TrackerOffer)}
   {@const days = offer.wearDays ?? 0}
   {@const hours = offer.wearHours ?? 0}
-  {#if offer.wearDays == null}
-    {offer.deviceName}: no typical wear time, so it counts the days since the last change
+  {#if offer.wearTimeIsTypical}
+    {offer.deviceName}: no rated wear time. The tracker uses a typical wear time of {days} days.
   {:else if hours === 0 && days === 1}
     {offer.deviceName}: typically worn for 1 day
   {:else if hours === 0}
