@@ -127,6 +127,26 @@ export function coachCopy() {
       description:
         "Each row shows the observed value, the profile value, the number of days or events and the confidence. Select a row to see the days or events for that figure.",
     },
+    "tracker-intro.pill": {
+      title: "Tracker pill",
+      description:
+        "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance.",
+    },
+    "tracker-intro.complete": {
+      title: "Record a change",
+      description:
+        "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers.",
+    },
+    "tracker-intro.settings": {
+      title: "Lifespan and thresholds",
+      description:
+        "Select Definitions. Then select the pencil icon of a tracker to edit it. The expected lifespan is the usual time between changes. Warning and Hazard alerts come from the notification thresholds.",
+    },
+    "tracker-intro.rail": {
+      title: "Status pills",
+      description:
+        "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again.",
+    },
   } satisfies Record<string, CoachMarkStep>;
 }
 

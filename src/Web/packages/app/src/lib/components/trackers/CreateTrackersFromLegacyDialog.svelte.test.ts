@@ -8,10 +8,9 @@ import {
   type LegacyFallbackDto,
 } from "$lib/api/generated/nocturne-api-client";
 
-const { createFromLegacy, coach, sequences } = vi.hoisted(() => ({
+const { createFromLegacy, coach } = vi.hoisted(() => ({
   createFromLegacy: vi.fn<(request: { kinds: string[] }) => Promise<LegacyConversionDto>>(),
   coach: { startSequence: vi.fn() },
-  sequences: {} as Record<string, unknown>,
 }));
 
 vi.mock("$api/generated/trackerLegacyFallbacks.generated.remote", () => ({
@@ -19,8 +18,6 @@ vi.mock("$api/generated/trackerLegacyFallbacks.generated.remote", () => ({
 }));
 
 vi.mock("@nocturne/coach", () => ({ getCoachMarkContext: () => coach }));
-
-vi.mock("$lib/coach-marks/sequences", () => ({ sequences }));
 
 import CreateTrackersFromLegacyDialog from "./CreateTrackersFromLegacyDialog.svelte";
 
@@ -59,7 +56,6 @@ describe("CreateTrackersFromLegacyDialog", () => {
   beforeEach(() => {
     createFromLegacy.mockReset();
     coach.startSequence.mockReset();
-    for (const name of Object.keys(sequences)) delete sequences[name];
   });
 
   it("lists every uncovered kind with the clicked one selected", async () => {
@@ -128,7 +124,6 @@ describe("CreateTrackersFromLegacyDialog", () => {
   });
 
   it("starts the tracker introduction when it closes after creating a tracker", async () => {
-    sequences["tracker-intro"] = { steps: [] };
     createFromLegacy.mockResolvedValue({
       definitions: [{ id: "d1", name: "Infusion Site" }],
       instances: [],
@@ -142,22 +137,7 @@ describe("CreateTrackersFromLegacyDialog", () => {
     expect(coach.startSequence).toHaveBeenCalledExactlyOnceWith("tracker-intro");
   });
 
-  it("starts no introduction while none is registered", async () => {
-    createFromLegacy.mockResolvedValue({
-      definitions: [{ id: "d1", name: "Infusion Site" }],
-      instances: [],
-      failedKinds: [],
-    });
-    open(LegacyConsumableKind.Site);
-
-    await submit().click();
-    await page.getByRole("button", { name: "Done" }).click();
-
-    expect(coach.startSequence).not.toHaveBeenCalled();
-  });
-
   it("starts no introduction when nothing was created", async () => {
-    sequences["tracker-intro"] = { steps: [] };
     createFromLegacy.mockResolvedValue({
       definitions: [],
       instances: [],

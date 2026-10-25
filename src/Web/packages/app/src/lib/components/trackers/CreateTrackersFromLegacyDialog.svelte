@@ -15,7 +15,6 @@
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import { describeSubmitError } from "$lib/forms/submit-error";
   import { formatLocale } from "$lib/utils/formatting";
-  import { sequences } from "$lib/coach-marks/sequences";
   import { formatLifespan } from "./age.svelte";
   import { legacyKindLabel } from "./legacy-kind-label.svelte";
   import Check from "@lucide/svelte/icons/check";
@@ -84,7 +83,7 @@
 
   function finish() {
     const created = (result?.definitions?.length ?? 0) > 0;
-    if (created && TRACKER_INTRO in sequences) coach?.startSequence(TRACKER_INTRO);
+    if (created) coach?.startSequence(TRACKER_INTRO);
   }
 
   function close() {

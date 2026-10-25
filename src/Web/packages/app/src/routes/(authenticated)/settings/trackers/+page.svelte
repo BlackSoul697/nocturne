@@ -39,6 +39,8 @@
   import { page } from "$app/state";
   import * as trackersRemote from "$api/generated/trackers.generated.remote";
   import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import {
     NotificationUrgency,
     TrackerCategory,
@@ -480,10 +482,12 @@
           <History class="h-4 w-4" />
           History
         </Tabs.Trigger>
-        <Tabs.Trigger value="definitions">
-          <Settings2 class="h-4 w-4" />
-          Definitions
-        </Tabs.Trigger>
+        <div class="flex" {@attach coachmark({ ...coachFor("tracker-intro.settings") })}>
+          <Tabs.Trigger value="definitions">
+            <Settings2 class="h-4 w-4" />
+            Definitions
+          </Tabs.Trigger>
+        </div>
         <Tabs.Trigger value="presets">
           <Bookmark class="h-4 w-4" />
           Presets

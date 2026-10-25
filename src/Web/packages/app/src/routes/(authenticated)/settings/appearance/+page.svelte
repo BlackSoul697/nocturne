@@ -949,13 +949,15 @@
       />
     </div>
 
-    <DashboardRailConfigurator
-      value={dashboardRail.current}
-      {trackerPillsEnabled}
-      onchange={(preference) => (dashboardRail.current = preference)}
-      hiddenLegacyFallbacks={hiddenLegacyFallbacks.current}
-      onhiddenlegacyfallbackschange={(kinds) => (hiddenLegacyFallbacks.current = kinds)}
-    />
+    <div {@attach coachmark({ ...coachFor("tracker-intro.rail") })}>
+      <DashboardRailConfigurator
+        value={dashboardRail.current}
+        {trackerPillsEnabled}
+        onchange={(preference) => (dashboardRail.current = preference)}
+        hiddenLegacyFallbacks={hiddenLegacyFallbacks.current}
+        onhiddenlegacyfallbackschange={(kinds) => (hiddenLegacyFallbacks.current = kinds)}
+      />
+    </div>
 
 
     {#if !tenantless}
