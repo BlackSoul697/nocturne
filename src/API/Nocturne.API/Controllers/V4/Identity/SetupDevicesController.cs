@@ -34,7 +34,7 @@ public class SetupDevicesController(DeviceSetupService deviceSetup) : Controller
         if (!HttpContext.HasScope(Scope.FullAccess))
             return Forbid();
 
-        return Ok(await deviceSetup.GetAsync(HttpContext.GetSubjectIdString()!, ct));
+        return Ok(await deviceSetup.GetAsync(ct));
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public class SetupDevicesController(DeviceSetupService deviceSetup) : Controller
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<ActionResult<DeviceSetup>> RemoveSetupTracker([FromRoute] TrackerOfferKind kind, CancellationToken ct) =>
-        Write(() => deviceSetup.RemoveTrackerAsync(kind, HttpContext.GetSubjectIdString()!, ct), ct);
+        Write(() => deviceSetup.RemoveTrackerAsync(kind, ct), ct);
 
     private async Task<ActionResult<DeviceSetup>> Write(Func<Task> write, CancellationToken ct)
     {
@@ -138,7 +138,7 @@ public class SetupDevicesController(DeviceSetupService deviceSetup) : Controller
             return Problem(detail: ex.Message, statusCode: 409, title: "Conflict");
         }
 
-        return Ok(await deviceSetup.GetAsync(HttpContext.GetSubjectIdString()!, ct));
+        return Ok(await deviceSetup.GetAsync(ct));
     }
 }
 
