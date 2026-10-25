@@ -3656,7 +3656,6 @@ msgstr ""
 #. 0: food.carbs
 #. 0: food.carbs
 #. 0: food.carbs
-#. 0: (insulinStats.totalCarbs ?? 0).toFixed(0)
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/entries/CarbIntakeSection.svelte
@@ -3667,7 +3666,6 @@ msgstr ""
 #: src/lib/components/treatments/FoodSearchCombobox.svelte
 #: src/lib/components/treatments/FoodSearchCombobox.svelte
 #: src/lib/components/treatments/FoodSearchCombobox.svelte
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "{0}g carbs"
 msgstr ""
 
@@ -10965,9 +10963,8 @@ msgstr ""
 #~ msgid "avg {0}U each"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "Avg I:C"
-msgstr ""
+#~ msgid "Avg I:C"
+#~ msgstr ""
 
 #~ msgid "Basal/Bolus Ratio: {0}% / {1}%"
 #~ msgstr ""
@@ -11032,10 +11029,8 @@ msgstr ""
 #~ msgid "<0>Basal Rate Estimation:</0> If your TDD is accurate, your hourly basal rate should be approximately <1>{0} U/hr</1> (using 50% basal assumption)."
 #~ msgstr ""
 
-#. 0: (insulinStats.icRatio ?? 0).toFixed( 0 )
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "means you use about 1 unit of insulin for every {0} grams of carbs."
-msgstr ""
+#~ msgid "means you use about 1 unit of insulin for every {0} grams of carbs."
+#~ msgstr ""
 
 #~ msgid "<0>I:C Ratio Check:</0> Your average insulin-to-carb ratio of 1:{0} <1/>"
 #~ msgstr ""
@@ -34734,9 +34729,8 @@ msgstr ""
 msgid "Carbs / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-msgid "Carb-to-insulin ratio"
-msgstr ""
+#~ msgid "Carb-to-insulin ratio"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
@@ -35019,10 +35013,8 @@ msgstr ""
 msgid "<0>Total daily dose (TDD):</0> Typically ranges from 0.4-1.0 units/kg body weight for Type 1 diabetes. Your TDD of <1>{0}U/day</1> can be compared to this reference."
 msgstr ""
 
-#. 0: (insulinStats.icRatio ?? 0).toFixed( 0 )
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "<0>I:C ratio check:</0> Your average insulin-to-carb ratio of 1:{0} <1/>"
-msgstr ""
+#~ msgid "<0>I:C ratio check:</0> Your average insulin-to-carb ratio of 1:{0} <1/>"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/basal-analysis/BasalAnalysisContent.svelte
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
@@ -36832,4 +36824,14 @@ msgstr ""
 
 #: src/routes/(authenticated)/reports/steps/+page.svelte
 msgid "The rows and their step totals use UTC days."
+msgstr ""
+
+#. 0: (insulinStats.unpairedCarbs ?? 0).toFixed(0)
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "{0} g not paired with a bolus"
+msgstr ""
+
+#. 0: formatInsulinToCarbRatio(insulinStats.icRatio); 1: insulinStats.icRatio.toFixed(1)
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "<0>ICR check:</0> Your insulin-to-carb ratio of {0} means you use about 1 unit of insulin for every {1} grams of carbs."
 msgstr ""
