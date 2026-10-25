@@ -8,7 +8,9 @@ const api = vi.hoisted(() => ({
   emptyList: vi.fn(),
   getTrackerDefinitions: vi.fn(),
   getActiveTrackerInstances: vi.fn(),
+  getLegacyFallbacks: vi.fn(() => Promise.resolve([] as unknown[])),
 }));
+
 
 vi.mock("$lib/api/browser-clients", () => ({
   currentTherapyStateClient: () => ({ getCurrentTherapyState: api.getCurrentTherapyState }),
@@ -25,6 +27,7 @@ vi.mock("$lib/api/browser-clients", () => ({
     getActiveInstances: api.getActiveTrackerInstances,
   }),
   notificationsClient: () => ({ getNotifications: api.emptyList }),
+  trackerLegacyFallbacksClient: () => ({ getLegacyFallbacks: api.getLegacyFallbacks }),
 }));
 
 vi.mock("svelte-sonner", () => ({
@@ -53,7 +56,9 @@ import type {
 } from "$lib/websocket/types";
 import {
   SyncPhase,
+  LegacyConsumableKind,
   TrackerRealtimeAction,
+  type LegacyFallbackDto,
   type SensorGlucose,
   type TrackerDefinitionDto,
   type TrackerInstanceDto,
@@ -102,6 +107,7 @@ type TestStore = StoreInternals &
     | "syncProgressByConnector"
     | "trackerInstances"
     | "trackerDefinitions"
+    | "legacyFallbacks"
     | "apsSnapshots"
     | "carbIntakes"
     | "treatmentRevision"
@@ -1042,6 +1048,10 @@ describe("RealtimeStore tracker definition updates", () => {
     definitionName,
   });
 
+  beforeEach(() => {
+    api.getLegacyFallbacks.mockResolvedValue([]);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -1133,6 +1143,88 @@ describe("RealtimeStore tracker definition updates", () => {
 
     expect(store.trackerDefinitions.map((d) => d.id)).toEqual(["site"]);
     expect(store.trackerInstances.map((i) => i.id)).toEqual(["run"]);
+
+    store.destroy();
+  });
+
+  it("swaps a converted fallback for the tracker it became", async () => {
+    const store = makeStore();
+    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 50 }];
+    api.getTrackerDefinitions.mockResolvedValue([definition("site")]);
+    api.getActiveTrackerInstances.mockResolvedValue([instance("run", "site")]);
+    api.getLegacyFallbacks.mockResolvedValue([]);
+
+    emit(store, "site");
+    await settled();
+
+    expect(store.legacyFallbacks).toEqual([]);
+    expect(store.trackerInstances.map((i) => i.id)).toEqual(["run"]);
+
+    store.destroy();
+  });
+
+  it("keeps a fallback read that started later than the definition update's", async () => {
+    const store = makeStore();
+    let resolveCombined: (value: LegacyFallbackDto[]) => void = () => {};
+    api.getTrackerDefinitions.mockResolvedValue([]);
+    api.getActiveTrackerInstances.mockResolvedValue([]);
+    api.getLegacyFallbacks
+      .mockReturnValueOnce(new Promise<LegacyFallbackDto[]>((resolve) => (resolveCombined = resolve)))
+      .mockResolvedValueOnce([{ kind: LegacyConsumableKind.Sensor, ageHours: 2 }]);
+
+    emit(store, "site");
+    void (store as unknown as { refreshLegacyFallbacks(): Promise<void> }).refreshLegacyFallbacks();
+    await settled();
+    resolveCombined([{ kind: LegacyConsumableKind.Sensor, ageHours: 200 }]);
+    await settled();
+
+    expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([2]);
+
+    store.destroy();
+  });
+});
+
+describe("RealtimeStore legacy fallbacks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  const deviceEvent = (id: string): StorageEvent => ({
+    colName: "care",
+    recordType: "deviceEvent",
+    doc: { id, mills: Date.now(), eventType: "SiteChange" },
+  });
+
+  it("re-reads the fallbacks once after a burst of device events", async () => {
+    const store = makeStore();
+    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 70 }];
+    api.getLegacyFallbacks.mockResolvedValue([{ kind: LegacyConsumableKind.Site, ageHours: 0 }]);
+
+    store.handleCreate(deviceEvent("d1"));
+    store.handleCreate(deviceEvent("d2"));
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(api.getLegacyFallbacks).toHaveBeenCalledTimes(1);
+    expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([0]);
+
+    store.destroy();
+  });
+
+  it("keeps the fallbacks when the read fails", async () => {
+    const store = makeStore();
+    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 70 }];
+    api.getLegacyFallbacks.mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    store.handleCreate(deviceEvent("d1"));
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([70]);
 
     store.destroy();
   });

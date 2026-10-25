@@ -26,6 +26,7 @@ import type {
 import type {
   TrackerInstanceDto,
   TrackerDefinitionDto,
+  LegacyFallbackDto,
   InAppNotificationDto,
   Bolus,
   CarbIntake,
@@ -69,6 +70,7 @@ import {
   nutritionClient,
   profileClient,
   sensorGlucoseClient,
+  trackerLegacyFallbacksClient,
   trackersClient,
 } from "$lib/api/browser-clients";
 import {
@@ -249,12 +251,17 @@ export class RealtimeStore {
   private decompositionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly DECOMPOSITION_REFRESH_MS = 3_000;
 
+  /** Pending refetch of the legacy fallbacks after device events arrived. */
+  private legacyFallbacksRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
   /** Reactive state using Svelte 5 runes - using $state.raw for arrays to avoid deep proxy issues */
   entries = $state.raw<Entry[]>([]);
   deviceStatuses = $state.raw<DeviceStatus[]>([]);
   profile = $state<ProfileSummary | null>(null);
   trackerInstances = $state.raw<TrackerInstanceDto[]>([]);
   trackerDefinitions = $state.raw<TrackerDefinitionDto[]>([]);
+  /** The legacy consumable ages no tracker covers; empty for a reader the server shows none. */
+  legacyFallbacks = $state.raw<LegacyFallbackDto[]>([]);
   inAppNotifications = $state.raw<InAppNotificationDto[]>([]);
 
   /**
@@ -496,6 +503,7 @@ export class RealtimeStore {
         profileClient().getProfileSummary().catch(() => null),
         trackersClient().getDefinitions().catch(() => null),
         trackersClient().getActiveInstances().catch(() => null),
+        trackerLegacyFallbacksClient().getLegacyFallbacks().catch(() => null),
         notificationsClient().getNotifications().catch(() => []),
         bolusClient().getAll(oneDayAgo, now, CARE_RECORD_CAP).then((r) => r.data ?? []).catch((e) => { console.error("Failed to load boluses:", e); return []; }),
         nutritionClient().getCarbIntakes(oneDayAgo, now, CARE_RECORD_CAP).then((r) => r.data ?? []).catch((e) => { console.error("Failed to load carbIntakes:", e); return []; }),
@@ -528,6 +536,7 @@ export class RealtimeStore {
         profileData,
         trackerDefs,
         trackerActive,
+        fallbacks,
         notifications,
         historicalBoluses,
         historicalCarbIntakes,
@@ -546,6 +555,9 @@ export class RealtimeStore {
       }
       if (trackerActive) {
         this.trackerInstances = trackerActive;
+      }
+      if (fallbacks) {
+        this.legacyFallbacks = fallbacks;
       }
       if (notifications.length > 0) {
         this.inAppNotifications = notifications;
@@ -708,6 +720,7 @@ export class RealtimeStore {
         break;
       case "deviceEvent":
         this.deviceEvents = apply<DeviceEvent>(this.deviceEvents, CARE_RECORD_CAP);
+        this.scheduleLegacyFallbacksRefresh();
         break;
       case "apsSnapshot":
         this.apsSnapshots = apply<ApsSnapshot>(this.apsSnapshots, APS_SNAPSHOT_CAP);
@@ -854,27 +867,55 @@ export class RealtimeStore {
   }
 
   private trackersRead = 0;
+  private legacyFallbacksRead = 0;
 
-  /** Re-reads the tenant's tracker definitions and running instances together after a definition
-   *  was created, changed or deleted: an instance carries its definition's name, icon and schedule,
-   *  and a deleted definition takes its instances with it. Only the latest read is kept. */
-  private async refreshTrackers(): Promise<void> {
+  /** Re-reads the tenant's tracker definitions, running instances and legacy fallbacks together
+   *  after a definition was created, changed or deleted: an instance carries its definition's name,
+   *  icon and schedule, a deleted definition takes its instances with it, and a new one can cover a
+   *  fallback. Only the latest read of each is kept. */
+  async refreshTrackers(): Promise<void> {
     const read = ++this.trackersRead;
+    const fallbacksRead = ++this.legacyFallbacksRead;
     let definitions: TrackerDefinitionDto[];
     let instances: TrackerInstanceDto[];
+    let fallbacks: LegacyFallbackDto[];
     try {
-      [definitions, instances] = await Promise.all([
+      [definitions, instances, fallbacks] = await Promise.all([
         trackersClient().getDefinitions(),
         trackersClient().getActiveInstances(),
+        trackerLegacyFallbacksClient().getLegacyFallbacks(),
       ]);
     } catch (error) {
       console.error("Failed to refresh trackers:", error);
       return;
     }
-    if (read !== this.trackersRead) return;
+    if (read === this.trackersRead) {
+      this.trackerDefinitions = definitions;
+      this.trackerInstances = instances;
+    }
+    if (fallbacksRead === this.legacyFallbacksRead) this.legacyFallbacks = fallbacks;
+  }
 
-    this.trackerDefinitions = definitions;
-    this.trackerInstances = instances;
+  /** Re-reads the legacy fallbacks, whose ages run from the latest device event of each kind. */
+  private async refreshLegacyFallbacks(): Promise<void> {
+    const read = ++this.legacyFallbacksRead;
+    let fallbacks: LegacyFallbackDto[];
+    try {
+      fallbacks = await trackerLegacyFallbacksClient().getLegacyFallbacks();
+    } catch (error) {
+      console.error("Failed to refresh legacy fallbacks:", error);
+      return;
+    }
+    if (read === this.legacyFallbacksRead) this.legacyFallbacks = fallbacks;
+  }
+
+  /** A connector sync writes device events in bursts; a pending refresh absorbs the burst. */
+  private scheduleLegacyFallbacksRefresh(): void {
+    if (this.legacyFallbacksRefreshTimer) return;
+    this.legacyFallbacksRefreshTimer = setTimeout(() => {
+      this.legacyFallbacksRefreshTimer = null;
+      void this.refreshLegacyFallbacks();
+    }, RealtimeStore.DECOMPOSITION_REFRESH_MS);
   }
 
   /** Handle tracker updates from SignalR */
@@ -1105,6 +1146,10 @@ export class RealtimeStore {
     if (this.decompositionRefreshTimer) {
       clearTimeout(this.decompositionRefreshTimer);
       this.decompositionRefreshTimer = null;
+    }
+    if (this.legacyFallbacksRefreshTimer) {
+      clearTimeout(this.legacyFallbacksRefreshTimer);
+      this.legacyFallbacksRefreshTimer = null;
     }
     if (this.timeInterval) {
       clearInterval(this.timeInterval);
