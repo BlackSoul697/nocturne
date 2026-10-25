@@ -26,7 +26,7 @@ public class TrackerLegacyFallbacksControllerTests
     {
         var spec = ConsumableTrackerSpecs.Generic(LegacyConsumableKind.Site);
         var at = DateTime.UtcNow.AddHours(-10);
-        _service.Setup(s => s.GetAsync(It.IsAny<CancellationToken>()))
+        _service.Setup(s => s.GetAsync(true, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new LegacyFallbackRead([
                 new LegacyFallback(
                     LegacyConsumableKind.Site,
@@ -38,6 +38,9 @@ public class TrackerLegacyFallbacksControllerTests
                         Definition = ConsumableTrackerSpecs.ToDefinition(spec, string.Empty),
                     }),
             ], [new LegacyCoverage(LegacyConsumableKind.Sensor, [SensorTrackerId])]));
+        _service.Setup(s => s.GetAsync(false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LegacyFallbackRead(
+                [], [new LegacyCoverage(LegacyConsumableKind.Sensor, [SensorTrackerId])]));
         _service.Setup(s => s.CreateTrackersAsync(
                 It.IsAny<IReadOnlyCollection<LegacyConsumableKind>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new LegacyConversion([], [], []));
@@ -76,17 +79,24 @@ public class TrackerLegacyFallbacksControllerTests
         sensor.DefinitionIds.Should().Equal(SensorTrackerId);
     }
 
-    [Theory]
-    [InlineData(Scope.AlertsRead)]
-    [InlineData(Scope.DevicesRead)]
-    public async Task ACallerMissingEitherScope_GetsNone(string onlyScope)
+    [Fact]
+    public async Task AReaderOfTrackersAlone_GetsTheCoverageAndNoFallbacks()
     {
-        var body = Body(await Controller(onlyScope).GetLegacyFallbacks());
+        var body = Body(await Controller(Scope.AlertsRead).GetLegacyFallbacks());
+
+        body.Fallbacks.Should().BeEmpty();
+        body.Covered.Should().ContainSingle().Which.DefinitionIds.Should().Equal(SensorTrackerId);
+        _service.Verify(s => s.GetAsync(true, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ACallerWithoutTrackerReadAccess_GetsNone()
+    {
+        var body = Body(await Controller(Scope.DevicesRead).GetLegacyFallbacks());
 
         body.Fallbacks.Should().BeEmpty();
         body.Covered.Should().BeEmpty();
-
-        _service.Verify(s => s.GetAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _service.Verify(s => s.GetAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

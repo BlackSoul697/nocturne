@@ -33,20 +33,23 @@ public class TrackerLegacyFallbacksController(ILegacyFallbackService fallbacks)
     private bool ReadsFallbacks =>
         TrackerReadAccess.Allows(HttpContext) && HttpContext.HasScope(Scope.DevicesRead);
 
+    /// <summary>Coverage is read from tracker definitions alone.</summary>
+    private bool ReadsCoverage => TrackerReadAccess.Allows(HttpContext);
+
     /// <summary>
     /// The consumables no tracker covers whose latest device event is recent enough to trust, and
-    /// the definitions covering the others. Empty for a caller that does not hold both tracker read
-    /// access and <c>devices.read</c>.
+    /// the definitions covering the others. The fallbacks need tracker read access and
+    /// <c>devices.read</c>; the coverage needs tracker read access only. Empty without either.
     /// </summary>
     [HttpGet("legacy-fallbacks")]
     [RemoteQuery]
     [ProducesResponseType(typeof(LegacyFallbacksDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<LegacyFallbacksDto>> GetLegacyFallbacks()
     {
-        if (!ReadsFallbacks)
+        if (!ReadsCoverage)
             return Ok(new LegacyFallbacksDto());
 
-        var found = await fallbacks.GetAsync(HttpContext.RequestAborted);
+        var found = await fallbacks.GetAsync(ReadsFallbacks, HttpContext.RequestAborted);
         return Ok(new LegacyFallbacksDto
         {
             Fallbacks = [.. found.Fallbacks.Select(LegacyFallbackDto.From)],

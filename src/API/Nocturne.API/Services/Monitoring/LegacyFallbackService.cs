@@ -52,8 +52,12 @@ public interface ILegacyFallbackService
     /// The uncovered consumables <see cref="LegacyFallbackRules.IsConfident"/> accepts, in
     /// <see cref="LegacyConsumableKind"/> order, and the definitions covering the rest.
     /// </summary>
+    /// <param name="readDeviceAges">
+    /// False for a caller that may not read device events: coverage comes from the definitions
+    /// alone, and no fallback is resolved.
+    /// </param>
     /// <remarks>A history-clamped member reads only the last day of device events, so sees fewer.</remarks>
-    Task<LegacyFallbackRead> GetAsync(CancellationToken ct = default);
+    Task<LegacyFallbackRead> GetAsync(bool readDeviceAges, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a tracker for each of <paramref name="kinds"/> that has a fallback, recording
@@ -78,7 +82,7 @@ internal sealed class LegacyFallbackService(
     ILogger<LegacyFallbackService> logger) : ILegacyFallbackService
 {
     /// <inheritdoc />
-    public async Task<LegacyFallbackRead> GetAsync(CancellationToken ct = default)
+    public async Task<LegacyFallbackRead> GetAsync(bool readDeviceAges, CancellationToken ct = default)
     {
         var definitions = await trackers.GetAllDefinitionsAsync(ct);
         var covered = Enum.GetValues<LegacyConsumableKind>()
@@ -86,8 +90,10 @@ internal sealed class LegacyFallbackService(
                 kind, [.. definitions.Where(d => LegacyFallbackRules.Covers(kind, d)).Select(d => d.Id)]))
             .Where(coverage => coverage.DefinitionIds.Count > 0)
             .ToList();
-        return new LegacyFallbackRead(
-            await ResolveAsync(Enum.GetValues<LegacyConsumableKind>(), definitions, ct), covered);
+        var fallbacks = readDeviceAges
+            ? await ResolveAsync(Enum.GetValues<LegacyConsumableKind>(), definitions, ct)
+            : [];
+        return new LegacyFallbackRead(fallbacks, covered);
     }
 
     /// <inheritdoc />
