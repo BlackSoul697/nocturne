@@ -130,12 +130,12 @@ export function coachCopy() {
     "tracker-intro.pill": {
       title: "Tracker pill",
       description:
-        "The pill shows the time since the last change. Its color changes as the item gets near the end of its lifespan.",
+        "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance.",
     },
     "tracker-intro.complete": {
       title: "Record a change",
       description:
-        "When you change the item, select its pill. Then select Complete tracker. In the completion dialog, select Start another (item name) after completion. A new tracker then starts from the change.",
+        "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers.",
     },
     "tracker-intro.settings": {
       title: "Lifespan and thresholds",

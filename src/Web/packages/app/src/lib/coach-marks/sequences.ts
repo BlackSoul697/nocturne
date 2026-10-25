@@ -26,7 +26,7 @@ export const sequences: SequenceConfig = {
   },
   // Started by the legacy age conversion dialog once it closes, never organically: shown on its own,
   // it would open over that dialog as the new pill mounts, and show its settings steps to users with
-  // no trackers.
+  // no trackers. It has one chance: a reload or another started tour drops a run still waiting.
   "tracker-intro": {
     priority: 40,
     startOnly: true,
