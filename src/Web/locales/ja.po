@@ -246,14 +246,10 @@ msgstr ""
 #~ msgid "Error Loading Data"
 #~ msgstr ""
 
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 msgid "UrgentLow"
 msgstr ""
 
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/stores/alarm-state.svelte.ts
 msgid "UrgentHigh"
 msgstr ""
@@ -266,8 +262,6 @@ msgstr ""
 #: src/lib/components/reports/sleep/single-night/OvernightLowsCard.svelte
 #: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
@@ -287,7 +281,6 @@ msgstr ""
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/lib/components/schedule/ScheduleView.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
@@ -299,9 +292,8 @@ msgstr ""
 msgid "High"
 msgstr ""
 
-#: src/lib/stores/auth-store.svelte.ts
-msgid "IsAuthenticated="
-msgstr ""
+#~ msgid "IsAuthenticated="
+#~ msgstr ""
 
 #: src/lib/components/profile/ProfileIconPicker.svelte
 #: src/lib/stores/auth-store.svelte.ts
@@ -335,20 +327,11 @@ msgstr ""
 #~ msgid "Failed to connect to real-time data"
 #~ msgstr ""
 
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ServerConnectorsCard.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
-#: src/lib/stores/realtime-store.svelte.ts
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
-msgid "Syncing"
-msgstr ""
+#~ msgid "Syncing"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-#: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/lib/components/treatments/edit-dialog/NoteFormFields.svelte
-#: src/lib/stores/realtime-store.svelte.ts
 msgid "Announcement"
 msgstr ""
 
@@ -737,10 +720,7 @@ msgstr ""
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 #: src/lib/components/admin/OidcProvidersTabContent.svelte
 #: src/lib/components/alerts/AlertRuleRow.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/ConnectorSetup.svelte
-#: src/lib/components/connectors/ServerConnectorsCard.svelte
 msgid "Disabled"
 msgstr ""
 
@@ -1122,10 +1102,6 @@ msgstr ""
 #: src/lib/components/alerts/AlertHistoryCard.svelte
 #: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/reports/sensor-integrity/ClusterTable.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/tracker-notification-editor.svelte
-#: src/lib/components/ui/duration-input/duration-input.svelte
-#: src/lib/components/ui/duration-input/duration-input.svelte
 msgid "Duration"
 msgstr ""
 
@@ -1205,8 +1181,6 @@ msgstr ""
 msgid "{0} reading{1}"
 msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
-#: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
@@ -1277,13 +1251,10 @@ msgstr ""
 #: src/lib/components/clock-builder/TextStyleControls.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
-#: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 msgid "Custom"
@@ -2378,9 +2349,8 @@ msgstr ""
 msgid "<0/> Syncing..."
 msgstr ""
 
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-msgid "BackingOff"
-msgstr ""
+#~ msgid "BackingOff"
+#~ msgstr ""
 
 #~ msgid "<0/> Backing Off"
 #~ msgstr ""
@@ -2395,18 +2365,11 @@ msgstr ""
 msgid "<0/> Disabled"
 msgstr ""
 
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-msgid "Unreachable"
-msgstr ""
+#~ msgid "Unreachable"
+#~ msgstr ""
 
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/lib/components/connectors/ServerConnectorsCard.svelte
-msgid "Offline"
-msgstr ""
+#~ msgid "Offline"
+#~ msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/settings/DataSourceRow.svelte
@@ -2461,7 +2424,6 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/admin/IntegrationsTabContent.svelte
-#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/settings/ConnectorConfigForm.svelte
 msgid "Configured"
 msgstr ""
@@ -2914,7 +2876,6 @@ msgstr ""
 
 #: ../portal/src/lib/components/MilestoneCard.svelte
 #: ../portal/src/routes/roadmap/+page.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
@@ -2923,7 +2884,6 @@ msgstr ""
 msgid "Completed"
 msgstr ""
 
-#: src/lib/components/settings/DataSourceRow.svelte
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
@@ -3405,11 +3365,9 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/day-in-review/+page.svelte
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
@@ -3434,11 +3392,9 @@ msgstr ""
 msgid "Carbs"
 msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "BG Check"
-msgstr ""
+#~ msgid "BG Check"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
@@ -3608,7 +3564,6 @@ msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/entries/BGCheckSection.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 msgid "Sensor"
@@ -3730,30 +3685,23 @@ msgstr ""
 msgid "Unspecified {0}g"
 msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "Sensor Start"
-msgstr ""
+#~ msgid "Sensor Start"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "Sensor Change"
-msgstr ""
+#~ msgid "Sensor Change"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "Sensor Stop"
-msgstr ""
+#~ msgid "Sensor Stop"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "Site Change"
-msgstr ""
+#~ msgid "Site Change"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "Insulin Change"
-msgstr ""
+#~ msgid "Insulin Change"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "Pump Battery Change"
-msgstr ""
+#~ msgid "Pump Battery Change"
+#~ msgstr ""
 
 #~ msgid "Pod Change"
 #~ msgstr ""
@@ -3805,9 +3753,8 @@ msgstr ""
 #~ msgid "Basal Max Changed"
 #~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "Profile Switch"
-msgstr ""
+#~ msgid "Profile Switch"
+#~ msgstr ""
 
 #~ msgid "<0/> Device Event"
 #~ msgstr ""
@@ -3936,34 +3883,23 @@ msgstr ""
 #~ msgid "Is Announcement"
 #~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "SensorStart"
-msgstr ""
+#~ msgid "SensorStart"
+#~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "SensorChange"
-msgstr ""
+#~ msgid "SensorChange"
+#~ msgstr ""
 
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "SensorStop"
-msgstr ""
+#~ msgid "SensorStop"
+#~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "SiteChange"
-msgstr ""
+#~ msgid "SiteChange"
+#~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "InsulinChange"
-msgstr ""
+#~ msgid "InsulinChange"
+#~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/DeviceEventIcon.svelte
-msgid "PumpBatteryChange"
-msgstr ""
+#~ msgid "PumpBatteryChange"
+#~ msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
@@ -3972,14 +3908,12 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/engine/chart-data-view.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/engine/chart-data-view.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/engine/chart-data-view.svelte.ts
-#: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/components/treatments/edit-dialog/BolusFormFields.svelte
 msgid "Automatic"
 msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
@@ -3988,13 +3922,11 @@ msgid "Manual"
 msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 msgid "Boost"
 msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/constants/scope-labels.svelte.ts
 #: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
@@ -4004,7 +3936,6 @@ msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/components/reports/loop-analysis/event-labels.svelte.ts
 #: src/lib/components/reports/loop-analysis/filter-labels.svelte.ts
 msgid "Exercise"
@@ -4014,29 +3945,23 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/components/reports/loop-analysis/LoopHealthBody.svelte
 msgid "Suspended"
 msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 msgid "Limited"
 msgstr ""
 
-#: src/lib/components/icons/PumpModeIcon.svelte
-msgid "EaseOff"
-msgstr ""
+#~ msgid "EaseOff"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "Correction Bolus"
-msgstr ""
+#~ msgid "Correction Bolus"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "Carb Correction"
-msgstr ""
+#~ msgid "Carb Correction"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/meals/MealsTable.svelte
 #: src/lib/components/meals/MealsTable.svelte
 #: src/lib/components/reports/loop-analysis/event-labels.svelte.ts
@@ -4045,7 +3970,6 @@ msgid "Meal"
 msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/meal-period-labels.svelte.ts
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 msgid "Snack"
 msgstr ""
 
@@ -4057,8 +3981,6 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/engine/point-inspection.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/tracks/BasalTrack.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
-#: src/lib/components/entries/BasalInjectionSection.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
@@ -4070,11 +3992,6 @@ msgstr ""
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
 #: src/lib/components/status-pills/BasalPill.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
-#: src/lib/components/treatments/edit-dialog/BasalInjectionFormFields.svelte
-#: src/lib/components/treatments/edit-dialog/BolusFormFields.svelte
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 #: src/routes/(authenticated)/time-spans/+page.svelte
@@ -4082,25 +3999,21 @@ msgid "Basal"
 msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 msgid "Site"
 msgstr ""
 
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/navigation/report-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 msgid "Battery"
 msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "Question"
-msgstr ""
+#~ msgid "Question"
+#~ msgstr ""
 
-#: src/lib/components/icons/TreatmentTypeIcon.svelte
-msgid "D.A.D. Alert"
-msgstr ""
+#~ msgid "D.A.D. Alert"
+#~ msgstr ""
 
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
 msgid "Missing required data"
@@ -6244,15 +6157,11 @@ msgstr ""
 msgid "Revoke access"
 msgstr ""
 
-#: src/lib/components/settings/ConnectorConfigForm.svelte
-#: src/lib/components/settings/ConnectorConfigForm.svelte
-msgid "Credentials"
-msgstr ""
+#~ msgid "Credentials"
+#~ msgstr ""
 
-#: src/lib/components/settings/ConnectorConfigForm.svelte
-#: src/lib/components/settings/ConnectorConfigForm.svelte
-msgid "Advanced"
-msgstr ""
+#~ msgid "Advanced"
+#~ msgstr ""
 
 #: src/lib/components/settings/ConnectorConfigForm.svelte
 #: src/lib/components/settings/ConnectorConfigForm.svelte
@@ -6534,8 +6443,6 @@ msgstr ""
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Smoothed"
 msgstr ""
 
@@ -6568,7 +6475,6 @@ msgstr ""
 #: src/lib/components/status-pills/IOBPill.svelte
 #: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
 #: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
-#: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
 msgid "Device"
 msgstr ""
 
@@ -6577,8 +6483,6 @@ msgid "Prefix to match..."
 msgstr ""
 
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Unsmoothed"
@@ -7020,11 +6924,6 @@ msgstr ""
 
 #: src/lib/components/reports/loop-analysis/EventList.svelte
 #: src/lib/components/reports/loop-analysis/event-labels.svelte.ts
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/tracker-notification-editor.svelte
-#: src/lib/components/trackers/tracker-notification-editor.svelte
-#: src/lib/components/ui/duration-input/duration-input.svelte
-#: src/lib/components/ui/duration-input/duration-input.svelte
 msgid "Event"
 msgstr ""
 
@@ -7480,15 +7379,8 @@ msgstr ""
 msgid "Edit the details of this {0} record."
 msgstr ""
 
-#: src/lib/components/entries/BasalInjectionSection.svelte
-#: src/lib/components/entries/BasalInjectionSection.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
-#: src/lib/components/treatments/TreatmentEditDialog.svelte
-#: src/lib/components/treatments/edit-dialog/BasalInjectionFormFields.svelte
-#: src/lib/components/treatments/edit-dialog/BasalInjectionFormFields.svelte
-#: src/lib/components/treatments/edit-dialog/BolusFormFields.svelte
-msgid "Both"
-msgstr ""
+#~ msgid "Both"
+#~ msgstr ""
 
 #~ msgid "Add New Insulin"
 #~ msgstr ""
@@ -9490,13 +9382,8 @@ msgstr ""
 msgid "Alarm: {0}"
 msgstr ""
 
-#: src/lib/components/settings/alarm-preview/AlarmActiveView.svelte
-#: src/lib/components/settings/alarm-preview/AlarmActiveView.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-msgid "StaleData"
-msgstr ""
+#~ msgid "StaleData"
+#~ msgstr ""
 
 #~ msgid "No Data Received"
 #~ msgstr ""
@@ -9656,20 +9543,14 @@ msgstr ""
 #~ msgid "Vibration Pattern"
 #~ msgstr ""
 
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-msgid "ForecastLow"
-msgstr ""
+#~ msgid "ForecastLow"
+#~ msgstr ""
 
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-msgid "RisingFast"
-msgstr ""
+#~ msgid "RisingFast"
+#~ msgstr ""
 
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-msgid "FallingFast"
-msgstr ""
+#~ msgid "FallingFast"
+#~ msgstr ""
 
 #~ msgid "Alarm Name"
 #~ msgstr ""
@@ -9873,15 +9754,11 @@ msgstr ""
 #~ msgid "Glucose Type"
 #~ msgstr ""
 
-#: src/lib/components/treatments/edit-dialog/BGCheckFormFields.svelte
-#: src/lib/components/treatments/edit-dialog/BGCheckFormFields.svelte
-msgid "MgDl"
-msgstr ""
+#~ msgid "MgDl"
+#~ msgstr ""
 
-#: src/lib/components/treatments/edit-dialog/BGCheckFormFields.svelte
-#: src/lib/components/treatments/edit-dialog/BGCheckFormFields.svelte
-msgid "Mmol"
-msgstr ""
+#~ msgid "Mmol"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/docs/alert-simulator/AlertSimulator.svelte
 #: src/lib/components/clock-builder/DisplaySettings.svelte
@@ -12358,21 +12235,11 @@ msgstr ""
 #~ msgid "Go to Connector Settings <0/>"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-msgid "Api"
-msgstr ""
+#~ msgid "Api"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-msgid "MongoDb"
-msgstr ""
+#~ msgid "MongoDb"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Failed to load migration data"
@@ -15586,7 +15453,6 @@ msgid "Day in review"
 msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
-#: src/lib/components/icons/PumpModeIcon.svelte
 msgid "Liberty"
 msgstr ""
 
@@ -20600,10 +20466,8 @@ msgstr ""
 msgid "Samsung"
 msgstr ""
 
-#: src/lib/components/reports/sleep/SleepCompositionChart.svelte
-#: src/routes/(authenticated)/reports/sleep/+page.svelte
-msgid "Computed"
-msgstr ""
+#~ msgid "Computed"
+#~ msgstr ""
 
 #. 0: base
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
@@ -21181,13 +21045,11 @@ msgstr ""
 msgid "Sign in with your passkey"
 msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/markers/BolusMarker.svelte
-msgid "AutomaticBolus"
-msgstr ""
+#~ msgid "AutomaticBolus"
+#~ msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/markers/BolusMarker.svelte
-msgid "Smb"
-msgstr ""
+#~ msgid "Smb"
+#~ msgstr ""
 
 #: src/lib/components/reports/sleep/single-night/BiometricsCard.svelte
 msgid "Average heart rate"
@@ -26141,9 +26003,8 @@ msgstr ""
 msgid "Focus {0}–{1} {2}"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/year-overview/+page.svelte
-msgid "Band"
-msgstr ""
+#~ msgid "Band"
+#~ msgstr ""
 
 #: src/lib/coach-marks/TourScrollHarness.test.svelte
 msgid "Near target"
