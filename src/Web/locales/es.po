@@ -9225,9 +9225,9 @@ msgstr "<0/> {0} ({1}% CV)"
 
 #. 0: basic.count
 #. 0: formatNumber(totalReadings)
-#. 0: formatNumber(entries.length)
+#. 0: formatNumber(readingCount)
 #. 0: readings.length
-#. 0: formatNumber(entries.length)
+#. 0: formatNumber(readingCount)
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
@@ -22480,7 +22480,7 @@ msgstr "TIR después"
 #~ msgid "{0} meals · {1}g/day · {2}g avg/meal"
 #~ msgstr "{0} comidas · {1} g/día · {2} g de media/comida"
 
-#. 0: formatNumber(entries.length)
+#. 0: formatNumber(readingCount)
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "· {0} readings"
 msgstr "· {0} lecturas"
