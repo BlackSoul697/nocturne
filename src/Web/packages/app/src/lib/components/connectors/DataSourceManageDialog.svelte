@@ -20,7 +20,7 @@
   import { getCategoryIcon } from "$lib/utils/connector-display";
   import {
     formatNumber,
-    lastSeen,
+    relativeAge,
   } from "$lib/utils/formatting";
 
   interface Props {
@@ -149,7 +149,7 @@
           <div>
             <span class="text-muted-foreground">Last record received</span>
             <p class="mt-1 font-medium">
-              {lastSeen(selectedDataSource.lastSeen)}
+              {relativeAge(selectedDataSource.lastSeen, { fallback: "Never" })}
             </p>
           </div>
           <div>

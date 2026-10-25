@@ -3,8 +3,7 @@
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import BellOff from "@lucide/svelte/icons/bell-off";
   import Check from "@lucide/svelte/icons/check";
-  import { time } from "$lib/utils/formatting";
-  import { formatTimeSince } from "./alertTime.svelte";
+  import { formatDateTimeCompact, relativeAge, time, toDate } from "$lib/utils/formatting";
   import { severity } from "./severity";
   import { severityLabel } from "./severityLabel.svelte";
   import { seenBy } from "./receipts";
@@ -43,8 +42,11 @@
           <span class="text-sm text-muted-foreground mx-2">
             {conditionLabel(alert.conditionType)}
           </span>
-          <span class="text-xs text-muted-foreground">
-            {formatTimeSince(alert.startedAt)}
+          <span
+            class="text-xs text-muted-foreground"
+            title={toDate(alert.startedAt) ? formatDateTimeCompact(alert.startedAt) : undefined}
+          >
+            {relativeAge(alert.startedAt, { fallback: "Unknown" })}
           </span>
           {#if alert.snoozedUntil}
             <!-- Still listed: a snooze pauses notifications, it does not

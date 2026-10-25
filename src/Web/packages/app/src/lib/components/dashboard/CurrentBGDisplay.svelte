@@ -14,7 +14,7 @@
     formatGlucoseValue,
     formatGlucoseDelta,
     formatLocale,
-    minutesAgo,
+    relativeAge,
     prefersHour12,
   } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
@@ -69,7 +69,10 @@
   );
 
   function formatTimeSinceLastReading(): string {
-    return minutesAgo(lastUpdated, currentTime.getTime());
+    return relativeAge(lastUpdated, {
+      now: currentTime.getTime(),
+      fallback: "Unknown",
+    });
   }
 
   // Status text - show "Connection error" when disconnected

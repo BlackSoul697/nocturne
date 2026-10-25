@@ -20,6 +20,7 @@
   } from "$lib/api/generated/accessRequests.generated.remote";
   import { getRoles } from "$lib/api/generated/roles.generated.remote";
   import { describeSubmitError } from "$lib/forms/submit-error";
+  import { relativeAge } from "$lib/utils/formatting";
   import FormError from "$lib/forms/FormError.svelte";
 
   // Queries
@@ -61,19 +62,6 @@
   let successMessage = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
   let approveFailure = $state<{ subjectId: string; message: string } | null>(null);
-
-  function formatRelativeTime(dateInput: string | Date): string {
-    const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  }
 
   function clearMessages() {
     setTimeout(() => {
@@ -202,9 +190,7 @@
                 class="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
               >
                 <Clock class="h-3 w-3" />
-                {request.createdAt
-                  ? formatRelativeTime(request.createdAt)
-                  : "Unknown"}
+                {relativeAge(request.createdAt, { fallback: "Unknown" })}
               </div>
             </div>
           </Card.Header>
