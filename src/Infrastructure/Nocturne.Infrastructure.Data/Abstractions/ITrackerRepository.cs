@@ -1,4 +1,5 @@
 using Nocturne.Core.Models;
+using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 
 namespace Nocturne.Infrastructure.Data.Abstractions;
@@ -80,13 +81,13 @@ public interface ITrackerRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets, per tracker definition, the reference timestamp of the instance active at
-    /// <paramref name="at"/>: start time for Duration mode, scheduled time for Event mode.
+    /// Gets, per tracker definition, the instance active at <paramref name="at"/>: its reference
+    /// time (start for Duration mode, scheduled time for Event mode) and when it was recorded.
     /// When several instances of a definition are active, the most recently started wins.
     /// Definitions with no active instance are absent from the result. Feeds the
     /// <c>tracker_age</c> alert condition (live evaluation passes now; replay passes the tick).
     /// </summary>
-    Task<Dictionary<Guid, DateTime>> GetActiveTrackerReferencesAsync(
+    Task<Dictionary<Guid, ActiveTrackerReference>> GetActiveTrackerReferencesAsync(
         IReadOnlySet<Guid> definitionIds,
         DateTime at,
         CancellationToken cancellationToken = default);
@@ -177,6 +178,21 @@ public interface ITrackerRepository
     Task<T> ExecuteUnderDefinitionLockAsync<T>(
         Guid definitionId,
         Func<ITrackerRepository, CancellationToken, Task<T>> work,
+        Func<ITrackerRepository, T, CancellationToken, Task<bool>>? verifySucceeded = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in one transaction holding the tenant's consumable lock, so that
+    /// writers that create a tracker for a piece of hardware take turns: each finds what the one
+    /// before it created. <paramref name="work"/> is handed the unit, for writers that must commit
+    /// with it.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="work"/> can run more than once when the store retries a transient failure;
+    /// <paramref name="verifySucceeded"/> is as for <see cref="ExecuteUnderDefinitionLockAsync{T}"/>.
+    /// </remarks>
+    Task<T> ExecuteUnderConsumableLockAsync<T>(
+        Func<ITrackerRepository, DbUnitOfWork, CancellationToken, Task<T>> work,
         Func<ITrackerRepository, T, CancellationToken, Task<bool>>? verifySucceeded = null,
         CancellationToken cancellationToken = default);
 
