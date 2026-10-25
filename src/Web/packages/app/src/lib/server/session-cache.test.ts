@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearSessionCache, getCachedSession, sessionCacheKey, type SessionLoad } from "./session-cache";
+import { clearSessionCache, forgetSession, getCachedSession, sessionCacheKey, type SessionLoad } from "./session-cache";
 
 const signedIn = (name = "a") => ({ isAuthenticated: true, subjectId: "s", name });
 const loadOf = (session: object, cacheable = true) =>
@@ -12,9 +12,9 @@ describe("session cache", () => {
     let t = 1_000;
     const load = loadOf(signedIn());
 
-    await getCachedSession("k", load, () => t);
+    await getCachedSession("k", load, { now: () => t });
     t += 10_000;
-    const again = await getCachedSession("k", load, () => t);
+    const again = await getCachedSession("k", load, { now: () => t });
 
     expect(load).toHaveBeenCalledTimes(1);
     expect(again.name).toBe("a");
@@ -24,9 +24,9 @@ describe("session cache", () => {
     let t = 1_000;
     const load = loadOf(signedIn());
 
-    await getCachedSession("k", load, () => t);
+    await getCachedSession("k", load, { now: () => t });
     t += 16_000;
-    await getCachedSession("k", load, () => t);
+    await getCachedSession("k", load, { now: () => t });
 
     expect(load).toHaveBeenCalledTimes(2);
   });
@@ -71,9 +71,9 @@ describe("session cache", () => {
     let t = Date.parse("2026-01-01T00:00:00Z");
     const load = loadOf({ ...signedIn(), expiresAt: new Date(t + 5_000).toISOString() });
 
-    await getCachedSession("k", load, () => t);
+    await getCachedSession("k", load, { now: () => t });
     t += 6_000;
-    await getCachedSession("k", load, () => t);
+    await getCachedSession("k", load, { now: () => t });
 
     expect(load).toHaveBeenCalledTimes(2);
   });
@@ -86,6 +86,38 @@ describe("session cache", () => {
     const b = await getCachedSession("k", load);
 
     expect((b.preferences as { units: string }).units).toBe("mmol");
+  });
+
+  it("asks afresh for a request that may write, without keeping its answer", async () => {
+    const load = loadOf(signedIn());
+
+    await getCachedSession("k", load, { fresh: true });
+    await getCachedSession("k", load);
+
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again once a write has forgotten the answer", async () => {
+    const load = loadOf(signedIn());
+    await getCachedSession("k", load);
+
+    forgetSession("k");
+    await getCachedSession("k", load);
+
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not keep an answer whose lookup was running when a write finished", async () => {
+    let answer!: (value: SessionLoad) => void;
+    const slow = vi.fn(() => new Promise<SessionLoad>((resolve) => (answer = resolve)));
+    const read = getCachedSession("k", slow);
+
+    forgetSession("k");
+    answer({ session: signedIn("before"), cacheable: true });
+    await read;
+    const next = loadOf(signedIn("after"));
+
+    expect((await getCachedSession("k", next)).name).toBe("after");
   });
 
   it("keys different hosts and tokens apart", () => {

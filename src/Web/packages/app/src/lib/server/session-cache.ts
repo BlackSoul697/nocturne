@@ -14,6 +14,11 @@ import type { SessionInfo } from "$lib/api/generated/nocturne-api-client";
  * The API authenticates every data call itself, so a reused answer can only delay what SSR shows
  * (the signed-in shell, the granted scopes) by up to the TTL after a role or membership change;
  * it never widens what the API returns.
+ *
+ * The answer also carries the caller's own preferences, which the browser writes back over its
+ * local copy, so a write must not leave a stale one behind: a request that may write asks with
+ * `fresh` and calls {@link forgetSession} once it has finished, and an answer whose lookup was
+ * already running when a write finished is not kept.
  */
 const SESSION_TTL_MS = 15_000;
 const MAX_ENTRIES = 5_000;
@@ -31,6 +36,8 @@ interface Entry {
 
 const answers = new Map<string, Entry>();
 const inflight = new Map<string, Promise<SessionLoad>>();
+/** Bumped by every {@link forgetSession}; an answer read under an older value is not kept. */
+let generation = 0;
 
 /** Hashes the credentials and request facts the API's session answer depends on. */
 export function sessionCacheKey(parts: (string | undefined | null)[]): string {
@@ -40,8 +47,10 @@ export function sessionCacheKey(parts: (string | undefined | null)[]): string {
 export async function getCachedSession(
   key: string,
   load: () => Promise<SessionLoad>,
-  now: () => number = Date.now
+  { fresh = false, now = Date.now }: { fresh?: boolean; now?: () => number } = {}
 ): Promise<SessionInfo> {
+  if (fresh) return (await load()).session;
+
   const hit = answers.get(key);
   if (hit && hit.expiresAt > now()) return structuredClone(hit.session);
   if (hit) answers.delete(key);
@@ -55,11 +64,13 @@ export async function getCachedSession(
     return (await load()).session;
   }
 
+  const startedAt = generation;
   const started = load();
   inflight.set(key, started);
   try {
     const result = await started;
-    if (result.cacheable && result.session.isAuthenticated) remember(key, result.session, now());
+    if (result.cacheable && result.session.isAuthenticated && generation === startedAt)
+      remember(key, result.session, now());
     return result.session;
   } finally {
     inflight.delete(key);
@@ -82,6 +93,12 @@ function remember(key: string, session: SessionInfo, at: number) {
     }
   }
   answers.set(key, { session: structuredClone(session), expiresAt });
+}
+
+/** Drops the answer for these credentials, and any lookup in flight, after a request that may have changed it. */
+export function forgetSession(key: string) {
+  answers.delete(key);
+  generation++;
 }
 
 /** Test seam: forget every answer. */

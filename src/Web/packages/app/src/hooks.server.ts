@@ -12,7 +12,7 @@ import {
   createServerApiClient,
 } from "$lib/server/api-client-factory";
 import { isApiOutage } from "$lib/server/api-outage";
-import { getCachedSession, sessionCacheKey } from "$lib/server/session-cache";
+import { forgetSession, getCachedSession, sessionCacheKey } from "$lib/server/session-cache";
 import { authenticateGuestSession } from "$lib/server/guest-session-auth";
 import { sequence } from "@sveltejs/kit/hooks";
 import type { AuthUser } from "./app.d";
@@ -84,6 +84,8 @@ const authHandle: Handle = async ({ event, resolve }) => {
     return resolve(event);
   }
 
+  const mayWrite = event.request.method !== "GET" && event.request.method !== "HEAD";
+  let sessionKey: string | null = null;
   try {
     // Create a temporary API client with auth tokens for session validation.
     // `responseCookies` lets the client forward any auth-cookie rotations
@@ -94,8 +96,9 @@ const authHandle: Handle = async ({ event, resolve }) => {
     const forwardedHost = getEffectiveHost(event.request, event.cookies);
     const authExtraHeaders: Record<string, string> = { "X-Forwarded-Proto": getOriginalProto(event.request) };
     if (forwardedHost) authExtraHeaders["X-Forwarded-Host"] = forwardedHost;
+    sessionKey = sessionCacheKey([accessToken, refreshToken, platformAccessToken, forwardedHost, authExtraHeaders["X-Forwarded-Proto"]]);
     const session = await getCachedSession(
-      sessionCacheKey([accessToken, refreshToken, platformAccessToken, forwardedHost, authExtraHeaders["X-Forwarded-Proto"]]),
+      sessionKey,
       async () => {
         let cacheable = true;
         const observingFetch: typeof fetch = async (input, init) => {
@@ -112,7 +115,8 @@ const authHandle: Handle = async ({ event, resolve }) => {
           rawSetCookies: event.locals.rawSetCookies,
         });
         return { session: await apiClient.oidc.getSession(), cacheable };
-      }
+      },
+      { fresh: mayWrite }
     );
 
     if (session?.isAuthenticated && session.subjectId) {
@@ -149,7 +153,12 @@ const authHandle: Handle = async ({ event, resolve }) => {
     if (isApiOutage(error)) event.locals.sessionUnreadable = true;
   }
 
-  return resolve(event);
+  if (!mayWrite || sessionKey === null) return resolve(event);
+  try {
+    return await resolve(event);
+  } finally {
+    forgetSession(sessionKey);
+  }
 };
 
 /**
