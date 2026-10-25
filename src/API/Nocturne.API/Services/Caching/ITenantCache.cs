@@ -20,6 +20,10 @@ namespace Nocturne.API.Services.Caching;
 /// including <c>null</c> and value types, and is never invalidated, so it suits only TTLs short
 /// enough to absorb a write.
 /// </para>
+/// <para>
+/// Concurrent misses of one key in either tier run one factory between them (<see cref="CacheFlights"/>).
+/// <c>ct</c> bounds only the caller's own wait and its own cache I/O; a factory honours the token it captured.
+/// </para>
 /// <para>How broadly each write path clears is set out on <see cref="ClearsTenantCacheAttribute"/>.</para>
 /// </remarks>
 public interface ITenantCache
@@ -31,6 +35,13 @@ public interface ITenantCache
     Task SetAsync<T>(string key, T value, DateTimeOffset expiresAt, CancellationToken ct = default) where T : class;
 
     Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl, CancellationToken ct = default)
+        where T : class;
+
+    /// <summary>
+    /// As <see cref="GetOrSetAsync{T}"/>, but a <c>null</c> from <paramref name="factory"/> is returned
+    /// and not cached, so the next read runs a factory again.
+    /// </summary>
+    Task<T?> GetOrSetUnlessNullAsync<T>(string key, Func<Task<T?>> factory, TimeSpan ttl, CancellationToken ct = default)
         where T : class;
 
     /// <summary>
@@ -46,5 +57,5 @@ public interface ITenantCache
 
     void SetLocal<T>(string key, T value, TimeSpan ttl);
 
-    Task<T> GetOrCreateLocalAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl);
+    Task<T> GetOrCreateLocalAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl, CancellationToken ct = default);
 }

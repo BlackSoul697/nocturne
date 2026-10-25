@@ -9,6 +9,7 @@ namespace Nocturne.API.Services.Caching;
 public sealed class TenantCache(
     ICacheService distributed,
     IMemoryCache local,
+    CacheFlights flights,
     ITenantAccessor tenantAccessor,
     IReaderCachePartition partition,
     IDemoModeService demoMode) : ITenantCache
@@ -33,7 +34,27 @@ public sealed class TenantCache(
 
     public async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl, CancellationToken ct = default)
         where T : class =>
-        KeyFor(key) is { } full ? await distributed.GetOrSetAsync(full, factory, ttl, ct) : await factory();
+        await GetOrSetUnlessNullAsync<T>(key, async () => await factory(), ttl, ct)
+            ?? throw new InvalidOperationException($"The factory for cache key {key} returned null.");
+
+    public async Task<T?> GetOrSetUnlessNullAsync<T>(
+        string key, Func<Task<T?>> factory, TimeSpan ttl, CancellationToken ct = default) where T : class
+    {
+        if (KeyFor(key) is not { } full)
+            return await factory();
+
+        return await distributed.GetAsync<T>(full, ct)
+            ?? await flights.RunAsync(full, async () =>
+            {
+                if (await distributed.GetAsync<T>(full, ct) is { } again)
+                    return again;
+
+                var value = await factory();
+                if (value is not null)
+                    await distributed.SetAsync(full, value, ttl, ct);
+                return value;
+            }, ct);
+    }
 
     public Task RemoveFamilyAsync(string family, CancellationToken ct = default) =>
         tenantAccessor.Context is { } tenant
@@ -58,13 +79,23 @@ public sealed class TenantCache(
             local.Set(full, value, ttl);
     }
 
-    public async Task<T> GetOrCreateLocalAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl)
+    public async Task<T> GetOrCreateLocalAsync<T>(
+        string key, Func<Task<T>> factory, TimeSpan ttl, CancellationToken ct = default)
     {
-        if (TryGetLocal<T>(key, out var cached))
+        if (KeyFor(key) is not { } full)
+            return await factory();
+
+        if (local.TryGetValue(full, out T? cached))
             return cached!;
 
-        var value = await factory();
-        SetLocal(key, value, ttl);
-        return value;
+        return await flights.RunAsync($"local:{full}", async () =>
+        {
+            if (local.TryGetValue(full, out T? again))
+                return again!;
+
+            var value = await factory();
+            local.Set(full, value, ttl);
+            return value;
+        }, ct);
     }
 }
