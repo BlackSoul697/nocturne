@@ -1245,6 +1245,7 @@ msgstr ""
 #: src/routes/(authenticated)/food/InlineEditor.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
+#: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "<0/> Delete"
 msgstr ""
 
@@ -1979,6 +1980,7 @@ msgid "Always show time"
 msgstr ""
 
 #: src/lib/components/clock-builder/DisplaySettings.svelte
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
 msgid "<0/> Reset to default"
 msgstr ""
 
@@ -2518,6 +2520,7 @@ msgid "Food sync failed"
 msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
 msgid "<0/> Downloading..."
 msgstr ""
 
@@ -7036,6 +7039,7 @@ msgstr ""
 
 #: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
 #: src/lib/components/status-pills/ReservoirPill.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
@@ -9379,6 +9383,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/dashboard/widgets/TrackersWidget.svelte
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
 msgid "Trackers"
 msgstr ""
 
@@ -12838,10 +12843,8 @@ msgstr ""
 msgid "· Entered by {0}"
 msgstr ""
 
-#. 0: formatRelativeTime(therapy.createdAt)
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Created {0} <0/>"
-msgstr ""
+#~ msgid "Created {0} <0/>"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
@@ -15083,7 +15086,6 @@ msgstr ""
 #: ../portal/src/lib/components/docs/SystemRequirements.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 #: ../portal/src/routes/docs/installation/docker-compose/+page.svelte
-#: ../portal/src/routes/docs/installation/docker-compose/+page.svelte
 msgid "Docker Compose"
 msgstr ""
 
@@ -15410,9 +15412,8 @@ msgstr ""
 #~ msgid "Add the foods you eat regularly with their carb counts. Once they're here, logging a meal takes a couple of taps anywhere in Nocturne."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/compatibility/+page.svelte
-msgid "No analyses found. Make sure the compatibility proxy service is running and receiving traffic."
-msgstr ""
+#~ msgid "No analyses found. Make sure the compatibility proxy service is running and receiving traffic."
+#~ msgstr ""
 
 #. 0: formatShortDate(fromDate); 1: formatShortDate(toDate, true); 2: dayCount
 #: src/routes/(authenticated)/time-spans/+page.svelte
@@ -20912,9 +20913,8 @@ msgstr ""
 #~ msgid "At startup Nocturne sets <0/> on each of its tenant-scoped tables, so a newly added tenant's rows reach the query planner's statistics once they exceed about 1% of the table rather than a tenth of it. The value is a ceiling: a lower value set by hand on those tables is kept, a higher or missing one is replaced on the next start."
 #~ msgstr ""
 
-#: src/lib/components/dashboard/first-reading/FirstReadingEmptyState.svelte
-msgid "<0/> Waiting for your first reading"
-msgstr ""
+#~ msgid "<0/> Waiting for your first reading"
+#~ msgstr ""
 
 #: src/lib/components/dashboard/first-reading/FirstReadingEmptyState.svelte
 msgid "Your glucose chart will appear here as soon as the first reading arrives."
@@ -21681,7 +21681,9 @@ msgstr ""
 #~ msgstr ""
 
 #. 0: metricLabel; 1: formatted(scale.axis[0]); 2: formatted(scale.axis[1]); 3: unitLabel
+#. 0: metricLabel; 1: formatted(scale.axis[0]); 2: formatted(scale.axis[1]); 3: unitLabel
 #: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 msgid "{0} color scale from {1} to {2} {3}"
 msgstr ""
 
@@ -36746,4 +36748,239 @@ msgstr ""
 
 #: ../portal/src/routes/docs/installation/+page.svelte
 msgid "Platform notes"
+msgstr ""
+
+#: src/routes/(authenticated)/compatibility/+page.svelte
+msgid "<0/> No analyses found. Make sure the compatibility proxy service is running and receiving traffic."
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Carbs on board (COB)"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Basal rate"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Insulin on board (IOB)"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Loop status"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "<0/> Status Pills"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Select the pills that show next to the glucose value. Drag a pill to change its position."
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Status pills"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "The owner turned off tracker pills."
+msgstr ""
+
+#. 0: LABELS[id]
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Move {0} up"
+msgstr ""
+
+#. 0: LABELS[id]
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Move {0} down"
+msgstr ""
+
+#. 0: LABELS[id]
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Show {0}"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "No pills show on the dashboard."
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Trackers show only when a tracker is active."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "When this is off, tracker pills do not show for any user."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "We could not delete this profile."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "This is your only profile. Deleting it would leave your therapy settings with nothing to fall back on."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "This is your default profile. Make another profile the default first, then delete this one."
+msgstr ""
+
+#. 0: therapy.dataSource
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "· Synced from {0}"
+msgstr ""
+
+#. 0: formatRelativeTime(therapy.createdAt)
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Created {0} <0/> <1/>"
+msgstr ""
+
+#. 0: selectedProfileName
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Delete the profile “{0}”?"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Delete profile"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "This removes its basal rates, carb ratios, insulin sensitivity and target ranges, along with their history. Your other profiles are untouched, and nothing about your glucose readings or treatments changes."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "The source device"
+msgstr ""
+
+#. 0: relayedBy ?? "an external source"
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "This profile is synced from {0}. Deleting it here does not stop it being sent, so it can reappear the next time that source syncs."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "To keep it from coming back, turn off profile syncing for that source, or remove the profile where it lives."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "<0/> Manage data sources"
+msgstr ""
+
+#. 0: relayedBy ?? "The source device"
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "{0} will send this profile again"
+msgstr ""
+
+#: src/lib/components/dashboard/first-reading/FirstReadingEmptyState.svelte
+msgid "Waiting for your first reading"
+msgstr ""
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} low end color"
+msgstr ""
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Swap {0} end colors"
+msgstr ""
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> Swap colors"
+msgstr ""
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} high end color"
+msgstr ""
+
+#. 0: metricLabel; 1: index + 1
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} color boundary {1} color"
+msgstr ""
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Expand {0} color scale"
+msgstr ""
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Collapse {0} color scale"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "We could not start the re-download. Try again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "<0/> Fill in missing history"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Download past data again to fill a gap that a normal refresh cannot reach"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "This runs while you wait"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "A long date range can take several minutes. Keep this tab open. If the page stops waiting before it finishes, the download usually carries on in the background. Check your data again in a few minutes before starting another one. Choose the shortest range and the fewest kinds of data that cover your gap."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Download from"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Pick the day your data starts missing from."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "What to download"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "<0/> Download history"
+msgstr ""
+
+#. 0: elapsedSeconds
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "{0}s elapsed"
+msgstr ""
+
+#. 0: errorMessage
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "{0} If it ran for a long time before this, it may still be finishing on the server. Check your data before trying again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Nothing new was found for that range."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Finished. <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "A refresh only looks for data newer than the most recent reading you already have, so it can never fill a gap further back in your history. This downloads everything from the day you choose up to now. Readings you already have are matched and kept, so running it again will not duplicate anything."
+msgstr ""
+
+#. 0: fromDate
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Download history from {0}?"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "Download history"
+msgstr ""
+
+#. 0: selectedDataTypes.length
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "{0} kind(s) of data"
+msgstr ""
+
+#. 0: selectedDataTypes.length === dataTypes.length ? "every kind of data" \\: `${selectedDataTypes.length} kind(s) of data`; 1: fromDate
+#: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
+msgid "This downloads {0} from {1} up to now. It runs while you wait and can take several minutes, so keep this tab open until it finishes."
 msgstr ""
