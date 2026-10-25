@@ -28,7 +28,7 @@
 <div class="grid gap-4 @3xl:grid-cols-2">
   {#if basal?.entries && basal.entries.length > 0}
     <ScheduleView
-      title="Basal Rates"
+      title="Basal rates"
       description="Background insulin delivery rates"
       unit="U/hr"
       icon={Activity}
@@ -38,7 +38,7 @@
 
   {#if carbRatio?.entries && carbRatio.entries.length > 0}
     <ScheduleView
-      title="Carb Ratios (I:C)"
+      title="Carb ratios (I:C)"
       description="Grams of carbs per unit of insulin"
       unit="g/U"
       icon={Droplet}
@@ -49,7 +49,7 @@
 
   {#if sensitivity?.entries && sensitivity.entries.length > 0}
     <ScheduleView
-      title="Insulin Sensitivity (ISF)"
+      title="Insulin sensitivity (ISF)"
       description="BG drop per unit of insulin"
       unit="{bgLabel()}/U"
       icon={TrendingUp}

@@ -16,12 +16,12 @@ export function coachCopy() {
     "quick-tour.chart": {
       title: "Interactive chart",
       description:
-        "Drag to pan, pinch or scroll to zoom. Tap any point to see the exact reading and time.",
+        "Drag to pan, pinch or scroll to zoom. Select any point to see the exact reading and time.",
     },
     "feature-intro.calendar-views": {
       title: "View modes",
       description:
-        "Switch between Time in Range and Profile views to see different patterns.",
+        "Switch between time in range and profile views to see different patterns.",
     },
     "feature-intro.calendar-trackers": {
       title: "Tracker events",
@@ -40,7 +40,7 @@ export function coachCopy() {
     "loop-analysis-pages.switcher": {
       title: "Pages and filters",
       description:
-        "Select a page name to open that page. Select Filters (the funnel icon) at the top of the report to choose the data that the report uses. All the Loop Analysis pages use the same filters.",
+        "Select a page name to open that page. Select Filters (the funnel icon) at the top of the report to choose the data that the report uses. All the Loop analysis pages use the same filters.",
     },
     "loop-analysis-daily-profile.totals": {
       title: "Daily totals",
@@ -60,7 +60,7 @@ export function coachCopy() {
     "loop-analysis-daily-profile.days": {
       title: "Days at a time of day",
       description:
-        "Select a time on a chart to see the days for that time. Select a day to open it in Day in Review. Faded areas have too few days to show a pattern.",
+        "Select a time on a chart to see the days for that time. Select a day to open it in Day in review. Faded areas have too few days to show a pattern.",
     },
     "loop-analysis-meals-and-events.builder": {
       title: "Events to align",
@@ -80,7 +80,7 @@ export function coachCopy() {
     "loop-analysis-meals-and-events.events": {
       title: "All the events",
       description:
-        "This list shows each event in the cohorts. Select a column heading to sort the events. Select an event to open it in Day in Review.",
+        "This list shows each event in the cohorts. Select a column heading to sort the events. Select an event to open it in Day in review.",
     },
     "loop-analysis-prediction-accuracy.horizons": {
       title: "Error by horizon",
@@ -110,7 +110,7 @@ export function coachCopy() {
     "loop-analysis-loop-health.gaps": {
       title: "Gaps",
       description:
-        "This list shows the gaps in the loop, with the longest gap first. Select a gap to open it in Day in Review.",
+        "This list shows the gaps in the loop, with the longest gap first. Select a gap to open it in Day in review.",
     },
     "loop-analysis-settings-evidence.observations": {
       title: "Observations, not advice",

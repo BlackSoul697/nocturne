@@ -58,7 +58,7 @@ describe("Finish", () => {
     ["failed", /some or all of the history is missing/],
     ["running", /may still be\s+running/],
     ["partial", /not all of it/],
-    ["complete", /has been copied into Nocturne/],
+    ["complete", /now has a copy of/],
   ] as const)("describes a %s import as it ended", async (importResult, lead) => {
     renderFinish("migration", { importResult });
 

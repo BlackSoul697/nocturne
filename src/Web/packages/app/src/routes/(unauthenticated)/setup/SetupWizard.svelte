@@ -447,9 +447,9 @@
         class="rounded-2xl border border-destructive/20 bg-destructive/5 p-8"
       >
         <ShieldAlert class="mx-auto mb-4 h-12 w-12 text-destructive" />
-        <h2 class="text-xl font-semibold mb-3">HTTPS Required</h2>
+        <h2 class="text-xl font-semibold mb-3">HTTPS required</h2>
         <p class="text-muted-foreground text-sm leading-relaxed">
-          Nocturne requires a secure connection. Please access this site using <strong
+          Nocturne requires a secure connection. Open this site using <strong
             class="text-foreground"
           >
             https://

@@ -47,7 +47,7 @@
       onclick={onDisableDnd}
       disabled={disablingDnd}
     >
-      Turn off
+      Disable
     </Button>
   {/if}
 </div>

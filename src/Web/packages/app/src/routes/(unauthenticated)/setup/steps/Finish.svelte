@@ -54,16 +54,16 @@
     <p class="text-lg leading-relaxed text-muted-foreground max-w-130">
       {#if path === "migration"}
         {#if importResult === "complete" && voice.kind === "self"}
-          Your Nightscout history has been copied into Nocturne. Your Nightscout
-          site has not been changed, and your uploaders keep sending to it until
+          Nocturne now has a copy of your Nightscout history. Nothing changed on
+          your Nightscout site, and your uploaders keep sending to it until
           you choose to move them.
         {:else if importResult === "complete" && voice.kind === "named"}
-          {voice.name}'s Nightscout history has been copied into Nocturne. The
-          Nightscout site has not been changed, and {voice.name}'s uploaders keep
+          Nocturne now has a copy of {voice.name}'s Nightscout history. Nothing
+          changed on the Nightscout site, and {voice.name}'s uploaders keep
           sending to it until you choose to move them.
         {:else if importResult === "complete"}
-          The Nightscout history has been copied into Nocturne. The Nightscout
-          site has not been changed, and its uploaders keep sending to it until
+          Nocturne now has a copy of the Nightscout history. Nothing changed on
+          the Nightscout site, and its uploaders keep sending to it until
           you choose to move them.
         {:else if importResult === "partial"}
           Some of the Nightscout history was copied, but not all of it. You can

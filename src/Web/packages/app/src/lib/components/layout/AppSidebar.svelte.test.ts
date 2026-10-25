@@ -138,6 +138,17 @@ describe("AppSidebar", () => {
     expect(visited.urls).toEqual(["https://charlie.example.com/"]);
   });
 
+  it("offers the member's own data on the apex host, where no tenant is on screen", async () => {
+    pageState.data = { effectivePermissions: ["*"] };
+
+    render(Harness, { user: MEMBER, baseDomain: "example.com", tenantTargets: TENANTS });
+
+    await group("My data").click();
+
+    await expect.element(option("My data")).toHaveAttribute("aria-selected", "true");
+    await expect.element(option("Alpha (alpha)")).toBeVisible();
+  });
+
   it("shows a multi-tenant member the switcher and the Tenants item", async () => {
     renderViewingBravo();
 
