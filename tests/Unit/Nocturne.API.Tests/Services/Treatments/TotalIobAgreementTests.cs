@@ -429,16 +429,15 @@ public class TotalIobAgreementTests
     {
         // A device clock two minutes ahead: live, the snapshot is the present; at a requested
         // time it is later data.
-        foreach (var anchor in new[] { ReadingMills, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() })
-            _apsRows.Add(new ApsSnapshot
-            {
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(anchor + 2 * Minute).UtcDateTime,
-                Iob = 1.5,
-                AidAlgorithm = AidAlgorithm.OpenAps,
-            });
+        _apsRows.Add(new ApsSnapshot
+        {
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ReadingMills + 2 * Minute).UtcDateTime,
+            Iob = 1.5,
+            AidAlgorithm = AidAlgorithm.OpenAps,
+        });
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), new FakeTimeProvider(Reading), NullLogger<IobController>.Instance);
 
         var atTime = (await controller.GetCurrentIob(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
@@ -454,7 +453,7 @@ public class TotalIobAgreementTests
     {
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), new FakeTimeProvider(Reading), NullLogger<IobController>.Instance);
 
         var result = (await controller.GetIobFromTreatments(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
@@ -475,7 +474,7 @@ public class TotalIobAgreementTests
             .ReturnsAsync([]);
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), temps.Object, MockStateSpans.Empty().Object,
-            Reader(ReadingMills), NullLogger<IobController>.Instance);
+            Reader(ReadingMills), new FakeTimeProvider(Reading), NullLogger<IobController>.Instance);
 
         await controller.GetHourlyIob(intervalMinutes: 5, hours: 168, startTime: ReadingMills - 168 * 60 * Minute);
 
@@ -505,7 +504,7 @@ public class TotalIobAgreementTests
             .ReturnsAsync([]);
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, boluses.Object, temps.Object,
-            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), new FakeTimeProvider(Reading), NullLogger<IobController>.Instance);
 
         await controller.GetHourlyIob(intervalMinutes: 5, hours: 1, startTime: ReadingMills - 55 * Minute);
 
@@ -518,7 +517,7 @@ public class TotalIobAgreementTests
     {
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), new FakeTimeProvider(Reading), NullLogger<IobController>.Instance);
 
         var current = (await controller.GetCurrentIob(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
