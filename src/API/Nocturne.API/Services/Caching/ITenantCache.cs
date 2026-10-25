@@ -28,18 +28,21 @@ namespace Nocturne.API.Services.Caching;
 /// </remarks>
 public interface ITenantCache
 {
-    Task<T?> GetAsync<T>(string key, CancellationToken ct = default) where T : class;
-
-    Task SetAsync<T>(string key, T value, TimeSpan ttl, CancellationToken ct = default) where T : class;
-
-    Task SetAsync<T>(string key, T value, DateTimeOffset expiresAt, CancellationToken ct = default) where T : class;
-
     Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan ttl, CancellationToken ct = default)
         where T : class;
 
     /// <summary>
-    /// As <see cref="GetOrSetAsync{T}"/>, but a <c>null</c> from <paramref name="factory"/> is returned
-    /// and not cached, so the next read runs a factory again.
+    /// As <see cref="GetOrSetAsync{T}(string, Func{Task{T}}, TimeSpan, CancellationToken)"/>, but the
+    /// factory chooses how long its value is cached, or that it is not cached. A <c>null</c>
+    /// <see cref="CacheResult{T}.Value"/> throws <see cref="InvalidOperationException"/>.
+    /// </summary>
+    Task<T> GetOrSetAsync<T>(string key, Func<Task<CacheResult<T>>> factory, CancellationToken ct = default)
+        where T : class;
+
+    /// <summary>
+    /// As <see cref="GetOrSetAsync{T}(string, Func{Task{T}}, TimeSpan, CancellationToken)"/>, but a
+    /// <c>null</c> from <paramref name="factory"/> is returned and not cached, so the next read runs a
+    /// factory again.
     /// </summary>
     Task<T?> GetOrSetUnlessNullAsync<T>(string key, Func<Task<T?>> factory, TimeSpan ttl, CancellationToken ct = default)
         where T : class;

@@ -190,7 +190,6 @@ public class StoreSizeReaderTests
         await ReaderOver(contexts.Object, Tenant(Guid.NewGuid()), cache.Object).ReadAsync();
 
         cache.Verify(x => x.SetLocal(It.IsAny<string>(), true, TimeSpan.FromMinutes(1)), Times.Once);
-        cache.Verify(x => x.SetAsync(It.IsAny<string>(), It.IsAny<DbStats>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -198,7 +197,7 @@ public class StoreSizeReaderTests
     {
         var tenant = Tenant(Guid.NewGuid());
         var cache = TestTenantCache.Create(tenantId: tenant.TenantId);
-        await cache.SetAsync("dbstats:size", new DbStats { DataSize = 7 }, TimeSpan.FromMinutes(10));
+        await cache.GetOrSetAsync("dbstats:size", () => Task.FromResult(new DbStats { DataSize = 7 }), TimeSpan.FromMinutes(10));
         var contexts = new Mock<INocturneDbContextFactory>(MockBehavior.Strict);
 
         var stats = await ReaderOver(contexts.Object, tenant, cache).ReadAsync();
