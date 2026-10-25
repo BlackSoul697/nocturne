@@ -36,7 +36,7 @@
   async function handleCreate() {
     creating = true;
     try {
-      const result = await createClockFace({ name: "New Clock Face" });
+      const result = await createClockFace({ name: "New clock face" });
       if (result.id) {
         goto(resolve("/(authenticated)/clock/config/[id]", { id: result.id }));
       } else {
@@ -69,14 +69,14 @@
 </script>
 
 <svelte:head>
-  <title>Clock Faces - Nocturne</title>
+  <title>Clock faces - Nocturne</title>
 </svelte:head>
 
 <div class="min-h-dvh overflow-y-auto bg-background p-4 text-foreground sm:p-6 md:p-8">
   <div class="mx-auto max-w-4xl">
     <div class="mb-8 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold sm:text-3xl">Clock Faces</h1>
+        <h1 class="text-2xl font-bold sm:text-3xl">Clock faces</h1>
         <p class="mt-1 text-muted-foreground">
           {canManage ? "Create and manage your custom clock displays" : "Your clock displays"}
         </p>
@@ -88,7 +88,7 @@
           {:else}
             <Plus class="size-4" />
           {/if}
-          New Clock
+          New clock
         </Button>
       {/if}
     </div>
@@ -135,7 +135,7 @@
                 {:else}
                   <Plus class="size-4" />
                 {/if}
-                Create Clock Face
+                Create clock face
               </Button>
             {/if}
           </Card.Content>
@@ -211,7 +211,7 @@
 <!-- Delete Confirmation Dialog -->
 <ConfirmDialog
   bind:open={deleteDialogOpen}
-  title="Delete Clock Face"
+  title="Delete clock face"
   confirmLabel="Delete"
   destructive
   busy={deletion.busy}

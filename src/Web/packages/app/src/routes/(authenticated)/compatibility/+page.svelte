@@ -75,8 +75,8 @@
   const matchOptions = [
     { value: "", label: "All" },
     { value: "0", label: "Perfect" },
-    { value: "1", label: "Minor Differences" },
-    { value: "2", label: "Major Differences" },
+    { value: "1", label: "Minor differences" },
+    { value: "2", label: "Major differences" },
     { value: "3", label: "Critical" },
   ];
   let showCompatible = $state(false); // Hide compatible by default
@@ -185,7 +185,7 @@
   <div class="flex flex-col gap-3 @lg:flex-row @lg:justify-between @lg:items-center">
     <div class="flex items-center gap-3">
       <Link class="size-6 text-primary" />
-      <h1 class="text-3xl font-bold">Compatibility Testing</h1>
+      <h1 class="text-3xl font-bold">Compatibility testing</h1>
     </div>
     <div class="flex gap-2 items-center">
       <span class="text-sm text-muted-foreground">
@@ -195,7 +195,7 @@
         variant={isPolling ? "default" : "secondary"}
         onclick={togglePolling}
       >
-        {isPolling ? "Polling Active" : "Polling Paused"}
+        {isPolling ? "Polling active" : "Polling paused"}
       </Button>
     </div>
   </div>
@@ -221,13 +221,13 @@
   <div class="grid grid-cols-1 @xl:grid-cols-2 @5xl:grid-cols-4 gap-4">
     <div class="bg-card rounded-lg shadow p-6">
       <h3 class="text-sm text-muted-foreground mb-2">
-        Total Requests
+        Total requests
       </h3>
       <p class="text-3xl font-bold">{activeMetrics.totalRequests || 0}</p>
     </div>
     <div class="bg-card rounded-lg shadow p-6">
       <h3 class="text-sm text-muted-foreground mb-2">
-        Compatibility Score
+        Compatibility score
       </h3>
       <p class="text-3xl font-bold">
         {(activeMetrics.compatibilityScore || 0).toFixed(1)}%
@@ -235,7 +235,7 @@
     </div>
     <div class="bg-card rounded-lg shadow p-6">
       <h3 class="text-sm text-muted-foreground mb-2">
-        Critical Issues
+        Critical issues
       </h3>
       <p class="text-3xl font-bold text-destructive">
         {activeMetrics.criticalDifferences || 0}
@@ -243,7 +243,7 @@
     </div>
     <div class="bg-card rounded-lg shadow p-6">
       <h3 class="text-sm text-muted-foreground mb-2">
-        Avg Response Time
+        Avg response time
       </h3>
       <p class="text-3xl font-bold">
         {formatElapsedMs(activeMetrics.averageNocturneResponseTime || 0)}
@@ -257,7 +257,7 @@
     <div class="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-4 gap-4">
       <div>
         <label for="filterPath" class="block text-sm font-medium mb-1">
-          Request Path
+          Request path
         </label>
         <Input
           type="text"
@@ -285,7 +285,7 @@
       </div>
       <div>
         <label for="filterMatch" class="block text-sm font-medium mb-1">
-          Match Type
+          Match type
         </label>
         <Select.Root type="single" bind:value={filterMatch}>
           <Select.Trigger id="filterMatch" class="w-full">
@@ -307,7 +307,7 @@
       <label class="flex items-center gap-2">
         <Checkbox bind:checked={showCompatible} />
         <span class="text-sm">
-          Show compatible requests (Perfect & Minor Differences)
+          Show compatible requests (perfect & minor differences)
         </span>
       </label>
     </div>
@@ -317,7 +317,7 @@
   <div class="bg-card rounded-lg shadow overflow-hidden">
     <div class="px-6 py-4 border-b">
       <h2 class="text-xl font-semibold">
-        Recent Requests ({filteredAnalyses.length}{showCompatible
+        Recent requests ({filteredAnalyses.length}{showCompatible
           ? ""
           : " incompatible"})
       </h2>
@@ -359,7 +359,7 @@
             <th
               class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
             >
-              Response Time
+              Response time
             </th>
           </tr>
         </thead>

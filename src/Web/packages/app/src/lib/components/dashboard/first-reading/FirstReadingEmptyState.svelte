@@ -111,8 +111,7 @@
       </div>
     {:else}
       <p class="text-sm text-muted-foreground" data-testid="no-connector-intro">
-        No data source is set up yet. Pick whichever matches how you track your
-        glucose.
+        No data source is configured yet. Pick whichever matches how you track your glucose.
       </p>
       <!-- No `fonts`: these sizes are inherited rather than set on the element,
            so there is no class to mirror. The DOM fallback measures it. -->
@@ -144,7 +143,7 @@
             contentClass="flex flex-col gap-2 p-4"
           >
             <KeyRound data-drop-obstacle class="h-5 w-5 text-primary" />
-            <span class="font-medium">Set up an uploader app</span>
+            <span class="font-medium">Add an uploader app</span>
             <span class="text-sm text-muted-foreground">
               Create an API token so an app like xDrip, AAPS, Loop, or Trio can
               send readings.

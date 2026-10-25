@@ -73,8 +73,8 @@
     | "carbs";
 
   const METRIC_OPTIONS: { value: HeatmapMetric; label: string }[] = [
-    { value: "avgGlucose", label: "Avg Glucose" },
-    { value: "tir", label: "Time in Range" },
+    { value: "avgGlucose", label: "Avg glucose" },
+    { value: "tir", label: "Time in range" },
     { value: "bolus", label: "Bolus" },
     { value: "basal", label: "Basal" },
     { value: "tdd", label: "TDD" },
@@ -664,7 +664,7 @@
             autoplay="once"
             class="mx-auto size-48"
           />
-          <h2 class="text-xl font-semibold">No Data Available</h2>
+          <h2 class="text-xl font-semibold">No data available</h2>
           <p class="text-muted-foreground">
             There is no data to display yet. Connect a data source in your
             settings to get started.
@@ -674,7 +674,7 @@
             variant="outline"
             class="print:hidden"
           >
-            Configure Data Sources
+            Configure data sources
           </Button>
         </div>
       </div>

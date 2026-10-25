@@ -216,7 +216,7 @@
 </script>
 
 <svelte:head>
-  <title>Reset Connector Cursors - Administration - Nocturne</title>
+  <title>Reset connector cursors - Administration - Nocturne</title>
 </svelte:head>
 
 <div class="@container container mx-auto max-w-4xl space-y-6 p-3 @md:p-6">
@@ -225,7 +225,7 @@
       <Database class="size-6 text-primary" />
     </div>
     <div>
-      <h1 class="text-2xl font-bold tracking-tight">Reset Connector Cursors</h1>
+      <h1 class="text-2xl font-bold tracking-tight">Reset connector cursors</h1>
       <p class="text-muted-foreground">
         Re-pull a tenant's connector history after fixing a connector bug
       </p>

@@ -107,7 +107,7 @@
         onCreated?.(createdInviteUrl);
       }
     } catch (e) {
-      errorMessage = describeSubmitError(e, "Failed to create invite. Please try again.");
+      errorMessage = describeSubmitError(e, "Failed to create invite. Try again.");
     } finally {
       isCreatingInvite = false;
     }
@@ -139,7 +139,7 @@
 
 <Card.Root data-testid="create-invite-card">
   <Card.Header>
-    <Card.Title class="text-lg">Create Invite Link</Card.Title>
+    <Card.Title class="text-lg">Create invite link</Card.Title>
     <Card.Description>
       Generate a shareable link. Anyone with this link can accept the invite
       after signing in.
@@ -272,7 +272,7 @@
                 {:else}
                   <ChevronDown class="h-4 w-4" />
                 {/if}
-                Direct Permissions (optional)
+                Direct permissions (optional)
               </Button>
             {/snippet}
           </Collapsible.Trigger>
@@ -358,7 +358,7 @@
             {#if isCreatingInvite}
               <Loader2 class="mr-1.5 h-4 w-4 animate-spin" />
             {/if}
-            Create Link
+            Create link
           </Button>
         </div>
       </div>

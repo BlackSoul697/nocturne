@@ -48,7 +48,7 @@
   <CardHeader>
     <CardTitle class="flex items-center gap-2">
       <Clock class="h-5 w-5" />
-      Alert History
+      Alert history
     </CardTitle>
     <CardDescription>
       Past alert excursions and their resolution

@@ -175,7 +175,7 @@
   </div>
 
   <div class="space-y-2">
-    <Label>Tracker Mode</Label>
+    <Label>Tracker mode</Label>
     <Select.Root type="single" name="{prefix}mode" bind:value={formMode}>
       <Select.Trigger>
         {#if formMode === TrackerMode.Duration}
@@ -206,7 +206,7 @@
 
   {#if formMode === TrackerMode.Duration}
     <div class="space-y-2">
-      <Label for="lifespan">Expected Lifespan</Label>
+      <Label for="lifespan">Expected lifespan</Label>
       <DurationInput
         id="lifespan"
         bind:value={formLifespanHours}
@@ -374,7 +374,7 @@
   />
 
   <div class="space-y-2">
-    <Label for="dashboardVisibility">Dashboard Visibility</Label>
+    <Label for="dashboardVisibility">Dashboard visibility</Label>
     <Select.Root
       type="single"
       name="{prefix}dashboardVisibility"
@@ -427,7 +427,7 @@
   </div>
 
   <div class="space-y-2">
-    <Label for="visibility">Public Visibility</Label>
+    <Label for="visibility">Public visibility</Label>
     <Select.Root
       type="single"
       name="{prefix}visibility"
@@ -458,7 +458,7 @@
   </div>
 
   <div class="space-y-3 pt-2 border-t">
-    <Label>Event Integration (Nightscout)</Label>
+    <Label>Event integration (Nightscout)</Label>
     <p class="text-xs text-muted-foreground -mt-1">
       Optionally create treatment events when this tracker starts or completes.
       This maintains compatibility with existing CAGE/SAGE pills.
@@ -493,7 +493,7 @@
   >
     <Dialog.Header>
       <Dialog.Title>
-        {isNewDefinition ? "New Tracker Definition" : "Edit Definition"}
+        {isNewDefinition ? "New tracker definition" : "Edit definition"}
       </Dialog.Title>
     </Dialog.Header>
 
