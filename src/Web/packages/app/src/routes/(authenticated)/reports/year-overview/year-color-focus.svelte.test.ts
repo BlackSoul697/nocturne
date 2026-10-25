@@ -362,7 +362,8 @@ describe("year overview page color focus integration", () => {
     await expect.element(cell("2026-01-04")).toBeInTheDocument();
     await page.getByRole("button", { name: "Collapse Avg Glucose color scale" }).click();
     expect(page.getByRole("slider").elements()).toHaveLength(0);
-    await expect.element(page.getByRole("img", { name: /^Avg Glucose color scale from/ })).toBeInTheDocument();
+    await expect.element(page.getByTestId("collapsed-scale")).toBeInTheDocument();
+    expect(page.getByTestId("collapsed-scale").element().getAttribute("style")).toContain("linear-gradient");
 
     await selectMetric("TDD");
     await expect.element(cell("2026-01-04")).toHaveTextContent(/^var\(--insulin\)$/);

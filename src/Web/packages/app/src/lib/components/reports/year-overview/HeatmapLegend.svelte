@@ -103,6 +103,7 @@
           <span
             class="h-2.5 min-w-0 flex-1 rounded-sm bg-(image:--scale-gradient)"
             style:--scale-gradient={scaleGradient(scale)}
+            data-testid="collapsed-scale"
             role="img"
             aria-label={`${metricLabel} color scale from ${formatted(scale.axis[0])} to ${formatted(scale.axis[1])} ${unitLabel}`}
           ></span>
