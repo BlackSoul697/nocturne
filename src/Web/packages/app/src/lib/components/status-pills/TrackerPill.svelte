@@ -55,13 +55,13 @@
   const ageHours = $derived(ageHoursSince(instance.startedAt, now) ?? instance.ageHours);
 
   const timeRemaining = $derived.by(() => {
-    if (!ageHours || !definition?.lifespanHours) return undefined;
+    if (ageHours === undefined || ageHours === null || !definition?.lifespanHours) return undefined;
     return definition.lifespanHours - ageHours;
   });
 
   // Capped at 100%.
   const progressPercent = $derived.by(() => {
-    if (!ageHours || !definition?.lifespanHours) return 0;
+    if (ageHours === undefined || ageHours === null || !definition?.lifespanHours) return 0;
     return Math.min(100, (ageHours / definition.lifespanHours) * 100);
   });
 
