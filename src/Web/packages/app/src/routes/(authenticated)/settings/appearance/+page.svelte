@@ -21,6 +21,7 @@
     userPrefersMode,
     dashboardTopWidgets,
     dashboardRail,
+    hiddenLegacyFallbacks,
     chartLineColorMode,
     chartLineColor,
     chartPointColorMode,
@@ -952,6 +953,8 @@
       value={dashboardRail.current}
       {trackerPillsEnabled}
       onchange={(preference) => (dashboardRail.current = preference)}
+      hiddenLegacyFallbacks={hiddenLegacyFallbacks.current}
+      onhiddenlegacyfallbackschange={(kinds) => (hiddenLegacyFallbacks.current = kinds)}
     />
 
 

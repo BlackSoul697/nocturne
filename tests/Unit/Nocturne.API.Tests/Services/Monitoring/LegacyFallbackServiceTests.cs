@@ -160,7 +160,7 @@ public class LegacyFallbackServiceTests
     {
         var change = Event(DeviceEventType.SiteChange, Now.AddHours(-30));
 
-        var fallbacks = await _service.GetAsync();
+        var fallbacks = (await _service.GetAsync(readDeviceAges: true)).Fallbacks;
 
         var site = fallbacks.Should().ContainSingle().Subject;
         site.Kind.Should().Be(LegacyConsumableKind.Site);
@@ -174,17 +174,58 @@ public class LegacyFallbackServiceTests
         ExistingTracker("Site Change");
         Event(DeviceEventType.CannulaChange, Now.AddHours(-30));
 
-        (await _service.GetAsync()).Should().BeEmpty();
+        (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ACoveredKind_NamesEveryDefinitionCoveringIt()
+    {
+        ExistingTracker("Site Change");
+        ExistingTracker("Pod Change");
+        ExistingTracker("Sensor Start");
+        Event(DeviceEventType.CannulaChange, Now.AddHours(-30));
+
+        var covered = (await _service.GetAsync(readDeviceAges: true)).Covered;
+
+        covered.Select(c => c.Kind).Should().Equal(LegacyConsumableKind.Sensor, LegacyConsumableKind.Site);
+        covered.Single(c => c.Kind == LegacyConsumableKind.Site).DefinitionIds
+            .Should().Equal(_definitions[0].Id, _definitions[1].Id);
+        covered.Single(c => c.Kind == LegacyConsumableKind.Sensor).DefinitionIds
+            .Should().Equal(_definitions[2].Id);
+    }
+
+    [Fact]
+    public async Task WithoutDeviceAges_OnlyCoverageIsRead()
+    {
+        ExistingTracker("Sensor Start");
+        Event(DeviceEventType.SiteChange, Now.AddHours(-30));
+
+        var read = await _service.GetAsync(readDeviceAges: false);
+
+        read.Fallbacks.Should().BeEmpty();
+        read.Covered.Should().ContainSingle().Which.Kind.Should().Be(LegacyConsumableKind.Sensor);
+        _deviceEvents.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AnUncoveredKind_IsNotListedAsCovered()
+    {
+        Event(DeviceEventType.SiteChange, Now.AddHours(-30));
+
+        var read = await _service.GetAsync(readDeviceAges: true);
+
+        read.Covered.Should().BeEmpty();
+        read.Fallbacks.Should().ContainSingle();
     }
 
     [Fact]
     public async Task ThePumpBattery_NeedsTwoChangesInTheWindow()
     {
         Event(DeviceEventType.PumpBatteryChange, Now.AddDays(-5));
-        (await _service.GetAsync()).Should().BeEmpty();
+        (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().BeEmpty();
 
         Event(DeviceEventType.PumpBatteryChange, Now.AddDays(-26));
-        (await _service.GetAsync()).Should().ContainSingle()
+        (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().ContainSingle()
             .Which.Kind.Should().Be(LegacyConsumableKind.PumpBattery);
     }
 
@@ -194,7 +235,7 @@ public class LegacyFallbackServiceTests
         _devices.Add(new PatientDevice { CatalogId = "omnipod-dash" });
         Event(DeviceEventType.PodChange, Now.AddHours(-10));
 
-        var fallback = (await _service.GetAsync()).Should().ContainSingle().Subject;
+        var fallback = (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().ContainSingle().Subject;
 
         fallback.Spec.Name.Should().Be("Omnipod DASH pod");
         fallback.Projected.Definition.LifespanHours.Should().Be(fallback.Spec.LifespanHours);
@@ -206,7 +247,7 @@ public class LegacyFallbackServiceTests
         _devices.Add(new PatientDevice { CatalogId = "omnipod-dash" });
         Event(DeviceEventType.ReservoirChange, Now.AddHours(-10));
 
-        (await _service.GetAsync()).Should().BeEmpty();
+        (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().BeEmpty();
         (await _service.CreateTrackersAsync([LegacyConsumableKind.Reservoir], UserId)).Definitions.Should().BeEmpty();
     }
 
@@ -214,7 +255,7 @@ public class LegacyFallbackServiceTests
     public async Task TheFallbacksSchedule_IsTheScheduleOfTheTrackerItConvertsInto()
     {
         Event(DeviceEventType.SensorStart, Now.AddDays(-9));
-        var fallback = LegacyFallbackDto.From((await _service.GetAsync()).Single());
+        var fallback = LegacyFallbackDto.From((await _service.GetAsync(readDeviceAges: true)).Fallbacks.Single());
 
         var conversion = await _service.CreateTrackersAsync([LegacyConsumableKind.Sensor], UserId);
 
@@ -386,7 +427,7 @@ public class LegacyFallbackServiceTests
         });
         Event(DeviceEventType.SensorStart, Now.AddDays(-2));
 
-        (await _service.GetAsync()).Should().BeEmpty();
+        (await _service.GetAsync(readDeviceAges: true)).Fallbacks.Should().BeEmpty();
         (await _service.CreateTrackersAsync([LegacyConsumableKind.Sensor], UserId)).Definitions.Should().BeEmpty();
     }
 }

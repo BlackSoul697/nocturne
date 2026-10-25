@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatAge } from "$lib/components/trackers/age.svelte";
   import { formatDayTime } from "$lib/utils/formatting";
   import {
     Card,
@@ -220,15 +221,6 @@
     [TrackerCategory.Cannula]: "text-pink-500",
     [TrackerCategory.Battery]: "text-yellow-500",
   };
-
-  // Format age
-  function formatAge(hours: number): string {
-    if (hours < 1) return `${Math.floor(hours * 60)}m`;
-    if (hours < 24) return `${Math.floor(hours)}h`;
-    const days = Math.floor(hours / 24);
-    const h = Math.floor(hours % 24);
-    return h > 0 ? `${days}d ${h}h` : `${days}d`;
-  }
 
   // Format date
   function formatDate(dateStr: Date | string | undefined): string {

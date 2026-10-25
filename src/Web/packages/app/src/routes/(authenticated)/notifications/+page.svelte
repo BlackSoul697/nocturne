@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatAge } from "$lib/components/trackers/age.svelte";
   import { resolve } from "$app/paths";
   import { startOfDay, toDayString } from "$lib/utils/date-range";
   import { formatDayTime, formatLongDate } from "$lib/utils/formatting";
@@ -70,15 +71,6 @@
     [CompletionReason.Cancelled]: "Canceled",
     [CompletionReason.Missed]: "Missed",
   };
-
-  // Format age
-  function formatAge(hours: number): string {
-    if (hours < 1) return `${Math.floor(hours * 60)}m`;
-    if (hours < 24) return `${Math.floor(hours)}h`;
-    const days = Math.floor(hours / 24);
-    const h = Math.floor(hours % 24);
-    return h > 0 ? `${days}d ${h}h` : `${days}d`;
-  }
 
   // Format date
   function formatDate(dateStr: string | undefined): string {

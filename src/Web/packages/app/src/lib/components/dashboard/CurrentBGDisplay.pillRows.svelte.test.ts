@@ -24,6 +24,7 @@ const store = reactiveFields({
   demoMode: false,
   trackerInstances: [] as unknown[],
   trackerDefinitions: [] as unknown[],
+  legacyFallbacks: [] as unknown[],
   pillsData: { cob: null, basal: null, iob: null, loop: null } as Record<string, unknown>,
   currentReservoir: null as number | null,
   isReady: false,

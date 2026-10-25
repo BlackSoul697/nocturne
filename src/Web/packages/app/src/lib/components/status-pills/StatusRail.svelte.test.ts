@@ -2,7 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
-import { RailItemId } from "$lib/api/generated/nocturne-api-client";
+import { LegacyConsumableKind, RailItemId } from "$lib/api/generated/nocturne-api-client";
 
 const { now, store, settings } = vi.hoisted(() => {
   const now = Date.UTC(2026, 5, 14, 9, 30, 0);
@@ -23,6 +23,8 @@ const { now, store, settings } = vi.hoisted(() => {
       currentReservoir: 120 as number | null,
       trackerInstances: [] as unknown[],
       trackerDefinitions: [] as unknown[],
+      legacyFallbacks: [] as unknown[],
+      refreshTrackers: () => Promise.resolve(),
     },
     settings: { features: { trackerPills: { enabled: true } } },
   };
@@ -37,7 +39,7 @@ vi.mock("$api/ui-settings.remote", () => ({
   getUiSettings: () => remoteQuery(() => settings),
 }));
 
-import { dashboardRail } from "$lib/stores/appearance-store.svelte";
+import { dashboardRail, hiddenLegacyFallbacks } from "$lib/stores/appearance-store.svelte";
 import CurrentBGDisplay from "$lib/components/dashboard/current-bg-display-test-wrapper.svelte";
 
 const SENSOR_DEFINITION = {
@@ -57,10 +59,19 @@ const SENSOR_INSTANCE = {
   isActive: true,
 };
 
+const SITE_FALLBACK = {
+  kind: "Site",
+  latestEventAt: new Date(now - 50 * 3600_000).toISOString(),
+  ageHours: 50,
+  schedule: [],
+  spec: { name: "Infusion Site", category: "Cannula", lifespanHours: 72 },
+};
+
 const DESKTOP = "status-pills";
 const MOBILE = "status-pills-mobile";
 // The pref writes through to localStorage, which every later test file's store reads at load.
 const RAIL_STORAGE_KEY = "nocturne-dashboard-rail";
+const HIDDEN_STORAGE_KEY = "nocturne-hidden-legacy-fallbacks";
 
 const { Cob, Basal, Iob, Loop, Reservoir, Trackers } = RailItemId;
 
@@ -80,6 +91,8 @@ describe("StatusRail", () => {
     store.currentReservoir = 120;
     store.trackerDefinitions = [SENSOR_DEFINITION];
     store.trackerInstances = [SENSOR_INSTANCE];
+    store.legacyFallbacks = [];
+    hiddenLegacyFallbacks.presentFrom({});
   });
 
   afterEach(() => {
@@ -87,6 +100,54 @@ describe("StatusRail", () => {
     localStorage.removeItem(RAIL_STORAGE_KEY);
     store.trackerInstances = [];
     store.trackerDefinitions = [];
+    store.legacyFallbacks = [];
+    hiddenLegacyFallbacks.presentFrom({});
+    localStorage.removeItem(HIDDEN_STORAGE_KEY);
+  });
+
+  /** The tracker pill buttons inside a rail, in the order they render. */
+  function trackerPills(testId: string): string[] {
+    const trackers = page.getByTestId(testId).element().querySelector(`[data-rail-item="${Trackers}"]`);
+    return [...(trackers?.querySelectorAll("button") ?? [])].map(
+      (button) => button.getAttribute("data-testid") ?? "tracker-pill"
+    );
+  }
+
+  it("shows a legacy age after the tracker pills, on desktop and mobile", async () => {
+    store.legacyFallbacks = [SITE_FALLBACK];
+    render(CurrentBGDisplay);
+
+    await expect
+      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion site/ }))
+      .toBeVisible();
+    expect(trackerPills(DESKTOP)).toEqual(["tracker-pill", "legacy-age-pill"]);
+
+    await page.viewport(400, 900);
+    await expect
+      .element(page.getByTestId(MOBILE).getByRole("button", { name: /Infusion site/ }))
+      .toBeVisible();
+  });
+
+  it("shows the trackers item for a legacy age alone", async () => {
+    store.trackerInstances = [];
+    store.legacyFallbacks = [SITE_FALLBACK];
+    render(CurrentBGDisplay);
+
+    await expect
+      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion site/ }))
+      .toBeVisible();
+    expect(railItems(DESKTOP)).toContain(Trackers);
+  });
+
+  it("does not show a legacy age the user hid", async () => {
+    store.legacyFallbacks = [SITE_FALLBACK];
+    hiddenLegacyFallbacks.hydrate([LegacyConsumableKind.Site]);
+    render(CurrentBGDisplay);
+
+    await expect
+      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Sensor/ }))
+      .toBeVisible();
+    expect(page.getByRole("button", { name: /Infusion site/ }).elements()).toHaveLength(0);
   });
 
   it("shows the ordered items first and the rest after them in default order", async () => {

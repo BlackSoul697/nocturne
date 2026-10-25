@@ -18,14 +18,16 @@ public class TrackerLegacyFallbacksControllerTests
 {
     private static readonly Guid SubjectId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
+    private static readonly Guid SensorTrackerId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
     private readonly Mock<ILegacyFallbackService> _service = new();
 
     public TrackerLegacyFallbacksControllerTests()
     {
         var spec = ConsumableTrackerSpecs.Generic(LegacyConsumableKind.Site);
         var at = DateTime.UtcNow.AddHours(-10);
-        _service.Setup(s => s.GetAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+        _service.Setup(s => s.GetAsync(true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LegacyFallbackRead([
                 new LegacyFallback(
                     LegacyConsumableKind.Site,
                     new DeviceEvent { Id = Guid.NewGuid(), EventType = DeviceEventType.SiteChange, Timestamp = at },
@@ -35,7 +37,10 @@ public class TrackerLegacyFallbacksControllerTests
                         StartedAt = at,
                         Definition = ConsumableTrackerSpecs.ToDefinition(spec, string.Empty),
                     }),
-            ]);
+            ], [new LegacyCoverage(LegacyConsumableKind.Sensor, [SensorTrackerId])]));
+        _service.Setup(s => s.GetAsync(false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LegacyFallbackRead(
+                [], [new LegacyCoverage(LegacyConsumableKind.Sensor, [SensorTrackerId])]));
         _service.Setup(s => s.CreateTrackersAsync(
                 It.IsAny<IReadOnlyCollection<LegacyConsumableKind>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new LegacyConversion([], [], []));
@@ -57,28 +62,41 @@ public class TrackerLegacyFallbacksControllerTests
         };
     }
 
-    private static LegacyFallbackDto[] Body(ActionResult<LegacyFallbackDto[]> result) =>
-        (LegacyFallbackDto[])result.Result.Should().BeOfType<OkObjectResult>().Subject.Value!;
+    private static LegacyFallbacksDto Body(ActionResult<LegacyFallbacksDto> result) =>
+        (LegacyFallbacksDto)result.Result.Should().BeOfType<OkObjectResult>().Subject.Value!;
 
     [Fact]
     public async Task AReaderOfTrackersAndDevices_GetsTheFallbacks()
     {
         var body = Body(await Controller(Scope.AlertsRead, Scope.DevicesRead).GetLegacyFallbacks());
 
-        var site = body.Should().ContainSingle().Subject;
+        var site = body.Fallbacks.Should().ContainSingle().Subject;
         site.Kind.Should().Be(LegacyConsumableKind.Site);
         site.Spec.Name.Should().Be("Infusion Site");
         site.Schedule.Should().HaveCount(2);
+        var sensor = body.Covered.Should().ContainSingle().Subject;
+        sensor.Kind.Should().Be(LegacyConsumableKind.Sensor);
+        sensor.DefinitionIds.Should().Equal(SensorTrackerId);
     }
 
-    [Theory]
-    [InlineData(Scope.AlertsRead)]
-    [InlineData(Scope.DevicesRead)]
-    public async Task ACallerMissingEitherScope_GetsNone(string onlyScope)
+    [Fact]
+    public async Task AReaderOfTrackersAlone_GetsTheCoverageAndNoFallbacks()
     {
-        Body(await Controller(onlyScope).GetLegacyFallbacks()).Should().BeEmpty();
+        var body = Body(await Controller(Scope.AlertsRead).GetLegacyFallbacks());
 
-        _service.Verify(s => s.GetAsync(It.IsAny<CancellationToken>()), Times.Never);
+        body.Fallbacks.Should().BeEmpty();
+        body.Covered.Should().ContainSingle().Which.DefinitionIds.Should().Equal(SensorTrackerId);
+        _service.Verify(s => s.GetAsync(true, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ACallerWithoutTrackerReadAccess_GetsNone()
+    {
+        var body = Body(await Controller(Scope.DevicesRead).GetLegacyFallbacks());
+
+        body.Fallbacks.Should().BeEmpty();
+        body.Covered.Should().BeEmpty();
+        _service.Verify(s => s.GetAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

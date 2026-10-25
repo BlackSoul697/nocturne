@@ -28,6 +28,7 @@ import { PersistedState } from "runed";
 import { setMode, mode, userPrefersMode } from "mode-watcher";
 import supportedLocales from "../../../../../supportedLocales.json";
 import {
+  LegacyConsumableKind,
   WidgetId,
   type DashboardRailPreference,
   type UserDisplayPreferences,
@@ -505,6 +506,21 @@ export const dashboardRail = new SyncedPref<DashboardRailPreference>(
   parseRailPreference
 );
 
+const LEGACY_CONSUMABLE_KINDS: readonly LegacyConsumableKind[] = Object.values(LegacyConsumableKind);
+
+const legacyKindListPref: PrefParser<LegacyConsumableKind[]> = (raw) =>
+  Array.isArray(raw)
+    ? LEGACY_CONSUMABLE_KINDS.filter((kind) => raw.includes(kind))
+    : undefined;
+
+/** The legacy ages the user hid from the rail's tracker pills. */
+export const hiddenLegacyFallbacks = new SyncedPref<LegacyConsumableKind[]>(
+  "nocturne-hidden-legacy-fallbacks",
+  [],
+  (p) => p.hiddenLegacyFallbacks,
+  legacyKindListPref
+);
+
 // ==========================================
 // Color Theme Management (Nocturne/Trio)
 // ==========================================
@@ -850,6 +866,7 @@ export function collectPreferences(): UserDisplayPreferences {
     calendarShowTirPercent: calendarShowTirPercent.stored,
     dashboardTopWidgets: dashboardTopWidgets.stored,
     dashboardRail: dashboardRail.stored,
+    hiddenLegacyFallbacks: hiddenLegacyFallbacks.stored,
     prediction: {
       enabled: predictionEnabled.stored,
       minutes: predictionMinutes.stored,

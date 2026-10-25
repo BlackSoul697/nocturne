@@ -11,6 +11,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import {
+    type LegacyConsumableKind,
     RailItemId,
     type DashboardRailPreference,
   } from "$lib/api/generated/nocturne-api-client";
@@ -21,10 +22,12 @@
   } from "$lib/components/status-pills/rail";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import ArrowUp from "@lucide/svelte/icons/arrow-up";
+  import Eye from "@lucide/svelte/icons/eye";
   import GripVertical from "@lucide/svelte/icons/grip-vertical";
   import Pill from "@lucide/svelte/icons/pill";
   import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
   import { DragReorder, moveItem } from "./drag-reorder.svelte";
+  import { legacyKindLabelWithNightscoutName } from "$lib/components/trackers/legacy-kind-label.svelte";
 
   interface Props {
     /** The user's arrangement of the rail; an empty object is the default. */
@@ -32,9 +35,22 @@
     /** The tenant's tracker pill switch. While it is off, no user sees trackers. */
     trackerPillsEnabled: boolean;
     onchange?: (preference: DashboardRailPreference) => void;
+    /** The legacy ages the user hid from the tracker pills. */
+    hiddenLegacyFallbacks?: LegacyConsumableKind[];
+    onhiddenlegacyfallbackschange?: (kinds: LegacyConsumableKind[]) => void;
   }
 
-  let { value, trackerPillsEnabled, onchange }: Props = $props();
+  let {
+    value,
+    trackerPillsEnabled,
+    onchange,
+    hiddenLegacyFallbacks = [],
+    onhiddenlegacyfallbackschange,
+  }: Props = $props();
+
+  function showLegacyFallback(kind: LegacyConsumableKind) {
+    onhiddenlegacyfallbackschange?.(hiddenLegacyFallbacks.filter((k) => k !== kind));
+  }
 
   const LABELS: Record<RailItemId, string> = {
     [RailItemId.Cob]: "Carbs on board (COB)",
@@ -172,9 +188,36 @@
       </p>
     {/if}
 
+    {#if hiddenLegacyFallbacks.length > 0}
+      <div class="space-y-2" data-testid="hidden-legacy-fallbacks">
+        <div>
+          <h3 class="text-sm font-medium">Hidden legacy ages</h3>
+          <p class="text-xs text-muted-foreground">
+            The ages of these items do not show with the tracker pills.
+          </p>
+        </div>
+        <ul class="space-y-2">
+          {#each hiddenLegacyFallbacks as kind (kind)}
+            <li class="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+              <span class="text-sm text-muted-foreground">{legacyKindLabelWithNightscoutName(kind)}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={`Show ${legacyKindLabelWithNightscoutName(kind)}`}
+                onclick={() => showLegacyFallback(kind)}
+              >
+                <Eye class="h-4 w-4" />
+                Show
+              </Button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
     <div class="flex items-center justify-between gap-2">
       <p class="text-xs text-muted-foreground">
-        Trackers show only when a tracker is active.
+        Trackers show when a tracker is active. If an item has no tracker and you did not hide it, its age also shows.
       </p>
       <Button
         variant="outline"
