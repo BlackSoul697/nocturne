@@ -17,7 +17,11 @@
   import { localDayStart } from "$lib/utils/timezone";
   import { indexBy } from "$lib/utils/collections";
   import { formatMinutesDuration } from "$lib/utils/duration";
-  import type { SleepNightSummary, SleepStageReferenceRangeSet } from "$lib/api";
+  import {
+    SleepScoreSource,
+    type SleepNightSummary,
+    type SleepStageReferenceRangeSet,
+  } from "$lib/api";
 
   interface Props {
     /** Nights already filtered to the selected date range / source. */
@@ -249,7 +253,7 @@
                       <Tooltip.Separator />
                       <Tooltip.Item
                         label="Sleep score"
-                        value={`${Math.round(night.sleepScore)}${night.scoreSource === "Computed" ? " (Estimated)" : ""}`}
+                        value={`${Math.round(night.sleepScore)}${night.scoreSource === SleepScoreSource.Computed ? " (Estimated)" : ""}`}
                       />
                     {/if}
                     {#if night.overnightTirPct != null}

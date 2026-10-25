@@ -9,6 +9,7 @@
     complete as completeCareLinkConnect,
     desktopToken as mintDesktopLinkCode,
   } from "$lib/api/generated/careLinkConnects.generated.remote";
+  import { CareLinkRegion } from "$lib/constants/carelink-regions";
   import { describeSubmitError } from "$lib/forms/submit-error";
   import {
     Card,
@@ -53,7 +54,7 @@
     // Called after a refresh token is stored, with the region signed in to and the
     // auto-detected profile (if any).
     onConnected?: (info: {
-      server: "EU" | "US";
+      server: CareLinkRegion;
       username?: string | null;
       country?: string | null;
     }) => void;
@@ -61,7 +62,7 @@
 
   type Phase = "idle" | "awaiting-code" | "done";
 
-  let region = $state<"EU" | "US">("EU");
+  let region = $state<CareLinkRegion>(CareLinkRegion.Eu);
   let phase = $state<Phase>("idle");
   let flowState = $state<string | null>(null);
   let codeInput = $state("");
@@ -169,15 +170,15 @@
         <Label>Region</Label>
         <div class="flex gap-2">
           <Button
-            variant={region === "EU" ? "default" : "outline"}
+            variant={region === CareLinkRegion.Eu ? "default" : "outline"}
             size="sm"
-            onclick={() => (region = "EU")}
+            onclick={() => (region = CareLinkRegion.Eu)}
             disabled={busy}>EU / outside-US</Button
           >
           <Button
-            variant={region === "US" ? "default" : "outline"}
+            variant={region === CareLinkRegion.Us ? "default" : "outline"}
             size="sm"
-            onclick={() => (region = "US")}
+            onclick={() => (region = CareLinkRegion.Us)}
             disabled={busy}>US</Button
           >
         </div>

@@ -1,4 +1,4 @@
-import { TrackerRealtimeAction, type InAppNotificationDto } from "$lib/api/generated/nocturne-api-client";
+import { SyncPhase, TrackerRealtimeAction, type InAppNotificationDto } from "$lib/api/generated/nocturne-api-client";
 import { isOneOf, isRecord, nonEmptyString } from "$lib/utils/type-guards";
 import { isoNow } from "$lib/utils/now";
 import { toIsoString } from "$lib/utils/api-date";
@@ -137,11 +137,7 @@ export function parseTrackerDefinitionUpdate(data: unknown): TrackerDefinitionUp
   return definitionId === undefined ? null : { definitionId };
 }
 
-const SYNC_PHASES = [
-  "Syncing",
-  "Completed",
-  "Failed",
-] as const satisfies readonly SyncProgressEvent["phase"][];
+const SYNC_PHASES: readonly SyncPhase[] = Object.values(SyncPhase);
 
 const SYNC_MESSAGE_TYPES = [
   "Authenticating",

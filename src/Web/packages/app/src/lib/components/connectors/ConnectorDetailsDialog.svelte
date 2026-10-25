@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ConnectorState, ConnectorReachability } from "$lib/constants/connector-states";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -181,12 +182,12 @@
       <div class="space-y-4 py-4">
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium">Status</span>
-          {#if selectedConnector.state === "Syncing"}
+          {#if selectedConnector.state === ConnectorState.Syncing}
             <Badge variant="info">
               <Loader2 class="h-3 w-3 mr-1 animate-spin" />
               Syncing...
             </Badge>
-          {:else if selectedConnector.state === "BackingOff"}
+          {:else if selectedConnector.state === ConnectorState.BackingOff}
             <Badge variant="warning">
               <Clock class="h-3 w-3 mr-1" />
               Backing off
@@ -196,12 +197,12 @@
               <CheckCircle class="h-3 w-3 mr-1" />
               Healthy
             </Badge>
-          {:else if selectedConnector.state === "Disabled"}
+          {:else if selectedConnector.state === ConnectorState.Disabled}
             <Badge variant="secondary">
               <WifiOff class="h-3 w-3 mr-1" />
               Disabled
             </Badge>
-          {:else if selectedConnector.status === "Unreachable" || selectedConnector.state === "Offline"}
+          {:else if selectedConnector.status === ConnectorReachability.Unreachable || selectedConnector.state === ConnectorState.Offline}
             <Badge variant="outline">
               <WifiOff class="h-3 w-3 mr-1" />
               Offline
@@ -241,7 +242,7 @@
           {/if}
         {/if}
 
-        {#if selectedConnector.state === "Disabled"}
+        {#if selectedConnector.state === ConnectorState.Disabled}
           <div
             class="rounded-lg border border-border bg-muted/50 p-4"
           >
@@ -255,7 +256,7 @@
               server configuration to resume syncing, or delete the data below.
             </p>
           </div>
-        {:else if selectedConnector.state === "Offline"}
+        {:else if selectedConnector.state === ConnectorState.Offline}
           <div
             class="rounded-lg border border-border bg-muted/50 p-4"
           >
@@ -270,7 +271,7 @@
           </div>
         {/if}
 
-        {#if selectedConnector.status !== "Unreachable" || selectedConnector.totalEntries}
+        {#if selectedConnector.status !== ConnectorReachability.Unreachable || selectedConnector.totalEntries}
           <Separator />
 
           <div class="space-y-3">
@@ -381,7 +382,7 @@
               </div>
             {/if}
           </div>
-        {:else if selectedConnector.status === "Unreachable"}
+        {:else if selectedConnector.status === ConnectorReachability.Unreachable}
           <div
             class="rounded-lg border border-border bg-muted/50 p-4"
           >
@@ -396,7 +397,7 @@
           </div>
         {/if}
 
-        {#if canManage && (selectedConnector.isHealthy || selectedConnector.state === "Configured") && selectedConnector.state !== "Offline" && (selectedConnectorCapabilities?.supportsManualSync ?? true)}
+        {#if canManage && (selectedConnector.isHealthy || selectedConnector.state === ConnectorState.Configured) && selectedConnector.state !== ConnectorState.Offline && (selectedConnectorCapabilities?.supportsManualSync ?? true)}
           <Separator />
 
           <div class="space-y-3">

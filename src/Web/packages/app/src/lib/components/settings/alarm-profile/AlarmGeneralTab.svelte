@@ -10,9 +10,9 @@
     SelectTrigger,
   } from "$lib/components/ui/select";
   import Timer from "@lucide/svelte/icons/timer";
+  import { AlarmTriggerType } from "$lib/api";
   import type {
     AlarmProfileConfiguration,
-    AlarmTriggerType,
     AlarmPriority,
   } from "$lib/types/alarm-profile";
   import {
@@ -28,15 +28,15 @@
   let { profile = $bindable() }: Props = $props();
 
   const alarmTypes: AlarmTriggerType[] = [
-    "UrgentLow",
-    "Low",
-    "High",
-    "UrgentHigh",
-    "ForecastLow",
-    "RisingFast",
-    "FallingFast",
-    "StaleData",
-    "Custom",
+    AlarmTriggerType.UrgentLow,
+    AlarmTriggerType.Low,
+    AlarmTriggerType.High,
+    AlarmTriggerType.UrgentHigh,
+    AlarmTriggerType.ForecastLow,
+    AlarmTriggerType.RisingFast,
+    AlarmTriggerType.FallingFast,
+    AlarmTriggerType.StaleData,
+    AlarmTriggerType.Custom,
   ];
 
   const priorities: AlarmPriority[] = ["Low", "Normal", "High", "Critical"];
@@ -74,7 +74,7 @@
 
             // Auto-fill emergency instructions for Urgent Low if empty
             if (
-              profile.alarmType === "UrgentLow" &&
+              profile.alarmType === AlarmTriggerType.UrgentLow &&
               !profile.visual.emergencyInstructions
             ) {
               profile.visual.emergencyInstructions =
@@ -126,7 +126,7 @@
     <div class="grid gap-4 @sm:grid-cols-2">
       <div class="space-y-2">
         <Label>
-          {profile.alarmType === "StaleData"
+          {profile.alarmType === AlarmTriggerType.StaleData
             ? "Minutes without data"
             : "Threshold"}
         </Label>
@@ -137,17 +137,17 @@
             class="w-24"
           />
           <span class="text-sm text-muted-foreground">
-            {profile.alarmType === "StaleData"
+            {profile.alarmType === AlarmTriggerType.StaleData
               ? "min"
-              : profile.alarmType === "RisingFast" ||
-                  profile.alarmType === "FallingFast"
+              : profile.alarmType === AlarmTriggerType.RisingFast ||
+                  profile.alarmType === AlarmTriggerType.FallingFast
                 ? "mg/dL/min"
                 : "mg/dL"}
           </span>
         </div>
       </div>
 
-      {#if profile.alarmType === "Custom"}
+      {#if profile.alarmType === AlarmTriggerType.Custom}
         <div class="space-y-2">
           <Label>Upper threshold</Label>
           <div class="flex items-center gap-2">
@@ -161,7 +161,7 @@
         </div>
       {/if}
 
-      {#if profile.alarmType === "ForecastLow"}
+      {#if profile.alarmType === AlarmTriggerType.ForecastLow}
         <div class="space-y-2">
           <Label>Lead time</Label>
           <div class="flex items-center gap-2">

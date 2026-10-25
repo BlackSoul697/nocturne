@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SyncPhase } from "$lib/api";
   import type { Snippet } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Item, type ItemVariant } from "$lib/components/ui/item";
@@ -198,17 +199,17 @@
           {/if}
 
           <!-- Status badge -->
-          {#if syncProgress?.phase === "Syncing" || status === "syncing"}
+          {#if syncProgress?.phase === SyncPhase.Syncing || status === "syncing"}
             <Badge variant="info">
               <Loader2 class="h-3 w-3 mr-1 animate-spin" />
               Syncing
             </Badge>
-          {:else if syncProgress?.phase === "Completed"}
+          {:else if syncProgress?.phase === SyncPhase.Completed}
             <Badge variant="success">
               <CheckCircle class="h-3 w-3 mr-1" />
               Sync complete
             </Badge>
-          {:else if syncProgress?.phase === "Failed"}
+          {:else if syncProgress?.phase === SyncPhase.Failed}
             <Badge variant="destructive">
               <AlertCircle class="h-3 w-3 mr-1" />
               Sync failed
@@ -264,7 +265,7 @@
         <!-- Metrics line -->
         {#if metrics}
           {@render metrics()}
-        {:else if syncProgress?.phase === "Syncing" && syncProgress.messageType}
+        {:else if syncProgress?.phase === SyncPhase.Syncing && syncProgress.messageType}
           <p class="text-sm text-info">
             {formatSyncMessage(
               syncProgress.messageType,
