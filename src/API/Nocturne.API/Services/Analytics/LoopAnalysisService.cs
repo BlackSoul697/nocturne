@@ -1,3 +1,4 @@
+using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Profiles.Resolvers;
 using Nocturne.Core.Clinical.Devices;
@@ -208,7 +209,7 @@ internal sealed partial class LoopAnalysisService(
         var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals, Math.Min(to, now));
         var scheduled = new ScheduledBasal(hasTherapy ? await ScheduleAsync(actingFrom, to, ct) : [], common.Overrides);
         var series = await basalSeriesBuilder.BuildAsync(
-            clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), ct);
+            clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), common.Overrides, ct);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
 
         var doses = common.Boluses

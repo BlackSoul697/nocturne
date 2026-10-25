@@ -7,6 +7,7 @@ using Nocturne.API.Helpers;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.ChartData;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Basal;
@@ -25,6 +26,11 @@ public class ChartDataServiceTests
 {
     // Common test timestamp: 2023-11-15T00:00:00Z in millis
     private const long TestMills = 1700000000000L;
+
+    private static IStateSpanRepository NoOverrides() =>
+        Mock.Of<IStateSpanRepository>(r => r.GetByCategories(
+            It.IsAny<IEnumerable<StateSpanCategory>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())
+            == Task.FromResult(new Dictionary<StateSpanCategory, List<StateSpan>>()));
 
     #region BuildGlucoseData Tests
 
@@ -1764,12 +1770,61 @@ public class ChartDataServiceTests
                 (now, 0.8));
         }
 
+        [Fact]
+        public async Task ReadsTheOverridesOverTheWindow_AndScalesTheScheduleByThem()
+        {
+            var repository = new Mock<ITempBasalRepository>();
+            repository
+                .Setup(r => r.GetAsync(
+                    It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync([]);
+            var segments = new Mock<IBasalSegmentService>();
+            segments
+                .Setup(s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+                .Returns(new[] { new BasalSegment(Start, End, 1.0, 1.0, "Default") }.ToAsyncEnumerable());
+            var stateSpans = new Mock<IStateSpanRepository>();
+            stateSpans
+                .Setup(r => r.GetByCategories(
+                    It.IsAny<IEnumerable<StateSpanCategory>>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Dictionary<StateSpanCategory, List<StateSpan>>
+                {
+                    [StateSpanCategory.Override] =
+                    [
+                        new StateSpan
+                        {
+                            Category = StateSpanCategory.Override,
+                            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start + 10 * Minute).UtcDateTime,
+                            EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start + 30 * Minute).UtcDateTime,
+                            Metadata = new Dictionary<string, object> { ["insulinNeedsScaleFactor"] = 0.5 },
+                        },
+                    ],
+                });
+            using var cts = new CancellationTokenSource();
+
+            var series = await Service(
+                    repository.Object, TimeProvider.System, hasTherapySettings: true,
+                    segments: segments.Object, stateSpans: stateSpans.Object)
+                .GetBasalSeriesAsync(Start, End, cts.Token);
+
+            series.Select(p => (p.Timestamp, p.Rate)).Should().Equal(
+                (Start, 1.0), (Start + 10 * Minute, 0.5), (Start + 30 * Minute, 1.0));
+            stateSpans.Verify(
+                r => r.GetByCategories(
+                    It.Is<IEnumerable<StateSpanCategory>>(c => c.SequenceEqual(new[] { StateSpanCategory.Override })),
+                    DateTimeOffset.FromUnixTimeMilliseconds(Start).UtcDateTime,
+                    DateTimeOffset.FromUnixTimeMilliseconds(End).UtcDateTime,
+                    cts.Token),
+                Times.Once);
+        }
+
         private static ChartDataService Service(
             ITempBasalRepository repository,
             TimeProvider timeProvider,
             bool hasTherapySettings = false,
             IBasalRateResolver? basalRate = null,
-            IBasalSegmentService? segments = null)
+            IBasalSegmentService? segments = null,
+            IStateSpanRepository? stateSpans = null)
         {
             var settings = new Mock<ITherapySettingsResolver>();
             settings.Setup(s => s.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(hasTherapySettings);
@@ -1779,6 +1834,7 @@ public class ChartDataServiceTests
                 new BasalSeriesBuilder(
                     settings.Object, segments ?? Mock.Of<IBasalSegmentService>(), NullLogger<BasalSeriesBuilder>.Instance),
                 repository,
+                stateSpans ?? NoOverrides(),
                 settings.Object,
                 basalRate ?? Mock.Of<IBasalRateResolver>(),
                 timeProvider,
@@ -1829,6 +1885,7 @@ public class ChartDataServiceTests
                 Mock.Of<IChartDataAssembler>(),
                 new BasalSeriesBuilder(Mock.Of<ITherapySettingsResolver>(), Mock.Of<IBasalSegmentService>(), NullLogger<BasalSeriesBuilder>.Instance),
                 repository.Object,
+                NoOverrides(),
                 Mock.Of<ITherapySettingsResolver>(),
                 Mock.Of<IBasalRateResolver>(),
                 new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(End)),

@@ -281,7 +281,7 @@ public class TotalIobAgreementTests
     {
         var basalSeries = new Mock<IBasalSeriesBuilder>();
         basalSeries
-            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<IReadOnlyList<ScaleFactorInterval>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         var stage = new IobCobComputeStage(
             _calculator, new Mock<ICobCalculator>(MockBehavior.Strict).Object, basalSeries.Object,
@@ -531,10 +531,6 @@ public class TotalIobAgreementTests
     {
         var entries = new Mock<IEntryService>();
         entries.Setup(e => e.QueryEntriesAsync(It.IsAny<EntryQuery>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
-        var basalRate = new Mock<IBasalRateResolver>();
-        basalRate.Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
-        basalRate.Setup(b => b.GetBasalRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(1.0);
         var projection = new DeviceStatusProjectionService(
             Mock.Of<IDeviceStatusGroupRepository>(r => r.GetAsync(
                     It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(),
@@ -548,7 +544,7 @@ public class TotalIobAgreementTests
             NullLogger<DeviceStatusProjectionService>.Instance);
         var controller = new RetrospectiveController(
             _calculator, _cob.Object, entries.Object, Boluses(ReadingMills), _carbs.Object, TempBasals(ReadingMills),
-            projection, basalRate.Object, _timelines.Object, MockStateSpans.Empty().Object, _aps.Object, _pump.Object, Reader(ReadingMills),
+            projection, _timelines.Object, MockStateSpans.Empty().Object, _aps.Object, _pump.Object, Reader(ReadingMills),
             NullLogger<RetrospectiveController>.Instance);
         var http = new DefaultHttpContext();
         http.Items["GrantedScopes"] = new HashSet<string> { Scope.GlucoseRead, Scope.TreatmentsRead };

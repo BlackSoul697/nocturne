@@ -19,6 +19,7 @@ using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
@@ -47,7 +48,7 @@ public partial class StatisticsControllerTests
     private readonly Mock<IApsSnapshotRepository> _apsSnapshotRepoMock = new();
     private readonly Mock<IDeviceEventRepository> _deviceEventRepoMock = new();
     private readonly Mock<IAidMetricsService> _aidMetricsServiceMock = new();
-    private readonly Mock<IBasalRateResolver> _basalRateResolverMock = new();
+    private readonly Mock<IStateSpanRepository> _stateSpanRepoMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
     private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
     private static readonly DateTimeOffset DefaultNow = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -57,7 +58,14 @@ public partial class StatisticsControllerTests
         _therapySettingsResolverMock
             .Setup(r => r.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
             .ReturnsAsync("UTC");
+        SetupOverrides();
     }
+
+    private void SetupOverrides(params StateSpan[] overrides) =>
+        _stateSpanRepoMock
+            .Setup(r => r.GetByCategories(
+                It.IsAny<IEnumerable<StateSpanCategory>>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<StateSpanCategory, List<StateSpan>> { [StateSpanCategory.Override] = [.. overrides] });
 
     private StatisticsController CreateController(
         ICanonicalGlucoseService? canonicalGlucose = null,
@@ -78,7 +86,7 @@ public partial class StatisticsControllerTests
             statisticsService ?? _statsServiceMock.Object,
             cache ?? Mock.Of<ITenantCache>(),
             Mock.Of<IProfileProjectionService>(),
-            _basalRateResolverMock.Object,
+            _stateSpanRepoMock.Object,
             _basalSegmentsMock.Object,
             _therapySettingsResolverMock.Object,
             _glucoseRepoMock.Object,
@@ -829,7 +837,108 @@ public partial class StatisticsControllerTests
     }
 
     [Fact]
+    public async Task GetBasalAnalysis_WithNoTempBasals_SynthesizesTheOverrideScaledSchedule()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupEmptyTreatments();
+        _therapySettingsResolverMock
+            .Setup(r => r.HasDataAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _basalSegmentsMock
+            .Setup(s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Returns(AsAsync([new BasalSegment(Mills(start), Mills(start.AddDays(1)), 1.0, 1.0, "Default")]));
+        SetupOverrides(new StateSpan
+        {
+            Category = StateSpanCategory.Override,
+            StartTimestamp = start.AddHours(-1),
+            EndTimestamp = start.AddHours(6),
+            Metadata = new Dictionary<string, object> { ["insulinNeedsScaleFactor"] = 0.5 },
+        });
+        List<TempBasal>? synthesized = null;
+        _statsServiceMock
+            .Setup(s => s.CalculateBasalAnalysis(
+                It.IsAny<IEnumerable<TempBasal>>(),
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long>(), It.IsAny<TimeZoneInfo?>()))
+            .Callback<IEnumerable<TempBasal>, DateTime, DateTime, long, TimeZoneInfo?>(
+                (tempBasals, _, _, _, _) => synthesized = tempBasals.ToList())
+            .Returns(new BasalAnalysisResponse());
+
+        await CreateController().GetBasalAnalysis(start, start.AddDays(1));
+
+        synthesized.Should().NotBeNull();
+        synthesized!.Select(t => (t.StartTimestamp, t.EndTimestamp, t.Rate!.Value)).Should().Equal(
+            (start, (DateTime?)start.AddHours(6), 0.5),
+            (start.AddHours(6), (DateTime?)start.AddDays(1), 1.0));
+    }
+
+    [Fact]
+    public async Task GetInsulinDeliveryStatistics_FillsMissingScheduledRateUnderTheRequestToken()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        using var cts = new CancellationTokenSource();
+        SetupEmptyTreatments();
+        _tempBasalRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TempBasal>
+            {
+                new()
+                {
+                    StartTimestamp = start,
+                    EndTimestamp = start.AddMinutes(30),
+                    Rate = 1.5,
+                    Origin = TempBasalOrigin.Manual,
+                },
+            });
+        _therapySettingsResolverMock
+            .Setup(r => r.HasDataAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _basalSegmentsMock
+            .Setup(s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Returns(AsAsync([]));
+
+        await CreateController(statisticsService: new StatisticsService())
+            .GetInsulinDeliveryStatistics(start, start.AddDays(1), cancellationToken: cts.Token);
+
+        _basalSegmentsMock.Verify(
+            x => x.GetSegmentsAsync(Mills(start.AddHours(-24)), Mills(start.AddDays(1)), cts.Token), Times.Once);
+        _stateSpanRepoMock.Verify(
+            r => r.GetByCategories(
+                It.IsAny<IEnumerable<StateSpanCategory>>(), start.AddHours(-24), start.AddDays(1), cts.Token),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task GetBasalAnalysis_FillsMissingScheduledRate_SoLegacyTempsCountAsHighAndLow()
+    {
+        var payload = await LegacyTempsAnalysisAsync();
+
+        payload.TempBasalInfo.HighTemps.Should().Be(1);
+        payload.TempBasalInfo.LowTemps.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetBasalAnalysis_FillsMissingScheduledRateFromTheOverrideScaledProfile()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupOverrides(new StateSpan
+        {
+            Category = StateSpanCategory.Override,
+            StartTimestamp = start.AddHours(-1),
+            EndTimestamp = start.AddHours(1),
+            Metadata = new Dictionary<string, object> { ["insulinNeedsScaleFactor"] = 2.0 },
+        });
+
+        var payload = await LegacyTempsAnalysisAsync();
+
+        payload.TempBasalInfo.HighTemps.Should().Be(0);
+        payload.TempBasalInfo.LowTemps.Should().Be(2);
+    }
+
+    private async Task<BasalAnalysisResponse> LegacyTempsAnalysisAsync()
     {
         var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
         var tempBasals = new List<TempBasal>
@@ -865,17 +974,18 @@ public partial class StatisticsControllerTests
                 It.IsAny<bool>(), It.IsAny<BolusKind?>(),
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Bolus>());
-        _basalRateResolverMock
-            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
+        _therapySettingsResolverMock
+            .Setup(r => r.HasDataAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _basalSegmentsMock
+            .Setup(s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Returns(AsAsync([new BasalSegment(Mills(start.AddDays(-1)), Mills(start.AddDays(2)), 1.0, 1.0, "Default")]));
 
         var result = await CreateController(statisticsService: new StatisticsService())
             .GetBasalAnalysis(start, start.AddDays(1));
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var payload = ok.Value.Should().BeOfType<BasalAnalysisResponse>().Subject;
-        payload.TempBasalInfo.HighTemps.Should().Be(1);
-        payload.TempBasalInfo.LowTemps.Should().Be(1);
+        return ok.Value.Should().BeOfType<BasalAnalysisResponse>().Subject;
     }
 
     [Fact]
@@ -1288,9 +1398,6 @@ public partial class StatisticsControllerTests
     public async Task GetInsulinDeliveryStatistics_CountsRecordsPastTheOldLimitUnderTheRequestToken()
     {
         SetupHistoryPastTheOldLimits();
-        _basalRateResolverMock
-            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
         using var cts = new CancellationTokenSource();
 
         var result = await CreateController(statisticsService: new StatisticsService())
@@ -1306,8 +1413,6 @@ public partial class StatisticsControllerTests
         payload.BasalCount.Should().Be(2 * (OldTreatmentLimit + 1));
 
         _repositoryTokens.Should().HaveCount(5).And.OnlyContain(t => t == cts.Token);
-        _basalRateResolverMock.Verify(
-            r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), cts.Token), Times.Once);
     }
 
     [Fact]
@@ -1334,9 +1439,6 @@ public partial class StatisticsControllerTests
                     ScheduledRate = 1.0,
                 },
             });
-        _basalRateResolverMock
-            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
 
         var result = await CreateController(statisticsService: new StatisticsService())
             .GetBasalAnalysis(start, start.AddDays(1));
@@ -1351,9 +1453,6 @@ public partial class StatisticsControllerTests
     public async Task GetBasalAnalysis_ForwardsTheRequestTokenToEveryFetch()
     {
         SetupHistoryPastTheOldLimits();
-        _basalRateResolverMock
-            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
         using var cts = new CancellationTokenSource();
 
         var result = await CreateController(statisticsService: new StatisticsService())
@@ -1361,8 +1460,6 @@ public partial class StatisticsControllerTests
 
         result.Result.Should().BeOfType<OkObjectResult>();
         _repositoryTokens.Should().HaveCount(1).And.OnlyContain(t => t == cts.Token);
-        _basalRateResolverMock.Verify(
-            r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), cts.Token), Times.Once);
         _therapySettingsResolverMock.Verify(r => r.GetTimezoneAsync(null, cts.Token), Times.Once);
     }
 
@@ -1420,6 +1517,10 @@ public partial class StatisticsControllerTests
 
     private void VerifyScheduledFallbackRanUnder(CancellationToken token)
     {
+        _stateSpanRepoMock.Verify(
+            r => r.GetByCategories(
+                It.IsAny<IEnumerable<StateSpanCategory>>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), token),
+            Times.Once);
         _therapySettingsResolverMock.Verify(r => r.HasDataAsync(token), Times.Once);
         _basalSegmentsMock.Verify(
             s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), token), Times.Once);
@@ -1452,6 +1553,34 @@ public partial class StatisticsControllerTests
         delivery.Tdd.Should().Be(32.3);
         delivery.BasalPercent.Should().Be(76.2);
         delivery.BolusPercent.Should().Be(23.8);
+    }
+
+    [Fact]
+    public async Task GetMultiPeriodStatistics_WithOnlyProfileBasal_ScalesTheProfileByAnActiveOverride()
+    {
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
+        SetupMultiPeriodWithProfile(
+            [
+                new BasalSegment(Mills(start), Mills(start.AddHours(6)), 0.8, 0.8, "Default"),
+                new BasalSegment(Mills(start.AddHours(6)), Mills(start.AddHours(18)), 1.2, 1.2, "Default"),
+                new BasalSegment(Mills(start.AddHours(18)), Mills(start.AddDays(1)), 0.9, 0.9, "Default"),
+            ]);
+        SetupOverrides(new StateSpan
+        {
+            Category = StateSpanCategory.Override,
+            StartTimestamp = start.AddHours(-1),
+            EndTimestamp = start.AddHours(6),
+            Metadata = new Dictionary<string, object> { ["insulinNeedsScaleFactor"] = 0.5 },
+        });
+
+        var delivery = await MultiPeriodLastDayDelivery();
+
+        delivery.TotalBasal.Should().Be(22.2);
+        delivery.ScheduledBasal.Should().Be(22.2);
+        _stateSpanRepoMock.Verify(
+            r => r.GetByCategories(
+                It.IsAny<IEnumerable<StateSpanCategory>>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -1629,19 +1758,43 @@ public partial class StatisticsControllerTests
     }
 
     [Fact]
-    public async Task GetBasalAnalysis_BuildsTheScheduleResolverFromTheTempBasalReadStart()
+    public async Task GetBasalAnalysis_ReadsTheScheduleAndOverridesFromTheTempBasalReadStart()
     {
         var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        using var cts = new CancellationTokenSource();
         SetupEmptyTreatments();
-        _basalRateResolverMock
-            .Setup(r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
+        _tempBasalRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TempBasal>
+            {
+                new()
+                {
+                    StartTimestamp = start,
+                    EndTimestamp = start.AddMinutes(30),
+                    Rate = 1.5,
+                    Origin = TempBasalOrigin.Manual,
+                },
+            });
+        _therapySettingsResolverMock
+            .Setup(r => r.HasDataAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _basalSegmentsMock
+            .Setup(x => x.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Returns(AsAsync([]));
 
         await CreateController(statisticsService: new StatisticsService())
-            .GetBasalAnalysis(start, start.AddDays(1));
+            .GetBasalAnalysis(start, start.AddDays(1), cts.Token);
 
-        _basalRateResolverMock.Verify(
-            r => r.BuildResolverAsync(Mills(start.AddHours(-24)), Mills(start.AddDays(1)), It.IsAny<CancellationToken>()),
+        _basalSegmentsMock.Verify(
+            x => x.GetSegmentsAsync(Mills(start.AddHours(-24)), Mills(start.AddDays(1)), cts.Token),
+            Times.Once);
+        _stateSpanRepoMock.Verify(
+            r => r.GetByCategories(
+                It.IsAny<IEnumerable<StateSpanCategory>>(), start.AddHours(-24), start.AddDays(1), cts.Token),
             Times.Once);
     }
 
