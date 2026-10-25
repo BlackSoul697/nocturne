@@ -116,6 +116,61 @@ public class IobCobReaderTests
         current.Iob.Source.Should().Be("OpenAPS");
         current.Cob.Cob.Should().Be(23);
         current.Cob.Source.Should().Be("OpenAPS");
+        current.HasIob.Should().BeTrue();
+        current.HasCob.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SnapshotReportingZero_HasIobAndCob()
+    {
+        Snapshot(AidAlgorithm.Loop, 3, iob: 0, cob: 0);
+
+        var current = await Live(NewReader());
+
+        current.HasIob.Should().BeTrue();
+        current.HasCob.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TreatmentsAlone_HaveIobAndCobOnlyForWhatTheyHold()
+    {
+        _storedBoluses.Add(new Bolus { Timestamp = DateTime.UtcNow.AddMinutes(-30), Insulin = 2 });
+
+        var current = await Live(NewReader());
+
+        current.HasIob.Should().BeTrue();
+        current.HasCob.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TempBasalThatEndedBeforeTheInsulinWindow_HasNoIob()
+    {
+        _storedTempBasals.Add(new TempBasal
+        {
+            StartTimestamp = DateTime.UtcNow.AddHours(-30),
+            EndTimestamp = DateTime.UtcNow.AddHours(-20),
+            Rate = 1,
+        });
+
+        var current = await Live(NewReader());
+
+        current.Inputs.TempBasals.Should().HaveCount(1);
+        current.HasIob.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TempBasalStillRunningInTheInsulinWindow_HasIob()
+    {
+        _storedTempBasals.Add(new TempBasal
+        {
+            StartTimestamp = DateTime.UtcNow.AddHours(-12),
+            EndTimestamp = null,
+            Rate = 1,
+        });
+
+        var current = await Live(NewReader());
+
+        current.HasIob.Should().BeTrue();
     }
 
     [Fact]
@@ -152,6 +207,8 @@ public class IobCobReaderTests
         current.Iob.Iob.Should().Be(0);
         IobResult.FormatDisplay(current.Iob.Iob).Should().Be("0");
         current.Cob.Cob.Should().Be(0);
+        current.HasIob.Should().BeFalse();
+        current.HasCob.Should().BeFalse();
     }
 
     [Fact]
