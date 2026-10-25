@@ -574,14 +574,17 @@ public class PropertiesService : IPropertiesService
             // properties endpoint reports the service defaults.
             var prefs = new DeviceAgePreferences();
 
-            var sensor = await _deviceAgeService.GetSensorAgeAsync(prefs, ct: cancellationToken);
+            // The sage plugin always shows days and hours.
+            var sensor = await _deviceAgeService.GetSensorAgeAsync(
+                new DeviceAgePreferences { Display = "days" },
+                ct: cancellationToken);
 
             properties["cage"] = ToAgeDictionary(
                 await _deviceAgeService.GetCannulaAgeAsync(prefs, ct: cancellationToken));
             properties["sage"] = new Dictionary<string, object?>
             {
-                ["Sensor Start"] = ToAgeDictionary(sensor.SensorStart),
-                ["Sensor Change"] = ToAgeDictionary(sensor.SensorChange),
+                ["Sensor Start"] = ToSensorDictionary(sensor.SensorStart, sensor.Min == "Sensor Start"),
+                ["Sensor Change"] = ToSensorDictionary(sensor.SensorChange, sensor.Min == "Sensor Change"),
                 ["min"] = sensor.Min,
             };
             properties["iage"] = ToAgeDictionary(
@@ -604,20 +607,70 @@ public class PropertiesService : IPropertiesService
     /// <c>age</c>/<c>days</c>/<c>level</c> exactly when a site was just changed, and never
     /// emit <c>found: false</c>. Dictionary values are exempt from that condition.
     /// </summary>
-    private static Dictionary<string, object?> ToAgeDictionary(DeviceAgeInfo age) =>
-        new()
+    private static Dictionary<string, object?> ToAgeDictionary(DeviceAgeInfo age)
+    {
+        if (!age.Found)
         {
-            ["found"] = age.Found,
+            return new()
+            {
+                ["found"] = false,
+                ["age"] = 0,
+                ["treatmentDate"] = null,
+                ["checkForAlert"] = false,
+                ["level"] = age.Level,
+                // NIGHTSCOUT-COMPAT: Nightscout's trailing space.
+                ["display"] = "n/a ",
+            };
+        }
+
+        var result = FoundAgeFields(age);
+        result["checkForAlert"] = false;
+        result["level"] = age.Level;
+        result["display"] = age.Display;
+        if (age.Notification is not null)
+            result["notification"] = age.Notification;
+        return result;
+    }
+
+    /// <summary>
+    /// Projects one sage entry. Nightscout sets <c>level</c> and <c>notification</c> only on the
+    /// entry named by <c>min</c>, and gives an entry with nothing found no other field.
+    /// </summary>
+    private static Dictionary<string, object?> ToSensorDictionary(DeviceAgeInfo age, bool isMin)
+    {
+        var result = age.Found ? FoundAgeFields(age) : new Dictionary<string, object?> { ["found"] = false };
+        if (age.Found)
+        {
+            result["display"] = age.Display;
+            result["displayLong"] = age.Age >= 24
+                ? $"{age.Days} days {age.Hours} hours"
+                : $"{age.Hours} hours";
+        }
+
+        if (!isMin)
+            return result;
+
+        result["level"] = age.Level;
+        if (age.Notification is not null)
+            result["notification"] = age.Notification;
+        return result;
+    }
+
+    private static Dictionary<string, object?> FoundAgeFields(DeviceAgeInfo age)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["found"] = true,
+            ["treatmentDate"] = age.TreatmentDate,
             ["age"] = age.Age,
             ["days"] = age.Days,
             ["hours"] = age.Hours,
-            ["treatmentDate"] = age.TreatmentDate,
-            ["notes"] = age.Notes,
             ["minFractions"] = age.MinFractions,
-            ["level"] = age.Level,
-            ["display"] = age.Display,
-            ["notification"] = age.Notification,
         };
+        if (age.Notes is not null)
+            fields["notes"] = age.Notes;
+        return fields;
+    }
 
     /// <summary>
     /// Set profile properties

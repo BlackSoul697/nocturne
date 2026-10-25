@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Nocturne.API.Tests.Integration.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
@@ -153,6 +154,9 @@ public class PropertiesParityTests : ParityTestBase
                 timestamp: TestTimeProvider.GetTestTime().AddDays(-2))
         };
         await SeedTreatmentsAsync(treatments);
+        await WaitForNightscoutBodyAsync(
+            "/api/v2/properties/cage",
+            body => body?["cage"]?["found"]?.GetValue<bool>() == true);
 
         await AssertGetParityAsync("/api/v2/properties/cage");
     }
@@ -168,6 +172,9 @@ public class PropertiesParityTests : ParityTestBase
                 timestamp: TestTimeProvider.GetTestTime().AddDays(-5))
         };
         await SeedTreatmentsAsync(treatments);
+        await WaitForNightscoutBodyAsync(
+            "/api/v2/properties/sage",
+            body => body?["sage"]?["Sensor Start"]?["found"]?.GetValue<bool>() == true);
 
         await AssertGetParityAsync("/api/v2/properties/sage");
     }
