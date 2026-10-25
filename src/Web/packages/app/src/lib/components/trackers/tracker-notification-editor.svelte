@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TrackerMode } from "$lib/api";
   import { page } from "$app/state";
   import { satisfiesScope } from "$lib/authorization/scopes";
   import { enumValue } from "$lib/components/ui/enum-value";
@@ -20,7 +21,7 @@
     /** Additional CSS classes */
     class?: string;
     /** Tracker mode for display formatting */
-    mode?: "Duration" | "Event";
+    mode?: TrackerMode;
     /** Lifespan hours for negative threshold validation (Duration mode only) */
     lifespanHours?: number | undefined;
   }
@@ -28,7 +29,7 @@
   let {
     notifications = $bindable([]),
     class: className,
-    mode = "Duration",
+    mode = TrackerMode.Duration,
     lifespanHours,
   }: Props = $props();
 
@@ -144,7 +145,7 @@
 
           <div class="flex-shrink-0 w-36">
             <Label size="sm" variant="muted" class="mb-1 block">
-              {mode === "Event" ? "Hours" : "After (hours)"}
+              {mode === TrackerMode.Event ? "Hours" : "After (hours)"}
             </Label>
             <DurationInput
               value={notification.hours}
@@ -199,7 +200,7 @@
 
   {#if notifications.length > 0}
     <p class="text-xs text-muted-foreground">
-      {#if mode === "Event"}
+      {#if mode === TrackerMode.Event}
         Negative = before event, positive = after event.
       {:else}
         Positive = after start, negative = before expiration.

@@ -1,4 +1,6 @@
 <script module lang="ts">
+  import { SyncPhase } from "$lib/api";
+  import { ConnectorState } from "$lib/constants/connector-states";
   import type { ConnectorStatusDto } from "$lib/api/generated/nocturne-api-client";
 
   export interface ConnectorStatusWithDescription extends ConnectorStatusDto {
@@ -229,7 +231,7 @@
             name={connector.name ?? connector.id ?? "Unknown"}
             icon={connector.icon}
             status={syncProgressByConnector[connector.id ?? ""]?.phase ===
-            "Syncing"
+            SyncPhase.Syncing
               ? "syncing"
               : mapConnectorStatus(connectorStatus)}
             syncProgress={syncProgressByConnector[connector.id ?? ""] ?? null}
@@ -297,7 +299,7 @@
                 entriesLast24Hours: dataSource?.entriesLast24h ?? 0,
                 state:
                   connectorStatusInfo?.state ??
-                  (isDisabled ? "Disabled" : "Offline"),
+                  (isDisabled ? ConnectorState.Disabled : ConnectorState.Offline),
                 isHealthy: false,
                 isEnabled: connectorStatusInfo?.isEnabled,
                 hasDatabaseConfig: connectorStatusInfo?.hasDatabaseConfig,

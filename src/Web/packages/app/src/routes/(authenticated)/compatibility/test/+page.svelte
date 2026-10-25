@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { HttpMethod } from "$lib/constants/http-methods";
   import { runCompatibilityTest } from "./data.remote";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { createPatch } from "diff";
@@ -21,7 +22,7 @@
   let nightscoutUrl = $state("https://your-nightscout.herokuapp.com");
   let apiSecret = $state("");
   let queryPath = $state("/api/v1/treatments?count=5");
-  let method = $state("GET");
+  let method = $state<HttpMethod>(HttpMethod.Get);
   let requestBody = $state("");
 
   // Options
@@ -427,8 +428,8 @@
                 {method}
               </Select.Trigger>
               <Select.Content>
-                <Select.Item value="GET">GET</Select.Item>
-                <Select.Item value="POST">POST</Select.Item>
+                <Select.Item value={HttpMethod.Get}>GET</Select.Item>
+                <Select.Item value={HttpMethod.Post}>POST</Select.Item>
               </Select.Content>
             </Select.Root>
             <Input
@@ -440,7 +441,7 @@
           </div>
         </div>
 
-        {#if method === "POST"}
+        {#if method === HttpMethod.Post}
           <div class="@lg:col-span-2 space-y-2">
             <Label for="requestBody">Request body (JSON)</Label>
             <Textarea

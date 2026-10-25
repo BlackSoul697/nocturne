@@ -5,6 +5,7 @@ import type {
   TrackerInstanceDto,
   TrackerRealtimeAction,
   InAppNotificationDto,
+  SyncPhase,
 } from '$lib/api/generated/nocturne-api-client';
 
 // Re-export API client types for convenience
@@ -105,7 +106,7 @@ export type SyncMessageType =
 export interface SyncProgressEvent {
   connectorId: string;
   connectorName: string;
-  phase: "Syncing" | "Completed" | "Failed";
+  phase: SyncPhase;
   errorMessage: string | null;
   timestamp: string;
   messageType: SyncMessageType | null;
