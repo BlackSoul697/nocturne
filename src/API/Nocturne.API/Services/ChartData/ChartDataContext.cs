@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -95,6 +96,9 @@ public sealed record ChartDataContext
     /// <summary>State spans keyed by category, populated from a batched repository query.</summary>
     public IReadOnlyDictionary<StateSpanCategory, IEnumerable<StateSpan>> StateSpans { get; init; }
         = new Dictionary<StateSpanCategory, IEnumerable<StateSpan>>();
+
+    /// <summary>Override scale factors covering the buffer window, which IOB and COB are read against.</summary>
+    public IReadOnlyList<ScaleFactorInterval> Overrides { get; init; } = [];
 
     public IReadOnlyList<SystemEvent> SystemEvents { get; init; } = [];
     public IReadOnlyList<TrackerDefinitionEntity> TrackerDefinitions { get; init; } = [];

@@ -1,4 +1,5 @@
 using System.Text;
+using Nocturne.Core.Models.Basal;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.Core.Models;
@@ -108,6 +109,24 @@ public sealed class TherapySnapshot
             : ApplyForwardCcp(LookupAt(_basalEntries, ShiftedSecondsFromMidnight(timeMills)) ?? DefaultBasalRate);
 
     /// <summary>
+    /// The scheduled basal rate over <c>[fromMills, toMills)</c> as segments, each holding the rate
+    /// <see cref="BasalRateAt"/> reads at every instant inside it.
+    /// </summary>
+    public IEnumerable<BasalSegment> BasalSegments(long fromMills, long toMills) =>
+        _basalEntries is null
+            ? [new BasalSegment(fromMills, toMills, DefaultBasalRate, DefaultBasalRate, "")]
+            : BasalCalculator.BuildSegments(
+                new BasalWindow(fromMills, toMills),
+                [new ScheduleAssignment(
+                    fromMills,
+                    toMills,
+                    "",
+                    [.. _basalEntries.Select(e => new ScheduleEntry { TimeAsSeconds = e.Seconds, Value = e.Value })],
+                    CcpPercentage is { } pct && pct > 0 ? pct : 100,
+                    CcpTimeshiftMs,
+                    Timezone?.Id)]);
+
+    /// <summary>
     /// Appends everything a lookup on this snapshot reads to <paramref name="sb"/>, so two snapshots
     /// that append the same text answer every lookup alike.
     /// </summary>
@@ -181,6 +200,10 @@ public sealed class TherapyTimeline
     }
 
     public IReadOnlyList<TherapySegment> Segments => _segments;
+
+    /// <summary>The scheduled basal rate over the whole timeline; see <see cref="TherapySnapshot.BasalSegments"/>.</summary>
+    public IEnumerable<BasalSegment> BasalSegments() =>
+        _segments.SelectMany(s => s.Snapshot.BasalSegments(s.StartMills, s.EndMills));
 
     /// <summary>
     /// Returns the snapshot active at <paramref name="timeMills"/>.
