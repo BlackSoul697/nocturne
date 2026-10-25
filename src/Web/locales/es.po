@@ -1252,8 +1252,8 @@ msgstr "No se pudo subir el sonido"
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
@@ -1815,8 +1815,8 @@ msgstr "TDD media"
 #: src/lib/components/reports/RetrospectiveStats.svelte
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
 msgid "No data"
 msgstr "Sin datos"
@@ -4123,7 +4123,7 @@ msgstr "Reloj"
 
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Overview"
 msgstr "Resumen"
 
@@ -5822,7 +5822,7 @@ msgstr "g/U <0/>"
 #~ msgstr "18:00"
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Median glucose"
 msgstr "Glucosa mediana"
 
@@ -8333,7 +8333,7 @@ msgstr "Próximamente"
 #. 0: days
 #. 0: span
 #: src/routes/(authenticated)/reports/+layout.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last {0} days"
 msgstr "Últimos {0} días"
 
@@ -14511,7 +14511,7 @@ msgstr "Mes siguiente"
 #~ msgstr "Este mes"
 
 #. 0: span
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Prior {0} days"
 msgstr "{0} días anteriores"
 
@@ -14527,7 +14527,7 @@ msgstr "{0} días anteriores"
 #~ msgid "This Month vs Last Month"
 #~ msgstr "Este mes frente al mes pasado"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Variability (CV)"
 msgstr "Variabilidad (CV)"
 
@@ -14549,20 +14549,20 @@ msgstr "Variabilidad (CV)"
 #~ msgid "Hypo Events"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Preset"
 msgstr "Preajuste"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "<0/> Swap"
 msgstr "<0/> Intercambiar"
 
 #. 0: dayCount(p.from, p.to)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "{0}d"
 msgstr "{0} d"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "vs"
 msgstr "frente a"
 
@@ -14578,7 +14578,7 @@ msgstr "frente a"
 #~ msgid "Time in Range — stacked comparison"
 #~ msgstr "Tiempo en rango — comparación apilada"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Vertical stacked bars showing the full TIR breakdown for each period."
 msgstr "Barras verticales apiladas que muestran el desglose completo de TIR para cada periodo."
 
@@ -16652,8 +16652,8 @@ msgstr "Ventanas en las que las lecturas oscilan de una forma poco probable desd
 #. 0: signed(d)
 #. 0: signed(d, 2)
 #. 0: signedNumber(priorWeek.tirDelta)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "{0} pp"
 msgstr "{0} pp"
@@ -16667,7 +16667,7 @@ msgstr "{0} pp"
 msgid "{0} h"
 msgstr "{0} h"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Load"
 msgstr "Cargar"
 
@@ -19548,7 +19548,7 @@ msgstr "{0} · últimos 14 días"
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
@@ -22135,15 +22135,15 @@ msgid "Compression lows by review status"
 msgstr "Bajadas por compresión según estado de revisión"
 
 #. 0: committed.a.label; 1: rangeDisplay(committed.a.from, committed.a.to); 2: committed.b.label; 3: rangeDisplay(committed.b.from, committed.b.to)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "{0} ({1}) vs {2} ({3})"
 msgstr "{0} ({1}) frente a {2} ({3})"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Metric"
 msgstr "Métrica"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Change"
@@ -22616,16 +22616,16 @@ msgid "{0} events<0/>"
 msgstr "{0} eventos<0/>"
 
 #. 0: committed.b.label
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "<0/> Lower in {0}"
 msgstr "<0/> Más bajo en {0}"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "No change"
 msgstr "Sin cambios"
 
 #. 0: committed.b.label
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Higher in {0} <0/>"
 msgstr "Más alto en {0} <0/>"
 
@@ -22642,7 +22642,7 @@ msgstr "Duró: {0} (del {1}% al {2}%)"
 #~ msgid "Target: <7%"
 #~ msgstr "Objetivo: <7%"
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Standard deviation"
 msgstr "Desviación estándar"
@@ -26517,7 +26517,7 @@ msgid "Hidden: your access does not include this data"
 msgstr ""
 
 #: src/lib/components/reports/loop-analysis/DailyProfileBody.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Days with data"
 msgstr ""
 
@@ -30060,19 +30060,19 @@ msgstr[1] ""
 msgid "{0} · {1}g/day · {2}g avg/entry"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Very Low (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Low (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time High (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Very High (%)"
 msgstr ""
 
@@ -30109,21 +30109,21 @@ msgstr ""
 #~ msgid "Readings / Day"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Range detail"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Variability and risk"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Insulin and carbs"
 msgstr ""
 
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/lib/navigation/report-navigation.svelte.ts
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 msgid "Data quality"
 msgstr ""
@@ -34648,98 +34648,99 @@ msgstr ""
 msgid "About this report"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last month"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "This month"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 7 vs prior 7 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 14 vs prior 14 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 30 vs prior 30 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "This month vs last month"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Error loading comparison"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Glycemic risk index"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Mean glucose"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hyper time / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hyper events / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hypo time / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hypo events / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time in personal range"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Total insulin / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Basal / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Basal share of insulin"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Manual boluses / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Carbs / day"
 msgstr ""
 
 #~ msgid "Carb-to-insulin ratio"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "CGM active time"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Readings / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time in range: stacked comparison"
 msgstr ""
 
@@ -36797,7 +36798,7 @@ msgstr ""
 msgid "Time in a personal target range that changes through the day is not shown. Days of data are counted on UTC days."
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "The average daily risk range (ADRR) is not shown for either period, and days with data are counted on UTC days."
 msgstr ""
 
