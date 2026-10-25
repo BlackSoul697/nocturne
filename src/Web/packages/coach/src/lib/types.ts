@@ -48,8 +48,9 @@ export interface SequenceDefinition {
   quietOnDismiss?: boolean;
   /**
    * Shown only by `startSequence`, never chosen by organic selection. A started run outlives
-   * navigation, waiting on each page for the next unfinished step's target, and holds back every
-   * organic mark until its last step is done or it is dismissed.
+   * navigation and ends once its last step is done or one of its steps is dismissed. It shows its
+   * first unfinished step that is mounted; while none is, organic marks are chosen as usual, and a
+   * step that mounts with no mark up takes the floor. A reload or another started run drops it.
    */
   startOnly?: boolean;
 }

@@ -10,24 +10,62 @@ vi.mock("$app/paths", () => ({ resolve: (path: string) => path }));
 
 const SRC = fileURLToPath(new URL("../..", import.meta.url));
 const TOUR = "tracker-intro";
-const copy: Record<string, { title: string; description: string }> = coachCopy();
+const copy: Record<string, { title: string; description: string }> =
+  coachCopy();
 const steps = sequences[TOUR]?.steps ?? [];
 
-/** Where each step's target is attached; the settings steps are on their own pages. */
+/**
+ * Where each step's target is attached; the settings steps are on their own
+ * pages.
+ */
 const TARGETS: Record<string, string> = {
-  "tracker-intro.pill": join("lib", "components", "status-pills", "TrackerPillBar.svelte"),
-  "tracker-intro.complete": join("lib", "components", "status-pills", "TrackerPillBar.svelte"),
-  "tracker-intro.settings": join("routes", "(authenticated)", "settings", "trackers", "+page.svelte"),
-  "tracker-intro.rail": join("routes", "(authenticated)", "settings", "appearance", "+page.svelte"),
+  "tracker-intro.pill": join(
+    "lib",
+    "components",
+    "status-pills",
+    "TrackerPillBar.svelte"
+  ),
+  "tracker-intro.complete": join(
+    "lib",
+    "components",
+    "status-pills",
+    "TrackerPillBar.svelte"
+  ),
+  "tracker-intro.settings": join(
+    "routes",
+    "(authenticated)",
+    "settings",
+    "trackers",
+    "+page.svelte"
+  ),
+  "tracker-intro.rail": join(
+    "routes",
+    "(authenticated)",
+    "settings",
+    "appearance",
+    "+page.svelte"
+  ),
 };
 
-/** `sequences.test` proves every `coachFor` key sits in a `coachmark` call; this places each one. */
+/**
+ * `sequences.test` proves every `coachFor` key sits in a `coachmark` call; this
+ * places each one.
+ */
 const attachedIn = (file: string, key: string) =>
   readFileSync(join(SRC, file), "utf8").includes(`coachFor("${key}")`);
 
 describe("tracker introduction tour", () => {
   it("is registered under the name the legacy conversion dialog starts", () => {
-    const dialog = readFileSync(join(SRC, "lib", "components", "trackers", "CreateTrackersFromLegacyDialog.svelte"), "utf8");
+    const dialog = readFileSync(
+      join(
+        SRC,
+        "lib",
+        "components",
+        "trackers",
+        "CreateTrackersFromLegacyDialog.svelte"
+      ),
+      "utf8"
+    );
 
     expect(dialog).toContain(`const TRACKER_INTRO = "${TOUR}";`);
     expect(sequences).toHaveProperty(TOUR);
@@ -53,7 +91,9 @@ describe("tracker introduction tour", () => {
   });
 
   it("has no copy that no step shows", () => {
-    const unused = Object.keys(copy).filter((key) => key.startsWith(`${TOUR}.`) && !steps.includes(key));
+    const unused = Object.keys(copy).filter(
+      (key) => key.startsWith(`${TOUR}.`) && !steps.includes(key)
+    );
 
     expect(unused).toEqual([]);
   });
@@ -61,7 +101,10 @@ describe("tracker introduction tour", () => {
   it("writes every sentence in 20 words or fewer", () => {
     for (const key of steps)
       for (const sentence of copy[key].description.split(/(?<=\.)\s+/))
-        expect(sentence.split(/\s+/).length, `${key}: ${sentence}`).toBeLessThanOrEqual(20);
+        expect(
+          sentence.split(/\s+/).length,
+          `${key}: ${sentence}`
+        ).toBeLessThanOrEqual(20);
   });
 
   it("tells the reader that Warning and Hazard alerts come from the thresholds", () => {
@@ -75,11 +118,22 @@ describe("a run of the tracker introduction", () => {
   const SETTLE = 10;
   const settle = () => vi.advanceTimersByTime(SETTLE * 2);
   const [PILL, COMPLETE, SETTINGS, RAIL] = steps;
+  const DISCOVERY = "feature-intro.calendar-views";
 
-  /** Registers each key on one page; the returned function navigates away from it. */
+  /**
+   * Registers each key on one page; the returned function navigates away from
+   * it.
+   */
   function visit(context: CoachMarkContext, ...keys: string[]): () => void {
     const unregister = keys.map((key) =>
-      context.register({ key, step: 0, title: key, description: key, priority: 0, element: {} as HTMLElement })
+      context.register({
+        key,
+        step: 0,
+        title: key,
+        description: key,
+        priority: 0,
+        element: {} as HTMLElement,
+      })
     );
     return () => {
       context.clearQuiet();
@@ -88,10 +142,20 @@ describe("a run of the tracker introduction", () => {
   }
 
   async function started() {
-    const adapter: CoachMarkAdapter = { fetchAll: async () => [], update: async () => {} };
-    const context = new CoachMarkContext(adapter, coachLabels(), sequences, SETTLE, 2000, () => ({
-      [ONBOARDING_CORE_GATE]: true,
-    }));
+    const adapter: CoachMarkAdapter = {
+      fetchAll: async () => [],
+      update: async () => {},
+    };
+    const context = new CoachMarkContext(
+      adapter,
+      coachLabels(),
+      sequences,
+      SETTLE,
+      2000,
+      () => ({
+        [ONBOARDING_CORE_GATE]: true,
+      })
+    );
     await context.initialize();
     return context;
   }
@@ -147,6 +211,51 @@ describe("a run of the tracker introduction", () => {
 
     expect(context.activeKey).toBeNull();
     expect(context.getStatus(SETTINGS)).toBe("dismissed");
+  });
+
+  it("shows a settings step when the pill never mounts", async () => {
+    const context = await started();
+    visit(context, SETTINGS);
+    context.startSequence(TOUR);
+
+    expect(context.activeKey).toBe(SETTINGS);
+  });
+
+  it("leaves other tours to run while it waits, and takes the floor once their mark is done", async () => {
+    const context = await started();
+    const leaveDashboard = visit(context, PILL, COMPLETE);
+    context.startSequence(TOUR);
+    context.complete(PILL);
+    context.complete(COMPLETE);
+    leaveDashboard();
+
+    visit(context, DISCOVERY);
+    settle();
+    expect(context.activeKey).toBe(DISCOVERY);
+
+    visit(context, SETTINGS);
+    expect(context.activeKey).toBe(DISCOVERY);
+    context.complete(DISCOVERY);
+    expect(context.activeKey).toBe(SETTINGS);
+  });
+
+  it("outlives the dismissal of another tour's mark raised from its dot", async () => {
+    const context = await started();
+    const leaveDashboard = visit(context, PILL, COMPLETE);
+    context.startSequence(TOUR);
+    context.complete(PILL);
+    context.complete(COMPLETE);
+    leaveDashboard();
+
+    const leaveCalendar = visit(context, DISCOVERY);
+    context.activate(DISCOVERY, 0);
+    context.dismiss(DISCOVERY);
+    expect(context.getStatus(DISCOVERY)).toBe("dismissed");
+    expect(context.getStatus(SETTINGS)).toBe("unseen");
+
+    leaveCalendar();
+    visit(context, SETTINGS);
+    expect(context.activeKey).toBe(SETTINGS);
   });
 
   it("replays only the steps on the page, as any replay does", async () => {
