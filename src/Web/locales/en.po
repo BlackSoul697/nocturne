@@ -9220,12 +9220,12 @@ msgstr "{0} avg"
 msgid "Variability:"
 msgstr "Variability:"
 
-#. 0: cvStatus.text; 1: dailyStats.cv.toFixed(0)
+#. 0: cvText; 1: cv.toFixed(0)
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 msgid "<0/> {0} ({1}% CV)"
 msgstr "<0/> {0} ({1}% CV)"
 
-#. 0: dailyStats.readings
+#. 0: basic.count
 #. 0: formatNumber(totalReadings)
 #. 0: formatNumber(entries.length)
 #. 0: readings.length
@@ -9238,9 +9238,8 @@ msgstr "<0/> {0} ({1}% CV)"
 msgid "{0} readings"
 msgstr "{0} readings"
 
-#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
-msgid "No data today"
-msgstr "No data today"
+#~ msgid "No data today"
+#~ msgstr "No data today"
 
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
@@ -9289,6 +9288,7 @@ msgstr "Last 24h"
 msgid "No 90-day data available"
 msgstr "No 90-day data available"
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 msgid "Failed to load data"
@@ -25871,6 +25871,7 @@ msgstr "Evening/Night (6pm-6am)"
 msgid "Daily total {0} U"
 msgstr "Daily total {0} U"
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 msgid "No data in the last 24h"
 msgstr "No data in the last 24h"
@@ -35828,14 +35829,14 @@ msgstr "Auto basal"
 msgid "Blood glucose <0/>"
 msgstr "Blood glucose <0/>"
 
-#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
-msgid "Today's summary"
-msgstr "Today's summary"
+#~ msgid "Today's summary"
+#~ msgstr "Today's summary"
 
 #: src/lib/components/dashboard/widgets/MealsWidget.svelte
 msgid "Recent meals"
 msgstr "Recent meals"
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 msgid "Try again."
@@ -36963,3 +36964,7 @@ msgstr "Expires {0}"
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Expired {0}"
 msgstr "Expired {0}"
+
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
+msgid "Last 24h summary"
+msgstr "Last 24h summary"

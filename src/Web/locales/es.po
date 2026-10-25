@@ -9220,12 +9220,12 @@ msgstr "{0} de media"
 msgid "Variability:"
 msgstr "Variabilidad:"
 
-#. 0: cvStatus.text; 1: dailyStats.cv.toFixed(0)
+#. 0: cvText; 1: cv.toFixed(0)
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 msgid "<0/> {0} ({1}% CV)"
 msgstr "<0/> {0} ({1}% CV)"
 
-#. 0: dailyStats.readings
+#. 0: basic.count
 #. 0: formatNumber(totalReadings)
 #. 0: formatNumber(entries.length)
 #. 0: readings.length
@@ -9238,9 +9238,8 @@ msgstr "<0/> {0} ({1}% CV)"
 msgid "{0} readings"
 msgstr "{0} lecturas"
 
-#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
-msgid "No data today"
-msgstr "Sin datos hoy"
+#~ msgid "No data today"
+#~ msgstr "Sin datos hoy"
 
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
@@ -9289,6 +9288,7 @@ msgstr "Últimas 24 h"
 msgid "No 90-day data available"
 msgstr "No hay datos de 90 días disponibles"
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 msgid "Failed to load data"
@@ -25871,6 +25871,7 @@ msgstr ""
 msgid "Daily total {0} U"
 msgstr ""
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 msgid "No data in the last 24h"
 msgstr ""
@@ -35828,14 +35829,14 @@ msgstr ""
 msgid "Blood glucose <0/>"
 msgstr ""
 
-#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
-msgid "Today's summary"
-msgstr ""
+#~ msgid "Today's summary"
+#~ msgstr ""
 
 #: src/lib/components/dashboard/widgets/MealsWidget.svelte
 msgid "Recent meals"
 msgstr ""
 
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 msgid "Try again."
@@ -36962,4 +36963,8 @@ msgstr ""
 #. 0: relative
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Expired {0}"
+msgstr ""
+
+#: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
+msgid "Last 24h summary"
 msgstr ""
