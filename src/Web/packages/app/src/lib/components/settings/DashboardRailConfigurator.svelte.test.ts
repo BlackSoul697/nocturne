@@ -135,10 +135,10 @@ describe("DashboardRailConfigurator", () => {
     });
 
     const hidden = page.getByTestId("hidden-legacy-fallbacks");
-    await expect.element(hidden.getByText("Site age (CAGE)")).toBeVisible();
-    await expect.element(hidden.getByText("Pump battery age (BAGE)")).toBeVisible();
+    await expect.element(hidden.getByText("Infusion site")).toBeVisible();
+    await expect.element(hidden.getByText("Pump battery")).toBeVisible();
 
-    await page.getByRole("button", { name: "Show Site age (CAGE)" }).click();
+    await page.getByRole("button", { name: "Show Infusion site" }).click();
 
     expect(writes).toEqual([[LegacyConsumableKind.PumpBattery]]);
   });

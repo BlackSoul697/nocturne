@@ -118,13 +118,13 @@ describe("StatusRail", () => {
     render(CurrentBGDisplay);
 
     await expect
-      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion Site/ }))
+      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion site/ }))
       .toBeVisible();
     expect(trackerPills(DESKTOP)).toEqual(["tracker-pill", "legacy-age-pill"]);
 
     await page.viewport(400, 900);
     await expect
-      .element(page.getByTestId(MOBILE).getByRole("button", { name: /Infusion Site/ }))
+      .element(page.getByTestId(MOBILE).getByRole("button", { name: /Infusion site/ }))
       .toBeVisible();
   });
 
@@ -134,7 +134,7 @@ describe("StatusRail", () => {
     render(CurrentBGDisplay);
 
     await expect
-      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion Site/ }))
+      .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Infusion site/ }))
       .toBeVisible();
     expect(railItems(DESKTOP)).toContain(Trackers);
   });
@@ -147,7 +147,7 @@ describe("StatusRail", () => {
     await expect
       .element(page.getByTestId(DESKTOP).getByRole("button", { name: /Sensor/ }))
       .toBeVisible();
-    expect(page.getByRole("button", { name: /Infusion Site/ }).elements()).toHaveLength(0);
+    expect(page.getByRole("button", { name: /Infusion site/ }).elements()).toHaveLength(0);
   });
 
   it("shows the ordered items first and the rest after them in default order", async () => {

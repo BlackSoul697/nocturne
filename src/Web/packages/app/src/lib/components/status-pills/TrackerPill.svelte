@@ -3,16 +3,25 @@
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
   import type { TrackerInstanceDto, TrackerDefinitionDto } from "$lib/api";
-  import { NotificationUrgency, TrackerCategory } from "$lib/api";
+  import { TrackerCategory } from "$lib/api";
   import { cn } from "$lib/utils";
   import Check from "@lucide/svelte/icons/check";
   import Clock from "@lucide/svelte/icons/clock";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import { reachedUrgency } from "$lib/components/trackers/schedule";
-  import { formatAge, formatLifespan } from "$lib/components/trackers/age.svelte";
-
-  type AlertLevel = "none" | "info" | "warn" | "hazard" | "urgent";
+  import {
+    ageHoursSince,
+    formatAge,
+    formatLifespan,
+  } from "$lib/components/trackers/age.svelte";
+  import {
+    PROGRESS_FILL,
+    VALUE_TONE,
+    alertLevel,
+    alertLevelPrefix,
+    trackerPillClasses,
+  } from "./tracker-pill-style.svelte";
 
   interface TrackerPillProps {
     /** The tracker instance to display */
@@ -43,16 +52,17 @@
 
   let popoverOpen = $state(false);
 
-  // Calculate time remaining
+  const ageHours = $derived(ageHoursSince(instance.startedAt, now) ?? instance.ageHours);
+
   const timeRemaining = $derived.by(() => {
-    if (!instance.ageHours || !definition?.lifespanHours) return undefined;
-    return definition.lifespanHours - instance.ageHours;
+    if (!ageHours || !definition?.lifespanHours) return undefined;
+    return definition.lifespanHours - ageHours;
   });
 
-  // Calculate progress percentage (capped at 100%)
+  // Capped at 100%.
   const progressPercent = $derived.by(() => {
-    if (!instance.ageHours || !definition?.lifespanHours) return 0;
-    return Math.min(100, (instance.ageHours / definition.lifespanHours) * 100);
+    if (!ageHours || !definition?.lifespanHours) return 0;
+    return Math.min(100, (ageHours / definition.lifespanHours) * 100);
   });
 
   // Only show progress bar if over 10%
@@ -65,47 +75,16 @@
     return formatAge(hours);
   }
 
-  const LEVELS: Record<NotificationUrgency, AlertLevel> = {
-    [NotificationUrgency.Info]: "info",
-    [NotificationUrgency.Warn]: "warn",
-    [NotificationUrgency.Hazard]: "hazard",
-    [NotificationUrgency.Urgent]: "urgent",
-  };
+  const level = $derived(alertLevel(reachedUrgency(instance, now)));
+  const alertPrefix = $derived(alertLevelPrefix(level));
 
-  const level = $derived.by((): AlertLevel => {
-    const urgency = reachedUrgency(instance, now);
-    return urgency ? LEVELS[urgency] : "none";
-  });
-
-  // eslint-disable-next-line shadcn/require-static-classes -- this is the pill component: levelClasses is its variant table, and PopoverTrigger renders unstyled.
-  const pillClasses = $derived(
-    cn(
-      "relative inline-flex flex-col items-start rounded-md px-3 py-1 text-left whitespace-nowrap transition-colors cursor-pointer select-none overflow-hidden hover:bg-accent/50",
-      className
-    )
-  );
-
-  const valueTone: Record<AlertLevel, string> = {
-    none: "",
-    info: "text-severity-info",
-    warn: "text-severity-warn",
-    hazard: "text-severity-hazard",
-    urgent: "text-severity-urgent",
-  };
-
-  // The share of the tracker's lifespan used, drawn as a hairline under the item.
-  const progressFillClasses: Record<AlertLevel, string> = {
-    none: "bg-muted-foreground/40",
-    info: "bg-severity-info",
-    warn: "bg-severity-warn",
-    hazard: "bg-severity-hazard",
-    urgent: "bg-severity-urgent",
-  };
+  // eslint-disable-next-line shadcn/require-static-classes -- this is the pill component, and PopoverTrigger renders unstyled.
+  const pillClasses = $derived(trackerPillClasses(className));
 
   const label = $derived(
     instance.definitionName ?? definition?.name ?? "Tracker"
   );
-  const ageDisplay = $derived(formatAge(instance.ageHours));
+  const ageDisplay = $derived(formatAge(ageHours));
 
   function handleComplete() {
     popoverOpen = false;
@@ -120,10 +99,10 @@
 </script>
 
 <Popover.Root bind:open={popoverOpen}>
-  <Popover.Trigger class={pillClasses}>
+  <Popover.Trigger class={pillClasses} data-pill-trigger>
     {#if showProgress}
       <span
-        class="absolute bottom-0 left-3 h-px {progressFillClasses[level]} w-[calc((100%-1.5rem)*var(--progress))] transition-all duration-500 ease-out"
+        class="absolute bottom-0 left-3 h-px {PROGRESS_FILL[level]} w-[calc((100%-1.5rem)*var(--progress))] transition-all duration-500 ease-out"
         style:--progress={progressPercent / 100}
         aria-hidden="true"
       ></span>
@@ -135,10 +114,10 @@
       />
       {label}
     </span>
-    <span class="flex items-center gap-1 text-sm font-medium tabular-nums {valueTone[level]}">
-      {#if level === "warn" || level === "hazard" || level === "urgent"}
+    <span class="flex items-center gap-1 text-sm font-medium tabular-nums {VALUE_TONE[level]}">
+      {#if alertPrefix}
         <TriangleAlert class="size-3.5" aria-hidden="true" />
-        <span class="sr-only">{level === "urgent" ? "Urgent:" : "Warning:"}</span>
+        <span class="sr-only">{alertPrefix}</span>
       {/if}
       {ageDisplay}
     </span>

@@ -141,7 +141,12 @@
     style:--pill-rows={reservedPillRows}
     data-testid={testid}
   >
-    <div bind:this={pillsEl} class="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div
+      bind:this={pillsEl}
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 outline-none"
+      tabindex="-1"
+      data-pill-rail
+    >
       {@render leading?.()}
       {#each renderable as item (item)}
         <div class="contents" data-rail-item={item}>

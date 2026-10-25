@@ -1,3 +1,15 @@
+// A .svelte.ts module so wuchale extracts its strings; it holds no runes.
+
+/**
+ * Hours elapsed from a server timestamp to `now`, so an age moves on the same clock as the
+ * schedule steps it is shown beside. Undefined without a timestamp.
+ */
+export function ageHoursSince(from: string | Date | undefined, now: number): number | undefined {
+  if (!from) return undefined;
+  const start = typeof from === "string" ? Date.parse(from) : from.getTime();
+  return Number.isNaN(start) ? undefined : Math.max(0, now - start) / 3_600_000;
+}
+
 /** A tracker's or a legacy age's elapsed hours, as the pills show them. */
 export function formatAge(hours: number | undefined | null): string {
   if (hours === undefined || hours === null) return "n/a";

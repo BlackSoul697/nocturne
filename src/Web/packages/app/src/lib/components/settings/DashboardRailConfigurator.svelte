@@ -11,7 +11,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import {
-    LegacyConsumableKind,
+    type LegacyConsumableKind,
     RailItemId,
     type DashboardRailPreference,
   } from "$lib/api/generated/nocturne-api-client";
@@ -27,6 +27,7 @@
   import Pill from "@lucide/svelte/icons/pill";
   import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
   import { DragReorder, moveItem } from "./drag-reorder.svelte";
+  import { legacyKindLabel } from "$lib/components/trackers/legacy-kind-label.svelte";
 
   interface Props {
     /** The user's arrangement of the rail; an empty object is the default. */
@@ -46,13 +47,6 @@
     hiddenLegacyFallbacks = [],
     onhiddenlegacyfallbackschange,
   }: Props = $props();
-
-  const LEGACY_LABELS: Record<LegacyConsumableKind, string> = {
-    [LegacyConsumableKind.Sensor]: "Sensor age (SAGE)",
-    [LegacyConsumableKind.Site]: "Site age (CAGE)",
-    [LegacyConsumableKind.Reservoir]: "Reservoir age (IAGE)",
-    [LegacyConsumableKind.PumpBattery]: "Pump battery age (BAGE)",
-  };
 
   function showLegacyFallback(kind: LegacyConsumableKind) {
     onhiddenlegacyfallbackschange?.(hiddenLegacyFallbacks.filter((k) => k !== kind));
@@ -199,17 +193,17 @@
         <div>
           <h3 class="text-sm font-medium">Hidden legacy ages</h3>
           <p class="text-xs text-muted-foreground">
-            These device ages do not show with the tracker pills.
+            The ages of these items do not show with the tracker pills.
           </p>
         </div>
         <ul class="space-y-2">
           {#each hiddenLegacyFallbacks as kind (kind)}
             <li class="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
-              <span class="text-sm text-muted-foreground">{LEGACY_LABELS[kind]}</span>
+              <span class="text-sm text-muted-foreground">{legacyKindLabel(kind)}</span>
               <Button
                 variant="outline"
                 size="sm"
-                aria-label={`Show ${LEGACY_LABELS[kind]}`}
+                aria-label={`Show ${legacyKindLabel(kind)}`}
                 onclick={() => showLegacyFallback(kind)}
               >
                 <Eye class="h-4 w-4" />
@@ -223,7 +217,7 @@
 
     <div class="flex items-center justify-between gap-2">
       <p class="text-xs text-muted-foreground">
-        Trackers show when a tracker is active or a device age has no tracker.
+        Trackers show when a tracker is active. If an item has no tracker and you did not hide it, its age also shows.
       </p>
       <Button
         variant="outline"

@@ -10,6 +10,7 @@ import {
 } from "$lib/api/generated/nocturne-api-client";
 import { hiddenLegacyFallbacks } from "$lib/stores/appearance-store.svelte";
 import LegacyAgePill from "./LegacyAgePill.svelte";
+import LegacyAgePillRail from "./LegacyAgePill.test-host.svelte";
 
 const HOUR = 3600_000;
 const now = Date.UTC(2026, 9, 25, 12, 0, 0);
@@ -21,16 +22,25 @@ const HIDDEN_STORAGE_KEY = "nocturne-hidden-legacy-fallbacks";
 const SITE: LegacyFallbackDto = {
   kind: LegacyConsumableKind.Site,
   latestEventAt: at(50),
-  ageHours: 50,
+  // A stale snapshot from the read; the pill ages from latestEventAt on the store's clock.
+  ageHours: 40,
   schedule: [
     { urgency: NotificationUrgency.Info, firesAt: at(6) },
     { urgency: NotificationUrgency.Warn, firesAt: at(2) },
     { urgency: NotificationUrgency.Urgent, firesAt: new Date(now + 22 * HOUR).toISOString() },
   ],
-  spec: { name: "Infusion Site", category: TrackerCategory.Cannula, lifespanHours: 72 },
+  spec: { name: "Omnipod DASH pod", category: TrackerCategory.Cannula, lifespanHours: 72 },
 };
 
-const pill = () => page.getByRole("button", { name: /Infusion Site/ });
+const SENSOR: LegacyFallbackDto = {
+  kind: LegacyConsumableKind.Sensor,
+  latestEventAt: at(30),
+  ageHours: 30,
+  schedule: [{ urgency: NotificationUrgency.Hazard, firesAt: at(1) }],
+  spec: { name: "CGM Sensor", category: TrackerCategory.Sensor, lifespanHours: 240 },
+};
+
+const pill = (name = /Infusion site/) => page.getByRole("button", { name });
 const createButton = () => page.getByRole("button", { name: "Create a tracker" });
 const hideButton = () => page.getByRole("button", { name: "Hide" });
 
@@ -45,11 +55,25 @@ describe("LegacyAgePill", () => {
     localStorage.removeItem(HIDDEN_STORAGE_KEY);
   });
 
-  it("shows the age in the tone of the step the schedule reached", async () => {
+  it("names the kind and shows its age in the tone of the step reached", async () => {
     render(LegacyAgePill, { fallback: SITE, now });
 
     await expect.element(pill()).toHaveTextContent("2d 2h");
     await expect.element(pill().getByText("Warning:")).toBeInTheDocument();
+  });
+
+  it("ages on the clock it is given, as its tone does", async () => {
+    const screen = render(LegacyAgePill, { fallback: SITE, now });
+
+    await screen.rerender({ fallback: SITE, now: now + 3 * HOUR });
+
+    await expect.element(pill()).toHaveTextContent("2d 5h");
+  });
+
+  it("announces a hazard as a hazard", async () => {
+    render(LegacyAgePill, { fallback: SENSOR, now });
+
+    await expect.element(pill(/Sensor/).getByText("Hazard:")).toBeInTheDocument();
   });
 
   it("shows the age and the last change in its popover", async () => {
@@ -85,14 +109,32 @@ describe("LegacyAgePill", () => {
     ]);
   });
 
-  it("shows a member without alerts.readwrite the age and no actions", async () => {
+  it("lets a reader without alerts.readwrite hide the age but not create a tracker", async () => {
     pageState.data = { effectivePermissions: ["alerts.read", "devices.read"] };
     render(LegacyAgePill, { fallback: SITE, now });
 
     await pill().click();
 
-    await expect.element(page.getByTestId("legacy-age-pill-popover")).toBeVisible();
+    await expect.element(hideButton()).toBeVisible();
     await expect.element(createButton()).not.toBeInTheDocument();
-    await expect.element(hideButton()).not.toBeInTheDocument();
+  });
+
+  it("moves focus to the next pill once one is hidden", async () => {
+    render(LegacyAgePillRail, { fallbacks: [SITE, SENSOR], now });
+
+    await pill().click();
+    await hideButton().click();
+
+    await expect.element(pill()).not.toBeInTheDocument();
+    await expect.element(pill(/Sensor/)).toHaveFocus();
+  });
+
+  it("moves focus to the rail once the last pill is hidden", async () => {
+    render(LegacyAgePillRail, { fallbacks: [SITE], now });
+
+    await pill().click();
+    await hideButton().click();
+
+    await expect.element(page.getByTestId("rail")).toHaveFocus();
   });
 });

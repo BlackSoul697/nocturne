@@ -17,6 +17,7 @@
   import { formatLocale } from "$lib/utils/formatting";
   import { sequences } from "$lib/coach-marks/sequences";
   import { formatLifespan } from "./age.svelte";
+  import { legacyKindLabel } from "./legacy-kind-label.svelte";
   import Check from "@lucide/svelte/icons/check";
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
   import Plus from "@lucide/svelte/icons/plus";
@@ -33,7 +34,6 @@
 
   let { open = $bindable(false), fallbacks, initialKind, onCreated }: Props = $props();
 
-  /** Phase 4 registers this sequence; until then a conversion starts no tour. */
   const TRACKER_INTRO = "tracker-intro";
 
   const coach = getCoachMarkContext();
@@ -42,8 +42,6 @@
   let submitting = $state(false);
   let errorMessage = $state<string | null>(null);
   let result = $state.raw<LegacyConversionDto | null>(null);
-  /** The fallbacks as they were when submitted; a conversion removes them from `fallbacks`. */
-  let submitted = $state.raw<LegacyFallbackDto[]>([]);
 
   $effect(() => {
     if (!open) return;
@@ -54,11 +52,7 @@
     });
   });
 
-  const failedNames = $derived(
-    (result?.failedKinds ?? []).map(
-      (kind) => submitted.find((f) => f.kind === kind)?.spec?.name ?? kind
-    )
-  );
+  const failedNames = $derived((result?.failedKinds ?? []).map(legacyKindLabel));
 
   function toggle(kind: LegacyConsumableKind, checked: boolean) {
     selected = checked ? [...selected, kind] : selected.filter((k) => k !== kind);
@@ -78,7 +72,6 @@
     if (selected.length === 0) return;
     submitting = true;
     errorMessage = null;
-    submitted = fallbacks;
     try {
       result = await createFromLegacy({ kinds: selected });
       if ((result.definitions?.length ?? 0) > 0) onCreated?.();
@@ -170,7 +163,7 @@
                       category={fallback.spec?.category ?? TrackerCategory.Custom}
                       class="h-4 w-4"
                     />
-                    {fallback.spec?.name ?? kind}
+                    {legacyKindLabel(kind)}
                   </span>
                 </Label>
                 <p class="text-xs text-muted-foreground">

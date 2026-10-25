@@ -1,30 +1,34 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { page } from "$app/state";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
-  import {
-    NotificationUrgency,
-    TrackerCategory,
-    type LegacyConsumableKind,
-    type LegacyFallbackDto,
-  } from "$lib/api";
+  import { TrackerCategory, type LegacyConsumableKind, type LegacyFallbackDto } from "$lib/api";
   import { satisfiesScope } from "$lib/authorization/scopes";
   import { hiddenLegacyFallbacks } from "$lib/stores/appearance-store.svelte";
   import { formatLocale } from "$lib/utils/formatting";
-  import { cn } from "$lib/utils";
   import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import Plus from "@lucide/svelte/icons/plus";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import { reachedUrgency } from "$lib/components/trackers/schedule";
-  import { formatAge, formatLifespan } from "$lib/components/trackers/age.svelte";
-
-  type AlertLevel = "none" | "info" | "warn" | "hazard" | "urgent";
+  import {
+    ageHoursSince,
+    formatAge,
+    formatLifespan,
+  } from "$lib/components/trackers/age.svelte";
+  import { legacyKindLabel } from "$lib/components/trackers/legacy-kind-label.svelte";
+  import {
+    VALUE_TONE,
+    alertLevel,
+    alertLevelPrefix,
+    trackerPillClasses,
+  } from "./tracker-pill-style.svelte";
 
   interface Props {
     fallback: LegacyFallbackDto;
-    /** Epoch milliseconds the reached level is judged against. */
+    /** Epoch milliseconds the age and the reached level are judged against. */
     now: number;
     /** Opens the conversion with this kind selected. */
     onCreateTracker?: (kind: LegacyConsumableKind) => void;
@@ -34,44 +38,25 @@
   let { fallback, now, onCreateTracker, class: className }: Props = $props();
 
   let popoverOpen = $state(false);
+  let trigger = $state<HTMLElement | null>(null);
 
-  // The conversion and the hidden list both change what the tenant tracks, which the server
-  // gates on alerts.readwrite.
-  const canWrite = $derived(
+  // Converting creates a tenant tracker, which the server gates on alerts.readwrite. Hiding is the
+  // viewer's own preference and needs nothing more than seeing the pill.
+  const canCreate = $derived(
     satisfiesScope(page.data.effectivePermissions ?? [], "alerts.readwrite")
   );
 
-  const LEVELS: Record<NotificationUrgency, AlertLevel> = {
-    [NotificationUrgency.Info]: "info",
-    [NotificationUrgency.Warn]: "warn",
-    [NotificationUrgency.Hazard]: "hazard",
-    [NotificationUrgency.Urgent]: "urgent",
-  };
+  const level = $derived(alertLevel(reachedUrgency(fallback, now)));
+  const alertPrefix = $derived(alertLevelPrefix(level));
 
-  const level = $derived.by((): AlertLevel => {
-    const urgency = reachedUrgency(fallback, now);
-    return urgency ? LEVELS[urgency] : "none";
-  });
-
-  // eslint-disable-next-line shadcn/require-static-classes -- the tracker pill's shape, as TrackerPill draws it; PopoverTrigger renders unstyled.
-  const pillClasses = $derived(
-    cn(
-      "relative inline-flex flex-col items-start rounded-md px-3 py-1 text-left whitespace-nowrap transition-colors cursor-pointer select-none overflow-hidden hover:bg-accent/50",
-      className
-    )
-  );
-
-  const valueTone: Record<AlertLevel, string> = {
-    none: "",
-    info: "text-severity-info",
-    warn: "text-severity-warn",
-    hazard: "text-severity-hazard",
-    urgent: "text-severity-urgent",
-  };
+  // eslint-disable-next-line shadcn/require-static-classes -- the tracker pill's shape, and PopoverTrigger renders unstyled.
+  const pillClasses = $derived(trackerPillClasses(className));
 
   const category = $derived(fallback.spec?.category ?? TrackerCategory.Custom);
-  const label = $derived(fallback.spec?.name ?? "");
-  const ageDisplay = $derived(formatAge(fallback.ageHours));
+  const label = $derived(fallback.kind ? legacyKindLabel(fallback.kind) : "");
+  const ageDisplay = $derived(
+    formatAge(ageHoursSince(fallback.latestEventAt, now) ?? fallback.ageHours)
+  );
 
   function createTracker() {
     if (!fallback.kind) return;
@@ -79,26 +64,42 @@
     onCreateTracker?.(fallback.kind);
   }
 
-  function hide() {
+  /** The next pill in the rail, else the previous one, else the rail itself. */
+  function focusAfterHide(): HTMLElement | null {
+    const rail = trigger?.closest<HTMLElement>("[data-pill-rail]") ?? null;
+    const pills = rail ? [...rail.querySelectorAll<HTMLElement>("[data-pill-trigger]")] : [];
+    const index = trigger ? pills.indexOf(trigger) : -1;
+    return (index >= 0 ? (pills[index + 1] ?? pills[index - 1]) : undefined) ?? rail;
+  }
+
+  async function hide() {
     const kind = fallback.kind;
     if (!kind) return;
+    const next = focusAfterHide();
     popoverOpen = false;
     if (!hiddenLegacyFallbacks.current.includes(kind)) {
       hiddenLegacyFallbacks.current = [...hiddenLegacyFallbacks.current, kind];
     }
+    await tick();
+    next?.focus();
   }
 </script>
 
 <Popover.Root bind:open={popoverOpen}>
-  <Popover.Trigger class={pillClasses} data-testid="legacy-age-pill">
+  <Popover.Trigger
+    bind:ref={trigger}
+    class={pillClasses}
+    data-pill-trigger
+    data-testid="legacy-age-pill"
+  >
     <span class="flex items-center gap-1 text-xs text-muted-foreground">
       <TrackerCategoryIcon {category} class="size-3" />
       {label}
     </span>
-    <span class="flex items-center gap-1 text-sm font-medium tabular-nums {valueTone[level]}">
-      {#if level === "warn" || level === "hazard" || level === "urgent"}
+    <span class="flex items-center gap-1 text-sm font-medium tabular-nums {VALUE_TONE[level]}">
+      {#if alertPrefix}
         <TriangleAlert class="size-3.5" aria-hidden="true" />
-        <span class="sr-only">{level === "urgent" ? "Urgent:" : "Warning:"}</span>
+        <span class="sr-only">{alertPrefix}</span>
       {/if}
       {ageDisplay}
     </span>
@@ -146,17 +147,17 @@
         </div>
       {/if}
     </div>
-    {#if canWrite}
-      <div class="flex gap-2 border-t border-border p-2">
+    <div class="flex gap-2 border-t border-border p-2">
+      {#if canCreate}
         <Button variant="outline" size="sm" class="flex-1" onclick={createTracker}>
           <Plus class="mr-2 h-4 w-4" />
           Create a tracker
         </Button>
-        <Button variant="ghost" size="sm" onclick={hide}>
-          <EyeOff class="mr-2 h-4 w-4" />
-          Hide
-        </Button>
-      </div>
-    {/if}
+      {/if}
+      <Button variant="ghost" size="sm" class={canCreate ? "" : "flex-1"} onclick={hide}>
+        <EyeOff class="mr-2 h-4 w-4" />
+        Hide
+      </Button>
+    </div>
   </Popover.Content>
 </Popover.Root>
