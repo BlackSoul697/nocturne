@@ -11,7 +11,7 @@
   import { cn } from "$lib/utils";
   import { coachmark } from "@nocturne/coach";
   import { coachFor } from "$lib/coach-marks/copy.svelte";
-  import { toured, whileShown } from "$lib/coach-marks/attach.svelte";
+  import { toured, whileShown } from "$lib/coach-marks/attach";
   import { trackerDefinition, visibleTrackerInstances } from "./tracker-pill-visibility";
 
   interface TrackerPillBarProps {
@@ -69,9 +69,7 @@
     {#each visibleInstances as instance, index (instance.id)}
       {#if index === 0}
         <div
-          class="flex"
-          data-testid="tracker-intro-target"
-          {@attach toured()
+          class="flex"          {@attach toured()
             ? whileShown(
                 coachmark([
                   { ...coachFor("tracker-intro.pill") },

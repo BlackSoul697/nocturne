@@ -1,6 +1,6 @@
 import { page } from "$app/state";
 import { coachmark } from "@nocturne/coach";
-import { toured } from "$lib/coach-marks/attach.svelte";
+import { toured } from "$lib/coach-marks/attach";
 import { coachFor, type CoachCopyKey } from "$lib/coach-marks/copy.svelte";
 import { loopAnalysisPageAt } from "./loop-analysis-pages.svelte";
 
