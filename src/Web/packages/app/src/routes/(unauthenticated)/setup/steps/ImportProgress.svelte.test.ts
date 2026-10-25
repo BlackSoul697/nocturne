@@ -9,6 +9,8 @@ let history: MigrationJobInfo[] = [];
 let statusUnreachable = false;
 const statusSpy = vi.fn();
 
+// The factory is hoisted above every declaration here, so it may only reach the bindings
+// below from inside the functions it returns.
 vi.mock("$api/generated/migrations.generated.remote", () => ({
   getStatus: (jobId: string) => {
     statusSpy(jobId);

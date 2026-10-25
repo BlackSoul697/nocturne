@@ -10,6 +10,8 @@
   import Loader2 from "@lucide/svelte/icons/loader-circle";
   import * as migrationRemote from "$api/generated/migrations.generated.remote";
   import { MigrationJobState } from "$api";
+  import { Artwork } from "@nocturne/watercolour";
+  import { databaseArtwork } from "$lib/watercolour-icons";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { findSessionJob } from "../migration-session";
   import { SkippedRecordsNote } from "$lib/components/shared";
@@ -287,6 +289,13 @@
 <div class="flex flex-col gap-8 px-4 py-8">
   <!-- Heading -->
   <div class="flex flex-col items-center gap-4 text-center">
+    <Artwork
+      icon={databaseArtwork}
+      palette="slate"
+      motion="auto"
+      autoplay="once"
+      class="size-48"
+    />
     <h1
       class="font-brand font-hairline leading-tight tracking-tight text-foreground text-3xl md:text-4xl xl:text-5xl"
     >
