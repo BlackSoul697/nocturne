@@ -3,7 +3,9 @@ import { page, userEvent } from "vitest/browser";
 import { describe, expect, it, vi } from "vitest";
 import { createRawSnippet } from "svelte";
 import Actogram from "./Actogram.svelte";
+import type { ActogramDay } from "./actogram";
 import Harness from "./ActogramHarness.test.svelte";
+import { servedDays } from "$lib/test-stubs/actogram-days";
 
 describe.each(["steps", "heart-rate"] as const)("%s actogram", (metric) => {
   it.each([
@@ -32,7 +34,7 @@ describe.each(["steps", "heart-rate"] as const)("%s actogram", (metric) => {
 });
 
 describe("keyboard navigation", () => {
-  const days = Array.from({ length: 40 }, (_, index) => new Date(Date.UTC(2026, 8, 1 + index)));
+  const days = servedDays("2026-09-01", 40);
   const row = createRawSnippet(() => ({ render: () => "<g></g>" }));
 
   async function press(keys: string) {
@@ -66,18 +68,18 @@ describe("keyboard navigation", () => {
 });
 
 describe("week buttons", () => {
-  const newestFirst = Array.from({ length: 40 }, (_, index) => new Date(Date.UTC(2026, 9, 10 - index)));
+  const newestFirst = servedDays("2026-08-02", 40).reverse();
   const row = createRawSnippet(() => ({ render: () => "<g></g>" }));
 
   it("Older week shows older days and Newer week returns", async () => {
     const onVisibleRangeChange = vi.fn();
     render(Actogram, { props: { data: [], days: newestFirst, visibleCount: 5, onVisibleRangeChange, row } });
-    const firstVisible = () => onVisibleRangeChange.mock.calls.at(-1)![0] as Date;
+    const firstVisible = () => onVisibleRangeChange.mock.calls.at(-1)![0] as ActogramDay;
 
     await expect.element(page.getByRole("button", { name: "Newer week" })).toBeDisabled();
     await page.getByRole("button", { name: "Older week" }).click();
     await expect.poll(() => onVisibleRangeChange.mock.calls.length).toBe(1);
-    expect(firstVisible().getTime()).toBeLessThan(newestFirst[0].getTime());
+    expect(firstVisible().startMills).toBeLessThan(newestFirst[0].startMills);
     expect(firstVisible()).toEqual(newestFirst[7]);
 
     await page.getByRole("button", { name: "Newer week" }).click();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatNumber, formatShortDate } from "$lib/utils/formatting";
+  import { formatNumber } from "$lib/utils/formatting";
   import {
     Card,
     CardContent,
@@ -12,12 +12,12 @@
   import {
     Actogram,
     extentOf,
+    formatActogramDay,
     pointsInRange,
     type ActogramRowContext,
   } from "$lib/components/actogram";
   import { MS_PER_HOUR } from "$lib/components/actogram/actogram";
   import { useActogramReport } from "$lib/hooks/actogram-report.svelte";
-  import { toDayString } from "$lib/utils/date-range";
 
   const VISIBLE_DAYS = 14;
 
@@ -26,10 +26,6 @@
 
   const dayTotals = $derived(actogramResource.current?.stepDayTotals ?? {});
   const noZoneReason = $derived(actogramResource.current?.timeZoneUnavailableReason);
-
-  function formatDate(date: Date): string {
-    return formatShortDate(date);
-  }
 
   // Step data as ActogramPoints
   const stepPoints = $derived(
@@ -76,7 +72,7 @@
   {#if noZoneReason}
     <p class="text-sm text-muted-foreground">
       <TimeZoneNote reason={noZoneReason}>
-        This report cannot calculate the total steps for each local day.
+        The rows and their step totals use UTC days.
       </TimeZoneNote>
     </p>
   {/if}
@@ -101,12 +97,10 @@
       >
         {#snippet rowLabel({ day })}
           <div class="text-right pr-2">
-            <div class="text-xs text-muted-foreground">{formatDate(day)}</div>
-            {#if !noZoneReason}
-              <div class="text-xs font-medium tabular-nums" data-testid="day-total">
-                {formatNumber(dayTotals[toDayString(day)])} <span class="text-muted-foreground font-normal">steps</span>
-              </div>
-            {/if}
+            <div class="text-xs text-muted-foreground">{formatActogramDay(day)}</div>
+            <div class="text-xs font-medium tabular-nums" data-testid="day-total">
+              {formatNumber(dayTotals[day.date])} <span class="text-muted-foreground font-normal">steps</span>
+            </div>
           </div>
         {/snippet}
         {#snippet tooltipValue({ point })}
@@ -118,9 +112,11 @@
           {#each ctx.data as { point, hoursFromStart, isExtended }, i (i)}
             {@const steps = typeof point.steps === "number" ? point.steps : 0}
             {@const barHeight = (steps / barScale) * ctx.height}
-            {@const x = ctx.xScale(new Date(ctx.day.getTime() + hoursFromStart * MS_PER_HOUR))}
+            {@const x = ctx.xScale(new Date(ctx.day.startMills + hoursFromStart * MS_PER_HOUR))}
             <rect
               data-testid="step-reading"
+              data-steps={steps}
+              data-extended={isExtended}
               {x}
               y={ctx.height - barHeight}
               width={3}

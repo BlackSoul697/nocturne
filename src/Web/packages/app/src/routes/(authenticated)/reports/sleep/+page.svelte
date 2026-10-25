@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { indexBy } from "$lib/utils/collections";
   import {
     Card,
     CardAction,
@@ -13,6 +12,7 @@
   import CalendarRange from "@lucide/svelte/icons/calendar-range";
   import {
     Actogram,
+    formatActogramDay,
     type ActogramRowContext,
   } from "$lib/components/actogram";
   import { MS_PER_HOUR, HOURS_PER_ROW, type ActogramPoint } from "$lib/components/actogram/actogram";
@@ -20,8 +20,7 @@
   import { useActogramReport } from "$lib/hooks/actogram-report.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { resolve } from "$app/paths";
-  import { dayKeyFor, buildNightsByDayKey } from "$lib/utils/sleep-night-mapping";
-  import { bgDelta, bgLabel, formatShortDate } from "$lib/utils/formatting";
+  import { bgDelta, bgLabel } from "$lib/utils/formatting";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
   import SleepCompositionChart from "$lib/components/reports/sleep/SleepCompositionChart.svelte";
   import SleepWeeklyBreakdown from "$lib/components/reports/sleep/SleepWeeklyBreakdown.svelte";
@@ -118,22 +117,9 @@
   const sleepNights = $derived(trendsResource.current?.nights ?? []);
   const sleepWeeks = $derived(trendsResource.current?.weeks ?? []);
 
-  // Maps each display day to the night's authoritative display date, for actogram row links.
-  const nightDateByDayKey = $derived(
-    indexBy(
-      buildNightsByDayKey(sleepNights),
-      ([key, night]) => (night.displayDate ? key : null),
-      ([, night]) => night.displayDate ?? ""
-    )
-  );
-
   function formatHoursMinutes(hours: number): string {
     const totalMinutes = Math.round(hours * 60);
     return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
-  }
-
-  function formatRowLabelDate(day: Date): string {
-    return formatShortDate(day);
   }
 
   const hasActogramSleep = $derived(sleepPoints.length > 0);
@@ -285,7 +271,7 @@
     {#if trendsResource.current?.timeZoneUnavailableReason}
       <p class="text-sm text-muted-foreground">
         <TimeZoneNote reason={trendsResource.current.timeZoneUnavailableReason}>
-          Days in range, the weekly breakdown and the composition chart use UTC days.
+          Days in range, the weekly breakdown, the composition chart and the actogram rows use UTC days.
         </TimeZoneNote>
       </p>
     {/if}
@@ -376,17 +362,16 @@
             <span class="ml-auto font-medium capitalize">{span.state.toLowerCase()}</span>
           {/snippet}
           {#snippet rowLabel({ day })}
-            {@const linkDate = nightDateByDayKey.get(dayKeyFor(day))}
-            {#if linkDate}
+            {#if sleepNights.some((night) => night.displayDate === day.date)}
               <a
-                href={resolve("/(authenticated)/reports/sleep/[date]", { date: linkDate })}
+                href={resolve("/(authenticated)/reports/sleep/[date]", { date: day.date })}
                 class="block text-xs text-muted-foreground text-right pr-2 hover:text-foreground hover:underline"
               >
-                {formatRowLabelDate(day)}
+                {formatActogramDay(day)}
               </a>
             {:else}
               <span class="block text-xs text-muted-foreground text-right pr-2">
-                {formatRowLabelDate(day)}
+                {formatActogramDay(day)}
               </span>
             {/if}
           {/snippet}
@@ -394,10 +379,10 @@
             {#each ctx.data as { point, hoursFromStart, isExtended }, i (i)}
               {@const span = sleepSpanOf(point)}
               {@const durationHours = (span.endMills - span.startMills) / MS_PER_HOUR}
-              {@const x = ctx.xScale(new Date(ctx.day.getTime() + hoursFromStart * MS_PER_HOUR))}
+              {@const x = ctx.xScale(new Date(ctx.day.startMills + hoursFromStart * MS_PER_HOUR))}
               {@const endHours = hoursFromStart + durationHours}
               {@const clampedEnd = Math.min(endHours, HOURS_PER_ROW)}
-              {@const x2 = ctx.xScale(new Date(ctx.day.getTime() + clampedEnd * MS_PER_HOUR))}
+              {@const x2 = ctx.xScale(new Date(ctx.day.startMills + clampedEnd * MS_PER_HOUR))}
               {@const rectWidth = Math.max(x2 - x, 1)}
               <rect
                 {x}
