@@ -7123,10 +7123,8 @@ msgstr ""
 #~ msgid "Public - Visible to everyone"
 #~ msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Private - Only you can see"
-msgstr ""
+#~ msgid "Private - Only you can see"
+#~ msgstr ""
 
 #~ msgid "Controls whether this tracker is visible to unauthenticated users"
 #~ msgstr ""
@@ -23906,14 +23904,11 @@ msgstr ""
 msgid "Use this to keep two trackers that listen for the same event apart, such as a left and a right site."
 msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public - Other members can see it"
-msgstr ""
+#~ msgid "Public - Other members can see it"
+#~ msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
-msgstr ""
+#~ msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
+#~ msgstr ""
 
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
 msgid "Bolus insulin"
@@ -34500,9 +34495,8 @@ msgstr ""
 msgid "Dashboard visibility"
 msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public visibility"
-msgstr ""
+#~ msgid "Public visibility"
+#~ msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 msgid "Event integration (Nightscout)"

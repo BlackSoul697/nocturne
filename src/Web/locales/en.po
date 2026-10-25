@@ -7123,10 +7123,8 @@ msgstr "When to show this tracker as a pill on the dashboard"
 #~ msgid "Public - Visible to everyone"
 #~ msgstr "Public - Visible to everyone"
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Private - Only you can see"
-msgstr "Private - Only you can see"
+#~ msgid "Private - Only you can see"
+#~ msgstr "Private - Only you can see"
 
 #~ msgid "Controls whether this tracker is visible to unauthenticated users"
 #~ msgstr "Controls whether this tracker is visible to unauthenticated users"
@@ -23906,14 +23904,11 @@ msgstr "Only when the event's notes contain (optional)"
 msgid "Use this to keep two trackers that listen for the same event apart, such as a left and a right site."
 msgstr "Use this to keep two trackers that listen for the same event apart, such as a left and a right site."
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public - Other members can see it"
-msgstr "Public - Other members can see it"
+#~ msgid "Public - Other members can see it"
+#~ msgstr "Public - Other members can see it"
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
-msgstr "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
+#~ msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
+#~ msgstr "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
 
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
 msgid "Bolus insulin"
@@ -34500,9 +34495,8 @@ msgstr "Tracker mode"
 msgid "Dashboard visibility"
 msgstr "Dashboard visibility"
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public visibility"
-msgstr "Public visibility"
+#~ msgid "Public visibility"
+#~ msgstr "Public visibility"
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 msgid "Event integration (Nightscout)"

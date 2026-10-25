@@ -7123,10 +7123,8 @@ msgstr "Cuándo mostrar este seguimiento como una etiqueta en el panel"
 #~ msgid "Public - Visible to everyone"
 #~ msgstr "Público - Visible para todos"
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Private - Only you can see"
-msgstr "Privado - Solo tú puedes verlo"
+#~ msgid "Private - Only you can see"
+#~ msgstr "Privado - Solo tú puedes verlo"
 
 #~ msgid "Controls whether this tracker is visible to unauthenticated users"
 #~ msgstr "Controla si este seguimiento es visible para usuarios no autenticados"
@@ -23906,14 +23904,11 @@ msgstr "Solo cuando las notas del evento contengan (opcional)"
 msgid "Use this to keep two trackers that listen for the same event apart, such as a left and a right site."
 msgstr "Úsalo para distinguir dos seguimientos que escuchan el mismo evento, como un sitio izquierdo y otro derecho."
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public - Other members can see it"
-msgstr "Público - Otros miembros pueden verlo"
+#~ msgid "Public - Other members can see it"
+#~ msgstr "Público - Otros miembros pueden verlo"
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
-msgstr "Indica si otras personas que hayan iniciado sesión en este sitio pueden verlo en ejecución. Los seguimientos nunca se muestran en un enlace público compartido."
+#~ msgid "Whether other people signed in to this site can see it running. Trackers are never shown on a public share link."
+#~ msgstr "Indica si otras personas que hayan iniciado sesión en este sitio pueden verlo en ejecución. Los seguimientos nunca se muestran en un enlace público compartido."
 
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
 msgid "Bolus insulin"
@@ -34500,9 +34495,8 @@ msgstr ""
 msgid "Dashboard visibility"
 msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "Public visibility"
-msgstr ""
+#~ msgid "Public visibility"
+#~ msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 msgid "Event integration (Nightscout)"
