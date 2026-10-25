@@ -1,0 +1,136 @@
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using Nocturne.API.Controllers.V4.Monitoring;
+using Nocturne.API.Services.Monitoring;
+using Nocturne.API.Tests.Infrastructure;
+using Nocturne.Core.Models;
+using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Entities;
+using Xunit;
+
+namespace Nocturne.API.Tests.Controllers.V4.Monitoring;
+
+[Trait("Category", "Unit")]
+public class TrackerLegacyFallbacksControllerTests
+{
+    private static readonly Guid SubjectId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    private readonly Mock<ILegacyFallbackService> _service = new();
+
+    public TrackerLegacyFallbacksControllerTests()
+    {
+        var spec = ConsumableTrackerSpecs.Generic(LegacyConsumableKind.Site);
+        var at = DateTime.UtcNow.AddHours(-10);
+        _service.Setup(s => s.GetAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new LegacyFallback(
+                    LegacyConsumableKind.Site,
+                    new DeviceEvent { Id = Guid.NewGuid(), EventType = DeviceEventType.SiteChange, Timestamp = at },
+                    spec,
+                    new TrackerInstanceEntity
+                    {
+                        StartedAt = at,
+                        Definition = ConsumableTrackerSpecs.ToDefinition(spec, string.Empty),
+                    }),
+            ]);
+        _service.Setup(s => s.CreateTrackersAsync(
+                It.IsAny<IReadOnlyCollection<LegacyConsumableKind>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LegacyConversion([], [], []));
+    }
+
+    private TrackerLegacyFallbacksController Controller(params string[] scopes)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items["GrantedScopes"] = new HashSet<string>(scopes);
+        httpContext.Items["AuthContext"] = new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.SessionCookie,
+            SubjectId = SubjectId,
+        };
+        return new TrackerLegacyFallbacksController(_service.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext },
+        };
+    }
+
+    private static LegacyFallbackDto[] Body(ActionResult<LegacyFallbackDto[]> result) =>
+        (LegacyFallbackDto[])result.Result.Should().BeOfType<OkObjectResult>().Subject.Value!;
+
+    [Fact]
+    public async Task AReaderOfTrackersAndDevices_GetsTheFallbacks()
+    {
+        var body = Body(await Controller(Scope.AlertsRead, Scope.DevicesRead).GetLegacyFallbacks());
+
+        var site = body.Should().ContainSingle().Subject;
+        site.Kind.Should().Be(LegacyConsumableKind.Site);
+        site.Spec.Name.Should().Be("Infusion Site");
+        site.Schedule.Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData(Scope.AlertsRead)]
+    [InlineData(Scope.DevicesRead)]
+    public async Task ACallerMissingEitherScope_GetsNone(string onlyScope)
+    {
+        Body(await Controller(onlyScope).GetLegacyFallbacks()).Should().BeEmpty();
+
+        _service.Verify(s => s.GetAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ConvertingWithoutDevicesRead_IsForbidden()
+    {
+        var result = await Controller(Scope.AlertsReadWrite).CreateFromLegacy(
+            new CreateTrackersFromLegacyRequest { Kinds = [LegacyConsumableKind.Site] });
+
+        result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        _service.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AnUndefinedKind_IsRejectedBeforeAnyConversion()
+    {
+        var result = await Controller(Scope.AlertsReadWrite, Scope.DevicesRead).CreateFromLegacy(
+            new CreateTrackersFromLegacyRequest { Kinds = [LegacyConsumableKind.Sensor, (LegacyConsumableKind)99] });
+
+        result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        _service.Verify(s => s.CreateTrackersAsync(
+            It.IsAny<IReadOnlyCollection<LegacyConsumableKind>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Converting_PassesTheKindsAndTheCaller()
+    {
+        await Controller(Scope.AlertsReadWrite, Scope.DevicesRead).CreateFromLegacy(
+            new CreateTrackersFromLegacyRequest { Kinds = [LegacyConsumableKind.Sensor] });
+
+        _service.Verify(s => s.CreateTrackersAsync(
+            It.Is<IReadOnlyCollection<LegacyConsumableKind>>(k => k.Single() == LegacyConsumableKind.Sensor),
+            SubjectId.ToString(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void ConvertingWithoutAlertsReadWrite_IsRefusedByTheGate()
+    {
+        var authContext = new AuthContext { IsAuthenticated = true, AuthType = AuthType.SessionCookie, SubjectId = SubjectId };
+
+        var refused = ActionGate.Evaluate(
+            typeof(TrackerLegacyFallbacksController),
+            nameof(TrackerLegacyFallbacksController.CreateFromLegacy),
+            new HashSet<string> { Scope.AlertsRead, Scope.DevicesRead },
+            authContext);
+        var admitted = ActionGate.Evaluate(
+            typeof(TrackerLegacyFallbacksController),
+            nameof(TrackerLegacyFallbacksController.CreateFromLegacy),
+            new HashSet<string> { Scope.AlertsReadWrite, Scope.DevicesRead },
+            authContext);
+
+        refused.Should().BeOfType<ForbidResult>();
+        admitted.Should().BeNull();
+    }
+}

@@ -27,6 +27,15 @@ public interface ITrackerAlertRuleSyncService
     Task SyncDefinitionAsync(Guid definitionId, CancellationToken ct = default);
 
     /// <summary>
+    /// Creates the managed alert rules of <paramref name="definitionId"/>, a definition that has
+    /// none yet, on the caller's <paramref name="unit"/> and inside its transaction, so the rules
+    /// commit with the definition. Having no rules, it retires none, so nothing is closed
+    /// before the caller commits.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The definition already has managed rules.</exception>
+    Task CreateRulesAsync(DbUnitOfWork unit, Guid definitionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Deletes every managed alert rule owned by <paramref name="definitionId"/>. Called
     /// when the tracker definition itself is deleted.
     /// </summary>
@@ -67,6 +76,21 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
     public async Task SyncDefinitionAsync(Guid definitionId, CancellationToken ct = default)
     {
         await using var unit = await DbUnitOfWork.OpenAsync(_contextFactory, ct);
+        await SyncAsync(unit, definitionId, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task CreateRulesAsync(DbUnitOfWork unit, Guid definitionId, CancellationToken ct = default)
+    {
+        var tag = ManagedByTag(definitionId);
+        if (await unit.Context.AlertRules.AnyAsync(r => r.ManagedBy == tag, ct))
+            throw new InvalidOperationException($"Tracker definition {definitionId} already has managed rules");
+
+        await SyncAsync(unit, definitionId, ct);
+    }
+
+    private async Task SyncAsync(DbUnitOfWork unit, Guid definitionId, CancellationToken ct)
+    {
         var db = unit.Context;
         var tenantId = db.TenantId;
 
@@ -83,6 +107,11 @@ public sealed class TrackerAlertRuleSyncService : ITrackerAlertRuleSyncService
         var managedRules = await db.AlertRules
             .Where(r => r.ManagedBy == tag)
             .ToDictionaryAsync(r => r.Id, ct);
+        if (managedRules.Count == 0
+            && definition.NotificationThresholds.Count == 0
+            && definition is not { Category: TrackerCategory.Reservoir, LowReservoirUnits: not null })
+            return;
+
         var recipient = await InAppRecipientOfAsync(db, tenantId, definition, ct);
 
         // The threshold editor replaces the whole threshold list (new row ids), which

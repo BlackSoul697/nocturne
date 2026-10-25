@@ -358,6 +358,7 @@ public class V4WriteScopeGatingTests
             // definition's thresholds become managed alert rules and acking an instance acks an
             // alert excursion. v1/v2 notification writes require alerts.readwrite.
             ["TrackersController"] = Scope.AlertsReadWrite,
+            ["TrackerLegacyFallbacksController"] = Scope.AlertsReadWrite,
 
             // alerts: UISettingsConfiguration is tenant-wide and carries NotificationSettings, the
             // alarm thresholds and profiles that decide whether a low-glucose alert fires.
