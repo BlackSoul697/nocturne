@@ -3,7 +3,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createServer } from 'http';
 import type { AddressInfo } from 'node:net';
 import { io as connectClient, type Socket as ClientSocket } from 'socket.io-client';
-import SocketIOServer, { pickHandshakeHost, resolveTenantSlug } from './socketio-server.js';
+import SocketIOServer, {
+  isShareHost,
+  pickHandshakeHost,
+  resolveTenantSlug,
+  SHARE_REALTIME_UNSUPPORTED,
+} from './socketio-server.js';
 import { signHandshakeTicket, type RealtimeGrant } from './handshake-ticket.js';
 import MessageTranslator from './message-translator.js';
 
@@ -13,6 +18,7 @@ const TENANT_ID = '0198a3c4-7e21-7b10-9d2f-5c6e7f809a1b';
 /** The server, with `TENANT_ID` as the tenant every slug names. */
 function servingTenant(server: SocketIOServer): SocketIOServer {
   server.isCurrentTenant = async (_slug, id) => id === TENANT_ID;
+  server.holdsTenantNow = (_slug, id) => id === TENANT_ID;
   return server;
 }
 
@@ -41,6 +47,26 @@ describe('resolveTenantSlug', () => {
 
   it('ignores a port on the host', () => {
     expect(resolveTenantSlug('rhys.nocturne.run:443', base, null)).toBe('rhys');
+  });
+});
+
+describe('isShareHost', () => {
+  const base = 'nocturne.run';
+
+  it('names a {token}.share.{baseDomain} host a share host', () => {
+    expect(isShareHost('abc123.share.nocturne.run', base)).toBe(true);
+    expect(isShareHost('ABC123.SHARE.nocturne.run:443', base)).toBe(true);
+  });
+
+  it.each(['share.nocturne.run', 'rhys.nocturne.run', 'nocturne.run', 'abc.share.evil.com', 'a.b.share.nocturne.run'])(
+    'does not name %s a share host',
+    (host) => {
+      expect(isShareHost(host, base)).toBe(false);
+    },
+  );
+
+  it('does not name a missing host a share host', () => {
+    expect(isShareHost(undefined, base)).toBe(false);
   });
 });
 
@@ -208,6 +234,30 @@ describe('SocketIOServer.authorizeHandshake', () => {
     expect(isCurrentTenant).toHaveBeenCalledWith('rhys', replaced);
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'unauthorized' }));
     expect(socket.data.tenantSlug).toBeUndefined();
+  });
+
+  it('refuses a ticket whose tenant list changed between the check and the grant', async () => {
+    const server = makeServer();
+    const recreated = '0198a3c4-0000-7000-8000-000000000001';
+    let current = TENANT_ID;
+    server.holdsTenantNow = (_slug, id) => id === current;
+    server.isCurrentTenant = async (_slug, id) => {
+      const held = id === current;
+      current = recreated;
+      return held;
+    };
+    const next = vi.fn();
+    const socket = fakeSocket(
+      { 'x-forwarded-host': 'rhys.nocturne.run' },
+      { token: signHandshakeTicket(SECRET, 'rhys.nocturne.run', TENANT_ID, grant(true)) },
+    );
+
+    await server.authorizeHandshake(socket as never, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'unauthorized' }));
+    expect(socket.data.tenantSlug).toBeUndefined();
+    expect(socket.data.tenantRelay).toBeUndefined();
   });
 
   it('rejects every ticket until it is told which tenant a slug names', async () => {
@@ -1497,4 +1547,55 @@ describe('SocketIOServer v3 /alarm broadcast fan-out', () => {
     expectRooms();
     server.getIO()!.close();
   });
+});
+
+describe('a share host handshake', () => {
+  const clients: ClientSocket[] = [];
+  const host = 'abc123.share.nocturne.run';
+
+  afterEach(() => {
+    for (const client of clients.splice(0)) client.disconnect();
+    vi.unstubAllGlobals();
+  });
+
+  it.each(['/', '/storage', '/alarm'])(
+    'is refused on %s before any tenant list read or API probe',
+    async (namespace) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const http = createServer();
+      const server = new SocketIOServer(http, {}, 'nocturne.run', null, SECRET, 'http://api.internal');
+      const isCurrentTenant = vi.fn(async () => true);
+      const holdsTenantNow = vi.fn(() => true);
+      const onApexUnresolved = vi.fn(async () => {});
+      const onTenantAdmitted = vi.fn();
+      server.isCurrentTenant = isCurrentTenant;
+      server.holdsTenantNow = holdsTenantNow;
+      server.onApexUnresolved = onApexUnresolved;
+      server.onTenantAdmitted = onTenantAdmitted;
+      await server.start();
+      await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+      const port = (http.address() as AddressInfo).port;
+
+      for (const auth of [{}, { token: signHandshakeTicket(SECRET, host, TENANT_ID, grant(true)) }]) {
+        const client = connectClient(`http://127.0.0.1:${port}${namespace}`, {
+          transports: ['websocket'],
+          reconnection: false,
+          extraHeaders: { 'X-Forwarded-Host': host },
+          auth,
+        });
+        clients.push(client);
+
+        const error = await new Promise<Error>((resolve) => client.once('connect_error', resolve));
+
+        expect(error.message).toBe(SHARE_REALTIME_UNSUPPORTED);
+      }
+      expect(isCurrentTenant).not.toHaveBeenCalled();
+      expect(holdsTenantNow).not.toHaveBeenCalled();
+      expect(onApexUnresolved).not.toHaveBeenCalled();
+      expect(onTenantAdmitted).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      await server.stop();
+    },
+  );
 });
