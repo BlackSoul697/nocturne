@@ -79,6 +79,12 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
 
+      # crates/rust-toolchain.toml pins the toolchain cargo runs there, and the target above went to
+      # stable, so the pinned one needs it too.
+      - name: Add the aarch64 target to the pinned toolchain
+        working-directory: crates
+        run: rustup target add aarch64-unknown-linux-gnu
+
       - name: Install aarch64 cross-linker
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
