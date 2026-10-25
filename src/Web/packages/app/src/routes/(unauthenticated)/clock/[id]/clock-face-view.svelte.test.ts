@@ -38,4 +38,26 @@ describe("clock face view", () => {
     await expect.element(browserPage.getByRole("button", { name: "Back" })).toBeInTheDocument();
     expect(browserPage.getByRole("button", { name: "Edit" }).query()).toBeNull();
   });
+
+  it("shows the bar on a tap and hides it, untappable, a few seconds later", async () => {
+    page.data.effectivePermissions = ["glucose.read"];
+    render(ClockFaceView);
+    const nav = browserPage.getByTestId("clock-nav");
+    await expect.element(nav).toHaveAttribute("data-revealed", "false");
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      document.body.dispatchEvent(
+        new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true })
+      );
+      await expect.element(nav).toHaveAttribute("data-revealed", "true");
+      expect(nav.element().hasAttribute("inert")).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect.element(nav).toHaveAttribute("data-revealed", "false");
+      expect(nav.element().hasAttribute("inert")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -26,7 +26,7 @@ describe("GlucoseChartCard inspection dialogs", () => {
 
     // The harness's readings sit at the right edge of the window; hovering there highlights the latest.
     const box = plot.element().getBoundingClientRect();
-    await userEvent.hover(plot, { position: { x: box.width - 40, y: box.height / 2 } });
+    await userEvent.hover(plot, { position: { x: box.width - 60, y: box.height / 2 } });
     const point = await vi.waitFor(() => {
       const circle = plot.element().querySelector<SVGCircleElement>(".lc-highlight-point");
       expect(circle).not.toBeNull();
@@ -53,7 +53,7 @@ describe("GlucoseChartCard inspection dialogs", () => {
     await vi.waitFor(() => expect(plot.element().querySelector("svg")).not.toBeNull());
 
     const box = plot.element().getBoundingClientRect();
-    await userEvent.hover(plot, { position: { x: box.width - 40, y: box.height / 2 } });
+    await userEvent.hover(plot, { position: { x: box.width - 60, y: box.height / 2 } });
     const point = await vi.waitFor(() => {
       const circle = plot.element().querySelector<SVGCircleElement>(".lc-highlight-point");
       expect(circle).not.toBeNull();
@@ -83,7 +83,7 @@ describe("GlucoseChartCard inspection dialogs", () => {
     });
 
     const box = plot.element().getBoundingClientRect();
-    await userEvent.hover(plot, { position: { x: box.width - 40, y: box.height / 2 } });
+    await userEvent.hover(plot, { position: { x: box.width - 60, y: box.height / 2 } });
     const point = await vi.waitFor(() => {
       const circle = plot.element().querySelector<SVGCircleElement>(".lc-highlight-point");
       expect(circle).not.toBeNull();

@@ -655,9 +655,9 @@
                         href={resolve(`/reports/day-in-review?${dayInReviewSearch(gap)}`)}
                         class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50"
                       >
-                        <span class="min-w-32 font-medium">{gapDate(gap)}</span><span class="sr-only">, </span>
+                        <span class="min-w-24 font-medium">{gapDate(gap)}</span><span class="sr-only">, </span>
                         <span class="min-w-16 tabular-nums">{time(atMinute(gap.startMinuteOfDay ?? 0))}</span><span class="sr-only">, </span>
-                        <span class="flex-1 tabular-nums">{duration(gap.minutes)}</span>
+                        <span class="flex-1 tabular-nums whitespace-nowrap">{duration(gap.minutes)}</span>
                         <span class="sr-only">. Open in Day in review</span>
                         <ArrowUpRight class="size-4 text-muted-foreground" aria-hidden="true" />
                       </a>

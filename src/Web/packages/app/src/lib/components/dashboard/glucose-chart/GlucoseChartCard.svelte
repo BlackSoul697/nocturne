@@ -103,8 +103,12 @@
   });
   const displayDemoMode = $derived(demoMode ?? realtimeStore.demoMode);
 
-  // On mobile, drop the card chrome so the chart can use the full width.
+  // Narrower than 672px (@2xl), the card drops its chrome and the axis gutters narrow, so the
+  // chart can use the full width. Until the card is measured, the viewport stands in for its
+  // width, so the server render and hydration pick the same branch as before measuring.
+  let cardWidth = $state(0);
   const isMobile = new IsMobile();
+  const compact = $derived(cardWidth > 0 ? cardWidth < 672 : isMobile.current);
   const print = new PrintMode();
 
   // Axis gutters. The desktop 48px each side is a quarter of a phone's width,
@@ -116,7 +120,7 @@
   const chartPadding = $derived(
     print.active
       ? { left: 56, right: 48, top: 8, bottom: 30 }
-      : isMobile.current
+      : compact
         ? { left: 36, right: 22, top: 8, bottom: 28 }
         : { left: 48, right: 48, top: 8, bottom: 30 }
   );
@@ -355,7 +359,7 @@
 </script>
 
 {#snippet chartBody()}
-  <CardHeader class={isMobile.current ? "pb-2 px-1" : "pb-2 px-3 @md:px-6"}>
+  <CardHeader class={compact ? "pb-2 px-1" : "pb-2 px-3 @md:px-6"}>
     <div class="flex items-center justify-between flex-wrap gap-2">
       <CardTitle class="flex items-center gap-2">
         Blood glucose
@@ -385,7 +389,7 @@
     </div>
   </CardHeader>
 
-  <CardContent class={isMobile.current ? "-mx-2 p-0" : "p-1 @md:p-2"}>
+  <CardContent class={compact ? "-mx-2 p-0" : "p-1 @md:p-2"}>
     <ZoomIndicator {isZoomed} brushXDomain={brushDomain} onResetZoom={resetZoom} />
 
     <!-- The basal, mode and IOB/COB tracks take fixed shares of the height, so
@@ -505,15 +509,17 @@
   </CardContent>
 {/snippet}
 
-{#if isMobile.current}
-  <div class="@container">
-    {@render chartBody()}
-  </div>
-{:else}
-  <Card class="@container">
-    {@render chartBody()}
-  </Card>
-{/if}
+<div bind:clientWidth={cardWidth}>
+  {#if compact}
+    <div class="@container">
+      {@render chartBody()}
+    </div>
+  {:else}
+    <Card class="@container">
+      {@render chartBody()}
+    </Card>
+  {/if}
+</div>
 
 <!-- Entry Edit Dialog -->
 {#if entryEditDialog.component}

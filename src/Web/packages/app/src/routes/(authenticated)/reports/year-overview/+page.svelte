@@ -622,7 +622,7 @@
 
 <div class="year-overview @container flex min-h-full">
   <!-- Main Content -->
-  <div class="flex-1">
+  <div class="min-w-0 flex-1">
     {#if !metadataLoaded || sortedYears.some((year) => !yearData.has(year) || !griTimelineData.has(year))}
       <p class="hidden print:block">
         This overview is incomplete. Use the report's Print button to load all years before printing.
