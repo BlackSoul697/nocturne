@@ -6,7 +6,7 @@
    * recorded night), plus a compact stage-composition reference panel.
    */
   import { formatShortDate, formatWeekdayLabel } from "$lib/utils/formatting";
-  import { Chart, Svg, Axis, Tooltip } from "layerchart";
+  import { Chart, Svg, Axis, Rect, Tooltip } from "layerchart";
   import { scaleBand, scaleLinear } from "d3-scale";
   import { bandScale } from "$lib/components/charts/scale-guards";
   import { goto } from "$app/navigation";
@@ -178,38 +178,28 @@
                 format={(v: number) => `${Math.round(v / 60)}h`}
               />
               <Axis placement="bottom" rule ticks={xTickKeys} format={formatDayTick} />
-              <!-- Stacked stage segments. Native SVG: layerchart marks each call
-                   registerMark() on mount and every registration re-runs the
-                   chart's mark deriveds over all marks, so days x segments rects
-                   cost O(N^2). Coordinates are already pixel-space, so native
-                   <rect> renders identically and registers nothing. -->
               {#each dayRows as row (row.dayKey)}
                 {@const xPos = xBandScale(row.dayKey) ?? 0}
                 {@const bandwidth = xBandScale.bandwidth()}
                 {#each row.segments as segment (segment.key)}
                   {#if segment.minutes > 0}
-                    <rect
+                    <Rect
                       x={xPos}
                       y={context.yScale(segment.y1)}
                       width={bandwidth}
                       height={Math.max(context.yScale(segment.y0) - context.yScale(segment.y1), 0)}
                       data-lane={segment.lane}
-                      class={["fill-lane", patternClass(laneTexture(segment.lane))]}
+                      class="fill-lane {patternClass(laneTexture(segment.lane))}"
                       rx={2}
                     />
                   {/if}
                 {/each}
               {/each}
 
-              <!-- Interaction overlay per day, on top of the bars: manual hover
-                   tooltip + click / keyboard drill-through to the night. Native
-                   <rect> keeps per-day focusability (a11y) and event handlers
-                   without registering a mark. -->
               {#each dayRows as row (row.dayKey)}
                 {@const xPos = xBandScale(row.dayKey) ?? 0}
                 {@const bandwidth = xBandScale.bandwidth()}
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-                <rect
+                <Rect
                   x={xPos}
                   y={0}
                   width={bandwidth}

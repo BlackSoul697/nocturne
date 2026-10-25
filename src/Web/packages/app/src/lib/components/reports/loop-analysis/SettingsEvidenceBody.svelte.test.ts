@@ -144,6 +144,7 @@ describe("SettingsEvidenceBody", () => {
     await expect.element(low).toHaveClass("text-muted-foreground");
     const basal = page.getByRole("region", { name: "Basal" });
     await expect.element(basal.getByTestId("spread-low").first()).toHaveAttribute("stroke-dasharray", "3 2");
+    await expect.element(basal.getByTestId("spread-low").first()).toHaveAttribute("stroke-opacity", "0.5");
     await expect.element(basal.getByTestId("spread")).not.toBeInTheDocument();
     await expect.element(basal.getByText("Observed, middle half of episodes")).toBeVisible();
     await expect.element(basal.getByText("Low confidence", { exact: true }).first()).toBeVisible();
@@ -211,6 +212,7 @@ describe("SettingsEvidenceBody", () => {
     await expect.element(block("Basal", /^\s*2/).first()).toHaveTextContent(/compared 1\.25\s*\(n = 14, Moderate confidence\)/);
     const basal = page.getByRole("region", { name: "Basal" });
     await expect.element(basal.getByTestId("observed-compared-low")).toHaveAttribute("fill", "var(--background)");
+    await expect.element(basal.getByTestId("compared-spread").first()).toHaveAttribute("stroke-opacity", "0.85");
     await expect.element(basal.getByTestId("observed-compared").first()).toHaveAttribute("d", expect.stringMatching(/Z$/));
     await expect.element(basal.getByText("Compared range, low confidence")).toBeVisible();
     await expect.element(block("Carb ratio", /^\s*6/).first()).toHaveTextContent("compared –");

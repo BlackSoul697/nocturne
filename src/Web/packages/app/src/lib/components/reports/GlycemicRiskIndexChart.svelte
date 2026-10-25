@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Chart, Svg, Axis, Polygon, Points, Tooltip } from "layerchart";
+  import { Chart, Svg, Axis, Circle, Line, Polygon, Points, Tooltip } from "layerchart";
   import { scaleLinear } from "d3-scale";
   import {
     GRIZone,
@@ -248,26 +248,26 @@
                 {#each timeSeriesPoints as point, i (i)}
                   {#if i > 0}
                     {@const prev = timeSeriesPoints[i - 1]}
-                    <line
+                    <Line
                       x1={context.xScale(prev.hypo)}
                       y1={context.yScale(prev.hyper)}
                       x2={context.xScale(point.hypo)}
                       y2={context.yScale(point.hyper)}
                       stroke="var(--muted-foreground)"
-                      stroke-width="1"
-                      stroke-dasharray="2,2"
+                      strokeWidth={1}
+                      dashArray="2 2"
                     />
                   {/if}
                 {/each}
 
                 {#each timeSeriesPoints as point, i (i)}
-                  <circle
+                  <Circle
                     cx={context.xScale(point.hypo)}
                     cy={context.yScale(point.hyper)}
                     r={6}
                     fill={point.fill}
                     stroke={point.stroke}
-                    stroke-width={2}
+                    strokeWidth={2}
                     role="img"
                     aria-label="{formatPeriodLabel(point.periodStart)}: GRI {Math.round(point.gri?.score ?? 0)}"
                     onpointermove={(e) => context.tooltip?.show(e, point)}
