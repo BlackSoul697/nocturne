@@ -46,6 +46,13 @@ export interface SequenceDefinition {
   completesKeys?: string[];
   /** Dismissing a step of this sequence also holds back every other mark until the next navigation. */
   quietOnDismiss?: boolean;
+  /**
+   * Shown only by `startSequence`, never chosen by organic selection. A started run outlives
+   * navigation and ends once its last step is done or one of its steps is dismissed. It shows its
+   * first unfinished step that is mounted; while none is, organic marks are chosen as usual, and a
+   * step that mounts with no mark up takes the floor. A reload or another started run drops it.
+   */
+  startOnly?: boolean;
 }
 
 export interface SequenceConfig {

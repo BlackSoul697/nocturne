@@ -8,6 +8,7 @@ using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Services;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Services;
@@ -322,7 +323,7 @@ public class DataOverviewService : IDataOverviewService
         var (startUtc, endUtc) = LocalYearBoundsUtc(year, tz);
 
         // --- Collect glucose readings by month (CGM + meter) ---
-        var allGlucoseByMonth = new Dictionary<int, List<double>>();
+        var allGlucoseByMonth = new Dictionary<int, List<(DateTime Timestamp, double Mgdl)>>();
 
         // A failed SensorGlucose query withholds every period, for the reason given on
         // <see cref="GetEHbA1cTimelineAsync"/>.
@@ -333,7 +334,7 @@ public class DataOverviewService : IDataOverviewService
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .ExcludeNonPrimary(context, RecordType.SensorGlucose)
                 .Select(e => new { e.Timestamp, e.Mgdl }),
-            r => r.Timestamp, r => r.Mgdl, allGlucoseByMonth, tz,
+            r => r.Timestamp, r => (r.Timestamp, r.Mgdl), allGlucoseByMonth, tz,
             "Failed to collect SensorGlucose for GRI year {Year}", year, cancellationToken, reads, YearMetricSource.Sensor);
         if (!sensorRead)
             return new GriTimelineResponse { Year = year };
@@ -345,7 +346,7 @@ public class DataOverviewService : IDataOverviewService
                 .Where(e => e.Mgdl > 0 && !double.IsNaN(e.Mgdl))
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .Select(e => new { e.Timestamp, e.Mgdl }),
-            r => r.Timestamp, r => r.Mgdl, allGlucoseByMonth, tz,
+            r => r.Timestamp, r => (r.Timestamp, r.Mgdl), allGlucoseByMonth, tz,
             "Failed to collect MeterGlucose for GRI year {Year}", year, cancellationToken, reads, YearMetricSource.Meter);
 
         // --- Collect insulin totals by month (manual bolus, algorithm bolus, temp basal) ---
@@ -708,8 +709,8 @@ public class DataOverviewService : IDataOverviewService
     private async Task<bool> AccumulateMonthlyReadingsAsync<T>(
         IQueryable<T> query,
         Func<T, DateTime> timestampSelector,
-        Func<T, double> valueSelector,
-        Dictionary<int, List<double>> readingsByMonth,
+        Func<T, (DateTime Timestamp, double Mgdl)> readingSelector,
+        Dictionary<int, List<(DateTime Timestamp, double Mgdl)>> readingsByMonth,
         TimeZoneInfo tz,
         string failureMessage,
         int year,
@@ -725,10 +726,10 @@ public class DataOverviewService : IDataOverviewService
                 var month = TimestampToMonth(timestampSelector(row), tz);
                 if (!readingsByMonth.TryGetValue(month, out var list))
                 {
-                    list = new List<double>();
+                    list = new List<(DateTime Timestamp, double Mgdl)>();
                     readingsByMonth[month] = list;
                 }
-                list.Add(valueSelector(row));
+                list.Add(readingSelector(row));
             }
             return true;
         }
@@ -775,38 +776,28 @@ public class DataOverviewService : IDataOverviewService
     }
 
     /// <summary>
-    /// The zones the GRI is scored over. These are the consensus bounds rather than the tenant's
-    /// thresholds — <see cref="GetGriTimelineAsync"/> takes no <c>GlycemicThresholds</c>, so no
-    /// caller can move them.
+    /// Time in range over the covered minutes of <paramref name="readings"/> at the consensus
+    /// bounds rather than the tenant's thresholds: <see cref="GetGriTimelineAsync"/> and
+    /// <see cref="GetDailySummaryAsync"/> take no <c>GlycemicThresholds</c>, so no caller can move
+    /// them.
     /// </summary>
-    private enum GriZone
-    {
-        VeryLow,
-        Low,
-        Target,
-        High,
-        VeryHigh,
-    }
-
-    private static readonly GlucoseZoneScale GriZones = new(
-        GlucoseZoneBound.Under(GlucoseConstants.VeryLowMgdl),
-        GlucoseZoneBound.Under(GlucoseConstants.TargetBottomMgdl),
-        GlucoseZoneBound.UpTo(GlucoseConstants.TargetTopMgdl),
-        GlucoseZoneBound.UpTo(GlucoseConstants.VeryHighMgdl)
-    );
+    private TimeInRangeMetrics TimeInRangeOf(IEnumerable<(DateTime Timestamp, double Mgdl)> readings) =>
+        _statisticsService.CalculateTimeInRange(
+            readings.Select(reading => new SensorGlucose { Timestamp = reading.Timestamp, Mgdl = reading.Mgdl }));
 
     /// <summary>
     /// Builds one month's GRI timeline period, or null when the month has fewer than
     /// <paramref name="minimumReadings"/> glucose readings. Values that are not readings are
     /// dropped before anything is counted, so they reach neither a zone nor the denominator — see
-    /// <see cref="GlucoseStatistics.IsReading"/>. Internal for the test assembly; not part of the
-    /// service's contract.
+    /// <see cref="GlucoseStatistics.IsReading"/>. The zones are shares of the time the readings
+    /// cover, not of their count. Internal for the test assembly; not part of the service's
+    /// contract.
     /// </summary>
     internal GriTimelinePeriod? BuildGriPeriod(
         int month,
         int year,
         int minimumReadings,
-        Dictionary<int, List<double>> allGlucoseByMonth,
+        Dictionary<int, List<(DateTime Timestamp, double Mgdl)>> allGlucoseByMonth,
         Dictionary<int, double> manualBolusByMonth,
         Dictionary<int, double> algorithmBolusByMonth,
         Dictionary<int, double> tempBasalByMonth,
@@ -815,27 +806,15 @@ public class DataOverviewService : IDataOverviewService
         if (!allGlucoseByMonth.TryGetValue(month, out var monthValues))
             return null;
 
-        var glucoseReadings = monthValues.Where(GlucoseStatistics.IsReading).ToList();
+        var glucoseReadings = monthValues.Where(reading => GlucoseStatistics.IsReading(reading.Mgdl)).ToList();
         if (glucoseReadings.Count < minimumReadings)
             return null;
 
         var totalCount = glucoseReadings.Count;
-        var counts = GriZones.Count(glucoseReadings);
-        double Percent(GriZone zone) => (double)counts[(int)zone] / totalCount * 100.0;
-
-        var percentages = new TimeInRangePercentages
-        {
-            VeryLow = Percent(GriZone.VeryLow),
-            Low = Percent(GriZone.Low),
-            Target = Percent(GriZone.Target),
-            High = Percent(GriZone.High),
-            VeryHigh = Percent(GriZone.VeryHigh),
-        };
-
-        var timeInRange = new TimeInRangeMetrics { Percentages = percentages };
+        var timeInRange = TimeInRangeOf(glucoseReadings);
 
         var gri = _statisticsService.CalculateGRI(timeInRange);
-        var averageGlucose = Math.Round(glucoseReadings.Average(), 1);
+        var averageGlucose = Math.Round(glucoseReadings.Average(reading => reading.Mgdl), 1);
 
         // Compute TDD for the month
         var localMonthStart = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
@@ -1001,14 +980,11 @@ public class DataOverviewService : IDataOverviewService
             .Select(g =>
             {
                 var readings = g.ToList();
-                var total = readings.Count;
-                var inRange = readings.Count(
-                    r => r.Mgdl >= GlucoseConstants.TargetBottomMgdl && r.Mgdl <= GlucoseConstants.TargetTopMgdl);
                 return new
                 {
                     Date = g.Key.ToString("yyyy-MM-dd"),
                     AvgMgdl = readings.Average(r => r.Mgdl),
-                    TimeInRangePercent = total > 0 ? Math.Round((double)inRange / total * 100.0, 1) : (double?)null
+                    TimeInRangePercent = Math.Round(TimeInRangeOf(readings).Percentages.Target, 1),
                 };
             });
 

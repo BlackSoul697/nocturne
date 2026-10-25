@@ -20,6 +20,7 @@ const { now, store, settings } = vi.hoisted(() => {
       pillsData: { cob: null, basal: null, iob: null, loop: null },
       trackerInstances: [] as unknown[],
       trackerDefinitions: [] as unknown[],
+      legacyFallbacks: [] as unknown[],
       timeSinceReading: Symbol("derived sentinel"),
       noteTreatmentWrite: () => {},
     },

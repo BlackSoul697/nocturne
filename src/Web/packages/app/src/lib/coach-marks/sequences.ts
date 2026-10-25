@@ -24,6 +24,19 @@ export const sequences: SequenceConfig = {
       "quick-tour.widgets",
     ],
   },
+  // Started by the legacy age conversion dialog once it closes, never organically: shown on its own,
+  // it would open over that dialog as the new pill mounts, and show its settings steps to users with
+  // no trackers. It has one chance: a reload or another started tour drops a run still waiting.
+  "tracker-intro": {
+    priority: 40,
+    startOnly: true,
+    steps: [
+      "tracker-intro.pill",
+      "tracker-intro.complete",
+      "tracker-intro.settings",
+      "tracker-intro.rail",
+    ],
+  },
   // Outranks the page tours, so the shared header is explained once, on the first page seen. A
   // reader who dismisses it does not want the page's tour that would follow it either.
   "loop-analysis-pages": {

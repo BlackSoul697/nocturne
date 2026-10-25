@@ -171,11 +171,11 @@ public interface IStatisticsService
     /// <summary>
     /// Calculate Patient Glycemic Status (PGS) composite score.
     /// </summary>
-    /// <param name="values">Glucose values in mg/dL.</param>
+    /// <param name="timeInRangePercent">Percentage of covered time in the target range, as <see cref="CalculateTimeInRange"/> reports it.</param>
     /// <param name="gvi">Pre-calculated GVI.</param>
     /// <param name="meanGlucose">Pre-calculated mean glucose in mg/dL.</param>
     /// <returns>PGS composite score.</returns>
-    double CalculatePGS(IEnumerable<double> values, double gvi, double meanGlucose);
+    double CalculatePGS(double timeInRangePercent, double gvi, double meanGlucose);
 
     // Time in Range
 

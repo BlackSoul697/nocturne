@@ -56,7 +56,7 @@ public class DataOverviewServiceNonPrimarySqlTests : IDisposable
                 therapySettings.Object,
                 new CategoryReadContext(),
                 NullLogger<TenantClockResolver>.Instance),
-            new Mock<IStatisticsService>().Object,
+            new Mock<IStatisticsService>().WithRealTimeInRange().Object,
             Mock.Of<ITenantCache>(),
             NullLogger<DataOverviewService>.Instance);
     }

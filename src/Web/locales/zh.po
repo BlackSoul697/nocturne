@@ -567,6 +567,7 @@ msgstr ""
 #: src/lib/components/settings/LinkedOidcIdentities.svelte
 #: src/lib/components/settings/LinkedOidcIdentities.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
 #: src/lib/components/trackers/ReservoirReportDialog.svelte
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
@@ -1252,8 +1253,8 @@ msgstr ""
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
@@ -1815,8 +1816,8 @@ msgstr ""
 #: src/lib/components/reports/RetrospectiveStats.svelte
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
 msgid "No data"
 msgstr ""
@@ -2985,6 +2986,7 @@ msgstr ""
 #: src/lib/components/members/CreateInviteCard.svelte
 #: src/lib/components/members/GuestLinksSection.svelte
 #: src/lib/components/settings/ApiTokens.svelte
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 #: src/routes/(unauthenticated)/setup/SetupWizard.svelte
@@ -3565,6 +3567,7 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/entries/BGCheckSection.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 msgid "Sensor"
 msgstr ""
@@ -4123,7 +4126,7 @@ msgstr ""
 
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Overview"
 msgstr ""
 
@@ -5822,7 +5825,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Median glucose"
 msgstr ""
 
@@ -6644,7 +6647,7 @@ msgstr ""
 
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 #: src/lib/components/patient/PatientClinicalForm.svelte
-#: src/lib/components/status-pills/TrackerPill.svelte
+#: src/lib/components/trackers/age.svelte.ts
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
 msgid "Not set"
@@ -6953,6 +6956,7 @@ msgstr ""
 #: src/lib/components/settings/DashboardRailConfigurator.svelte
 #: src/lib/components/status-pills/ReservoirPill.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 msgid "Reservoir"
 msgstr ""
@@ -8333,7 +8337,7 @@ msgstr ""
 #. 0: days
 #. 0: span
 #: src/routes/(authenticated)/reports/+layout.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last {0} days"
 msgstr ""
 
@@ -10212,7 +10216,7 @@ msgstr ""
 #. 0: dayCount
 #. 0: dayCount
 #: src/lib/components/members/CreateInviteCard.svelte
-#: src/lib/components/status-pills/TrackerPill.svelte
+#: src/lib/components/trackers/age.svelte.ts
 #: src/lib/components/ui/date-range-picker.svelte
 #: src/lib/components/ui/duration-input/duration-input.svelte
 #: src/lib/components/ui/duration-input/duration-input.svelte
@@ -11793,14 +11797,14 @@ msgstr ""
 msgid "Default chart range"
 msgstr ""
 
-#. 0: hours
 #. 0: Math.abs(hoursUntil).toFixed(1)
+#. 0: hours
 #. 0: absHours
 #. 0: focusHours
 #. 0: therapy.dia ?? "-"
 #. 0: therapy.dia ?? "-"
-#: src/lib/components/status-pills/TrackerPill.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
+#: src/lib/components/trackers/age.svelte.ts
 #: src/lib/components/ui/duration-input/duration-input.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
@@ -13669,6 +13673,7 @@ msgstr ""
 msgid "Manage the current tenant's details and members"
 msgstr ""
 
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Created"
 msgstr ""
@@ -14511,7 +14516,7 @@ msgstr ""
 #~ msgstr ""
 
 #. 0: span
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Prior {0} days"
 msgstr ""
 
@@ -14527,7 +14532,7 @@ msgstr ""
 #~ msgid "This Month vs Last Month"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Variability (CV)"
 msgstr ""
 
@@ -14549,20 +14554,20 @@ msgstr ""
 #~ msgid "Hypo Events"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Preset"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "<0/> Swap"
 msgstr ""
 
 #. 0: dayCount(p.from, p.to)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "{0}d"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "vs"
 msgstr ""
 
@@ -14578,7 +14583,7 @@ msgstr ""
 #~ msgid "Time in Range — stacked comparison"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Vertical stacked bars showing the full TIR breakdown for each period."
 msgstr ""
 
@@ -16652,8 +16657,8 @@ msgstr ""
 #. 0: signed(d)
 #. 0: signed(d, 2)
 #. 0: signedNumber(priorWeek.tirDelta)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "{0} pp"
 msgstr ""
@@ -16667,7 +16672,7 @@ msgstr ""
 msgid "{0} h"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Load"
 msgstr ""
 
@@ -19548,7 +19553,7 @@ msgstr ""
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
@@ -19714,6 +19719,7 @@ msgstr ""
 
 #: ../portal/src/lib/components/features/ReportsDemo.svelte
 #: src/lib/components/alerts/factText.svelte.ts
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
 msgid "Pump battery"
 msgstr ""
 
@@ -22135,15 +22141,15 @@ msgid "Compression lows by review status"
 msgstr ""
 
 #. 0: committed.a.label; 1: rangeDisplay(committed.a.from, committed.a.to); 2: committed.b.label; 3: rangeDisplay(committed.b.from, committed.b.to)
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "{0} ({1}) vs {2} ({3})"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Metric"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Change"
@@ -22616,16 +22622,16 @@ msgid "{0} events<0/>"
 msgstr ""
 
 #. 0: committed.b.label
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "<0/> Lower in {0}"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "No change"
 msgstr ""
 
 #. 0: committed.b.label
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Higher in {0} <0/>"
 msgstr ""
 
@@ -22642,7 +22648,7 @@ msgstr ""
 #~ msgid "Target: <7%"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Standard deviation"
 msgstr ""
@@ -22752,12 +22758,12 @@ msgid "{0} · eventual {1} {2}"
 msgstr ""
 
 #: src/lib/components/status-pills/StatusPill.svelte
-#: src/lib/components/status-pills/TrackerPill.svelte
+#: src/lib/components/status-pills/tracker-pill-style.svelte.ts
 msgid "Urgent:"
 msgstr ""
 
 #: src/lib/components/status-pills/StatusPill.svelte
-#: src/lib/components/status-pills/TrackerPill.svelte
+#: src/lib/components/status-pills/tracker-pill-style.svelte.ts
 msgid "Warning:"
 msgstr ""
 
@@ -26517,7 +26523,7 @@ msgid "Hidden: your access does not include this data"
 msgstr ""
 
 #: src/lib/components/reports/loop-analysis/DailyProfileBody.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Days with data"
 msgstr ""
 
@@ -30060,19 +30066,19 @@ msgstr[1] ""
 msgid "{0} · {1}g/day · {2}g avg/entry"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Very Low (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Low (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time High (%)"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time Very High (%)"
 msgstr ""
 
@@ -30109,21 +30115,21 @@ msgstr ""
 #~ msgid "Readings / Day"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Range detail"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Variability and risk"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Insulin and carbs"
 msgstr ""
 
 #: src/lib/navigation/app-navigation.svelte.ts
 #: src/lib/navigation/report-navigation.svelte.ts
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 msgid "Data quality"
 msgstr ""
@@ -34248,6 +34254,7 @@ msgstr ""
 msgid "<0/> Running time"
 msgstr ""
 
+#: src/lib/components/status-pills/LegacyAgePill.svelte
 #: src/lib/components/status-pills/TrackerPill.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 msgid "Expected lifespan"
@@ -34648,98 +34655,99 @@ msgstr ""
 msgid "About this report"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last month"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "This month"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 7 vs prior 7 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 14 vs prior 14 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Last 30 vs prior 30 days"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "This month vs last month"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Error loading comparison"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Glycemic risk index"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Mean glucose"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hyper time / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hyper events / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hypo time / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Hypo events / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time in personal range"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Total insulin / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Basal / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Basal share of insulin"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Manual boluses / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Carbs / day"
 msgstr ""
 
 #~ msgid "Carb-to-insulin ratio"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "CGM active time"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Readings / day"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "Time in range: stacked comparison"
 msgstr ""
 
@@ -36577,7 +36585,10 @@ msgstr ""
 msgid "Select the pills that show next to the glucose value. Drag a pill to change its position."
 msgstr ""
 
+#: src/lib/coach-marks/copy.svelte.ts
 #: src/lib/components/settings/DashboardRailConfigurator.svelte
+#: src/lib/components/status-pills/LegacyAgePill.test-host.svelte
+#: src/lib/components/status-pills/StatusRail.svelte
 msgid "Status pills"
 msgstr ""
 
@@ -36596,6 +36607,8 @@ msgid "Move {0} down"
 msgstr ""
 
 #. 0: LABELS[id]
+#. 0: legacyKindLabelWithNightscoutName(kind)
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
 #: src/lib/components/settings/DashboardRailConfigurator.svelte
 msgid "Show {0}"
 msgstr ""
@@ -36604,9 +36617,8 @@ msgstr ""
 msgid "No pills show on the dashboard."
 msgstr ""
 
-#: src/lib/components/settings/DashboardRailConfigurator.svelte
-msgid "Trackers show only when a tracker is active."
-msgstr ""
+#~ msgid "Trackers show only when a tracker is active."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "When this is off, tracker pills do not show for any user."
@@ -36797,7 +36809,7 @@ msgstr ""
 msgid "Time in a personal target range that changes through the day is not shown. Days of data are counted on UTC days."
 msgstr ""
 
-#: src/routes/(authenticated)/reports/comparison/+page.svelte
+#: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 msgid "The average daily risk range (ADRR) is not shown for either period, and days with data are counted on UTC days."
 msgstr ""
 
@@ -36837,4 +36849,129 @@ msgstr ""
 #. 0: offer.deviceName; 1: days
 #: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
 msgid "{0}: no rated wear time. The tracker uses a typical wear time of {1} days."
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Hidden legacy ages"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "The ages of these items do not show with the tracker pills."
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "<0/> Show"
+msgstr ""
+
+#: src/lib/components/settings/DashboardRailConfigurator.svelte
+msgid "Trackers show when a tracker is active. If an item has no tracker and you did not hide it, its age also shows."
+msgstr ""
+
+#: src/lib/components/status-pills/LegacyAgePill.svelte
+msgid "No tracker records this item. The age starts at the last change."
+msgstr ""
+
+#: src/lib/components/status-pills/LegacyAgePill.svelte
+msgid "<0/> Age"
+msgstr ""
+
+#: src/lib/components/status-pills/LegacyAgePill.svelte
+msgid "Last change"
+msgstr ""
+
+#: src/lib/components/status-pills/LegacyAgePill.svelte
+msgid "<0/> Create a tracker"
+msgstr ""
+
+#: src/lib/components/status-pills/LegacyAgePill.svelte
+msgid "<0/> Hide"
+msgstr ""
+
+#: src/lib/components/status-pills/tracker-pill-style.svelte.ts
+msgid "Hazard:"
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Could not create the trackers. Try again."
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "The status of each item."
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Select the items to track. Each tracker starts at the last change of its item."
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Create trackers"
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Not created"
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Nocturne could not create these trackers. Try again later."
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Trackers for these items exist already."
+msgstr ""
+
+#. 0: formatLifespan(fallback.spec?.lifespanHours); 1: lastChange(fallback.latestEventAt)
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "Lifespan: {0}. Starts from the last change: {1}."
+msgstr ""
+
+#: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
+msgid "<0/> Create trackers"
+msgstr ""
+
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
+msgid "Infusion site"
+msgstr ""
+
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
+msgid "Sensor (SAGE)"
+msgstr ""
+
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
+msgid "Infusion site (CAGE)"
+msgstr ""
+
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
+msgid "Reservoir (IAGE)"
+msgstr ""
+
+#: src/lib/components/trackers/legacy-kind-label.svelte.ts
+msgid "Pump battery (BAGE)"
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Tracker pill"
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance."
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Record a change"
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers."
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Lifespan and thresholds"
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Select Definitions. Then select the pencil icon of a tracker to edit it. The expected lifespan is the usual time between changes. Warning and Hazard alerts come from the notification thresholds."
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again."
 msgstr ""

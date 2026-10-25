@@ -71,6 +71,8 @@ public class DataOverviewServiceTests : IDisposable
         _therapySettings.Setup(p => p.GetTimezoneAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("UTC");
         var mockStatisticsService = new Mock<IStatisticsService>();
         mockStatisticsService.SetupGet(s => s.HourlyBandThresholds).Returns(ServedThresholds);
+
+        mockStatisticsService.WithRealTimeInRange();
         _service = new DataOverviewService(
             _factory.Object,
             new TenantClockResolver(_therapySettings.Object, _readContext, NullLogger<TenantClockResolver>.Instance),
@@ -214,7 +216,7 @@ public class DataOverviewServiceTests : IDisposable
             day.Counts["Boluses"].Should().Be(count * 2);
             day.TotalCount.Should().Be(count * 12);
             day.AverageGlucoseMgdl.Should().Be(150);
-            day.TimeInRangePercent.Should().Be(50);
+            day.TimeInRangePercent.Should().Be(0);
             day.TotalBolusUnits.Should().Be(bolus);
             day.TotalBasalUnits.Should().Be(basal);
             day.TotalDailyDose.Should().Be(tdd);
@@ -1635,6 +1637,22 @@ public class DataOverviewServiceTests : IDisposable
         var june15 = result.Days.FirstOrDefault(d => d.Date == "2024-06-15");
         june15.Should().NotBeNull();
         june15!.TimeInRangePercent.Should().BeApproximately(75.0, 0.1); // 3 of 4 readings in range
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task GetDailySummaryAsync_WeighsADayMixingSensorCadencesByTime()
+    {
+        var baseTime = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon).UtcDateTime;
+        for (var i = 0; i < 60; i++)
+            _dbContext.SensorGlucose.Add(new SensorGlucoseEntity { Id = Guid.NewGuid(), Timestamp = baseTime.AddMinutes(i), Mgdl = 120.0, DataSource = "dexcom" });
+        for (var i = 0; i < 12; i++)
+            _dbContext.SensorGlucose.Add(new SensorGlucoseEntity { Id = Guid.NewGuid(), Timestamp = baseTime.AddMinutes(60 + i * 5), Mgdl = 250.0, DataSource = "dexcom" });
+        await _dbContext.SaveChangesAsync();
+
+        var result = await _service.GetDailySummaryAsync(2024);
+
+        result.Days.Single(d => d.Date == "2024-06-15").TimeInRangePercent.Should().Be(50.0);
     }
 
     [Fact]

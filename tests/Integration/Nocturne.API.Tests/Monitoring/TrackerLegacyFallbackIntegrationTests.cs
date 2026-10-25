@@ -105,7 +105,7 @@ public class TrackerLegacyFallbackIntegrationTests(ApiIntegrationTestFixture fix
         var eventId = await RecordDeviceEventAsync(client, "SensorStart", DateTime.UtcNow.AddDays(-3));
 
         var fallbacks = await JsonAsync(await client.GetAsync("/api/v4/trackers/legacy-fallbacks"));
-        var sensor = fallbacks.EnumerateArray().Should().ContainSingle().Subject;
+        var sensor = fallbacks.GetProperty("fallbacks").EnumerateArray().Should().ContainSingle().Subject;
         sensor.GetProperty("kind").GetString().Should().Be("Sensor");
         sensor.GetProperty("latestEventId").GetString().Should().Be(eventId);
         sensor.GetProperty("schedule").GetArrayLength().Should().Be(2);
@@ -116,8 +116,12 @@ public class TrackerLegacyFallbackIntegrationTests(ApiIntegrationTestFixture fix
         instance.GetProperty("schedule").EnumerateArray().Select(s => s.GetProperty("firesAt").GetDateTime())
             .Should().Equal(sensor.GetProperty("schedule").EnumerateArray().Select(s => s.GetProperty("firesAt").GetDateTime()));
 
-        (await JsonAsync(await client.GetAsync("/api/v4/trackers/legacy-fallbacks")))
-            .GetArrayLength().Should().Be(0);
+        var after = await JsonAsync(await client.GetAsync("/api/v4/trackers/legacy-fallbacks"));
+        after.GetProperty("fallbacks").GetArrayLength().Should().Be(0);
+        var covered = after.GetProperty("covered").EnumerateArray().Should().ContainSingle().Subject;
+        covered.GetProperty("kind").GetString().Should().Be("Sensor");
+        covered.GetProperty("definitionIds")[0].GetString()
+            .Should().Be(conversion.GetProperty("definitions")[0].GetProperty("id").GetString());
         var running = await JsonAsync(await client.GetAsync("/api/v4/trackers/instances"));
         running.EnumerateArray().Should().ContainSingle()
             .Which.GetProperty("startedAt").GetDateTime().Should()

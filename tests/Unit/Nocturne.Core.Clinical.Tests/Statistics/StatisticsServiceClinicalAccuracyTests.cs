@@ -1180,11 +1180,8 @@ public class StatisticsServiceClinicalAccuracyTests
     [Fact]
     public void CalculatePGS_ExcellentControl_ShouldBeLow()
     {
-        // All values in range (70-180), GVI = 1.0, mean = 100
-        var values = Enumerable.Repeat(100.0, 100).ToArray();
-
         // With 100% in range, PGS = GVI * mean * (1 - 1.0) = 0
-        var result = _sut.CalculatePGS(values, 1.0, 100);
+        var result = _sut.CalculatePGS(100, 1.0, 100);
 
         result.Should().Be(0, "100% TIR with GVI=1 should yield PGS=0");
     }
@@ -1192,16 +1189,10 @@ public class StatisticsServiceClinicalAccuracyTests
     [Fact]
     public void CalculatePGS_PoorControl_ShouldBeHigh()
     {
-        // 50% of values out of range
-        var inRange = Enumerable.Repeat(100.0, 50);
-        var outRange = Enumerable.Repeat(250.0, 50);
-        var values = inRange.Concat(outRange).ToArray();
-        var mean = values.Average(); // 175
-
         // PGS = GVI * mean * (1 - TIR%)
-        // TIR = 50/100 = 0.5
+        // TIR = 50% = 0.5
         // PGS = 1.5 * 175 * 0.5 = 131.25
-        var result = _sut.CalculatePGS(values, 1.5, mean);
+        var result = _sut.CalculatePGS(50, 1.5, 175);
 
         result.Should().BeApproximately(131.25, 0.1);
         result.Should().BeGreaterThan(100, "PGS > 100 indicates poor glycemic status");

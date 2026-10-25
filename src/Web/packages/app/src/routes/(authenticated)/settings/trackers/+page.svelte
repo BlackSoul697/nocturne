@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatAge } from "$lib/components/trackers/age.svelte";
   import { formatDayTime } from "$lib/utils/formatting";
   import {
     Card,
@@ -38,6 +39,8 @@
   import { page } from "$app/state";
   import * as trackersRemote from "$api/generated/trackers.generated.remote";
   import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import {
     NotificationUrgency,
     TrackerCategory,
@@ -220,15 +223,6 @@
     [TrackerCategory.Cannula]: "text-pink-500",
     [TrackerCategory.Battery]: "text-yellow-500",
   };
-
-  // Format age
-  function formatAge(hours: number): string {
-    if (hours < 1) return `${Math.floor(hours * 60)}m`;
-    if (hours < 24) return `${Math.floor(hours)}h`;
-    const days = Math.floor(hours / 24);
-    const h = Math.floor(hours % 24);
-    return h > 0 ? `${days}d ${h}h` : `${days}d`;
-  }
 
   // Format date
   function formatDate(dateStr: Date | string | undefined): string {
@@ -488,10 +482,12 @@
           <History class="h-4 w-4" />
           History
         </Tabs.Trigger>
-        <Tabs.Trigger value="definitions">
-          <Settings2 class="h-4 w-4" />
-          Definitions
-        </Tabs.Trigger>
+        <div class="flex" {@attach coachmark({ ...coachFor("tracker-intro.settings") })}>
+          <Tabs.Trigger value="definitions">
+            <Settings2 class="h-4 w-4" />
+            Definitions
+          </Tabs.Trigger>
+        </div>
         <Tabs.Trigger value="presets">
           <Bookmark class="h-4 w-4" />
           Presets

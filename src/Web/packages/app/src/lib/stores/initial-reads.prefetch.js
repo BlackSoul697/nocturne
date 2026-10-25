@@ -18,6 +18,7 @@
       "/api/v4/profile/summary",
       "/api/v4/trackers/definitions",
       "/api/v4/trackers/instances",
+      "/api/v4/trackers/legacy-fallbacks",
       "/api/v4/notifications",
       range("/api/v4/insulin/boluses", 500),
       range("/api/v4/nutrition/carbs", 500),

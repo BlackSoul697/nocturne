@@ -19,6 +19,7 @@ export function selectActiveMark(
   );
 
   for (const [, seq] of sortedSequences) {
+    if (seq.startOnly) continue;
     if (seq.prerequisite && !isPrerequisiteMet(seq.prerequisite, sequences, states, gates)) {
       continue;
     }

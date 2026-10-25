@@ -22,7 +22,7 @@
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
 
   interface ComponentProps {
-    /** Show status pills (COB, IOB, CAGE, SAGE, etc.) */
+    /** Show the status pills besides the tracker pills. */
     showPills?: boolean;
   }
 

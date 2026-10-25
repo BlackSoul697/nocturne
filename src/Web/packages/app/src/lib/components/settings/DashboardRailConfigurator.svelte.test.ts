@@ -2,6 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, expect, it } from "vitest";
 import {
+  LegacyConsumableKind,
   RailItemId,
   type DashboardRailPreference,
 } from "$lib/api/generated/nocturne-api-client";
@@ -120,5 +121,32 @@ describe("DashboardRailConfigurator", () => {
     setup({});
 
     await expect.element(page.getByRole("button", { name: "Reset to default" })).toBeDisabled();
+  });
+
+  it("lists the hidden legacy ages and shows one again", async () => {
+    const writes: LegacyConsumableKind[][] = [];
+    render(DashboardRailConfigurator, {
+      props: {
+        value: {},
+        trackerPillsEnabled: true,
+        hiddenLegacyFallbacks: [LegacyConsumableKind.Site, LegacyConsumableKind.PumpBattery],
+        onhiddenlegacyfallbackschange: (kinds) => writes.push(kinds),
+      },
+    });
+
+    const hidden = page.getByTestId("hidden-legacy-fallbacks");
+    await expect.element(hidden.getByText("Infusion site (CAGE)")).toBeVisible();
+    await expect.element(hidden.getByText("Pump battery (BAGE)")).toBeVisible();
+
+    await page.getByRole("button", { name: "Show Infusion site (CAGE)" }).click();
+
+    expect(writes).toEqual([[LegacyConsumableKind.PumpBattery]]);
+  });
+
+  it("leaves out the hidden legacy ages while none is hidden", async () => {
+    setup({});
+
+    await expect.element(list()).toBeVisible();
+    expect(page.getByTestId("hidden-legacy-fallbacks").elements()).toHaveLength(0);
   });
 });
