@@ -138,6 +138,17 @@ describe("AppSidebar", () => {
     expect(visited.urls).toEqual(["https://charlie.example.com/"]);
   });
 
+  it("offers the member's own data on the apex host, where no tenant is on screen", async () => {
+    pageState.data = { effectivePermissions: ["*"] };
+
+    render(Harness, { user: MEMBER, baseDomain: "example.com", tenantTargets: TENANTS });
+
+    await group("My data").click();
+
+    await expect.element(option("My data")).toHaveAttribute("aria-selected", "true");
+    await expect.element(option("Alpha (alpha)")).toBeVisible();
+  });
+
   it("shows a multi-tenant member the switcher and the Tenants item", async () => {
     renderViewingBravo();
 
@@ -160,7 +171,7 @@ describe("AppSidebar", () => {
     await expect.element(link("Tenants")).not.toBeInTheDocument();
   });
 
-  it("reads the Do Not Disturb state the first time the alerts group opens", async () => {
+  it("reads the Do not disturb state the first time the alerts group opens", async () => {
     pageState.data = { effectivePermissions: ["*"] };
 
     render(Harness, { user: MEMBER });
@@ -173,7 +184,7 @@ describe("AppSidebar", () => {
     await group("Alerts").click();
 
     await expect
-      .element(page.getByRole("switch", { name: "Toggle Do Not Disturb" }))
+      .element(page.getByRole("switch", { name: "Toggle Do not disturb" }))
       .toBeVisible();
     await vi.waitFor(() => expect(getDnd).toHaveBeenCalledOnce());
 
@@ -193,19 +204,19 @@ describe("AppSidebar", () => {
     await expect.element(page.getByText("Viewing data for")).not.toBeInTheDocument();
   });
 
-  it("reads the Do Not Disturb state straight away on an alerts page", async () => {
+  it("reads the Do not disturb state straight away on an alerts page", async () => {
     pageState.data = { effectivePermissions: ["*"] };
     pageState.url.pathname = "/alerts/dnd";
 
     render(Harness, { user: MEMBER });
 
     await expect
-      .element(page.getByRole("switch", { name: "Toggle Do Not Disturb" }))
+      .element(page.getByRole("switch", { name: "Toggle Do not disturb" }))
       .toBeVisible();
     await vi.waitFor(() => expect(getDnd).toHaveBeenCalledOnce());
   });
 
-  it("holds the Do Not Disturb switch until the settings it saves back have been read", async () => {
+  it("holds the Do not disturb switch until the settings it saves back have been read", async () => {
     pageState.data = { effectivePermissions: ["*"] };
     let resolveRead: (settings: unknown) => void = () => {};
     getDnd.mockImplementation(() =>
@@ -218,7 +229,7 @@ describe("AppSidebar", () => {
     flushIdle();
     await group("Alerts").click();
 
-    const toggle = page.getByRole("switch", { name: "Toggle Do Not Disturb" });
+    const toggle = page.getByRole("switch", { name: "Toggle Do not disturb" });
     await expect.element(toggle).toBeDisabled();
     await vi.waitFor(() => expect(getDnd).toHaveBeenCalledOnce());
 
@@ -237,8 +248,8 @@ describe("AppSidebar", () => {
     );
   });
 
-  describe("Do Not Disturb indicator", () => {
-    const dndLink = () => page.getByRole("link", { name: "Do Not Disturb" });
+  describe("Do not disturb indicator", () => {
+    const dndLink = () => page.getByRole("link", { name: "Do not disturb" });
     const showsBellOff = () =>
       document.querySelector('a[href$="/alerts/dnd"] svg.lucide-bell-off') !== null;
 
@@ -255,7 +266,7 @@ describe("AppSidebar", () => {
 
       await expect
         .element(dndLink())
-        .toHaveAttribute("title", "Scheduled Do Not Disturb window is on now");
+        .toHaveAttribute("title", "Scheduled Do not disturb window is on now");
       await vi.waitFor(() => expect(showsBellOff()).toBe(true));
     });
 
@@ -264,7 +275,7 @@ describe("AppSidebar", () => {
 
       await expect
         .element(dndLink())
-        .toHaveAttribute("title", "Scheduled Do Not Disturb window configured");
+        .toHaveAttribute("title", "Scheduled Do not disturb window configured");
       expect(showsBellOff()).toBe(false);
     });
 
@@ -272,7 +283,7 @@ describe("AppSidebar", () => {
       await renderWith({ dndManualActive: false, dndScheduleEnabled: false, dndScheduleActiveNow: false });
 
       await expect
-        .element(page.getByRole("switch", { name: "Toggle Do Not Disturb" }))
+        .element(page.getByRole("switch", { name: "Toggle Do not disturb" }))
         .toBeEnabled();
       await expect.element(dndLink()).not.toHaveAttribute("title");
       expect(showsBellOff()).toBe(false);
@@ -282,7 +293,7 @@ describe("AppSidebar", () => {
       await renderWith({ dndManualActive: false, dndScheduleEnabled: true, dndScheduleActiveNow: false });
       await expect
         .element(dndLink())
-        .toHaveAttribute("title", "Scheduled Do Not Disturb window configured");
+        .toHaveAttribute("title", "Scheduled Do not disturb window configured");
 
       getDnd.mockImplementation(() =>
         remoteQuery(() => ({ dndManualActive: false, dndScheduleEnabled: true, dndScheduleActiveNow: true })),
@@ -292,7 +303,7 @@ describe("AppSidebar", () => {
       await vi.waitFor(() => expect(getDnd).toHaveBeenCalledTimes(2));
       await expect
         .element(dndLink())
-        .toHaveAttribute("title", "Scheduled Do Not Disturb window is on now");
+        .toHaveAttribute("title", "Scheduled Do not disturb window is on now");
     });
   });
 });

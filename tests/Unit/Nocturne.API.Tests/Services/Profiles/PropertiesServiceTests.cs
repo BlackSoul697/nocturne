@@ -2,6 +2,7 @@ using Nocturne.API.Tests.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Configuration;
@@ -58,7 +59,8 @@ public class PropertiesServiceTests
             mockAr2Service.Object,
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
-            TimeProvider.System
+            TimeProvider.System,
+            Options.Create(new DbSizeOptions())
         );
     }
 
@@ -83,6 +85,55 @@ public class PropertiesServiceTests
         Assert.True(result.ContainsKey("delta"));
         Assert.True(result.ContainsKey("direction"));
     }
+
+    [Theory]
+    [InlineData(59, "ok")]
+    [InlineData(60, "warn")]
+    [InlineData(74, "warn")]
+    [InlineData(75, "urgent")]
+    public async Task DbSize_StatusFollowsTheConfiguredBudget(int percent, string status)
+    {
+        const long mib = 1024 * 1024;
+        var service = ServiceWithBudget(maxMiB: 100);
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DData { DbStats = new DbStats { DataSize = percent * mib / 2, IndexSize = percent * mib / 2 } });
+
+        var result = await service.GetPropertiesAsync(new[] { "dbsize" }, CancellationToken.None);
+
+        var dbsize = (Dictionary<string, object>)result["dbsize"];
+        dbsize["size"].Should().Be(percent * mib, "the size is the data and the indexes together");
+        dbsize["percentage"].Should().Be(percent);
+        dbsize["status"].Should().Be(status);
+    }
+
+    [Fact]
+    public async Task DbSize_DefaultsToABudgetOf2048MiB()
+    {
+        var service = ServiceWithBudget(new DbSizeOptions());
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DData { DbStats = new DbStats { DataSize = 1024L * 1024 * 1024 } });
+
+        var result = await service.GetPropertiesAsync(new[] { "dbsize" }, CancellationToken.None);
+
+        ((Dictionary<string, object>)result["dbsize"])["percentage"].Should().Be(50);
+    }
+
+    private PropertiesService ServiceWithBudget(int maxMiB) =>
+        ServiceWithBudget(new DbSizeOptions { MaxMiB = maxMiB });
+
+    private PropertiesService ServiceWithBudget(DbSizeOptions budget) =>
+        new(
+            _mockDDataService.Object,
+            _mockLogger.Object,
+            TestIobCobReader.Empty(),
+            Mock.Of<IAr2Service>(),
+            _mockDeviceAgeService.Object,
+            _therapySettings.Object,
+            TimeProvider.System,
+            Options.Create(budget)
+        );
 
     [Fact]
     public async Task GetPropertiesAsync_WithSpecificNames_ReturnsOnlyRequestedProperties()
@@ -334,7 +385,8 @@ public class PropertiesServiceTests
             ar2Service.Object,
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
-            TimeProvider.System
+            TimeProvider.System,
+            Options.Create(new DbSizeOptions())
         );
         _mockDDataService
             .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
@@ -674,7 +726,8 @@ public class PropertiesServiceTests
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
-            new FakeTimeProvider(now)
+            new FakeTimeProvider(now),
+            Options.Create(new DbSizeOptions())
         );
 
     private async Task<double> CurrentBasalAt(DateTimeOffset now, List<TimeValue> schedule)
