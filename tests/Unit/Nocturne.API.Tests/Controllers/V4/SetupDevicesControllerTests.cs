@@ -1,3 +1,6 @@
+using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Contracts.Events;
+using Nocturne.API.Services.Realtime;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -37,7 +40,12 @@ public class SetupDevicesControllerTests
             Mock.Of<ITrackerAlertRuleSyncService>(),
             Mock.Of<ITherapySettingsResolver>(t =>
                 t.GetActionTimeAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>())
-                    == Task.FromResult(new InsulinActionTime(InsulinActionTimeSource.Default, 3, null))));
+                    == Task.FromResult(new InsulinActionTime(InsulinActionTimeSource.Default, 3, null))),
+            new ConsumableTrackerWriter(
+                Mock.Of<IDeviceEventRepository>(), Mock.Of<ITrackerAlertRuleSyncService>(),
+                Mock.Of<IDeviceEventReactor>(), Mock.Of<ISignalRBroadcastService>(), TimeProvider.System,
+                NullLogger<ConsumableTrackerWriter>.Instance),
+            NullLogger<DeviceSetupService>.Instance);
 
         var httpContext = new DefaultHttpContext();
         httpContext.Items["GrantedScopes"] = (IReadOnlySet<string>)new HashSet<string>(grantedScopes);

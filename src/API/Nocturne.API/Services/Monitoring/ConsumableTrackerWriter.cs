@@ -17,13 +17,13 @@ public sealed record CreatedConsumableTracker(
     TrackerDefinitionEntity Definition, ConsumableTrackerSpec Spec, TrackerInstanceEntity? Run, DeviceEvent? StartEvent);
 
 /// <summary>
-/// Creates a tracker for a piece of consumable hardware, as the legacy conversion and the device
-/// provisioner both do: the definition, its managed alert rules when it has a ladder, and a first
+/// Creates a tracker for a piece of consumable hardware, as the legacy conversion, the device
+/// provisioner and the setup hub all do: the definition, its managed alert rules when it has a ladder, and a first
 /// run started at the latest device event that restarts it, in the caller's transaction under the
 /// consumable lock (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), then
 /// announced after the commit.
 /// </summary>
-internal sealed class ConsumableTrackerWriter(
+public sealed class ConsumableTrackerWriter(
     IDeviceEventRepository deviceEvents,
     ITrackerAlertRuleSyncService ruleSync,
     IDeviceEventReactor deviceEventReactor,

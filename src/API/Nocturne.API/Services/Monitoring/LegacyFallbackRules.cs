@@ -56,6 +56,31 @@ public static class LegacyFallbackRules
     }
 
     /// <summary>
+    /// Whether <paramref name="definition"/> already does the job of a tracker of
+    /// <paramref name="spec"/>, so a second one would duplicate it: it <see cref="Covers"/> the
+    /// spec's kind and, for a site, follows the same hardware. A pod is restarted by pod changes and
+    /// an infusion set by site and cannula changes, so a site tracker follows a pod spec when it
+    /// restarts on pod changes, and an infusion-set spec when it does not, or when it restarts on
+    /// every change the spec does. A site tracker that restarts on nothing follows either.
+    /// </summary>
+    public static bool Follows(TrackerDefinitionEntity definition, ConsumableTrackerSpec spec)
+    {
+        if (ConsumableTrackerSpecs.KindOf(spec) is not { } kind || !Covers(kind, definition))
+            return false;
+        if (kind != LegacyConsumableKind.Site)
+            return true;
+
+        var triggers = TrackerTriggerService.ParseTriggerEventTypes(definition.TriggerEventTypes);
+        if (triggers.Count == 0)
+            return true;
+
+        var specTriggers = ConsumableTrackerSpecs.TriggerEventTypes(spec);
+        return specTriggers.Contains(DeviceEventType.PodChange)
+            ? triggers.Contains(DeviceEventType.PodChange)
+            : !triggers.Contains(DeviceEventType.PodChange) || specTriggers.All(triggers.Contains);
+    }
+
+    /// <summary>
     /// Whether the latest event of <paramref name="kind"/>, at <paramref name="latestAt"/>, is
     /// trusted as the age of a consumable still worn.
     /// </summary>

@@ -5,6 +5,9 @@ using Moq;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Monitoring;
 using Nocturne.API.Services.SetupHub;
+using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Contracts.Events;
+using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.SetupHub;
@@ -29,6 +32,7 @@ public class DeviceSetupServiceTests
     private readonly Mock<IDeviceReattributionService> _reattribution = new();
     private readonly Mock<ITrackerAlertRuleSyncService> _ruleSync = new();
     private readonly Mock<ITherapySettingsResolver> _therapySettings = new();
+    private readonly Mock<IDeviceEventRepository> _deviceEvents = new();
     private static readonly InsulinActionTime Profile5h = new(InsulinActionTimeSource.Profile, 5, null);
 
     public DeviceSetupServiceTests()
@@ -46,7 +50,12 @@ public class DeviceSetupServiceTests
             _reattribution.Object,
             new TrackerRepository(factory),
             _ruleSync.Object,
-            _therapySettings.Object);
+            _therapySettings.Object,
+            new ConsumableTrackerWriter(
+                _deviceEvents.Object, _ruleSync.Object, Mock.Of<IDeviceEventReactor>(),
+                Mock.Of<ISignalRBroadcastService>(), TimeProvider.System,
+                NullLogger<ConsumableTrackerWriter>.Instance),
+            NullLogger<DeviceSetupService>.Instance);
         _therapySettings.Setup(t => t.GetActionTimeAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Profile5h);
         _therapySettings.Setup(t => t.GetTimezoneAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync("Pacific/Auckland");
@@ -424,11 +433,12 @@ public class DeviceSetupServiceTests
             LifespanHours = (int?)336, Mode = TrackerMode.Duration,
         });
         JsonSerializer.Deserialize<string[]>(definition.TriggerEventTypes).Should().Equal("Sensor Start", "Sensor Change");
+        _db.TrackerNotificationThresholds.Should().BeEmpty();
         (await Setup()).Trackers.Single().Should().BeEquivalentTo(new
         {
             State = TrackerOfferState.AddedHere, DefinitionId = (Guid?)definition.Id,
         });
-        _ruleSync.Verify(r => r.SyncDefinitionAsync(definition.Id, It.IsAny<CancellationToken>()), Times.Once);
+        _ruleSync.Verify(r => r.CreateRulesAsync(It.IsAny<DbUnitOfWork>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
 
         await _service.RemoveTrackerAsync(TrackerOfferKind.Sensor, CancellationToken.None);
 
@@ -480,6 +490,53 @@ public class DeviceSetupServiceTests
             .Should().Be(TrackerOfferState.AlreadyTracked);
         _db.TrackerDefinitions.Where(d => d.Category == TrackerCategory.Cannula).Should().ContainSingle()
             .Which.Id.Should().Be(converted.Id);
+    }
+
+    [Fact]
+    public async Task ATrackerOfAnyCategoryRestartedBySensorStarts_StopsTheSensorOffer()
+    {
+        await _service.ConfirmDeviceAsync("dexcom-g7", null, CancellationToken.None);
+        var mine = ExistingTracker(TrackerCategory.Custom, "Sensor Start");
+
+        (await Setup()).Trackers.Single().Should().BeEquivalentTo(new
+        {
+            State = TrackerOfferState.AlreadyTracked, DefinitionId = (Guid?)mine.Id,
+        });
+    }
+
+    [Fact]
+    public async Task AnAddedTracker_StartsAtTheLatestRestartingEvent()
+    {
+        await _service.ConfirmDeviceAsync("libre-3", null, CancellationToken.None);
+        var latest = new DeviceEvent
+        {
+            Id = Guid.NewGuid(), EventType = DeviceEventType.SensorStart, Timestamp = DateTime.UtcNow.AddDays(-2),
+        };
+        _deviceEvents.Setup(r => r.GetLatestByEventTypesAsync(
+                It.IsAny<DeviceEventType[]>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(latest);
+
+        await _service.AddTrackerAsync(TrackerOfferKind.Sensor, "Libre 3 sensor", Owner, CancellationToken.None);
+
+        var run = _db.TrackerInstances.Should().ContainSingle().Subject;
+        run.StartTreatmentId.Should().Be(latest.Id.ToString());
+        run.StartedAt.Should().BeCloseTo(latest.Timestamp, TimeSpan.FromMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task AnAddedTracker_StartsNoRunFromAStaleEvent()
+    {
+        await _service.ConfirmDeviceAsync("libre-3", null, CancellationToken.None);
+        _deviceEvents.Setup(r => r.GetLatestByEventTypesAsync(
+                It.IsAny<DeviceEventType[]>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeviceEvent
+            {
+                Id = Guid.NewGuid(), EventType = DeviceEventType.SensorStart, Timestamp = DateTime.UtcNow.AddDays(-60),
+            });
+
+        await _service.AddTrackerAsync(TrackerOfferKind.Sensor, "Libre 3 sensor", Owner, CancellationToken.None);
+
+        _db.TrackerInstances.Should().BeEmpty();
     }
 
     [Fact]

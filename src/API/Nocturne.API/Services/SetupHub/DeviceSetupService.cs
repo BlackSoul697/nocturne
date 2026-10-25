@@ -1,6 +1,7 @@
-using System.Text.Json;
+using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Nocturne.API.Services.Connectors;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Monitoring;
@@ -38,7 +39,9 @@ public partial class DeviceSetupService(
     IDeviceReattributionService reattribution,
     ITrackerRepository trackers,
     ITrackerAlertRuleSyncService trackerRuleSync,
-    ITherapySettingsResolver therapySettings)
+    ITherapySettingsResolver therapySettings,
+    ConsumableTrackerWriter trackerWriter,
+    ILogger<DeviceSetupService> logger)
 {
     /// <summary>How far back data counts as evidence of what is in use now.</summary>
     internal static readonly TimeSpan EvidenceWindow = TimeSpan.FromDays(30);
@@ -233,14 +236,17 @@ public partial class DeviceSetupService(
     }
 
     /// <summary>
-    /// Creates the offered tracker of <paramref name="kind"/>, with the catalogue's wear time as its
-    /// lifespan and restarting on the matching device events, recording <paramref name="createdBy"/>
-    /// as its creator. Does nothing when the tenant already has one.
+    /// Creates the offered tracker of <paramref name="kind"/> through <see cref="ConsumableTrackerWriter"/>,
+    /// with no threshold ladder: the catalogue's wear time as its lifespan, or the kind's typical one
+    /// when the catalogue has none, restarting on the matching device events and started at the
+    /// latest of them, recording <paramref name="createdBy"/> as its creator. Does nothing when a
+    /// tracker already does its job.
     /// </summary>
     /// <remarks>
-    /// The check and the create run under the consumable lock the legacy conversion and the device
-    /// provisioner take (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), so
-    /// none of them adds a second tracker for a consumable another has just added.
+    /// The check, the create and this item's record of it run in one transaction under the
+    /// consumable lock the legacy conversion and the device provisioner take
+    /// (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), so none of them adds a
+    /// second tracker for a consumable another has just added.
     /// </remarks>
     /// <exception cref="ArgumentException">No tracker of that kind is offered for the recorded devices.</exception>
     public async Task AddTrackerAsync(TrackerOfferKind kind, string name, string createdBy, CancellationToken ct)
@@ -250,31 +256,41 @@ public partial class DeviceSetupService(
             {
                 var (offer, hours) = await OfferAsync(kind, token);
                 if (offer.State != TrackerOfferState.Off)
-                    return (Guid?)null;
+                    return null;
 
-                var definition = await tx.CreateDefinitionAsync(new TrackerDefinitionEntity
-                {
-                    CreatedBy = createdBy,
-                    Name = name,
-                    Category = TrackerCategoryOf(kind),
-                    LifespanHours = hours,
-                    TriggerEventTypes = JsonSerializer.Serialize(TriggersOf(kind)),
-                    Mode = TrackerMode.Duration,
-                }, token);
+                var written = await trackerWriter.CreateAsync(
+                    tx, unit, SpecOf(kind, name, hours), createdBy, withAlerts: false, token);
                 unit.Context.SetupHubAdditions.Add(new SetupHubAdditionEntity
                 {
                     Id = Guid.CreateVersion7(),
                     ItemKey = SetupHubItemKey.Devices,
                     RecordKind = SetupHubRecordKind.Tracker,
-                    RecordId = definition.Id,
+                    RecordId = written.Definition.Id,
                 });
                 await unit.Context.SaveChangesAsync(token);
-                return definition.Id;
+                return written;
             },
-            async (tx, attempt, token) => attempt is not { } id || await tx.GetDefinitionByIdAsync(id, token) is not null,
+            async (tx, attempt, token) => attempt is null || await ConsumableTrackerWriter.LandedAsync(tx, attempt, token),
             ct);
-        if (created is { } id)
-            await trackerRuleSync.SyncDefinitionAsync(id, CancellationToken.None);
+        if (created is null)
+            return;
+
+        try
+        {
+            await trackerWriter.PublishAsync(trackers, created, CancellationToken.None);
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogError(ex, "Announcing tracker {DefinitionId} failed", created.Definition.Id);
+        }
+        catch (DbException ex)
+        {
+            logger.LogError(ex, "Announcing tracker {DefinitionId} failed", created.Definition.Id);
+        }
+        catch (RetryLimitExceededException ex)
+        {
+            logger.LogError(ex, "Announcing tracker {DefinitionId} failed", created.Definition.Id);
+        }
     }
 
     /// <summary>Deletes a tracker this item created. A tracker the owner had before is never touched.</summary>
@@ -396,15 +412,12 @@ public partial class DeviceSetupService(
 
         var added = await AdditionsAsync(SetupHubRecordKind.Tracker, ct);
         await using var db = await contexts.CreateAsync(ct);
-        var existing = (await db.TrackerDefinitions
-                .Select(d => new { d.Id, d.Category, d.TriggerEventTypes })
-                .ToListAsync(ct))
-            .Select(d => (d.Id, d.Category, Triggers: ParseTriggers(d.TriggerEventTypes)))
-            .ToList();
+        var existing = await db.TrackerDefinitions.AsNoTracking().ToListAsync(ct);
 
         return offers.Select(o =>
         {
-            var covering = existing.Where(d => Covers(o.Kind, d.Category, d.Triggers)).ToList();
+            var spec = SpecOf(o.Kind, o.Device, o.Hours);
+            var covering = existing.Where(d => LegacyFallbackRules.Follows(d, spec)).ToList();
             var mine = covering.Where(d => added.Contains(d.Id)).Select(d => (Guid?)d.Id).FirstOrDefault();
             var (state, id) = mine is not null
                 ? (TrackerOfferState.AddedHere, mine)
@@ -416,32 +429,19 @@ public partial class DeviceSetupService(
     }
 
     /// <summary>
-    /// Whether an existing tracker already follows what an offer of <paramref name="kind"/> would.
-    /// A site tracker restarting on pod changes is a pod tracker, one restarting on anything else
-    /// an infusion-set tracker, one with no triggers could be either, and one restarting on every
-    /// infusion-set change, as the legacy conversion's site tracker does, is both.
+    /// The tracker an offer of <paramref name="kind"/> stands for. Its triggers and category decide
+    /// what already does its job (<see cref="LegacyFallbackRules.Follows"/>).
     /// </summary>
-    private static bool Covers(TrackerOfferKind kind, TrackerCategory category, IReadOnlyCollection<string> triggers) => kind switch
+    private static ConsumableTrackerSpec SpecOf(TrackerOfferKind kind, string name, int? hours)
     {
-        TrackerOfferKind.Sensor => category == TrackerCategory.Sensor,
-        TrackerOfferKind.Reservoir => category == TrackerCategory.Reservoir,
-        TrackerOfferKind.Pod => category == TrackerCategory.Cannula
-            && (triggers.Count == 0 || triggers.Contains(TreatmentTypes.PodChange)),
-        _ => category == TrackerCategory.Cannula
-            && (!triggers.Contains(TreatmentTypes.PodChange)
-                || TriggersOf(TrackerOfferKind.InfusionSet).All(triggers.Contains)),
-    };
-
-    private static IReadOnlyCollection<string> ParseTriggers(string json)
-    {
-        try
+        var typical = ConsumableTrackerSpecs.Generic(kind switch
         {
-            return JsonSerializer.Deserialize<string[]>(json) ?? [];
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
+            TrackerOfferKind.Sensor => LegacyConsumableKind.Sensor,
+            TrackerOfferKind.Reservoir => LegacyConsumableKind.Reservoir,
+            _ => LegacyConsumableKind.Site,
+        });
+        return new ConsumableTrackerSpec(
+            name, TrackerCategoryOf(kind), typical.Icon, hours ?? typical.LifespanHours, TriggersOf(kind));
     }
 
     private static TrackerCategory TrackerCategoryOf(TrackerOfferKind kind) => kind switch

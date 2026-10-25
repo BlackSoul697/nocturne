@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Nocturne.API.Services.Monitoring;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Abstractions;
-using Nocturne.Infrastructure.Data.Entities;
 
 namespace Nocturne.API.Services.Devices;
 
@@ -17,10 +16,9 @@ namespace Nocturne.API.Services.Devices;
 /// <remarks>
 /// Definitions are the tenant's and named after the device model. A spec is skipped when the tenant
 /// has a tracker of its name, so registering the same model twice reuses its trackers, or one that
-/// already stands for the same consumable (<see cref="LegacyFallbackRules.Covers"/>) and restarts on
-/// every event the spec would, or is run by hand, which a second tracker would duplicate: switching
-/// CGM models keeps the sensor tracker as it is, while switching from a tubed pump to a patch pump
-/// adds the pod tracker, since pod changes do not restart a site tracker. The trackers have
+/// already does its job (<see cref="LegacyFallbackRules.Follows"/>), which a second tracker would
+/// duplicate: switching CGM models keeps the sensor tracker as it is, while switching between a
+/// tubed and a patch pump adds the new type's site tracker. The trackers have
 /// no notification thresholds; a member adds them. Each starts at the latest event that restarts it
 /// (<see cref="ConsumableTrackerWriter"/>), under the consumable lock the legacy conversion takes.
 /// </remarks>
@@ -64,7 +62,7 @@ internal sealed class DeviceTrackerProvisioner(
                     {
                         if (existing.Any(d => string.Equals(d.Name, spec.Name, StringComparison.OrdinalIgnoreCase)))
                             continue;
-                        if (existing.Any(d => AlreadyFollows(d, spec)))
+                        if (existing.Any(d => LegacyFallbackRules.Follows(d, spec)))
                             continue;
 
                         made.Add(await writer.CreateAsync(tx, unit, spec, userId, withAlerts: false, token));
@@ -117,15 +115,5 @@ internal sealed class DeviceTrackerProvisioner(
         }
 
         return created.Count;
-    }
-
-    /// <summary>Whether <paramref name="definition"/> already does <paramref name="spec"/>'s job.</summary>
-    private static bool AlreadyFollows(TrackerDefinitionEntity definition, ConsumableTrackerSpec spec)
-    {
-        if (ConsumableTrackerSpecs.KindOf(spec) is not { } kind || !LegacyFallbackRules.Covers(kind, definition))
-            return false;
-
-        var triggers = TrackerTriggerService.ParseTriggerEventTypes(definition.TriggerEventTypes);
-        return triggers.Count == 0 || ConsumableTrackerSpecs.TriggerEventTypes(spec).All(triggers.Contains);
     }
 }
