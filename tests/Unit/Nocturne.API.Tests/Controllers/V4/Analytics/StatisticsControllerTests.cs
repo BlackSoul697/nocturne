@@ -148,7 +148,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+                It.IsAny<BolusKind?>(),
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Bolus>());
 
@@ -157,7 +157,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<CarbIntake>());
 
@@ -971,7 +971,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+                It.IsAny<BolusKind?>(),
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Bolus>());
         _therapySettingsResolverMock
@@ -1301,20 +1301,20 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+                It.IsAny<BolusKind?>(),
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .Returns((DateTime? _, DateTime? _, string? _, string? _, int limit, int _, bool descending,
-                bool _, BolusKind? kind, DateTime? _, Guid? _, CancellationToken ct) =>
+                BolusKind? kind, DateTime? _, Guid? _, CancellationToken ct) =>
                 Page(kind == BolusKind.Algorithm ? algorithm : manual, limit, descending, ct));
         _carbIntakeRepoMock
             .Setup(r => r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .Returns((DateTime? _, DateTime? _, string? _, string? _, int limit, int _, bool descending,
-                bool _, DateTime? _, Guid? _, CancellationToken ct) =>
+                DateTime? _, Guid? _, CancellationToken ct) =>
                 Page(carbs, limit, descending, ct));
         _tempBasalRepoMock
             .Setup(r => r.GetAsync(
@@ -1938,7 +1938,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), kind,
+                kind,
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(boluses);
 
@@ -1947,7 +1947,7 @@ public partial class StatisticsControllerTests
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
             It.IsAny<string?>(), It.IsAny<string?>(),
             limit, It.IsAny<int>(), It.IsAny<bool>(),
-            It.IsAny<bool>(), kind,
+            kind,
             It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
 
     private static long Mills(DateTime utc) => new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
@@ -2184,7 +2184,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), BolusKind.Manual,
+                BolusKind.Manual,
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(boluses);
         _carbIntakeRepoMock
@@ -2192,7 +2192,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(carbs);
         _basalInjectionRepoMock
@@ -2486,7 +2486,7 @@ public partial class StatisticsControllerTests
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
             It.IsAny<string?>(), It.IsAny<string?>(),
             int.MaxValue, It.IsAny<int>(), false,
-            It.IsAny<bool>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
 
         _glucoseRepoMock.Verify(r => r.GetForAnalyticsAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
@@ -2784,7 +2784,7 @@ public partial class StatisticsControllerTests
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
             It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-            It.IsAny<bool>(), It.IsAny<Guid?>(), token), Times.Once);
+            It.IsAny<Guid?>(), token), Times.Once);
 
         _glucoseRepoMock.Verify(r => r.GetForAnalyticsAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
@@ -2946,7 +2946,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(ages.Select(a => new CarbIntake { Timestamp = now - a, Carbs = 10 }).ToList());
         _tempBasalRepoMock
@@ -3051,7 +3051,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), BolusKind.Manual,
+                BolusKind.Manual,
                 It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(boluses);
         _carbIntakeRepoMock
@@ -3059,7 +3059,7 @@ public partial class StatisticsControllerTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
-                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(carbs);
         _basalInjectionRepoMock

@@ -182,11 +182,11 @@
   <div
     class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 @3xl:grid-cols-[auto_minmax(0,1fr)_auto]"
   >
-    <div class="col-start-1 row-start-1 min-w-0">
+    <div class="col-start-1 row-start-1 min-w-0 @max-md:col-span-2">
       {@render leading?.()}
     </div>
 
-    <div class="col-start-2 row-start-1 flex items-center justify-end gap-1.5 @3xl:col-start-3">
+    <div class="col-start-2 row-start-1 flex items-center justify-end gap-1.5 @max-md:col-span-2 @max-md:col-start-1 @max-md:row-start-2 @max-md:justify-start @3xl:col-start-3">
       <label for={id + "-dim"} class="whitespace-nowrap">Dim outside</label>
       <Input
         id={id + "-dim"}
@@ -207,7 +207,7 @@
       {@render trailing?.()}
     </div>
 
-    <div class="col-span-2 row-start-2 min-w-0 @3xl:col-span-1 @3xl:col-start-2 @3xl:row-start-1">
+    <div class="col-span-2 row-start-2 min-w-0 @max-md:row-start-3 @3xl:col-span-1 @3xl:col-start-2 @3xl:row-start-1">
       <div class="relative h-8">
         <!-- Each value sits beside its handle, on the outside, and gives way rather than overlap the other. -->
         {#each [0, 1] as const as index (index)}
@@ -321,7 +321,7 @@
     </div>
 
     <div
-      class="col-span-2 row-start-3 flex flex-wrap items-center gap-1.5 @3xl:col-span-1 @3xl:col-start-2 @3xl:row-start-2"
+      class="col-span-2 row-start-3 flex @max-md:row-start-4 flex-wrap items-center gap-1.5 @3xl:col-span-1 @3xl:col-start-2 @3xl:row-start-2"
     >
       {#each scale.boundaries as boundary, index (boundary.position)}
         <div class="flex items-center gap-1">
