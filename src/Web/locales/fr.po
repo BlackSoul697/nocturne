@@ -36961,3 +36961,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "Days in range, the weekly breakdown and the composition chart use UTC days."
 msgstr ""
+
+#: src/lib/components/reports/ReliabilityBadge.svelte
+msgid "Counted on UTC days <0/>"
+msgstr ""

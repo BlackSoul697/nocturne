@@ -36958,3 +36958,7 @@ msgstr "The hourly figures place each reading at the local time its device repor
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "Days in range, the weekly breakdown and the composition chart use UTC days."
 msgstr "Days in range, the weekly breakdown and the composition chart use UTC days."
+
+#: src/lib/components/reports/ReliabilityBadge.svelte
+msgid "Counted on UTC days <0/>"
+msgstr "Counted on UTC days <0/>"
