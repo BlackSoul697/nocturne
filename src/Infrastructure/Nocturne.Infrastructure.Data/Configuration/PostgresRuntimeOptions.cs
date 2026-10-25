@@ -10,7 +10,7 @@ internal static class PostgresRuntimeOptions
 {
     /// <summary>
     /// Builds the runtime app <see cref="NpgsqlDataSource"/> — the singleton that owns the
-    /// connection pool — with the pool cap and statement timeout from
+    /// connection pool — with the pool cap, statement preparation and statement timeout from
     /// <paramref name="config"/> applied.
     /// </summary>
     /// <param name="config">Runtime PostgreSQL configuration.</param>
@@ -19,6 +19,7 @@ internal static class PostgresRuntimeOptions
     {
         var builder = new NpgsqlDataSourceBuilder(config.ConnectionString);
         builder.ConnectionStringBuilder.MaxPoolSize = config.MaxPoolSize;
+        builder.ConnectionStringBuilder.MaxAutoPrepare = Math.Max(0, config.MaxAutoPrepare);
         ApplyStatementTimeout(builder.ConnectionStringBuilder, config.StatementTimeoutSeconds);
         ApplyIdleInTransactionTimeout(builder.ConnectionStringBuilder, config.IdleInTransactionTimeoutSeconds);
         return builder.Build();

@@ -50,6 +50,14 @@ public class PostgresRuntimeOptionsTests
     }
 
     [Fact]
+    public void RuntimePool_PreparesItsMostUsedStatements_AndConfigurationCanTurnItOff()
+    {
+        RegisteredPool().MaxAutoPrepare.Should().BePositive(
+            "planning every execution afresh was over a third of the database's time under load");
+        RegisteredPool(PostgreSqlSection.With(("MaxAutoPrepare", "0"))).MaxAutoPrepare.Should().Be(0);
+    }
+
+    [Fact]
     public void ConfigurationSection_ReachesTheStatementTimeout()
     {
         RegisteredPool(PostgreSqlSection.With(("StatementTimeoutSeconds", "12"))).Options.Should().Contain(
