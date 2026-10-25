@@ -88,6 +88,8 @@ public class DataOverviewServiceTimeZoneTests : IDisposable
             .Setup(s => s.CalculateGRI(It.IsAny<TimeInRangeMetrics>()))
             .Returns(new GlycemicRiskIndex());
 
+        statistics.WithRealTimeInRange();
+
         return new DataOverviewService(
             factory.Object,
             new TenantClockResolver(settings.Object, category, NullLogger<TenantClockResolver>.Instance),
