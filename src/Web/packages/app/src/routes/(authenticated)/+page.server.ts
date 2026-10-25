@@ -45,8 +45,9 @@ export const load: PageServerLoad = async ({ locals, request, parent }) => {
 		return { initialChartData: null };
 	}
 
-	const { initialChartData, initialWindowStart, historicalDataPromise } =
-		chartData ?? loadChartData(apiClient);
+	const loaded = chartData ?? (maybeTenantless ? loadChartData(apiClient) : null);
+	if (!loaded) return { initialChartData: null };
+	const { initialChartData, initialWindowStart, historicalDataPromise } = loaded;
 
 	return {
 		initialChartData: await initialChartData,

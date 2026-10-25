@@ -3,9 +3,10 @@ import { load } from "./+page.server";
 
 type LoadEvent = Parameters<typeof load>[0];
 
-function runLoad(getDashboardChartData: ReturnType<typeof vi.fn>) {
+function runLoad(getDashboardChartData: ReturnType<typeof vi.fn>, isAuthenticated = true) {
+  vi.stubEnv("BASE_DOMAIN", "nocturne.run");
   return load({
-    locals: { apiClient: { chartData: { getDashboardChartData } } },
+    locals: { apiClient: { chartData: { getDashboardChartData } }, isAuthenticated },
     request: new Request("https://sleepy.nocturne.run/", { headers: { host: "sleepy.nocturne.run" } }),
     parent: async () => ({ tenantless: false, baseDomain: "nocturne.run", dashboardSlugs: [] }),
   } as unknown as LoadEvent) as Promise<{ streamed: { historicalChartData: Promise<unknown> } }>;
@@ -49,6 +50,14 @@ describe("dashboard page load", () => {
     } as unknown as LoadEvent);
 
     expect(parent).not.toHaveBeenCalled();
+  });
+
+  it("asks for no chart data for a viewer the layout redirects to sign-in", async () => {
+    const getDashboardChartData = vi.fn().mockResolvedValue({});
+
+    await runLoad(getDashboardChartData, false);
+
+    expect(getDashboardChartData).not.toHaveBeenCalled();
   });
 
   it("starts the historical window before the initial window resolves", async () => {
