@@ -12,6 +12,7 @@ import {
   createServerApiClient,
 } from "$lib/server/api-client-factory";
 import { isApiOutage } from "$lib/server/api-outage";
+import { getCachedSession, sessionCacheKey } from "$lib/server/session-cache";
 import { authenticateGuestSession } from "$lib/server/guest-session-auth";
 import { sequence } from "@sveltejs/kit/hooks";
 import type { AuthUser } from "./app.d";
@@ -93,17 +94,26 @@ const authHandle: Handle = async ({ event, resolve }) => {
     const forwardedHost = getEffectiveHost(event.request, event.cookies);
     const authExtraHeaders: Record<string, string> = { "X-Forwarded-Proto": getOriginalProto(event.request) };
     if (forwardedHost) authExtraHeaders["X-Forwarded-Host"] = forwardedHost;
-    const apiClient = createServerApiClient(apiBaseUrl, fetch, {
-      accessToken,
-      refreshToken,
-      platformAccessToken,
-      extraHeaders: authExtraHeaders,
-      responseCookies: event.cookies,
-      rawSetCookies: event.locals.rawSetCookies,
-    });
-
-    // Validate session with the API using the typed client
-    const session = await apiClient.oidc.getSession();
+    const session = await getCachedSession(
+      sessionCacheKey([accessToken, refreshToken, platformAccessToken, forwardedHost, authExtraHeaders["X-Forwarded-Proto"]]),
+      async () => {
+        let cacheable = true;
+        const observingFetch: typeof fetch = async (input, init) => {
+          const response = await fetch(input, init);
+          if (response.headers.getSetCookie().length > 0) cacheable = false;
+          return response;
+        };
+        const apiClient = createServerApiClient(apiBaseUrl, observingFetch, {
+          accessToken,
+          refreshToken,
+          platformAccessToken,
+          extraHeaders: authExtraHeaders,
+          responseCookies: event.cookies,
+          rawSetCookies: event.locals.rawSetCookies,
+        });
+        return { session: await apiClient.oidc.getSession(), cacheable };
+      }
+    );
 
     if (session?.isAuthenticated && session.subjectId) {
       const user: AuthUser = {
