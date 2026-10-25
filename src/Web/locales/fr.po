@@ -244,7 +244,7 @@ msgstr ""
 msgid "UrgentHigh"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
@@ -265,7 +265,7 @@ msgstr ""
 msgid "Low"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
@@ -861,6 +861,7 @@ msgstr ""
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 #: src/lib/components/admin/RoleDialog.svelte
 #: src/lib/components/admin/SubjectEditDialog.svelte
+#: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
 #: src/lib/components/schedule/TargetRangeCard.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
@@ -1099,6 +1100,7 @@ msgid "Duration"
 msgstr ""
 
 #: src/lib/components/alerts/AlertHistoryCard.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
 #: src/routes/(authenticated)/alerts/history/+page.svelte
 msgid "Acknowledged"
@@ -1746,7 +1748,7 @@ msgstr ""
 msgid "TIR"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
@@ -1903,6 +1905,7 @@ msgid "Redo (Ctrl+Shift+Z)"
 msgstr ""
 
 #: ../cms/src/editor/PreviewPane.svelte
+#: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 #: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 #: src/lib/components/settings/CustomSoundUpload.svelte
 msgid "Preview"
@@ -2144,8 +2147,8 @@ msgstr ""
 
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/DndPanel.svelte
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 #: src/lib/components/alerts/RuleSidebar.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/command-palette/CommandPalette.svelte
 #: src/lib/components/dashboard/PredictionSettings.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
@@ -3885,7 +3888,7 @@ msgstr ""
 #~ msgid "PumpBatteryChange"
 #~ msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
@@ -3896,7 +3899,7 @@ msgstr ""
 msgid "Automatic"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
@@ -3905,11 +3908,11 @@ msgstr ""
 msgid "Manual"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Boost"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/constants/scope-labels.svelte.ts
 #: src/lib/navigation/report-navigation.svelte.ts
@@ -3918,14 +3921,14 @@ msgstr ""
 msgid "Sleep"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/reports/loop-analysis/event-labels.svelte.ts
 #: src/lib/components/reports/loop-analysis/filter-labels.svelte.ts
 msgid "Exercise"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
@@ -3933,7 +3936,7 @@ msgstr ""
 msgid "Suspended"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Limited"
 msgstr ""
 
@@ -9168,7 +9171,7 @@ msgstr ""
 #~ msgid "Pump Mode"
 #~ msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
 #: src/lib/components/dashboard/glucose-chart/tracks/SwimLaneTrack.svelte
@@ -13902,8 +13905,9 @@ msgstr ""
 msgid "<0/> Add condition"
 msgstr ""
 
-#~ msgid "Flat"
-#~ msgstr ""
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Flat"
+msgstr ""
 
 #: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
 msgid "Select a rule"
@@ -14411,28 +14415,28 @@ msgstr ""
 #~ msgid "No events yet — playhead at start of window."
 #~ msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Ease off"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Pump connectivity"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/reports/loop-analysis/filter-labels.svelte.ts
 msgid "Illness"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Travel"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Data exclusion"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/reports/loop-analysis/event-labels.svelte.ts
 msgid "Temporary target"
 msgstr ""
@@ -15434,7 +15438,7 @@ msgstr ""
 msgid "Day in review"
 msgstr ""
 
-#: src/lib/components/alerts/RuleBuilderLeafEditor.svelte
+#: src/lib/components/alerts/alert-labels.svelte.ts
 msgid "Liberty"
 msgstr ""
 
@@ -21266,7 +21270,7 @@ msgstr ""
 msgid "Elevated"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
@@ -23205,7 +23209,7 @@ msgstr ""
 msgid "No lows lasting 15 minutes or more during this session"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
@@ -23414,7 +23418,7 @@ msgstr ""
 msgid "Hour"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
@@ -30342,6 +30346,7 @@ msgstr ""
 msgid "Day of week"
 msgstr ""
 
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/alerts/factText.svelte.ts
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
@@ -33914,7 +33919,7 @@ msgstr ""
 msgid "Insufficient data"
 msgstr ""
 
-#: src/lib/components/alerts/summarizeCondition.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 msgid "Tight range"
@@ -37126,7 +37131,7 @@ msgstr ""
 msgid "No data for at least {0}"
 msgstr ""
 
-#. 0: listFormat().format(p.buckets.map(bucketLabel))
+#. 0: listFormat().format(p.buckets.map(glucoseBucketLabel))
 #: src/lib/components/alerts/summarizeCondition.svelte.ts
 msgid "Glucose range: {0}"
 msgstr ""
@@ -37353,4 +37358,50 @@ msgstr ""
 #. 0: bucket ?? ""
 #: src/lib/components/alerts/summarizeCondition.svelte.ts
 msgid "Trend {0}"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Motion"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Firing"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Unacknowledged"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Falling fast"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Falling"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Rising"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Rising fast"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Rate (U/h)"
+msgstr ""
+
+#: src/lib/components/alerts/alert-labels.svelte.ts
+msgid "Percent of scheduled"
+msgstr ""
+
+#: src/lib/components/alerts/summarizeCondition.svelte.ts
+msgid "Motion active"
+msgstr ""
+
+#: src/lib/components/alerts/summarizeCondition.svelte.ts
+msgid "Motion not active"
 msgstr ""
