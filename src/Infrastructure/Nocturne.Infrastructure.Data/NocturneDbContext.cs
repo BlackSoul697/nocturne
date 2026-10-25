@@ -1244,28 +1244,8 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder
             .Entity<TrackerDefinitionEntity>()
-            .HasIndex(d => d.UserId)
-            .HasDatabaseName("ix_tracker_definitions_user_id");
-
-        modelBuilder
-            .Entity<TrackerDefinitionEntity>()
-            .HasIndex(d => new { d.UserId, d.Category })
-            .HasDatabaseName("ix_tracker_definitions_user_category");
-
-        modelBuilder
-            .Entity<TrackerDefinitionEntity>()
-            .HasIndex(d => d.IsFavorite)
-            .HasDatabaseName("ix_tracker_definitions_is_favorite");
-
-        modelBuilder
-            .Entity<TrackerDefinitionEntity>()
             .HasIndex(d => d.CreatedAt)
             .HasDatabaseName("ix_tracker_definitions_created_at");
-
-        modelBuilder
-            .Entity<TrackerInstanceEntity>()
-            .HasIndex(i => i.UserId)
-            .HasDatabaseName("ix_tracker_instances_user_id");
 
         modelBuilder
             .Entity<TrackerInstanceEntity>()
@@ -1280,19 +1260,9 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder
             .Entity<TrackerInstanceEntity>()
-            .HasIndex(i => new { i.UserId, i.CompletedAt })
-            .HasDatabaseName("ix_tracker_instances_user_completed");
-
-        modelBuilder
-            .Entity<TrackerInstanceEntity>()
             .HasIndex(i => i.StartedAt)
             .HasDatabaseName("ix_tracker_instances_started_at")
             .IsDescending();
-
-        modelBuilder
-            .Entity<TrackerPresetEntity>()
-            .HasIndex(p => p.UserId)
-            .HasDatabaseName("ix_tracker_presets_user_id");
 
         modelBuilder
             .Entity<TrackerPresetEntity>()

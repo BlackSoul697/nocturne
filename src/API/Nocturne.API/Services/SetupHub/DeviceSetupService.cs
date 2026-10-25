@@ -74,7 +74,7 @@ public partial class DeviceSetupService(
 
     private static readonly DeviceCategory[] SlotCategories = [DeviceCategory.CGM, DeviceCategory.InsulinPump];
 
-    public async Task<DeviceSetup> GetAsync(string userId, CancellationToken ct)
+    public async Task<DeviceSetup> GetAsync(CancellationToken ct)
     {
         var current = (await devices.GetCurrentAsync(ct)).ToList();
         var evidence = await GatherEvidenceAsync(ct);
@@ -112,7 +112,7 @@ public partial class DeviceSetupService(
             currentInsulins.Where(i => i.FormulationId is null || !listedIds.Contains(i.FormulationId)).ToList(),
             await ActionTimeAsync(ct),
             takesNoInsulin,
-            await TrackerOffersAsync(current, userId, ct));
+            await TrackerOffersAsync(current, ct));
     }
 
     /// <summary>The insulin action time in use now, resolved as insulin on board resolves it.</summary>
@@ -233,20 +233,20 @@ public partial class DeviceSetupService(
     }
 
     /// <summary>
-    /// Creates the offered tracker of <paramref name="kind"/> for <paramref name="userId"/>, with the
-    /// catalogue's wear time as its lifespan and restarting on the matching device events. Does
-    /// nothing when the owner already has one.
+    /// Creates the offered tracker of <paramref name="kind"/>, with the catalogue's wear time as its
+    /// lifespan and restarting on the matching device events, recording <paramref name="createdBy"/>
+    /// as its creator. Does nothing when the tenant already has one.
     /// </summary>
     /// <exception cref="ArgumentException">No tracker of that kind is offered for the recorded devices.</exception>
-    public async Task AddTrackerAsync(TrackerOfferKind kind, string name, string userId, CancellationToken ct)
+    public async Task AddTrackerAsync(TrackerOfferKind kind, string name, string createdBy, CancellationToken ct)
     {
-        var (offer, hours) = await OfferAsync(kind, userId, ct);
+        var (offer, hours) = await OfferAsync(kind, ct);
         if (offer.State != TrackerOfferState.Off)
             return;
 
         var created = await trackers.CreateDefinitionAsync(new TrackerDefinitionEntity
         {
-            UserId = userId,
+            CreatedBy = createdBy,
             Name = name,
             Category = TrackerCategoryOf(kind),
             LifespanHours = hours,
@@ -260,9 +260,9 @@ public partial class DeviceSetupService(
     /// <summary>Deletes a tracker this item created. A tracker the owner had before is never touched.</summary>
     /// <exception cref="ArgumentException">No tracker of that kind is offered for the recorded devices.</exception>
     /// <exception cref="DeviceSetupConflictException">The tracker was not created here.</exception>
-    public async Task RemoveTrackerAsync(TrackerOfferKind kind, string userId, CancellationToken ct)
+    public async Task RemoveTrackerAsync(TrackerOfferKind kind, CancellationToken ct)
     {
-        var (offer, _) = await OfferAsync(kind, userId, ct);
+        var (offer, _) = await OfferAsync(kind, ct);
         if (offer.State == TrackerOfferState.Off)
             return;
         if (offer.State != TrackerOfferState.AddedHere)
@@ -274,10 +274,10 @@ public partial class DeviceSetupService(
         await ForgetAdditionAsync(id, ct);
     }
 
-    private async Task<(TrackerOffer Offer, int? Hours)> OfferAsync(TrackerOfferKind kind, string userId, CancellationToken ct)
+    private async Task<(TrackerOffer Offer, int? Hours)> OfferAsync(TrackerOfferKind kind, CancellationToken ct)
     {
         var current = (await devices.GetCurrentAsync(ct)).ToList();
-        var offer = (await TrackerOffersAsync(current, userId, ct)).FirstOrDefault(o => o.Kind == kind)
+        var offer = (await TrackerOffersAsync(current, ct)).FirstOrDefault(o => o.Kind == kind)
             ?? throw new ArgumentException($"No {kind} tracker is offered for the recorded devices.", nameof(kind));
         return (offer, offer.WearDays * 24 + offer.WearHours);
     }
@@ -346,7 +346,7 @@ public partial class DeviceSetupService(
     }
 
     private async Task<IReadOnlyList<TrackerOffer>> TrackerOffersAsync(
-        IReadOnlyList<PatientDevice> current, string userId, CancellationToken ct)
+        IReadOnlyList<PatientDevice> current, CancellationToken ct)
     {
         var offers = new List<(TrackerOfferKind Kind, string Device, int? Hours)>();
 
@@ -377,7 +377,6 @@ public partial class DeviceSetupService(
         var added = await AdditionsAsync(SetupHubRecordKind.Tracker, ct);
         await using var db = await contexts.CreateAsync(ct);
         var existing = (await db.TrackerDefinitions
-                .Where(d => d.UserId == userId)
                 .Select(d => new { d.Id, d.Category, d.TriggerEventTypes })
                 .ToListAsync(ct))
             .Select(d => (d.Id, d.Category, Triggers: ParseTriggers(d.TriggerEventTypes)))

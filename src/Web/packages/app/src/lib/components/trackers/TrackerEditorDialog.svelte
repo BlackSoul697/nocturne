@@ -15,7 +15,6 @@
   import {
     TrackerCategory,
     DashboardVisibility,
-    TrackerVisibility,
     TrackerMode,
     NotificationUrgency,
     type TrackerDefinitionDto,
@@ -38,7 +37,6 @@
     formNotifications?: TrackerNotification[];
     formIsFavorite?: boolean;
     formDashboardVisibility?: DashboardVisibility;
-    formVisibility?: TrackerVisibility;
     formMode?: TrackerMode;
     formStartEventType?: string | undefined;
     formCompletionEventType?: string | undefined;
@@ -62,7 +60,6 @@
     formNotifications = $bindable([]),
     formIsFavorite = $bindable(false),
     formDashboardVisibility = $bindable(DashboardVisibility.Always),
-    formVisibility = $bindable(TrackerVisibility.Private),
     formMode = $bindable(TrackerMode.Duration),
     formStartEventType = $bindable(undefined),
     formCompletionEventType = $bindable(undefined),
@@ -423,37 +420,6 @@
     </Select.Root>
     <p class="text-xs text-muted-foreground">
       When to show this tracker as a pill on the dashboard
-    </p>
-  </div>
-
-  <div class="space-y-2">
-    <Label for="visibility">Public visibility</Label>
-    <Select.Root
-      type="single"
-      name="{prefix}visibility"
-      bind:value={formVisibility}
-    >
-      <Select.Trigger>
-        {#if formVisibility === TrackerVisibility.Public}
-          Public - Other members can see it
-        {:else}
-          Private - Only you can see
-        {/if}
-      </Select.Trigger>
-      <Select.Content>
-        <Select.Item
-          value={TrackerVisibility.Public}
-          label="Public - Other members can see it"
-        />
-        <Select.Item
-          value={TrackerVisibility.Private}
-          label="Private - Only you can see"
-        />
-      </Select.Content>
-    </Select.Root>
-    <p class="text-xs text-muted-foreground">
-      Whether other people signed in to this site can see it running. Trackers
-      are never shown on a public share link.
     </p>
   </div>
 

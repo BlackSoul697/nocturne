@@ -52,7 +52,7 @@ public class DeviceSetupServiceTests
         _therapySettings.Setup(t => t.GetTimezoneAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync("Pacific/Auckland");
     }
 
-    private Task<DeviceSetup> Setup() => _service.GetAsync(Owner, CancellationToken.None);
+    private Task<DeviceSetup> Setup() => _service.GetAsync(CancellationToken.None);
 
     private static DeviceSlot Slot(DeviceSetup setup, DeviceCategory category) =>
         setup.Devices.Single(s => s.Category == category);
@@ -85,7 +85,7 @@ public class DeviceSetupServiceTests
     {
         var definition = new TrackerDefinitionEntity
         {
-            Id = Guid.CreateVersion7(), UserId = Owner, Name = "Mine", Category = category,
+            Id = Guid.CreateVersion7(), CreatedBy = Owner, Name = "Mine", Category = category,
             TriggerEventTypes = JsonSerializer.Serialize(triggers), LifespanHours = 72,
         };
         _db.TrackerDefinitions.Add(definition);
@@ -420,7 +420,7 @@ public class DeviceSetupServiceTests
         var definition = _db.TrackerDefinitions.Should().ContainSingle().Subject;
         definition.Should().BeEquivalentTo(new
         {
-            UserId = Owner, Name = "Libre 3 sensor", Category = TrackerCategory.Sensor,
+            CreatedBy = Owner, Name = "Libre 3 sensor", Category = TrackerCategory.Sensor,
             LifespanHours = (int?)336, Mode = TrackerMode.Duration,
         });
         JsonSerializer.Deserialize<string[]>(definition.TriggerEventTypes).Should().Equal("Sensor Start", "Sensor Change");
@@ -430,7 +430,7 @@ public class DeviceSetupServiceTests
         });
         _ruleSync.Verify(r => r.SyncDefinitionAsync(definition.Id, It.IsAny<CancellationToken>()), Times.Once);
 
-        await _service.RemoveTrackerAsync(TrackerOfferKind.Sensor, Owner, CancellationToken.None);
+        await _service.RemoveTrackerAsync(TrackerOfferKind.Sensor, CancellationToken.None);
 
         _db.TrackerDefinitions.Should().BeEmpty();
         (await Setup()).Trackers.Single().State.Should().Be(TrackerOfferState.Off);
@@ -448,7 +448,7 @@ public class DeviceSetupServiceTests
             State = TrackerOfferState.AlreadyTracked, DefinitionId = (Guid?)mine.Id,
         });
 
-        await _service.Invoking(s => s.RemoveTrackerAsync(TrackerOfferKind.Sensor, Owner, CancellationToken.None))
+        await _service.Invoking(s => s.RemoveTrackerAsync(TrackerOfferKind.Sensor, CancellationToken.None))
             .Should().ThrowAsync<DeviceSetupConflictException>();
         await _service.AddTrackerAsync(TrackerOfferKind.Sensor, "Another", Owner, CancellationToken.None);
 

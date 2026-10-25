@@ -9,7 +9,8 @@ namespace Nocturne.Core.Models;
 public enum TrackerCategory
 {
     /// <summary>
-    /// Consumable devices: cannulas, sensors, infusion sets
+    /// Pump parts and other consumables that are not a sensor, site, reservoir or battery, such as
+    /// a pump's battery lid
     /// </summary>
     Consumable,
 

@@ -5539,6 +5539,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
                     b.Property<int>("DashboardVisibility")
                         .HasColumnType("integer")
                         .HasColumnName("dashboard_visibility");
@@ -5603,31 +5609,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("user_id");
-
-                    b.Property<int>("Visibility")
-                        .HasColumnType("integer")
-                        .HasColumnName("visibility");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_tracker_definitions_created_at");
 
-                    b.HasIndex("IsFavorite")
-                        .HasDatabaseName("ix_tracker_definitions_is_favorite");
-
                     b.HasIndex("TenantId");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_tracker_definitions_user_id");
-
-                    b.HasIndex("UserId", "Category")
-                        .HasDatabaseName("ix_tracker_definitions_user_category");
 
                     b.ToTable("tracker_definitions");
                 });
@@ -5661,6 +5648,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("completion_reason");
 
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
                     b.Property<Guid>("DefinitionId")
                         .HasColumnType("uuid")
                         .HasColumnName("definition_id");
@@ -5691,12 +5684,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("user_id");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CompletedAt")
@@ -5712,12 +5699,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_tracker_instances_user_id");
-
-                    b.HasIndex("UserId", "CompletedAt")
-                        .HasDatabaseName("ix_tracker_instances_user_completed");
-
                     b.ToTable("tracker_instances");
                 });
 
@@ -5732,15 +5713,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("alert_rule_id");
 
-                    b.Property<bool>("AudioEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("audio_enabled");
-
-                    b.Property<string>("AudioSound")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("audio_sound");
-
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -5754,14 +5726,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("hours");
 
-                    b.Property<bool>("PushEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("push_enabled");
-
-                    b.Property<bool>("RespectQuietHours")
-                        .HasColumnType("boolean")
-                        .HasColumnName("respect_quiet_hours");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
@@ -5773,10 +5737,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<int>("Urgency")
                         .HasColumnType("integer")
                         .HasColumnName("urgency");
-
-                    b.Property<bool>("VibrateEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("vibrate_enabled");
 
                     b.HasKey("Id");
 
@@ -5804,6 +5764,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
                     b.Property<string>("DefaultStartNotes")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -5823,21 +5789,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("user_id");
-
                     b.HasKey("Id");
 
                     b.HasIndex("DefinitionId")
                         .HasDatabaseName("ix_tracker_presets_definition_id");
 
                     b.HasIndex("TenantId");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_tracker_presets_user_id");
 
                     b.ToTable("tracker_presets");
                 });

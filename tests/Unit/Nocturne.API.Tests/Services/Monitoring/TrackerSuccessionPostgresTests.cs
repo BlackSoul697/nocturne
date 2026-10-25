@@ -101,7 +101,7 @@ public class TrackerSuccessionPostgresTests(TrackerSuccessionPostgresTests.Datab
         {
             Id = Guid.CreateVersion7(),
             TenantId = tenant,
-            UserId = OwnerId,
+            CreatedBy = OwnerId,
             Name = "Infusion Site",
             Mode = mode,
             LifespanHours = mode == TrackerMode.Duration ? 72 : null,
@@ -114,7 +114,7 @@ public class TrackerSuccessionPostgresTests(TrackerSuccessionPostgresTests.Datab
             {
                 Id = Guid.CreateVersion7(),
                 TenantId = tenant,
-                UserId = OwnerId,
+                CreatedBy = OwnerId,
                 DefinitionId = definition.Id,
                 StartedAt = startedAt,
             });
