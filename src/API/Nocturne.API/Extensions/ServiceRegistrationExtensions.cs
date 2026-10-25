@@ -952,6 +952,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IEntryDecomposer, EntryDecomposer>();
         services.AddScoped<RelativeTempBasalRates>();
         services.AddScoped<ITempBasalRateReresolver, TempBasalRateReresolver>();
+        services.AddScoped<ILoopClosedLoopStamper, LoopClosedLoopStamper>();
         services.AddHostedService<TempBasalRateSweepService>();
         services.AddScoped<ITreatmentDecomposer, TreatmentDecomposer>();
         services.AddScoped<IDeviceStatusDecomposer, DeviceStatusDecomposer>();
