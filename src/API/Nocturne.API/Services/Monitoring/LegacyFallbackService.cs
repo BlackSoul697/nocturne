@@ -22,6 +22,17 @@ public sealed record LegacyFallback(
     ConsumableTrackerSpec Spec,
     TrackerInstanceEntity Projected);
 
+/// <summary>A consumable the tenant has a tracker for, and the definitions that cover it.</summary>
+/// <param name="DefinitionIds">Every definition <see cref="LegacyFallbackRules.Covers"/> the kind.</param>
+public sealed record LegacyCoverage(LegacyConsumableKind Kind, IReadOnlyList<Guid> DefinitionIds);
+
+/// <summary>What <see cref="ILegacyFallbackService.GetAsync"/> found.</summary>
+/// <param name="Fallbacks">The uncovered consumables with an age to show.</param>
+/// <param name="Covered">The covered consumables, in <see cref="LegacyConsumableKind"/> order.</param>
+public sealed record LegacyFallbackRead(
+    IReadOnlyList<LegacyFallback> Fallbacks,
+    IReadOnlyList<LegacyCoverage> Covered);
+
 /// <summary>What <see cref="ILegacyFallbackService.CreateTrackersAsync"/> did.</summary>
 /// <param name="Definitions">The trackers it created.</param>
 /// <param name="Instances">Their running instances.</param>
@@ -39,10 +50,10 @@ public interface ILegacyFallbackService
 {
     /// <summary>
     /// The uncovered consumables <see cref="LegacyFallbackRules.IsConfident"/> accepts, in
-    /// <see cref="LegacyConsumableKind"/> order.
+    /// <see cref="LegacyConsumableKind"/> order, and the definitions covering the rest.
     /// </summary>
     /// <remarks>A history-clamped member reads only the last day of device events, so sees fewer.</remarks>
-    Task<IReadOnlyList<LegacyFallback>> GetAsync(CancellationToken ct = default);
+    Task<LegacyFallbackRead> GetAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Creates a tracker for each of <paramref name="kinds"/> that has a fallback, recording
@@ -67,8 +78,17 @@ internal sealed class LegacyFallbackService(
     ILogger<LegacyFallbackService> logger) : ILegacyFallbackService
 {
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LegacyFallback>> GetAsync(CancellationToken ct = default) =>
-        await ResolveAsync(Enum.GetValues<LegacyConsumableKind>(), await trackers.GetAllDefinitionsAsync(ct), ct);
+    public async Task<LegacyFallbackRead> GetAsync(CancellationToken ct = default)
+    {
+        var definitions = await trackers.GetAllDefinitionsAsync(ct);
+        var covered = Enum.GetValues<LegacyConsumableKind>()
+            .Select(kind => new LegacyCoverage(
+                kind, [.. definitions.Where(d => LegacyFallbackRules.Covers(kind, d)).Select(d => d.Id)]))
+            .Where(coverage => coverage.DefinitionIds.Count > 0)
+            .ToList();
+        return new LegacyFallbackRead(
+            await ResolveAsync(Enum.GetValues<LegacyConsumableKind>(), definitions, ct), covered);
+    }
 
     /// <inheritdoc />
     /// <remarks>

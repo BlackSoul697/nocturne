@@ -34,19 +34,28 @@ public class TrackerLegacyFallbacksController(ILegacyFallbackService fallbacks)
         TrackerReadAccess.Allows(HttpContext) && HttpContext.HasScope(Scope.DevicesRead);
 
     /// <summary>
-    /// The consumables no tracker covers whose latest device event is recent enough to trust,
-    /// empty for a caller that does not hold both tracker read access and <c>devices.read</c>.
+    /// The consumables no tracker covers whose latest device event is recent enough to trust, and
+    /// the definitions covering the others. Empty for a caller that does not hold both tracker read
+    /// access and <c>devices.read</c>.
     /// </summary>
     [HttpGet("legacy-fallbacks")]
     [RemoteQuery]
-    [ProducesResponseType(typeof(LegacyFallbackDto[]), StatusCodes.Status200OK)]
-    public async Task<ActionResult<LegacyFallbackDto[]>> GetLegacyFallbacks()
+    [ProducesResponseType(typeof(LegacyFallbacksDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LegacyFallbacksDto>> GetLegacyFallbacks()
     {
         if (!ReadsFallbacks)
-            return Ok(Array.Empty<LegacyFallbackDto>());
+            return Ok(new LegacyFallbacksDto());
 
         var found = await fallbacks.GetAsync(HttpContext.RequestAborted);
-        return Ok(found.Select(LegacyFallbackDto.From).ToArray());
+        return Ok(new LegacyFallbacksDto
+        {
+            Fallbacks = [.. found.Fallbacks.Select(LegacyFallbackDto.From)],
+            Covered = [.. found.Covered.Select(c => new LegacyCoverageDto
+            {
+                Kind = c.Kind,
+                DefinitionIds = [.. c.DefinitionIds],
+            })],
+        });
     }
 
     /// <summary>
@@ -91,6 +100,20 @@ public class TrackerLegacyFallbacksController(ILegacyFallbackService fallbacks)
             FailedKinds = [.. conversion.FailedKinds],
         });
     }
+}
+
+/// <summary>The legacy consumable ages, covered or not.</summary>
+public class LegacyFallbacksDto
+{
+    public LegacyFallbackDto[] Fallbacks { get; set; } = [];
+    public LegacyCoverageDto[] Covered { get; set; } = [];
+}
+
+/// <summary>A consumable trackers cover; see <see cref="LegacyFallbackRules.Covers"/>.</summary>
+public class LegacyCoverageDto
+{
+    public LegacyConsumableKind Kind { get; set; }
+    public Guid[] DefinitionIds { get; set; } = [];
 }
 
 /// <summary>A consumable with no tracker, aged from its latest device event.</summary>
