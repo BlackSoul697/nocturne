@@ -21,10 +21,11 @@ public class PostgresRuntimeOptionsTests
     /// </summary>
     private static NpgsqlConnectionStringBuilder RegisteredPool(
         IConfiguration? configuration = null,
-        Action<PostgreSqlConfiguration>? configure = null)
+        Action<PostgreSqlConfiguration>? configure = null,
+        string connectionString = PostgreSqlSection.AppConnectionString)
     {
         var services = new ServiceCollection();
-        services.AddPostgreSqlInfrastructure(PostgreSqlSection.AppConnectionString, configuration, configure);
+        services.AddPostgreSqlInfrastructure(connectionString, configuration, configure);
 
         var dataSource = (NpgsqlDataSource)services
             .Single(d => d.ServiceType == typeof(NpgsqlDataSource))
@@ -55,6 +56,13 @@ public class PostgresRuntimeOptionsTests
         RegisteredPool().MaxAutoPrepare.Should().BePositive(
             "planning every execution afresh was over a third of the database's time under load");
         RegisteredPool(PostgreSqlSection.With(("MaxAutoPrepare", "0"))).MaxAutoPrepare.Should().Be(0);
+    }
+
+    [Fact]
+    public void RuntimePool_KeepsTheConnectionStringsOwnMaxAutoPrepare()
+    {
+        RegisteredPool(connectionString: PostgreSqlSection.AppConnectionString + ";Max Auto Prepare=0")
+            .MaxAutoPrepare.Should().Be(0, "an operator behind a transaction-mode pooler turns preparation off there");
     }
 
     [Fact]
