@@ -1,4 +1,9 @@
-import type { TrackerDefinitionDto, TrackerInstanceDto } from "$lib/api";
+import type {
+  LegacyConsumableKind,
+  LegacyFallbackDto,
+  TrackerDefinitionDto,
+  TrackerInstanceDto,
+} from "$lib/api";
 import { DashboardVisibility, NotificationUrgency } from "$lib/api";
 import { reachedUrgency, urgencyRank } from "$lib/components/trackers/schedule";
 
@@ -17,6 +22,14 @@ export function trackerDefinition(
   definitions: readonly TrackerDefinitionDto[]
 ): TrackerDefinitionDto | undefined {
   return definitions.find((d) => d.id === instance.definitionId);
+}
+
+/** The legacy fallbacks the user has not hidden; each always shows a pill, as a new tracker does. */
+export function visibleLegacyFallbacks(
+  fallbacks: readonly LegacyFallbackDto[],
+  hidden: readonly LegacyConsumableKind[]
+): LegacyFallbackDto[] {
+  return fallbacks.filter((fallback) => fallback.kind && !hidden.includes(fallback.kind));
 }
 
 /** The instances whose definition shows a pill on the dashboard at `now`. */

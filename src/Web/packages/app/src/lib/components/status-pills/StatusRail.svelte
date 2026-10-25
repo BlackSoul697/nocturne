@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { browser } from "$app/environment";
-  import { RailItemId, type TrackerCategory } from "$lib/api";
+  import { RailItemId, type LegacyConsumableKind, type TrackerCategory } from "$lib/api";
+  import { hiddenLegacyFallbacks } from "$lib/stores/appearance-store.svelte";
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { cn } from "$lib/utils";
   import COBPill from "./COBPill.svelte";
@@ -10,7 +12,7 @@
   import LoopPill from "./LoopPill.svelte";
   import ReservoirPill from "./ReservoirPill.svelte";
   import TrackerPillBar from "./TrackerPillBar.svelte";
-  import { visibleTrackerInstances } from "./tracker-pill-visibility";
+  import { visibleLegacyFallbacks, visibleTrackerInstances } from "./tracker-pill-visibility";
 
   interface Props {
     /** The rail items to show, in order. */
@@ -44,13 +46,28 @@
 
   const realtimeStore = getRealtimeStore();
 
-  const hasTrackerPills = $derived(
-    visibleTrackerInstances(
-      realtimeStore.trackerInstances,
-      realtimeStore.trackerDefinitions,
-      realtimeStore.now
-    ).length > 0
+  const legacyFallbacks = $derived(
+    visibleLegacyFallbacks(realtimeStore.legacyFallbacks, hiddenLegacyFallbacks.current)
   );
+
+  const hasTrackerPills = $derived(
+    legacyFallbacks.length > 0 ||
+      visibleTrackerInstances(
+        realtimeStore.trackerInstances,
+        realtimeStore.trackerDefinitions,
+        realtimeStore.now
+      ).length > 0
+  );
+
+  const conversionDialog = lazyComponent(
+    () => import("$lib/components/trackers/CreateTrackersFromLegacyDialog.svelte")
+  );
+  let conversionKind = $state<LegacyConsumableKind | undefined>();
+
+  function openConversion(kind: LegacyConsumableKind) {
+    conversionKind = kind;
+    conversionDialog.open = true;
+  }
 
   /** Many pumps and pods report no numeric reservoir (e.g. Omnipod above 50 U). */
   const renderable = $derived(
@@ -142,8 +159,10 @@
             <TrackerPillBar
               instances={realtimeStore.trackerInstances}
               definitions={realtimeStore.trackerDefinitions}
+              fallbacks={legacyFallbacks}
               now={realtimeStore.now}
               onComplete={onTrackerComplete}
+              onCreateTracker={openConversion}
               class="contents"
             />
           {/if}
@@ -151,4 +170,13 @@
       {/each}
     </div>
   </div>
+{/if}
+
+{#if conversionDialog.component}
+  <conversionDialog.component
+    bind:open={conversionDialog.open}
+    fallbacks={realtimeStore.legacyFallbacks}
+    initialKind={conversionKind}
+    onCreated={() => realtimeStore.refreshTrackers()}
+  />
 {/if}
