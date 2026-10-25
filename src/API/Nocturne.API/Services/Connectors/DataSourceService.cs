@@ -83,9 +83,9 @@ public class DataSourceService : IDataSourceService
     private record SourceBucket(string? Key, TableStats Stats);
 
     /// <summary>
-    /// What a source owns in one table, in the three ways the service reads it: the buckets discovery
+    /// What a source owns in one table, in the ways the service reads it: the buckets discovery
     /// groups it into (none for a table discovery does not list), a count by source for the summary,
-    /// and the delete and re-import release of the purge.
+    /// the profile names the purge must refresh, and the delete and re-import release of the purge.
     /// </summary>
     private interface IOwnedTable
     {
@@ -95,6 +95,8 @@ public class DataSourceService : IDataSourceService
             NocturneDbContext db, DateTime windowStart, DateTime last24HoursDate, CancellationToken ct);
 
         Task<long> CountAsync(NocturneDbContext db, string source, CancellationToken ct);
+
+        Task<List<string>> ProfileNamesAsync(NocturneDbContext db, string source, CancellationToken ct);
 
         Task<int> SoftDeleteAsync(
             NocturneDbContext db, string source, IAuditContext audit, string scope, CancellationToken ct);
@@ -107,7 +109,8 @@ public class DataSourceService : IDataSourceService
         SyncDataType type,
         Func<NocturneDbContext, IQueryable<T>> rows,
         Func<string, Expression<Func<T, bool>>> ownedBy,
-        Func<IQueryable<T>, DateTime, DateTime, CancellationToken, Task<List<SourceBucket>>>? buckets = null)
+        Func<IQueryable<T>, DateTime, DateTime, CancellationToken, Task<List<SourceBucket>>>? buckets = null,
+        Expression<Func<T, string>>? profileName = null)
         : IOwnedTable where T : class, ITenantScoped, ISoftDeletable
     {
         public SyncDataType Type => type;
@@ -120,6 +123,11 @@ public class DataSourceService : IDataSourceService
 
         public Task<long> CountAsync(NocturneDbContext db, string source, CancellationToken ct) =>
             rows(db).Where(ownedBy(source)).LongCountAsync(ct);
+
+        public Task<List<string>> ProfileNamesAsync(NocturneDbContext db, string source, CancellationToken ct) =>
+            profileName is null
+                ? Task.FromResult(new List<string>())
+                : rows(db).Where(ownedBy(source)).Select(profileName).Distinct().ToListAsync(ct);
 
         public Task<int> SoftDeleteAsync(
             NocturneDbContext db, string source, IAuditContext audit, string scope, CancellationToken ct) =>
@@ -152,6 +160,21 @@ public class DataSourceService : IDataSourceService
         TimeSeries<StepCountEntity>(SyncDataType.Steps, db => db.StepCounts),
         new OwnedTable<BodyWeightEntity>(
             SyncDataType.BodyWeight, db => db.BodyWeights, SourceFilter.For<BodyWeightEntity>, BodyWeightBuckets),
+        new OwnedTable<TherapySettingsEntity>(
+            SyncDataType.Profiles, db => db.TherapySettings, SourceFilter.For<TherapySettingsEntity>,
+            profileName: e => e.ProfileName),
+        new OwnedTable<BasalScheduleEntity>(
+            SyncDataType.Profiles, db => db.BasalSchedules, SourceFilter.For<BasalScheduleEntity>,
+            profileName: e => e.ProfileName),
+        new OwnedTable<CarbRatioScheduleEntity>(
+            SyncDataType.Profiles, db => db.CarbRatioSchedules, SourceFilter.For<CarbRatioScheduleEntity>,
+            profileName: e => e.ProfileName),
+        new OwnedTable<SensitivityScheduleEntity>(
+            SyncDataType.Profiles, db => db.SensitivitySchedules, SourceFilter.For<SensitivityScheduleEntity>,
+            profileName: e => e.ProfileName),
+        new OwnedTable<TargetRangeScheduleEntity>(
+            SyncDataType.Profiles, db => db.TargetRangeSchedules, SourceFilter.For<TargetRangeScheduleEntity>,
+            profileName: e => e.ProfileName),
     ];
 
     private static SourceHandle HandleOf(bool fromDataSource) =>
@@ -1115,15 +1138,15 @@ public class DataSourceService : IDataSourceService
 
     /// <summary>
     /// Deletes every data type attributable to <paramref name="source"/> (<see cref="SourceFilter"/>),
-    /// routing each entity through the strongest audited path it supports so the deletes are
-    /// attributed to the current request and the soft-delete dedup keeps them from re-importing —
-    /// the same way glucose already behaves. Returns the per-type deleted counts (non-zero only).
+    /// routing each entity through the strongest audited path it supports. Returns the per-type
+    /// deleted counts (non-zero only).
     /// </summary>
     /// <remarks>
     /// Capability matrix (entity interfaces decide the path):
     /// <list type="bullet">
     /// <item>Glucose and the auditable+soft-deletable records (Bolus, CarbIntake, BolusCalculation,
-    ///   DeviceEvent, BGCheck, Note, ApsSnapshot, TempBasal, StateSpan, ProfileActivation) take the audited soft-delete path,
+    ///   DeviceEvent, BGCheck, Note, ApsSnapshot, TempBasal, StateSpan, ProfileActivation,
+    ///   TherapySettings and the four schedules) take the audited soft-delete path,
     ///   which stamps the <c>deleted_by_user</c> flag the soft-delete dedup reads to block re-import
     ///   (<see cref="SoftDeleteDedupExtensions"/>).</item>
     /// <item>Heart rate, step counts and body weights are soft-deletable but not auditable: the same
@@ -1154,9 +1177,13 @@ public class DataSourceService : IDataSourceService
         Add(SyncDataType.Glucose, sensorGlucoseDeleted);
         Add(SyncDataType.ManualBG, meterGlucoseDeleted);
         Add(SyncDataType.Calibrations, calibrationsDeleted);
+        var purgedProfiles = new HashSet<string>();
         foreach (var table in OwnedTables)
+        {
+            purgedProfiles.UnionWith(await table.ProfileNamesAsync(db, source, cancellationToken));
             Add(table.Type, await table.SoftDeleteAsync(db, source, _auditContext, scope, cancellationToken));
-        await _profileActivationWriter.AfterBulkRemovalAsync(cancellationToken);
+        }
+        await _profileActivationWriter.AfterBulkRemovalAsync(purgedProfiles, cancellationToken);
 
         if (allowReimport)
             await AllowSourceReimportAsync(db, source, scope, cancellationToken);
@@ -1175,11 +1202,6 @@ public class DataSourceService : IDataSourceService
         await db.AuditedAllowReimportAsync(db.Calibrations.FromSource(source), _auditContext, scope, ct);
         foreach (var table in OwnedTables)
             await table.AllowReimportAsync(db, source, _auditContext, scope, ct);
-        await db.AuditedAllowReimportAsync(db.TherapySettings.FromSource(source), _auditContext, scope, ct);
-        await db.AuditedAllowReimportAsync(db.BasalSchedules.FromSource(source), _auditContext, scope, ct);
-        await db.AuditedAllowReimportAsync(db.CarbRatioSchedules.FromSource(source), _auditContext, scope, ct);
-        await db.AuditedAllowReimportAsync(db.SensitivitySchedules.FromSource(source), _auditContext, scope, ct);
-        await db.AuditedAllowReimportAsync(db.TargetRangeSchedules.FromSource(source), _auditContext, scope, ct);
     }
 
     internal static string GenerateId(string deviceId) => $"ds-{HashUtils.Sha256Hex(deviceId)[..8]}";
