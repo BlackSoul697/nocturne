@@ -38,6 +38,22 @@ describe("GlucoseChartCard inspection dialogs", () => {
     await expect.element(dialog.getByText("120")).toBeVisible();
   });
 
+  it("drops its chrome below @2xl without redrawing the plot", async () => {
+    const { rerender } = render(Harness, { props: { initiallyDeferred: false, onready: () => {} } });
+
+    const plot = page.getByTestId("glucose-plot");
+    await vi.waitFor(() => expect(plot.element().querySelector("svg")).not.toBeNull());
+    const svg = plot.element().querySelector("svg");
+    const card = plot.element().closest<HTMLElement>('[data-slot="card"]')!;
+    expect(getComputedStyle(card).borderTopWidth).toBe("1px");
+
+    await rerender({ narrow: true });
+
+    await vi.waitFor(() => expect(getComputedStyle(card).borderTopWidth).toBe("0px"));
+    expect(card.isConnected).toBe(true);
+    expect(plot.element().querySelector("svg")).toBe(svg);
+  });
+
   it("words the meal period of a carb treatment in the inspection dialog", async () => {
     render(Harness, {
       props: {

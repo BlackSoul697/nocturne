@@ -31,10 +31,19 @@
   const hasCarbs = $derived(chartData.some((d) => (d.carbs ?? 0) > 0));
   const carbAxisMax = $derived(niceCarbAxisMax(chartData.map((d) => d.carbs ?? 0)));
   // The insulin domain is fixed here, not read back from the chart: the carb marks join the
-  // chart's domain, so an accessor reading `context.yScale` would depend on itself.
+  // chart's domain, so an accessor reading `context.yScale` would depend on itself. Its top is
+  // the tallest stack drawn, which a served `total` need not equal.
   const insulinMax = $derived(
     scaleLinear()
-      .domain([0, Math.max(0, ...chartData.map((d) => d.total ?? 0))])
+      .domain([
+        0,
+        Math.max(
+          0,
+          ...chartData.map(
+            (d) => (d.basal ?? 0) + (d.manualBolus ?? 0) + (d.automaticBolus ?? 0)
+          )
+        ),
+      ])
       .nice()
       .domain()[1]
   );

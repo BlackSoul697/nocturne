@@ -103,9 +103,9 @@
   });
   const displayDemoMode = $derived(demoMode ?? realtimeStore.demoMode);
 
-  // Narrower than 672px (@2xl), the card drops its chrome and the axis gutters narrow, so the
-  // chart can use the full width. Until the card is measured, the viewport stands in for its
-  // width, so the server render and hydration pick the same branch as before measuring.
+  // Narrower than 672px (@2xl), the card drops its chrome (container queries, so the chart is
+  // never remounted) and the axis gutters narrow, so the chart can use the full width. Until
+  // the card is measured, the viewport stands in for its width.
   let cardWidth = $state(0);
   const isMobile = new IsMobile();
   const compact = $derived(cardWidth > 0 ? cardWidth < 672 : isMobile.current);
@@ -359,7 +359,7 @@
 </script>
 
 {#snippet chartBody()}
-  <CardHeader class={compact ? "pb-2 px-1" : "pb-2 px-3 @md:px-6"}>
+  <CardHeader class="pb-2 px-1 @2xl/chart-card:px-6">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <CardTitle class="flex items-center gap-2">
         Blood glucose
@@ -389,7 +389,10 @@
     </div>
   </CardHeader>
 
-  <CardContent class={compact ? "-mx-2 p-0" : "p-1 @md:p-2"}>
+  <!-- The bare plot reaches into the page's gutter only while <main> is phone-width, where
+       pages pad p-3: a narrow chart on a wide page, e.g. a clock builder preview, stays in
+       its box. -->
+  <CardContent class="p-0 @max-md/main:-mx-2 @2xl/chart-card:p-2">
     <ZoomIndicator {isZoomed} brushXDomain={brushDomain} onResetZoom={resetZoom} />
 
     <!-- The basal, mode and IOB/COB tracks take fixed shares of the height, so
@@ -509,16 +512,10 @@
   </CardContent>
 {/snippet}
 
-<div bind:clientWidth={cardWidth}>
-  {#if compact}
-    <div class="@container">
-      {@render chartBody()}
-    </div>
-  {:else}
-    <Card class="@container">
-      {@render chartBody()}
-    </Card>
-  {/if}
+<div class="@container/chart-card" bind:clientWidth={cardWidth}>
+  <Card bareWhenNarrow class="@container">
+    {@render chartBody()}
+  </Card>
 </div>
 
 <!-- Entry Edit Dialog -->

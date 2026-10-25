@@ -80,12 +80,12 @@
     {#if children}
       {@render children()}
     {/if}
-    <Button variant="outline" onclick={onSave} disabled={saving}>
+    <Button variant="outline" onclick={onSave} disabled={saving} aria-label="Save">
       {#if saving}<Loader2 class="size-4 animate-spin" />{:else}<Save
           class="size-4"
         />{/if}
     </Button>
-    <Button onclick={onPreview}>
+    <Button onclick={onPreview} aria-label="Preview">
       <Play class="size-4" />
       <span class="ml-2 hidden @xl:inline">Preview</span>
     </Button>

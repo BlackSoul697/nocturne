@@ -106,14 +106,19 @@
   const showTime = $derived(clockConfig?.settings?.alwaysShowTime || isStale);
 
   // Touch has no hover, so a tap shows the navigation bar for a few seconds. While the last
-  // pointer was a touch and the bar is hidden, it takes no taps.
+  // pointer was a touch and the bar is hidden, it takes no taps. A key press hands the bar
+  // back to the keyboard.
   const NAV_REVEAL_MS = 4000;
   let navRevealed = $state(false);
   let touchInput = $state(false);
   let navHideTimer: ReturnType<typeof setTimeout> | undefined;
+  // A screen whose primary pointer is fine still lets a tap land on the hidden bar: the tap
+  // that reveals it must not also press the button under it.
+  let tapRevealedNav = false;
 
   function handlePointerDown(event: PointerEvent) {
     touchInput = event.pointerType !== "mouse";
+    tapRevealedNav = touchInput && !navRevealed;
     if (!touchInput) return;
     navRevealed = true;
     clearTimeout(navHideTimer);
@@ -122,6 +127,18 @@
 
   function handlePointerMove(event: PointerEvent) {
     if (event.pointerType === "mouse") touchInput = false;
+  }
+
+  function handleKeyDown() {
+    touchInput = false;
+    tapRevealedNav = false;
+  }
+
+  function handleNavClickCapture(event: MouseEvent) {
+    if (!tapRevealedNav) return;
+    tapRevealedNav = false;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   $effect(() => () => clearTimeout(navHideTimer));
@@ -140,7 +157,11 @@
      desktop shows through behind the clock face. -->
 <svelte:body class:embed-transparent={embed} />
 
-<svelte:window onpointerdown={handlePointerDown} onpointermove={handlePointerMove} />
+<svelte:window
+  onpointerdown={handlePointerDown}
+  onpointermove={handlePointerMove}
+  onkeydown={handleKeyDown}
+/>
 
 {#if loading}
   <div class="fixed inset-0 flex items-center justify-center bg-black">
@@ -163,6 +184,7 @@
     data-testid="clock-nav"
     data-revealed={navRevealed}
     inert={touchInput && !navRevealed}
+    onclickcapture={handleNavClickCapture}
     class="fixed inset-x-0 top-0 z-50 flex items-center justify-between p-4
            bg-linear-to-b from-black/50 to-transparent
            transition-opacity duration-300 hover:opacity-100 focus-within:opacity-100
