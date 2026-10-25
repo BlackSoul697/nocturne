@@ -566,6 +566,7 @@
 
 {#snippet labMarkers({ points }: { points: { x: number; y: number; data: (typeof labChartPoints)[number] }[] })}
   {#each points as point (point.data.id)}
+    <!-- Native polygon: layerchart Polygon draws a path with no children, so the per-marker title tooltip has no home; one marker per lab result. -->
     <polygon
       data-testid="lab-marker"
       points="{point.x},{point.y - 7} {point.x - 6},{point.y + 5} {point.x + 6},{point.y + 5}"
