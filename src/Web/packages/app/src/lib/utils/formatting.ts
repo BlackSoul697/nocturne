@@ -584,6 +584,11 @@ export function formatCarbDisplay(carbs: number | undefined): string {
   return carbs.toFixed(0);
 }
 
+/** Formats an insulin-to-carb ratio, grams per unit, as `1:x.x`, or "–" when there is none. */
+export function formatInsulinToCarbRatio(gramsPerUnit: number | null | undefined): string {
+  return gramsPerUnit == null ? "–" : `1:${gramsPerUnit.toFixed(1)}`;
+}
+
 /**
  * Formats a percentage value for display.
  * @param value The percentage value.

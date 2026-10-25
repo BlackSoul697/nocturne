@@ -10,7 +10,7 @@ public readonly record struct RateSegment(long Start, long End, double Rate);
 
 public readonly record struct DeliveredBasalSegment(long Start, long End, double Rate, BasalDeliveryOrigin Origin);
 
-public readonly record struct InsulinDose(long Mills, double Units, bool Automatic);
+public readonly record struct InsulinDose(long Mills, double Units, bool Automatic, Guid? CorrelationId = null);
 
 /// <summary>An override's insulin-needs scale factor over <c>[Start, End)</c>.</summary>
 public readonly record struct ScaleFactorInterval(long Start, long End, double Factor);

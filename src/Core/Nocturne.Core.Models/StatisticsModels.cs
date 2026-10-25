@@ -531,9 +531,10 @@ public class TreatmentSummary
     public int CarbEntryCount { get; set; }
 
     /// <summary>
-    /// Grams of carbs per unit of bolus insulin
+    /// Insulin-to-carb ratio as dosed, as <see cref="InsulinDeliveryStatistics.IcRatio"/>; null when
+    /// no manual bolus is paired with a meal
     /// </summary>
-    public double CarbToInsulinRatio { get; set; }
+    public double? CarbToInsulinRatio { get; set; }
 
     /// <summary>
     /// Average bolus insulin per bolus (units), excluding basal
@@ -1716,20 +1717,28 @@ public class InsulinDeliveryStatistics
     public double AvgBolus { get; set; }
 
     /// <summary>
-    /// Number of meal boluses (based on event type)
+    /// Number of manual boluses paired with a meal: the meal of a carb entry linked to the bolus, else
+    /// the nearest meal from 30 minutes before it to 1 hour after it
     /// </summary>
     public int MealBoluses { get; set; }
 
     /// <summary>
-    /// Number of correction boluses (based on event type)
+    /// Number of manual boluses paired with no meal
     /// </summary>
     public int CorrectionBoluses { get; set; }
 
     /// <summary>
-    /// Insulin to carb ratio: grams of carbs per unit of the bolus insulin, manual and automatic,
-    /// delivered within the meal window of a carb entry
+    /// Insulin-to-carb ratio as dosed: grams of the meals a manual bolus is paired with, per unit of
+    /// every bolus, manual or automatic, paired with those meals; null when no manual bolus is paired
+    /// with a meal
     /// </summary>
-    public double IcRatio { get; set; }
+    public double? IcRatio { get; set; }
+
+    /// <summary>
+    /// Grams of the meals no manual bolus is paired with, such as hypo treatments and unbolused
+    /// snacks, which <see cref="IcRatio"/> leaves out
+    /// </summary>
+    public double UnpairedCarbs { get; set; }
 
     /// <summary>
     /// Average number of manual boluses per day

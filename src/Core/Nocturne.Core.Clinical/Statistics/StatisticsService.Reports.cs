@@ -200,7 +200,7 @@ public partial class StatisticsService
             monthBucket.MaxCarbs = Math.Max(monthBucket.MaxCarbs, dayStats.TotalCarbs);
             monthBucket.MaxInsulin = Math.Max(monthBucket.MaxInsulin, dayStats.TotalInsulin);
             monthBucket.MaxCarbInsulinDiff = Math.Max(
-                monthBucket.MaxCarbInsulinDiff, Math.Abs(dayStats.CarbToInsulinRatio));
+                monthBucket.MaxCarbInsulinDiff, Math.Abs(dayStats.CarbToInsulinRatio ?? 0));
             monthBucket.TotalReadings += dayStats.TotalReadings;
         }
 
@@ -284,7 +284,7 @@ public partial class StatisticsService
             TotalInsulin = totalBolus + totalBasal,
             TotalBolus = totalBolus,
             TotalBasal = totalBasal,
-            CarbToInsulinRatio = treatment?.CarbToInsulinRatio ?? 0,
+            CarbToInsulinRatio = treatment?.CarbToInsulinRatio,
             Entries = entries,
         };
 

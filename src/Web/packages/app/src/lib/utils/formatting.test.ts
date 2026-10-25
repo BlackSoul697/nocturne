@@ -43,6 +43,7 @@ const {
 	formatClock,
 	formatDayTime,
 	formatFileSize,
+	formatInsulinToCarbRatio,
 	formatNumber,
 	formatNumericDate,
 	formatMediumDateRange,
@@ -631,5 +632,17 @@ describe("prefersHour12", () => {
 
 	it("follows the time-format preference", () => {
 		expect(prefersHour12()).toBe(true);
+	});
+});
+
+describe("formatInsulinToCarbRatio", () => {
+	it("writes grams per unit as 1:x with one decimal", () => {
+		expect(formatInsulinToCarbRatio(10)).toBe("1:10.0");
+		expect(formatInsulinToCarbRatio(12.34)).toBe("1:12.3");
+	});
+
+	it("writes a dash when there is no ratio", () => {
+		expect(formatInsulinToCarbRatio(null)).toBe("–");
+		expect(formatInsulinToCarbRatio(undefined)).toBe("–");
 	});
 });

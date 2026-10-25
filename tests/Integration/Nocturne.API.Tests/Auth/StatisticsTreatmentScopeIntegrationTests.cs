@@ -127,7 +127,7 @@ public class StatisticsTreatmentScopeIntegrationTests(ApiIntegrationTestFixture 
             && day.GetProperty("totalInsulin").GetDouble() == 0
             && day.GetProperty("totalBolus").GetDouble() == 0
             && day.GetProperty("totalBasal").GetDouble() == 0
-            && day.GetProperty("carbToInsulinRatio").GetDouble() == 0);
+            && day.GetProperty("carbToInsulinRatio").ValueKind == JsonValueKind.Null);
     }
 
     private Task SetPatientTimezoneAsync(string timezone) =>

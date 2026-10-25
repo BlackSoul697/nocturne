@@ -206,7 +206,7 @@ internal sealed partial class LoopAnalysisService(
 
         var doses = common.Boluses
             .Where(b => b.Mills >= from && b.Mills < to)
-            .Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm));
+            .Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm, b.CorrelationId));
 
         return new Delivery(
             new NetInsulinAboveSchedule(delivered, scheduled, doses),
