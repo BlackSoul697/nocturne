@@ -130,6 +130,7 @@ public class UserDisplayPreferences
         return CheckEnumList("dashboardTopWidgets", DashboardTopWidgets)
             ?? CheckEnumList("dashboardRail.order", DashboardRail?.Order)
             ?? CheckEnumList("dashboardRail.hidden", DashboardRail?.Hidden)
+            ?? CheckEnumList("hiddenLegacyFallbacks", HiddenLegacyFallbacks)
             ?? YearOverviewColors?.Validate();
     }
 
@@ -185,6 +186,8 @@ public class UserDisplayPreferences
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
         // Replace the whole arrangement: an empty object resets the rail to its default.
         DashboardRail = incoming.DashboardRail ?? DashboardRail;
+        // Replace the whole list: an empty list shows every legacy age again.
+        HiddenLegacyFallbacks = incoming.HiddenLegacyFallbacks ?? HiddenLegacyFallbacks;
         // Replace the whole color selection: an empty object resets every metric to automatic.
         YearOverviewColors = incoming.YearOverviewColors ?? YearOverviewColors;
 
@@ -219,8 +222,9 @@ public class UserDisplayPreferences
     /// carried whole and carry no such guarantee: a field added inside either is disclosed on
     /// the next build. Their contents are pinned by a test instead.
     /// <para>
-    /// <see cref="DashboardTopWidgets"/> and <see cref="DashboardRail"/> are withheld: the widgets
-    /// and status pills an owner picks say what they treat and track.
+    /// <see cref="DashboardTopWidgets"/>, <see cref="DashboardRail"/> and
+    /// <see cref="HiddenLegacyFallbacks"/> are withheld: the widgets and status pills an owner
+    /// picks say what they treat and track.
     /// <see cref="NightModeSchedule"/> is withheld: it reports when the owner sleeps, and when a
     /// viewer's own screen dims is the viewer's setting.
     /// </para>
@@ -310,6 +314,13 @@ public class UserDisplayPreferences
     /// </summary>
     [JsonPropertyName("dashboardRail")]
     public DashboardRailPreference? DashboardRail { get; set; }
+
+    /// <summary>
+    /// The legacy consumable ages the user hid from the status rail's tracker pills. Null or empty
+    /// hides none.
+    /// </summary>
+    [JsonPropertyName("hiddenLegacyFallbacks")]
+    public List<LegacyConsumableKind>? HiddenLegacyFallbacks { get; set; }
 }
 
 /// <summary>
