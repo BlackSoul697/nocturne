@@ -15,6 +15,11 @@ import {
   preferredLanguage,
   type GlucoseUnits,
 } from "$lib/stores/appearance-store.svelte";
+import {
+  relativeAge as sharedRelativeAge,
+  relativeTime as sharedRelativeTime,
+  type RelativeTimeOptions,
+} from "@nocturne/ui/relative-time";
 import type { OverallAverages, Treatment, TreatmentSummary } from "$api-clients";
 
 // Re-export for backward compatibility
@@ -35,6 +40,7 @@ export {
   getUnitLabel,
   isGlucoseUnits,
 } from "@nocturne/ui/glucose";
+export { toDate } from "@nocturne/ui/relative-time";
 import {
   convertToDisplayUnits,
   formatGlucoseValue,
@@ -213,28 +219,6 @@ export function hourLabel(date: Date | number): string {
   });
 }
 
-function cachedRelativeFormatter(numeric: Intl.RelativeTimeFormatNumeric) {
-  let formatter: Intl.RelativeTimeFormat | null = null;
-  let cachedFor: string | null = null;
-  return (locale: string) => {
-    // Keyed on the requested tag, not on `resolvedOptions().locale`: ICU answers
-    // "nb-NO" with "nb", so comparing against the resolved tag never matches and
-    // rebuilds the formatter on every call.
-    if (!formatter || locale !== cachedFor) {
-      cachedFor = locale;
-      formatter = new Intl.RelativeTimeFormat(locale, {
-        style: "narrow",
-        numeric,
-      });
-    }
-    return formatter;
-  };
-}
-
-const pastFormatter = cachedRelativeFormatter("auto");
-// "auto" words a day ahead as "tomorrow", which is wrong for 47 hours away.
-const futureFormatter = cachedRelativeFormatter("always");
-
 /**
  * How long ago a moment was, in the largest whole unit: "now", "5m ago", "3h ago",
  * "2d ago", then the absolute date from a week on. The words are the regional
@@ -248,11 +232,9 @@ const futureFormatter = cachedRelativeFormatter("always");
  */
 export function relativeAge(
   at: Date | string | number | null | undefined,
-  opts: { now?: number; fallback?: string } = {}
+  opts: RelativeTimeOptions = {}
 ): string {
-  const { now = Date.now() } = opts;
-  const d = at ? toDate(at) : null;
-  return relativeTime(d && d.getTime() > now ? now : at, { ...opts, now });
+  return sharedRelativeAge(at, formatLocale(), opts);
 }
 
 /**
@@ -262,44 +244,14 @@ export function relativeAge(
  */
 export function relativeTime(
   at: Date | string | number | null | undefined,
-  opts: { now?: number; fallback?: string } = {}
+  opts: RelativeTimeOptions = {}
 ): string {
-  const { now = Date.now(), fallback = "" } = opts;
-  if (!at) return fallback;
-  const d = toDate(at);
-  if (!d) return fallback;
-
-  const ahead = d.getTime() > now;
-  const sign = ahead ? 1 : -1;
-  const round = ahead ? Math.round : Math.floor;
-  const formatter = (ahead ? futureFormatter : pastFormatter)(formatLocale());
-  const minutes = round(Math.abs(now - d.getTime()) / 60000);
-  if (minutes < 1) return pastFormatter(formatLocale()).format(0, "second");
-  if (minutes < 60) return formatter.format(sign * minutes, "minute");
-  const hours = round(minutes / 60);
-  if (hours < 24) return formatter.format(sign * hours, "hour");
-  const days = round(hours / 24);
-  if (days < 7) return formatter.format(sign * days, "day");
-  return formatNumericDate(d);
+  return sharedRelativeTime(at, formatLocale(), opts);
 }
 
 // =============================================================================
 // Date Formatting
 // =============================================================================
-
-/**
- * NSwag-generated fields typed `Date` arrive over the wire as ISO strings
- * (the client's jsonParseReviver is a no-op) — coerce defensively, and return
- * null rather than an Invalid Date so callers can take their empty branch
- * instead of feeding NaN to Intl.
- */
-export function toDate(
-  value: Date | string | number | undefined | null
-): Date | null {
-  if (value == null) return null;
-  const d = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 /**
  * A number with the regional format's own group and decimal separators — "1.234"

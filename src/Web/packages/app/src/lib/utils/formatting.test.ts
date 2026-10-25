@@ -7,6 +7,10 @@
  * in browser tests instead.
  */
 import { describe, it, expect, vi } from "vitest";
+import {
+	relativeAge as sharedRelativeAge,
+	relativeTime as sharedRelativeTime,
+} from "@nocturne/ui/relative-time";
 import type { RegionFormat } from "$lib/stores/appearance-store.svelte";
 
 // `formatting.ts` imports from appearance-store which imports mode-watcher.
@@ -680,5 +684,37 @@ describe("formatInsulinToCarbRatio", () => {
 	it("writes a dash when there is no ratio", () => {
 		expect(formatInsulinToCarbRatio(null)).toBe("–");
 		expect(formatInsulinToCarbRatio(undefined)).toBe("–");
+	});
+});
+
+describe("shared relative time (@nocturne/ui)", () => {
+	const NOW = Date.UTC(2026, 7, 29, 14, 5);
+	const MIN = 60_000;
+	const narrow = (locale: string, numeric: Intl.RelativeTimeFormatNumeric = "auto") =>
+		new Intl.RelativeTimeFormat(locale, { style: "narrow", numeric });
+
+	it("words a past moment in the locale it is given", () => {
+		expect(sharedRelativeAge(NOW - 5 * MIN, "de", { now: NOW })).toBe(
+			narrow("de").format(-5, "minute")
+		);
+		expect(sharedRelativeAge(NOW - 5 * MIN, "en", { now: NOW })).not.toBe(
+			sharedRelativeAge(NOW - 5 * MIN, "de", { now: NOW })
+		);
+	});
+
+	it("reads a future moment as now for an age and as ahead for a time", () => {
+		expect(sharedRelativeAge(NOW + 5 * MIN, "de", { now: NOW })).toBe(
+			narrow("de").format(0, "second")
+		);
+		expect(sharedRelativeTime(NOW + 47 * 60 * MIN, "de", { now: NOW })).toBe(
+			narrow("de", "always").format(2, "day")
+		);
+	});
+
+	it("gives the absolute date, in the given locale, from a week on", () => {
+		const at = NOW - 8 * 24 * 60 * MIN;
+		expect(sharedRelativeAge(at, "de-DE", { now: NOW })).toBe(
+			new Date(at).toLocaleDateString("de-DE")
+		);
 	});
 });

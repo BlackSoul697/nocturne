@@ -10,10 +10,11 @@
   import { fixture } from "virtual:report";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
+  import { relativeAge } from "$lib/utils/formatting";
 
   const ARROWS = { SingleUp: "^", FortyFiveUp: "/", Flat: "->", FortyFiveDown: "\\", SingleDown: "v" };
   const latest = fixture.entries[0];
-  const minutes = Math.round((Date.now() - latest.mills) / 60000);
+  const updated = relativeAge(latest.mills);
   const platforms = ["Discord", "Telegram", "Slack", "WhatsApp"];
 
   let acknowledged = $state(false);
@@ -104,7 +105,7 @@
           {#snippet body()}
             <div class="grid grid-cols-2 gap-8">
               <div><div class="text-sm text-muted-foreground">BG</div><div class="text-xl font-medium">{latest.sgv} mg/dL {ARROWS[latest.direction] ?? ""}</div></div>
-              <div><div class="text-sm text-muted-foreground">Updated</div><div class="text-xl font-medium">{minutes} min ago</div></div>
+              <div><div class="text-sm text-muted-foreground">Updated</div><div class="text-xl font-medium">{updated}</div></div>
             </div>
           {/snippet}
           {@render card("Glucose Reading", "bg-primary", body)}
