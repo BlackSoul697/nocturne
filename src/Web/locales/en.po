@@ -25,27 +25,23 @@ msgstr "Details:"
 msgid "Error ID: {0}"
 msgstr "Error ID: {0}"
 
-#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/ConnectionStatus.svelte
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 #: src/routes/(unauthenticated)/auth/bot/authorize/done/+page.svelte
 msgid "Connected"
 msgstr "Connected"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Real-time data active"
 msgstr "Real-time data active"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Connecting..."
 msgstr "Connecting..."
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Establishing connection"
 msgstr "Establishing connection"
 
@@ -55,13 +51,11 @@ msgstr "Establishing connection"
 #~ msgid "Attempting to reconnect"
 #~ msgstr "Attempting to reconnect"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Disconnected"
 msgstr "Disconnected"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Using cached data"
 msgstr "Using cached data"
 
@@ -84,13 +78,12 @@ msgstr "Error"
 msgid "Connection failed"
 msgstr "Connection failed"
 
-#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/ConnectionStatus.svelte
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/lib/components/connectors/GoogleHealthSourceRow.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/lib/components/settings/DataSourceRow.svelte
 #: src/lib/components/settings/DataSourceRow.svelte
 #: src/lib/components/settings/DataSourceRow.svelte
@@ -100,9 +93,8 @@ msgstr "Connection failed"
 msgid "Never"
 msgstr "Never"
 
-#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/ConnectionStatus.svelte
 #: src/lib/components/clock/ClockFacePreview.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/lib/components/tenants/TenantsOverview.svelte
 #: src/routes/(authenticated)/+layout.svelte
 #: src/routes/(authenticated)/clock/+page.svelte
@@ -112,17 +104,15 @@ msgstr "Never"
 msgid "Retry"
 msgstr "Retry"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Messages:"
 msgstr "Messages:"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Last update:"
 msgstr "Last update:"
 
-#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Reconnects:"
 msgstr "Reconnects:"
 
@@ -1985,11 +1975,9 @@ msgstr "Hours"
 #. 0: mins / 60; 1: mins > 60 ? "s" \\: ""
 #. 0: h; 1: h > 1 ? "s" \\: ""
 #. 0: h; 1: h > 1 ? "s" \\: ""
-#. 0: hours; 1: hours !== 1 ? "s" \\: ""
 #: src/lib/components/alerts/DndPanel.svelte
 #: src/lib/components/clock-builder/ElementInspector.svelte
 #: src/lib/components/clock-builder/ElementInspector.svelte
-#: src/lib/components/members/GuestLinksSection.svelte
 msgid "{0} hour{1}"
 msgstr "{0} hour{1}"
 
@@ -4499,15 +4487,11 @@ msgstr "Pending"
 msgid "Revoked"
 msgstr "Revoked"
 
-#. 0: relative
-#: src/lib/components/members/GuestLinksSection.svelte
-msgid "Expires in {0}"
-msgstr "Expires in {0}"
+#~ msgid "Expires in {0}"
+#~ msgstr "Expires in {0}"
 
-#. 0: relative
-#: src/lib/components/members/GuestLinksSection.svelte
-msgid "Expired {0} ago"
-msgstr "Expired {0} ago"
+#~ msgid "Expired {0} ago"
+#~ msgstr "Expired {0} ago"
 
 #~ msgid "Failed to create guest link. Please try again."
 #~ msgstr "Failed to create guest link. Please try again."
@@ -9263,7 +9247,7 @@ msgstr "No data today"
 msgid "Connection"
 msgstr "Connection"
 
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Error:"
 msgstr "Error:"
 
@@ -15900,15 +15884,11 @@ msgstr "Are you sure you want to delete this device? This action cannot be undon
 msgid "Select timezone..."
 msgstr "Select timezone..."
 
-#. 0: minutes; 1: minutes !== 1 ? "s" \\: ""
-#: src/lib/components/members/GuestLinksSection.svelte
-msgid "{0} minute{1}"
-msgstr "{0} minute{1}"
+#~ msgid "{0} minute{1}"
+#~ msgstr "{0} minute{1}"
 
-#. 0: days; 1: days !== 1 ? "s" \\: ""
-#: src/lib/components/members/GuestLinksSection.svelte
-msgid "{0} day{1}"
-msgstr "{0} day{1}"
+#~ msgid "{0} day{1}"
+#~ msgstr "{0} day{1}"
 
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Failed to create a new code. Active links are limited to 5 at a time."
@@ -21168,13 +21148,11 @@ msgstr "Charlie target"
 #~ msgid "Waiting to connect"
 #~ msgstr "Waiting to connect"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Not available"
 msgstr "Not available"
 
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Live updates are not permitted for this view"
 msgstr "Live updates are not permitted for this view"
 
@@ -32361,7 +32339,7 @@ msgstr "Manage audit settings"
 msgid "All health data"
 msgstr "All health data"
 
-#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/ConnectionStatus.svelte
 msgid "Connection error:"
 msgstr "Connection error:"
 
@@ -36975,3 +36953,13 @@ msgstr "Select Definitions. Then select the pencil icon of a tracker to edit it.
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again."
 msgstr "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again."
+
+#. 0: relative
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Expires {0}"
+msgstr "Expires {0}"
+
+#. 0: relative
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Expired {0}"
+msgstr "Expired {0}"
