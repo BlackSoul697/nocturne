@@ -26419,9 +26419,8 @@ msgstr ""
 msgid "Reset filters"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/steps/+page.svelte
-msgid "This report cannot calculate the total steps for each local day."
-msgstr ""
+#~ msgid "This report cannot calculate the total steps for each local day."
+#~ msgstr ""
 
 #. 0: days.map(weekdayLabel).join(", ")
 #: src/lib/components/reports/loop-analysis/AppliedFiltersSummary.svelte
@@ -36816,10 +36815,21 @@ msgstr ""
 msgid "The hourly figures place each reading at the local time its device reported. Days of data are counted on UTC days."
 msgstr ""
 
-#: src/routes/(authenticated)/reports/sleep/+page.svelte
-msgid "Days in range, the weekly breakdown and the composition chart use UTC days."
-msgstr ""
+#~ msgid "Days in range, the weekly breakdown and the composition chart use UTC days."
+#~ msgstr ""
 
 #: src/lib/components/reports/ReliabilityBadge.svelte
 msgid "Counted on UTC days <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/heart-rate/+page.svelte
+msgid "The rows use UTC days."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/sleep/+page.svelte
+msgid "Days in range, the weekly breakdown, the composition chart and the actogram rows use UTC days."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/steps/+page.svelte
+msgid "The rows and their step totals use UTC days."
 msgstr ""
