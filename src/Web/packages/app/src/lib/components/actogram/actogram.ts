@@ -1,5 +1,8 @@
 import type { ScaleTime } from 'd3-scale';
+import type { ActogramDay as ServedActogramDay } from '$lib/api';
 import type { ChartThresholds } from '$lib/constants/glucose-thresholds';
+import { formatShortDate } from '$lib/utils/formatting';
+import { localDayStart } from '$lib/utils/timezone';
 
 export const MS_PER_HOUR = 3_600_000;
 export const MS_PER_DAY = 86_400_000;
@@ -11,6 +14,13 @@ export const HOURS_PER_ROW = 48;
  * next-day double plot has data and scrolling back has context.
  */
 export const ACTOGRAM_PADDING_DAYS = 14;
+
+/** A day the API served: the row runs from `startMills` to `endMills`, so a DST day is 23 or 25 hours. */
+export type ActogramDay = Required<ServedActogramDay>;
+
+export function formatActogramDay(day: ActogramDay): string {
+	return formatShortDate(localDayStart(day.date));
+}
 
 export interface ActogramPoint {
 	mills: number;
@@ -48,7 +58,7 @@ export interface ActogramRowContext<T extends ActogramPoint = ActogramPoint> {
 	width: number;
 	height: number;
 	data: RowDataPoint<T>[];
-	day: Date;
+	day: ActogramDay;
 }
 
 export interface ActogramTooltipData<T extends ActogramPoint = ActogramPoint> {
@@ -78,21 +88,6 @@ export function findNearestPoint<T extends ActogramPoint>(
 	return minDist <= maxDistanceHours ? nearest : undefined;
 }
 
-/** Every local-midnight Date between `fromMs` and `toMs`, inclusive. */
-export function buildDayRange(fromMs: number, toMs: number): Date[] {
-	const start = new Date(fromMs);
-	const end = new Date(toMs);
-	const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-	const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-	const dayCount =
-		Math.round((endMidnight.getTime() - startMidnight.getTime()) / MS_PER_DAY) + 1;
-	return Array.from({ length: Math.max(1, dayCount) }, (_, i) => {
-		const day = new Date(startMidnight);
-		day.setDate(day.getDate() + i);
-		return day;
-	});
-}
-
 /** Points whose `mills` fall inside the inclusive window. */
 export function pointsInRange<T extends ActogramPoint>(points: T[], from: number, to: number): T[] {
 	return points.filter((point) => point.mills >= from && point.mills <= to);
@@ -118,21 +113,21 @@ export function extentOf<T>(
 	return { min, max };
 }
 
-function slicePoints<T extends ActogramPoint>(data: T[], days: Date[]): { day: Date; data: RowDataPoint<T>[] }[] {
-	const rows = days.map((day): { day: Date; data: RowDataPoint<T>[] } => ({
+function slicePoints<T extends ActogramPoint>(data: T[], days: ActogramDay[]): { day: ActogramDay; data: RowDataPoint<T>[] }[] {
+	const rows = days.map((day): { day: ActogramDay; data: RowDataPoint<T>[] } => ({
 		day,
 		data: [],
 	}));
 
 	for (const point of data) {
 		for (let i = 0; i < days.length; i++) {
-			const dayStart = days[i].getTime();
-			const offset = point.mills - dayStart;
-			const hoursFromStart = offset / MS_PER_HOUR;
+			const { startMills, endMills } = days[i];
+			const hoursFromStart = (point.mills - startMills) / MS_PER_HOUR;
+			const dayHours = (endMills - startMills) / MS_PER_HOUR;
 
-			if (hoursFromStart >= 0 && hoursFromStart < HOURS_PER_DAY) {
+			if (hoursFromStart >= 0 && hoursFromStart < dayHours) {
 				rows[i].data.push({ point, hoursFromStart, isExtended: false });
-			} else if (hoursFromStart >= HOURS_PER_DAY && hoursFromStart < HOURS_PER_ROW) {
+			} else if (hoursFromStart >= dayHours && hoursFromStart < HOURS_PER_ROW) {
 				rows[i].data.push({ point, hoursFromStart, isExtended: true });
 			}
 		}
@@ -143,15 +138,15 @@ function slicePoints<T extends ActogramPoint>(data: T[], days: Date[]): { day: D
 
 export function sliceIntoRows<T extends ActogramPoint>(
 	data: T[],
-	days: Date[],
-): { day: Date; data: RowDataPoint<T>[] }[] {
+	days: ActogramDay[],
+): { day: ActogramDay; data: RowDataPoint<T>[] }[] {
 	return slicePoints(data, days);
 }
 
 export function sliceBgIntoRows(
 	data: GlucosePoint[],
-	days: Date[],
-): { day: Date; bgData: RowDataPoint<GlucosePoint>[] }[] {
+	days: ActogramDay[],
+): { day: ActogramDay; bgData: RowDataPoint<GlucosePoint>[] }[] {
 	return slicePoints(data, days).map((row) => ({
 		day: row.day,
 		bgData: row.data,
