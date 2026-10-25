@@ -15,6 +15,7 @@
     limits={GLUCOSE_LIMITS}
     onWindowChange={() => {}}
     onBoundariesChange={() => {}}
+    onEndsChange={() => {}}
     onDimChange={() => {}}
     onReset={() => {}}
   />

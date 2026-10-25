@@ -356,4 +356,35 @@ describe("year overview page color focus integration", () => {
     await expect.element(maximum()).toHaveValue(500);
     expect(yearOverviewColors.current).toEqual({});
   });
+
+  it("collapses to the metric and its scale, and stays collapsed after a remount", async () => {
+    const screen = render(YearOverviewPage);
+    await expect.element(cell("2026-01-04")).toBeInTheDocument();
+    await page.getByRole("button", { name: "Collapse Avg Glucose color scale" }).click();
+    expect(page.getByRole("slider").elements()).toHaveLength(0);
+    await expect.element(page.getByTestId("collapsed-scale")).toBeInTheDocument();
+    expect(page.getByTestId("collapsed-scale").element().getAttribute("style")).toContain("linear-gradient");
+
+    await selectMetric("TDD");
+    await expect.element(cell("2026-01-04")).toHaveTextContent(/^var\(--insulin\)$/);
+
+    await screen.unmount();
+    render(YearOverviewPage);
+    await expect.element(page.getByRole("button", { name: "Expand Avg Glucose color scale" })).toBeInTheDocument();
+    await page.getByRole("button", { name: "Expand Avg Glucose color scale" }).click();
+    expect(page.getByRole("slider").elements()).toHaveLength(2);
+  });
+
+  it("saves a picked end color under the metric's own key", async () => {
+    render(YearOverviewPage);
+    await selectMetric("TDD");
+    const input = page.getByLabelText("TDD high end color", { exact: true }).element();
+    if (!(input instanceof HTMLInputElement)) throw new TypeError("Expected a color input");
+    input.value = "#123456";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await expect.element(cell("2026-01-04")).toHaveTextContent("#123456");
+    expect(stored()).toEqual({ tddHighColor: "#123456" });
+    await reset().click();
+    expect(stored()).toEqual({});
+  });
 });

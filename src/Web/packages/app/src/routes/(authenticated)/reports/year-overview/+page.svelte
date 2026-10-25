@@ -34,6 +34,7 @@
     scaleFill,
     GLUCOSE_LIMITS,
     type ColorBoundary,
+    type ColorEnds,
     type ColorFocusRange,
   } from "$lib/utils/metric-color-focus";
   import { onMount, untrack, tick } from "svelte";
@@ -103,10 +104,14 @@
   type ScaleKeys = {
     band: `${HeatmapMetric}Band`;
     boundaries: `${HeatmapMetric}Boundaries`;
+    low: `${HeatmapMetric}LowColor`;
+    high: `${HeatmapMetric}HighColor`;
   };
   const scaleKeys = $derived<ScaleKeys>({
     band: `${selectedMetric}Band`,
     boundaries: `${selectedMetric}Boundaries`,
+    low: `${selectedMetric}LowColor`,
+    high: `${selectedMetric}HighColor`,
   });
   /**
    * The retired shape applied its bands and dimming only in advanced mode. A blob saved with
@@ -151,12 +156,17 @@
       ? GLUCOSE_LIMITS
       : [0, selectedMetric === "tir" ? 100 : Infinity]
   );
+  const scaleEnds = $derived<ColorEnds>({
+    low: colorPreferences[scaleKeys.low],
+    high: colorPreferences[scaleKeys.high],
+  });
   const scale = $derived(
     selectedMetric === "avgGlucose"
       ? glucoseScale(
           colorPreferences.avgGlucoseBand,
           colorPreferences.avgGlucoseBoundaries,
-          dim
+          dim,
+          scaleEnds
         )
       : intensityScale(
           METRIC_CSS_VARS[selectedMetric],
@@ -164,7 +174,8 @@
           metricMax,
           colorPreferences[scaleKeys.band],
           colorPreferences[scaleKeys.boundaries],
-          dim
+          dim,
+          scaleEnds
         )
   );
 
@@ -178,8 +189,12 @@
     for (const { value } of METRIC_OPTIONS) {
       const band = colorPreferences[`${value}Band`];
       const boundaries = colorPreferences[`${value}Boundaries`];
+      const low = colorPreferences[`${value}LowColor`];
+      const high = colorPreferences[`${value}HighColor`];
       if (band) next[`${value}Band`] = band;
       if (boundaries) next[`${value}Boundaries`] = boundaries;
+      if (low) next[`${value}LowColor`] = low;
+      if (high) next[`${value}HighColor`] = high;
     }
     change(next);
     yearOverviewColors.current = next;
@@ -200,6 +215,15 @@
     });
   }
 
+  function setScaleEnds(ends: ColorEnds) {
+    saveColorPreferences((next) => {
+      if (ends.low) next[scaleKeys.low] = ends.low;
+      else delete next[scaleKeys.low];
+      if (ends.high) next[scaleKeys.high] = ends.high;
+      else delete next[scaleKeys.high];
+    });
+  }
+
   function setDim(value: number) {
     saveColorPreferences((next) => {
       next.outOfBandTransparency = Math.max(0, Math.min(100, value));
@@ -210,6 +234,8 @@
     saveColorPreferences((next) => {
       delete next[scaleKeys.band];
       delete next[scaleKeys.boundaries];
+      delete next[scaleKeys.low];
+      delete next[scaleKeys.high];
     });
   }
 
@@ -624,6 +650,7 @@
       limits={scaleLimits}
       onWindowChange={setScaleWindow}
       onBoundariesChange={setScaleBoundaries}
+      onEndsChange={setScaleEnds}
       onDimChange={setDim}
       onReset={resetScale}
       {glucoseBands}
