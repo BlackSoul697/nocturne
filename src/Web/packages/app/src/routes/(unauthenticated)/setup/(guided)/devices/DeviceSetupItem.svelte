@@ -82,7 +82,7 @@
       await write();
       await hubQuery.refresh();
     } catch (err) {
-      error = describeSubmitError(err, "We could not save that. Please try again.");
+      error = describeSubmitError(err, "We could not save that. Try again.");
     } finally {
       busy = false;
     }
@@ -238,7 +238,7 @@
                 <span class="font-medium">{slot.guess.name}</span>
                 {#if !slot.modelKnown}
                   <span class="text-xs text-muted-foreground" data-testid="brand-only">
-                    We could only tell the brand, so please check the model.
+                    We could only tell the brand, so check the model.
                   </span>
                 {/if}
                 <div class="flex flex-wrap items-center gap-1.5">
@@ -403,7 +403,7 @@
             Trackers
           </h2>
           <p class="text-sm text-muted-foreground">
-            A tracker counts how long a sensor, pod, infusion set or reservoir has been in use, so it is
+            A tracker counts how long a sensor, pod, infusion set or reservoir is in use, so it is
             easy to see when the next change is due. It restarts when a change is logged. These are
             optional, and the wear time can be changed in <a class="underline" href={trackerSettingsHref}>tracker settings</a>.
           </p>
