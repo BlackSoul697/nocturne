@@ -32,6 +32,8 @@ public sealed class ActogramReportService : IActogramReportService
     // Sleep spans are sparse (≤ a few per day). Cap is generous but bounded.
     private const int SleepSpanLimit = 10000;
 
+    private const int HourMarkSpacing = 6;
+
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
     private readonly ISleepService _sleepService;
     private readonly IStepCountService _stepCountService;
@@ -204,9 +206,16 @@ public sealed class ActogramReportService : IActogramReportService
                 Date = firstDay.AddDays(d).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 StartMills = starts[d],
                 EndMills = starts[d + 1],
+                HourMarks = BuildHourMarks(firstDay.AddDays(d), zone),
             })
             .ToList();
     }
+
+    private static List<long> BuildHourMarks(DateOnly day, TimeZoneInfo zone) =>
+        Enumerable.Range(0, 2)
+            .SelectMany(_ => Enumerable.Range(1, 3), (dayOffset, step) => (dayOffset, hour: step * HourMarkSpacing))
+            .Select(mark => LocalSlotBinning.LocalInstantMills(day.AddDays(mark.dayOffset), mark.hour, zone))
+            .ToList();
 
     private async Task<ChartThresholdsDto> BuildThresholdsAsync(long atMills, CancellationToken ct)
     {

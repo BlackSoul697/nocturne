@@ -5,7 +5,7 @@ import { createRawSnippet } from "svelte";
 import Actogram from "./Actogram.svelte";
 import type { ActogramDay } from "./actogram";
 import Harness from "./ActogramHarness.test.svelte";
-import { servedDays } from "$lib/test-stubs/actogram-days";
+import { servedDay, servedDays } from "$lib/test-stubs/actogram-days";
 
 describe.each(["steps", "heart-rate"] as const)("%s actogram", (metric) => {
   it.each([
@@ -85,5 +85,60 @@ describe("week buttons", () => {
     await page.getByRole("button", { name: "Newer week" }).click();
     await expect.poll(() => onVisibleRangeChange.mock.calls.length).toBe(2);
     expect(firstVisible()).toEqual(newestFirst[0]);
+  });
+});
+
+describe("hour marks on DST rows", () => {
+  const row = createRawSnippet(() => ({ render: () => "<g></g>" }));
+  const centreX = (element: Element) => {
+    const box = element.getBoundingClientRect();
+    return box.left + box.width / 2;
+  };
+
+  async function renderRow(hours: number, nextHours = 24) {
+    render(Actogram, { props: { data: [], days: [servedDay("2026-03-08", 0, hours, nextHours)], row } });
+    await expect.element(page.getByTestId("actogram-dim-boundary")).toBeInTheDocument();
+  }
+
+  async function expectMarksInsideTheRow() {
+    const marks = page.getByTestId("actogram-hour-mark");
+    await expect.element(marks.nth(7)).toBeInTheDocument();
+    expect(marks.elements()).toHaveLength(8);
+    const boundary = page.getByTestId("actogram-dim-boundary").element().getBoundingClientRect();
+    const chart = page.getByTestId("actogram-row").element().querySelector("svg")!.getBoundingClientRect();
+    for (const mark of marks.elements()) {
+      const box = mark.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(chart.left - 0.5);
+      expect(box.right).toBeLessThanOrEqual(chart.right + 0.5);
+    }
+    return { marks, boundary };
+  }
+
+  it.each([
+    { name: "DST start", hours: 23 },
+    { name: "DST end", hours: 25 },
+  ])("puts the second midnight label on the dim boundary at $name", async ({ hours }) => {
+    await renderRow(hours);
+    const { marks, boundary } = await expectMarksInsideTheRow();
+
+    const midnight = marks.nth(4).element();
+    expect(midnight.textContent?.trim()).toBe("0h");
+    expect(centreX(midnight)).toBeCloseTo(boundary.left, 0);
+  });
+
+  it.each([
+    { name: "DST start", nextHours: 23 },
+    { name: "DST end", nextHours: 25 },
+  ])("keeps every label inside the row of the day before $name", async ({ nextHours }) => {
+    await renderRow(24, nextHours);
+    const { marks, boundary } = await expectMarksInsideTheRow();
+
+    expect(centreX(marks.nth(4).element())).toBeCloseTo(boundary.left, 0);
+  });
+
+  it("draws no row labels on a 24 hour day", async () => {
+    await renderRow(24);
+
+    expect(page.getByTestId("actogram-hour-mark").elements()).toHaveLength(0);
   });
 });
