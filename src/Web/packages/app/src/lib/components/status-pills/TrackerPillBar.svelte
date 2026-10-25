@@ -9,6 +9,9 @@
   } from "$lib/api";
   import { TrackerCategory } from "$lib/api";
   import { cn } from "$lib/utils";
+  import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
+  import { toured, whileShown } from "$lib/coach-marks/attach.svelte";
   import { trackerDefinition, visibleTrackerInstances } from "./tracker-pill-visibility";
 
   interface TrackerPillBarProps {
@@ -49,18 +52,39 @@
   const hasVisiblePills = $derived(visibleInstances.length > 0 || fallbacks.length > 0);
 </script>
 
+{#snippet pill(instance: TrackerInstanceDto)}
+  <TrackerPill
+    {instance}
+    definition={trackerDefinition(instance, definitions)}
+    {now}
+    {onComplete}
+  />
+{/snippet}
+
 {#if hasVisiblePills}
   <div
     class={cn("flex flex-wrap items-center gap-x-2 gap-y-1", className)}
     data-testid="tracker-pill-bar"
   >
-    {#each visibleInstances as instance (instance.id)}
-      <TrackerPill
-        {instance}
-        definition={trackerDefinition(instance, definitions)}
-        {now}
-        {onComplete}
-      />
+    {#each visibleInstances as instance, index (instance.id)}
+      {#if index === 0}
+        <div
+          class="flex"
+          data-testid="tracker-intro-target"
+          {@attach toured()
+            ? whileShown(
+                coachmark([
+                  { ...coachFor("tracker-intro.pill") },
+                  { ...coachFor("tracker-intro.complete") },
+                ])
+              )
+            : undefined}
+        >
+          {@render pill(instance)}
+        </div>
+      {:else}
+        {@render pill(instance)}
+      {/if}
     {/each}
     {#each fallbacks as fallback (fallback.kind)}
       <LegacyAgePill {fallback} {now} {onCreateTracker} />

@@ -142,6 +142,24 @@ describe("CreateTrackersFromLegacyDialog", () => {
     expect(coach.startSequence).toHaveBeenCalledExactlyOnceWith("tracker-intro");
   });
 
+  it("starts the tracker introduction the app registers", async () => {
+    const actual = await vi.importActual<typeof import("$lib/coach-marks/sequences")>(
+      "$lib/coach-marks/sequences"
+    );
+    Object.assign(sequences, actual.sequences);
+    createFromLegacy.mockResolvedValue({
+      definitions: [{ id: "d1", name: "Infusion Site" }],
+      instances: [],
+      failedKinds: [],
+    });
+    open(LegacyConsumableKind.Site);
+
+    await submit().click();
+    await page.getByRole("button", { name: "Done" }).click();
+
+    expect(coach.startSequence).toHaveBeenCalledExactlyOnceWith("tracker-intro");
+  });
+
   it("starts no introduction while none is registered", async () => {
     createFromLegacy.mockResolvedValue({
       definitions: [{ id: "d1", name: "Infusion Site" }],

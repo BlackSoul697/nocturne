@@ -24,6 +24,18 @@ export const sequences: SequenceConfig = {
       "quick-tour.widgets",
     ],
   },
+  // Started when a legacy age becomes a tracker. Its settings steps wait on their pages: a forced
+  // start passes over a step whose target is absent, and organic selection raises it there.
+  "tracker-intro": {
+    priority: 40,
+    prerequisite: ONBOARDING_CORE_GATE,
+    steps: [
+      "tracker-intro.pill",
+      "tracker-intro.complete",
+      "tracker-intro.settings",
+      "tracker-intro.rail",
+    ],
+  },
   // Outranks the page tours, so the shared header is explained once, on the first page seen. A
   // reader who dismisses it does not want the page's tour that would follow it either.
   "loop-analysis-pages": {
