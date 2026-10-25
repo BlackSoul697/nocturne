@@ -341,7 +341,6 @@
       {#if canInvite && activeInvites.length > 0 && !showCreateInvite}
         <PendingInvitesList
           invites={activeInvites}
-          roles={allRoles}
           isRevoking={isRevokingInvite !== null}
           onRevoke={async (inviteId) => {
             isRevokingInvite = inviteId;
