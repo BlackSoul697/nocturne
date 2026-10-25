@@ -1065,7 +1065,7 @@ public static class ServiceRegistrationExtensions
 
     /// <summary>
     /// Alert engines, device health monitoring, compression low detection,
-    /// and all notifier implementations (SignalR, webhook, Pushover).
+    /// and all notifier implementations (SignalR, webhook).
     /// </summary>
     public static IServiceCollection AddAlertingAndMonitoring(
         this IServiceCollection services,

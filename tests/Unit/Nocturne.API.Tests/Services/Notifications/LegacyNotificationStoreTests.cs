@@ -12,49 +12,6 @@ public class LegacyNotificationStoreTests
     private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
 
     [Fact]
-    public void Receipt_IsGoneAfterItsLifetime()
-    {
-        var store = new LegacyNotificationStore(_time);
-        store.RegisterReceipt(Tenant, "r", 1, "default");
-
-        _time.Advance(LegacyNotificationStore.ReceiptLifetime - TimeSpan.FromSeconds(1));
-        store.TryGetReceipt(Tenant, "r", out _).Should().BeTrue();
-
-        _time.Advance(TimeSpan.FromSeconds(2));
-        store.TryGetReceipt(Tenant, "r", out _).Should().BeFalse();
-    }
-
-    [Fact]
-    public void Receipt_IsNotFoundByAnotherTenant()
-    {
-        var store = new LegacyNotificationStore(_time);
-        store.RegisterReceipt(Tenant, "r", 2, "group");
-
-        store.TryGetReceipt(Other, "r", out _).Should().BeFalse();
-        store.TryGetReceipt(Tenant, "r", out var alarm).Should().BeTrue();
-        alarm.Should().Be(new LegacyNotificationStore.PushoverReceipt(2, "group"));
-    }
-
-    [Fact]
-    public void Receipts_AtTheCapGiveUpTheOldestOfThatTenantOnly()
-    {
-        var store = new LegacyNotificationStore(_time);
-        store.RegisterReceipt(Other, "other", 1, "g");
-        for (var i = 0; i < LegacyNotificationStore.MaxReceiptsPerTenant; i++)
-        {
-            store.RegisterReceipt(Tenant, $"r{i}", 1, "g");
-            _time.Advance(TimeSpan.FromMilliseconds(1));
-        }
-
-        store.RegisterReceipt(Tenant, "newest", 1, "g");
-
-        store.CountActiveReceipts(Tenant).Should().Be(LegacyNotificationStore.MaxReceiptsPerTenant);
-        store.TryGetReceipt(Tenant, "r0", out _).Should().BeFalse();
-        store.TryGetReceipt(Tenant, "newest", out _).Should().BeTrue();
-        store.TryGetReceipt(Other, "other", out _).Should().BeTrue();
-    }
-
-    [Fact]
     public void AdminNotification_SameMessageCountsAgain()
     {
         var store = new LegacyNotificationStore(_time);
@@ -106,16 +63,6 @@ public class LegacyNotificationStoreTests
         held.Should().NotContain(n => n.Message == "m0");
         held.Should().Contain(n => n.Message == "newest");
         store.ListAdminNotifications(Other).Should().ContainSingle();
-    }
-
-    [Fact]
-    public void Receipt_GroupIsCutToTheSnoozeGroupLength()
-    {
-        var store = new LegacyNotificationStore(_time);
-        store.RegisterReceipt(Tenant, "r", 1, new string('g', LegacyAlarmSnoozeStore.MaxGroupLength + 50));
-
-        store.TryGetReceipt(Tenant, "r", out var alarm).Should().BeTrue();
-        alarm.Group.Should().HaveLength(LegacyAlarmSnoozeStore.MaxGroupLength);
     }
 
     [Fact]

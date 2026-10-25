@@ -4,7 +4,7 @@ namespace Nocturne.Core.Contracts.Notifications;
 
 /// <summary>
 /// Service interface for V1 notification operations with 1:1 legacy JavaScript compatibility
-/// Handles notification acknowledgments, Pushover callbacks, and admin notifications
+/// Handles notification acknowledgments and admin notifications
 /// Based on the legacy notifications.js and adminnotifies.js implementations
 /// </summary>
 public interface INotificationV1Service
@@ -17,16 +17,6 @@ public interface INotificationV1Service
     /// <returns>Acknowledgment response</returns>
     Task<NotificationAckResponse> AckNotificationAsync(
         NotificationAckRequest request,
-        CancellationToken cancellationToken = default
-    );
-
-    /// <summary>
-    /// Handles Pushover webhook callbacks for notification acknowledgments
-    /// Processes callbacks from Pushover service when notifications are acknowledged
-    /// </summary>
-    /// <returns>Success response</returns>
-    Task<NotificationAckResponse> ProcessPushoverCallbackAsync(
-        PushoverCallbackRequest request,
         CancellationToken cancellationToken = default
     );
 
@@ -56,32 +46,4 @@ public interface INotificationV1Service
     /// </summary>
     Task ClearAllAdminNotificationsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Registers a Pushover receipt for an alarm to enable proper acknowledgment mapping
-    /// This method should be called when a Pushover notification is sent for an alarm
-    /// </summary>
-    /// <param name="level">Alarm level</param>
-    /// <param name="group">Alarm group</param>
-    void RegisterPushoverReceipt(string receipt, int level, string group);
-
-    /// <summary>
-    /// Gets the count of active Pushover receipts for monitoring/debugging
-    /// </summary>
-    int GetActivePushoverReceiptCount();
-
-    /// <summary>
-    /// Sends a Pushover notification for an alarm
-    /// Implements legacy Pushover notification sending with full 1:1 compatibility
-    /// </summary>
-    /// <param name="level">Alarm level (1=WARN, 2=URGENT)</param>
-    /// <param name="group">Alarm group</param>
-    /// <returns>Response indicating success or failure</returns>
-    Task<NotificationAckResponse> SendPushoverNotificationAsync(
-        int level,
-        string group,
-        string title,
-        string message,
-        string? sound = null,
-        CancellationToken cancellationToken = default
-    );
 }
