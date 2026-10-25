@@ -46,6 +46,12 @@ export interface SequenceDefinition {
   completesKeys?: string[];
   /** Dismissing a step of this sequence also holds back every other mark until the next navigation. */
   quietOnDismiss?: boolean;
+  /**
+   * Shown only by `startSequence`, never chosen by organic selection. A started run outlives
+   * navigation, waiting on each page for the next unfinished step's target, and holds back every
+   * organic mark until its last step is done or it is dismissed.
+   */
+  startOnly?: boolean;
 }
 
 export interface SequenceConfig {

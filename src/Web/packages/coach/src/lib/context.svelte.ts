@@ -286,6 +286,7 @@ export class CoachMarkContext {
     if (!seqName) return true; // standalone marks are always eligible
 
     const seq = this.sequences[seqName];
+    if (seq.startOnly) return this._forcedSequence === seqName;
     if (
       seq.prerequisite &&
       !isPrerequisiteMet(seq.prerequisite, this.sequences, this._states, this.gates())
@@ -355,6 +356,7 @@ export class CoachMarkContext {
 
   clearQuiet(): void {
     this._quietUntilNavigation = false;
+    if (this.isStartOnlyRun()) return;
     this._forcedSequence = null;
     this._replayQueue = null;
     this.scheduleSelection();
@@ -384,6 +386,15 @@ export class CoachMarkContext {
     this._activeSelection = null;
     if (this._forcedSequence) this.activateNextForcedStep();
     else this.scheduleSelection();
+  }
+
+  /** A started run of a `startOnly` sequence, which navigation does not end; a replay of one does end. */
+  private isStartOnlyRun(): boolean {
+    return (
+      this._forcedSequence !== null &&
+      this._replayQueue === null &&
+      this.sequences[this._forcedSequence]?.startOnly === true
+    );
   }
 
   private activateNextForcedStep(): void {
