@@ -48,6 +48,7 @@ export const getActogramData = query(actogramSchema, async ({ from, to }) => {
     date: d.date ?? "",
     startMills: d.startMills ?? 0,
     endMills: d.endMills ?? d.startMills ?? 0,
+    hourMarks: d.hourMarks ?? [],
   }));
 
   return {

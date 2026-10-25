@@ -128,7 +128,7 @@ public class CobCalculator(
         List<Bolus>? boluses,
         List<TempBasal>? tempBasals,
         TherapySnapshot snapshot,
-        Func<long, double> scheduledBasalAt,
+        Func<TempBasal, long, double> scheduledUnder,
         long time
     )
     {
@@ -143,7 +143,7 @@ public class CobCalculator(
         // The bolus plus net basal activity the async IOB total gives, computed in-memory.
         double ActivityAt(long t) =>
             (iobCalculator.FromBoluses(boluses ?? [], snapshot, t).Activity ?? 0.0)
-            + (iobCalculator.FromTempBasals(tempBasals ?? [], snapshot, scheduledBasalAt, t, deliveredUntil: time).Activity ?? 0);
+            + (iobCalculator.FromTempBasals(tempBasals ?? [], snapshot, scheduledUnder, t, deliveredUntil: time).Activity ?? 0);
 
         var acc = new Accumulator();
         foreach (var carbIntake in SortedByTime(carbIntakes))

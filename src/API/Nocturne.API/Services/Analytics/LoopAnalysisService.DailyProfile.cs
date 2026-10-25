@@ -48,7 +48,7 @@ internal sealed partial class LoopAnalysisService
         var delivery = await DeliveryAsync(common, window, now, ct);
 
         var iobCob = IobCobSeries.Build(
-            iobCalculator, cobCalculator, common.Boluses, carbs, common.TempBasals, delivery.Timeline,
+            iobCalculator, cobCalculator, common.Boluses, carbs, common.TempBasals, delivery.Timeline, delivery.Scheduled,
             DeviceReadings.Of(apsPoints, await pumpTask),
             delivery.TickStart, to - 1, now, TickMs, ct);
 

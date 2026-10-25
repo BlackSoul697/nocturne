@@ -6,11 +6,13 @@ using Nocturne.API.Services.Treatments;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Treatments;
@@ -70,11 +72,9 @@ public class IobCobReaderTests
         sensitivity.Setup(s => s.GetSensitivityAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(50.0);
         var carbRatio = new Mock<ICarbRatioResolver>();
         carbRatio.Setup(c => c.GetCarbRatioAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(10.0);
-        var basal = new Mock<IBasalRateResolver>();
-        basal.Setup(b => b.GetBasalRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(1.0);
-        basal.Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>())).ReturnsAsync((long _) => 1.0);
 
-        iob = new IobCalculator(therapy.Object, sensitivity.Object, basal.Object, aps.Object, pump.Object);
+        iob = new IobCalculator(
+            therapy.Object, sensitivity.Object, MockBasalSegments.Flat(1.0).Object, aps.Object, pump.Object, MockStateSpans.Empty().Object);
         var cob = new CobCalculator(
             NullLogger<CobCalculator>.Instance, iob, sensitivity.Object, carbRatio.Object, therapy.Object, aps.Object);
 
@@ -191,7 +191,7 @@ public class IobCobReaderTests
             basalEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = 1.0 }]);
         var timeline = new TherapyTimeline([new TherapySegment(at - 24L * 60 * 60 * 1000, at + 1, snapshot)]);
         var chartTick = IobCobSeries.Build(
-            iobCalculator, Mock.Of<ICobCalculator>(), [], [], [suspend], timeline, null, at, at, at, 5 * 60 * 1000).Single();
+            iobCalculator, Mock.Of<ICobCalculator>(), [], [], [suspend], timeline, new ScheduledBasal(timeline.BasalSegments(), []), null, at, at, at, 5 * 60 * 1000).Single();
 
         chartTick.Iob.Should().BeLessThan(0);
         read.Iob.Iob.Should().BeApproximately(chartTick.Iob, 0.001);

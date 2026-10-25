@@ -13,6 +13,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.V4;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Analytics;
@@ -97,8 +98,8 @@ public class LoopAnalysisServiceReadTests
             basalSeriesBuilder: _series.Object,
             basalSegmentService: Mock.Of<IBasalSegmentService>(),
             iobCalculator: new IobCalculator(
-                Mock.Of<ITherapySettingsResolver>(), Mock.Of<ISensitivityResolver>(), Mock.Of<IBasalRateResolver>(),
-                Mock.Of<IApsSnapshotRepository>(), Mock.Of<IPumpSnapshotRepository>()),
+                Mock.Of<ITherapySettingsResolver>(), Mock.Of<ISensitivityResolver>(), Mock.Of<IBasalSegmentService>(),
+                Mock.Of<IApsSnapshotRepository>(), Mock.Of<IPumpSnapshotRepository>(), MockStateSpans.Empty().Object),
             cobCalculator: Mock.Of<ICobCalculator>(),
             therapySettingsRepository: Mock.Of<ITherapySettingsRepository>(),
             aidSystemMetrics: null!,

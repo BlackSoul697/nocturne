@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Contracts.Glucose;
@@ -307,6 +308,38 @@ public class ActogramReportServiceTests
 
         var day = march.Days.Concat(november.Days).First(d => d.Date == date);
         (day.EndMills - day.StartMills).Should().Be(hours * 3_600_000L);
+    }
+
+    [Theory]
+    [InlineData("2023-03-11")]
+    [InlineData("2023-03-12")]
+    [InlineData("2023-03-13")]
+    [InlineData("2023-11-04")]
+    [InlineData("2023-11-05")]
+    public async Task GetAsync_ServesHourMarksAtTheRealLocalHoursOfTheDayAndTheNext(string date)
+    {
+        SetupEmpty();
+        _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        SetupZone("America/New_York");
+        var from = new DateTimeOffset(2023, 3, 10, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var to = new DateTimeOffset(2023, 11, 7, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+        var march = await CreateService().GetAsync(from, from + 5L * 24 * 3_600_000);
+        var november = await CreateService().GetAsync(to - 5L * 24 * 3_600_000, to);
+
+        var day = march.Days.Concat(november.Days).First(d => d.Date == date);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        var local = day.HourMarks
+            .Select(m => TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.FromUnixTimeMilliseconds(m).UtcDateTime, zone))
+            .ToList();
+        var first = DateTime.Parse(date, CultureInfo.InvariantCulture);
+        local.Should().Equal(
+            first.AddHours(6), first.AddHours(12), first.AddHours(18),
+            first.AddDays(1).AddHours(6), first.AddDays(1).AddHours(12), first.AddDays(1).AddHours(18));
+        day.HourMarks.Should().BeInAscendingOrder();
+        day.HourMarks[0].Should().BeGreaterThan(day.StartMills);
+        day.HourMarks[2].Should().BeLessThan(day.EndMills);
+        day.HourMarks[3].Should().BeGreaterThan(day.EndMills);
     }
 
     [Fact]
