@@ -149,6 +149,17 @@ public class GlycemicVariability
     public double CoefficientOfVariationTarget => GlucoseConstants.CoefficientOfVariationTargetPercent;
 
     /// <summary>
+    /// Judged on the CV as a whole percent, the way <see cref="CoefficientOfVariation"/> is displayed.
+    /// </summary>
+    public GlycemicVariabilityStatus CoefficientOfVariationStatus =>
+        Math.Round(CoefficientOfVariation, MidpointRounding.AwayFromZero) switch
+        {
+            <= GlucoseConstants.CoefficientOfVariationTargetPercent => GlycemicVariabilityStatus.Stable,
+            <= GlucoseConstants.CoefficientOfVariationVariablePercent => GlycemicVariabilityStatus.Moderate,
+            _ => GlycemicVariabilityStatus.Variable,
+        };
+
+    /// <summary>
     /// Glucose Management Indicator - modern replacement for estimated A1c
     /// Based on: GMI (%) = 3.31 + (0.02392 x mean glucose in mg/dL)
     /// </summary>

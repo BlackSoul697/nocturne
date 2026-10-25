@@ -4,6 +4,7 @@
   import WidgetStatSkeleton from "./WidgetStatSkeleton.svelte";
   import { getMultiPeriodStatistics } from "$api/generated/statistics.generated.remote";
   import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { GlycemicVariabilityStatus } from "$lib/api";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { formatGlucoseValue, getUnitLabel } from "$lib/utils/formatting";
   import TrendingUp from "@lucide/svelte/icons/trending-up";
@@ -12,6 +13,12 @@
 
   const units = $derived(glucoseUnits.current);
   const unitLabel = $derived(getUnitLabel(units));
+
+  const variability = {
+    [GlycemicVariabilityStatus.Stable]: { icon: TrendingDown, color: "text-success", label: "Stable" },
+    [GlycemicVariabilityStatus.Moderate]: { icon: Minus, color: "text-muted-foreground", label: "Moderate" },
+    [GlycemicVariabilityStatus.Variable]: { icon: TrendingUp, color: "text-warning", label: "Variable" },
+  };
 
   // Fetched after hydration, as the other statistics widgets do, so a slow query cannot block SSR.
   let statsPromise = $state<ReturnType<typeof getMultiPeriodStatistics> | null>(null);
@@ -30,10 +37,8 @@
       {@const day = stats?.lastDay}
       {@const basic = day?.analytics?.basicStats}
       {#if basic && (basic.count ?? 0) > 0}
-        {@const cv = day?.analytics?.glycemicVariability?.coefficientOfVariation ?? 0}
-        {@const TrendIcon = cv < 33 ? TrendingDown : cv > 50 ? TrendingUp : Minus}
-        {@const cvColor = cv < 33 ? "text-success" : cv > 50 ? "text-warning" : "text-muted-foreground"}
-        {@const cvText = cv < 33 ? "Stable" : cv > 50 ? "Variable" : "Moderate"}
+        {@const gv = day?.analytics?.glycemicVariability}
+        {@const status = gv?.coefficientOfVariationStatus ? variability[gv.coefficientOfVariationStatus] : undefined}
         <div class="space-y-2">
           <div class="flex items-baseline justify-between">
             <div>
@@ -59,13 +64,15 @@
             </span>
           </div>
 
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-muted-foreground">Variability:</span>
-            <span class="flex items-center gap-1 {cvColor}">
-              <TrendIcon class="h-3 w-3" />
-              {cvText} ({cv.toFixed(0)}% CV)
-            </span>
-          </div>
+          {#if status}
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">Variability:</span>
+              <span class="flex items-center gap-1 {status.color}">
+                <status.icon class="h-3 w-3" />
+                {status.label} ({(gv?.coefficientOfVariation ?? 0).toFixed(0)}% CV)
+              </span>
+            </div>
+          {/if}
 
           <div class="text-xs text-muted-foreground text-right">
             {basic.count} readings
