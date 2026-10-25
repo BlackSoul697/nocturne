@@ -2281,6 +2281,21 @@ public partial class StatisticsService : IStatisticsService
     public static int WindowDays(DateTime startDate, DateTime endDate) =>
         Math.Max(1, (int)Math.Round((endDate - startDate).TotalDays));
 
+    /// <summary>
+    /// The days the window touches in <paramref name="timeZone"/>, or UTC days without one, at least
+    /// one. These are the days <see cref="DataSufficiencyAssessment.DaysWithData"/> counts readings
+    /// on, so the total and the count always share a calendar. An end bound on a midnight belongs
+    /// to the day before it.
+    /// </summary>
+    public static int WindowDays(DateTime startDate, DateTime endDate, TimeZoneInfo? timeZone)
+    {
+        var last = endDate.AddMilliseconds(-1);
+        var days = timeZone is null
+            ? LocalSlotBinning.UtcDays(startDate, last)
+            : LocalSlotBinning.LocalDays(startDate, last, timeZone);
+        return Math.Max(1, days.Count);
+    }
+
     private static string MillsToLocalDateString(long mills, TimeZoneInfo tz)
     {
         var utc = DateTimeOffset.FromUnixTimeMilliseconds(mills);

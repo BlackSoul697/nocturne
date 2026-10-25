@@ -53,7 +53,7 @@ vi.mock("$lib/components/reports/TIRStackedChart.svelte", () =>
   import("$lib/test-stubs/Empty.test-stub.svelte")
 );
 
-import ComparisonPage from "./+page.svelte";
+import ComparisonReport from "./ComparisonReport.svelte";
 
 function analysis(lowMinutesPerDay: number, lowEventsPerDay: number): ExtendedGlucoseAnalytics {
   return {
@@ -81,7 +81,7 @@ describe("hypo comparison rows", () => {
   });
 
   it("shows per-day time and events and a positive change from a measured zero", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const duration = await cells("Hypo time / day");
     expect(duration.slice(1, 3)).toEqual(["0m", "30m"]);
     expect(duration[4]).toBe("+30m");
@@ -95,7 +95,7 @@ describe("hypo comparison rows", () => {
   it("shows a low rate that one decimal would round to zero", async () => {
     periodA = analysis(0, 0.03);
     periodB = analysis(0, 0.04);
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const events = await cells("Hypo events / day");
     expect(events.slice(1, 3)).toEqual(["0.03", "0.04"]);
     expect(events[4]).toBe("+0.01");
@@ -103,7 +103,7 @@ describe("hypo comparison rows", () => {
 
   it("shows a negative change when the second period has fewer lows", async () => {
     periodA = analysis(90, 3);
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     expect((await cells("Hypo time / day"))[4]).toBe("−1h");
     expect((await cells("Hypo events / day"))[4]).toBe("−1.50");
   });
@@ -111,7 +111,7 @@ describe("hypo comparison rows", () => {
   it("shows no data instead of comparing a missing period against zero", async () => {
     periodA = { basicStats: { count: 0 } };
     periodB = analysis(0, 0);
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const duration = await cells("Hypo time / day");
     expect(duration.slice(1, 3)).toEqual(["No data", "0m"]);
     expect(duration[4]).toBe("—");
@@ -162,19 +162,19 @@ describe("grouped comparison rows", () => {
 
   it("names ADRR in the time zone note when the analytics carry a reason", async () => {
     zoneReason = TimeZoneUnavailableReason.NotConfigured;
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     await expect.element(page.getByText(/average daily risk range \(ADRR\) is not shown/)).toBeVisible();
     await expect.element(page.getByText(/do not have a time zone/)).toBeVisible();
   });
 
   it("shows no time zone note when the analytics carry no reason", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     await cells("ADRR");
     await expect.element(page.getByText(/average daily risk range \(ADRR\) is not shown/)).not.toBeInTheDocument();
   });
 
   it("renders each group heading in order, the overview first", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     await expect.element(page.getByText("Overview", { exact: true })).toBeVisible();
     const headings = [
       "Overview",
@@ -191,7 +191,7 @@ describe("grouped comparison rows", () => {
   });
 
   it("shows every row of the new groups for both periods with a change", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     for (const label of [
       "Time Very Low (%)",
       "Time Low (%)",
@@ -222,7 +222,7 @@ describe("grouped comparison rows", () => {
   });
 
   it("shows the API's per-day insulin unchanged", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const insulin = await cells("Total insulin / day");
     expect(insulin.slice(1, 3)).toEqual(["44.2 U", "46.9 U"]);
     expect(insulin[4]).toBe("+2.7 U");
@@ -233,7 +233,7 @@ describe("grouped comparison rows", () => {
 
   it("shows no data for insulin figures of a period with no insulin records", async () => {
     extrasA = { insulinDelivery: { insulinEventCount: 0, carbCount: 0, tdd: 0, carbsPerDay: 0 } };
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const insulin = await cells("Total insulin / day");
     expect(insulin.slice(1, 3)).toEqual(["No data", "46.9 U"]);
     expect(insulin[4]).toBe("—");
@@ -243,7 +243,7 @@ describe("grouped comparison rows", () => {
   it("shows glucose-valued variability rows in the chosen unit", async () => {
     glucoseUnits.current = "mmol";
     try {
-      render(ComparisonPage);
+      render(ComparisonReport, { today: "2026-09-02" });
       const sd = await cells("Standard deviation");
       expect(sd.slice(1, 3)).toEqual(["2.2 mmol/L", "2.4 mmol/L"]);
       expect(sd[4]).toBe("+0.2 mmol/L");
@@ -253,7 +253,7 @@ describe("grouped comparison rows", () => {
   });
 
   it("shows the personal range row only when the API returns a personal range", async () => {
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     await cells("Time Very Low (%)");
     expect(page.getByText("Time in personal range", { exact: true }).elements()).toHaveLength(0);
   });
@@ -261,7 +261,7 @@ describe("grouped comparison rows", () => {
   it("shows time in the personal range for both periods when returned", async () => {
     extrasA = { ...extrasA, personalRange: { inRangePercent: 55 } };
     extrasB = { ...extrasB, personalRange: { inRangePercent: 61.5 } };
-    render(ComparisonPage);
+    render(ComparisonReport, { today: "2026-09-02" });
     const row = await cells("Time in personal range");
     expect(row.slice(1, 3)).toEqual(["55.0%", "61.5%"]);
     expect(row[4]).toBe("+6.5 pp");

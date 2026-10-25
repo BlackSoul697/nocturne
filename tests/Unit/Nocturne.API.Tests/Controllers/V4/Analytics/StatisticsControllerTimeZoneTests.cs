@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Nocturne.API.Controllers.V4.Analytics;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Models;
@@ -256,6 +257,83 @@ public partial class StatisticsControllerTests
         payload.Analysis.TimeZoneUnavailableReason.Should().Be(expected);
         payload.Analysis.GlycemicVariability.TimeZoneUnavailableReason.Should().Be(expected);
         payload.Analysis.DataSufficiency.TimeZoneUnavailableReason.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_CountsTotalDaysAndDaysWithDataOnTheSamePatientDays()
+    {
+        SetupGlucose(new[]
+            {
+                new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 2, 4, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 3, 4, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 3, 20, 0, 0, DateTimeKind.Utc),
+            }
+            .Select(at => new SensorGlucose { Timestamp = at, Mgdl = 110 })
+            .ToList());
+        SetupEmptyTreatments();
+
+        var result = await ControllerOnClock("Australia/Sydney", share: false).GetRangeAnalytics(WindowStart, WindowEnd);
+
+        var sufficiency = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<ReportAnalysisResult>().Subject.Analysis.DataSufficiency;
+        sufficiency.TotalDays.Should().Be(4);
+        sufficiency.DaysWithData.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_FromTheLongDaylightSavingDay_CountsEachPatientDayTheWindowTouches()
+    {
+        var sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+        var firstDay = new DateOnly(2026, 4, 5);
+        var start = DateTimeOffset.FromUnixTimeMilliseconds(LocalSlotBinning.DayStartMills(firstDay, sydney)).UtcDateTime;
+        var end = DateTimeOffset.FromUnixTimeMilliseconds(
+            LocalSlotBinning.DayStartMills(firstDay.AddDays(3), sydney) + 6 * LocalSlotBinning.HourMs).UtcDateTime;
+        SetupGlucose(Enumerable.Range(0, 4)
+            .Select(i => new SensorGlucose
+            {
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(
+                    LocalSlotBinning.DayStartMills(firstDay.AddDays(i), sydney) + 30 * LocalSlotBinning.MinuteMs).UtcDateTime,
+                Mgdl = 110,
+            })
+            .ToList());
+        SetupEmptyTreatments();
+
+        var result = await ControllerOnClock("Australia/Sydney", share: false).GetRangeAnalytics(start, end);
+
+        var sufficiency = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<ReportAnalysisResult>().Subject.Analysis.DataSufficiency;
+        sufficiency.TotalDays.Should().Be(4);
+        sufficiency.DaysWithData.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetRangeAnalytics_ARolling24HourWindow_KeepsPerDayFiguresOnItsDuration()
+    {
+        var start = new DateTime(2026, 3, 2, 4, 0, 0, DateTimeKind.Utc);
+        var end = start.AddHours(24);
+        SetupGlucose(Enumerable.Range(0, 144)
+            .Select(i => new SensorGlucose { Timestamp = start.AddMinutes(10 * i), Mgdl = 110 })
+            .ToList());
+        SetupEmptyTreatments();
+        _carbIntakeRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CarbIntake> { new() { Timestamp = start.AddHours(1), Carbs = 60 } });
+
+        var result = await ControllerOnClock("Australia/Sydney", share: false).GetRangeAnalytics(start, end);
+
+        var analysis = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<ReportAnalysisResult>().Subject.Analysis;
+        analysis.DataSufficiency.TotalDays.Should().Be(2);
+        analysis.DataSufficiency.DaysWithData.Should().Be(2);
+        analysis.DataSufficiency.ExpectedReadings.Should().Be(288);
+        analysis.DataSufficiency.CompletenessPercentage.Should().Be(50);
+        analysis.TreatmentSummary!.DailyCarbs.Should().Be(60);
     }
 
     [Fact]

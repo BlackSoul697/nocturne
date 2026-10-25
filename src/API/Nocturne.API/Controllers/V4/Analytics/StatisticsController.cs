@@ -426,7 +426,12 @@ public class StatisticsController : ControllerBase
             request.Config,
             clock.Zone
         );
-        return Ok(Annotated(result, clock));
+        return Ok(Annotated(
+            result,
+            clock,
+            request.StartDate is { } from && request.EndDate is { } to
+                ? StatisticsService.WindowDays(from, to, clock.Zone)
+                : null));
     }
 
     /// <summary>
@@ -492,7 +497,8 @@ public class StatisticsController : ControllerBase
                     population,
                     timeZone: clock.Zone
                 ),
-                clock),
+                clock,
+                StatisticsService.WindowDays(startDt, endDt, clock.Zone)),
             AveragedStats = _statisticsService.CalculateAveragedStats(entries, clock.Zone).ToList(),
             HourlyBandThresholds = _statisticsService.HourlyBandThresholds,
             ContributingDevices = _statisticsService.CalculateContributingDevices(rawGlucose, devices).ToList(),
@@ -569,13 +575,20 @@ public class StatisticsController : ControllerBase
         return Ok(patterns);
     }
 
-    private static T Annotated<T>(T analytics, TenantClock clock) where T : GlucoseAnalytics
+    /// <param name="calendarDays">The days of the window on the report's calendar, which
+    /// <see cref="DataSufficiencyAssessment.DaysWithData"/> counts readings on. The per-day figures
+    /// keep the window's duration.</param>
+    private static T Annotated<T>(T analytics, TenantClock clock, int? calendarDays = null) where T : GlucoseAnalytics
     {
         analytics.TimeZoneUnavailableReason = clock.Reason;
         if (analytics.GlycemicVariability is { } variability)
             variability.TimeZoneUnavailableReason = clock.Reason;
         if (analytics is ExtendedGlucoseAnalytics extended)
+        {
             extended.DataSufficiency.TimeZoneUnavailableReason = clock.Reason;
+            if (calendarDays is { } days)
+                extended.DataSufficiency.TotalDays = days;
+        }
         return analytics;
     }
 
