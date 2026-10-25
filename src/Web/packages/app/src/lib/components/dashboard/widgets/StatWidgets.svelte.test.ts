@@ -1,7 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, expect, it, vi } from "vitest";
-import { TimeZoneUnavailableReason } from "$lib/api";
+import { GlycemicVariabilityStatus, TimeZoneUnavailableReason } from "$lib/api";
 import { reactiveFields } from "$lib/test-stubs/reactive-fields.svelte";
 
 const statistics = vi.hoisted(() => ({ resolve: (_stats: unknown) => {} }));
@@ -36,7 +36,7 @@ const stats = {
     entryCount: 288,
     analytics: {
       basicStats: { count: 288, mean: 144, min: 60, max: 260 },
-      glycemicVariability: { coefficientOfVariation: 40 },
+      glycemicVariability: { coefficientOfVariation: 40, coefficientOfVariationStatus: GlycemicVariabilityStatus.Moderate },
       timeInRange: {
         percentages: { veryLow: 1, low: 3, target: 70, high: 20, veryHigh: 6 },
       },
@@ -177,6 +177,42 @@ describe("stat widgets", () => {
     await expect.element(page.getByText("70%", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Moderate (40% CV)")).toBeVisible();
     await expect.element(page.getByText("288 readings")).toBeVisible();
+  });
+
+  it.each([
+    [GlycemicVariabilityStatus.Stable, 30, "Stable (30% CV)"],
+    [GlycemicVariabilityStatus.Moderate, 40, "Moderate (40% CV)"],
+    [GlycemicVariabilityStatus.Variable, 55, "Variable (55% CV)"],
+  ])("Last 24h summary renders the served %s variability status", async (status, cv, text) => {
+    await page.viewport(1440, 900);
+    render(DailySummaryWidget);
+    statistics.resolve({
+      lastDay: {
+        ...stats.lastDay,
+        analytics: {
+          ...stats.lastDay.analytics,
+          glycemicVariability: { coefficientOfVariation: cv, coefficientOfVariationStatus: status },
+        },
+      },
+    });
+
+    await expect.element(page.getByText(text)).toBeVisible();
+  });
+
+  it("Last 24h summary shows the served status even when it disagrees with the figure", async () => {
+    await page.viewport(1440, 900);
+    render(DailySummaryWidget);
+    statistics.resolve({
+      lastDay: {
+        ...stats.lastDay,
+        analytics: {
+          ...stats.lastDay.analytics,
+          glycemicVariability: { coefficientOfVariation: 10, coefficientOfVariationStatus: GlycemicVariabilityStatus.Variable },
+        },
+      },
+    });
+
+    await expect.element(page.getByText("Variable (10% CV)")).toBeVisible();
   });
 
   it("Last 24h summary says so when the last 24 hours hold no readings", async () => {
