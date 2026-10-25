@@ -6,11 +6,10 @@ const api = vi.hoisted(() => ({
   emptyPage: vi.fn(),
   getProfileSummary: vi.fn(),
   emptyList: vi.fn(),
-  getTrackerDefinitions: vi.fn(),
-  getActiveTrackerInstances: vi.fn(),
-  getLegacyFallbacks: vi.fn(() => Promise.resolve([] as unknown[])),
+  getTrackerDefinitions: vi.fn(() => Promise.resolve([] as unknown[])),
+  getActiveTrackerInstances: vi.fn(() => Promise.resolve([] as unknown[])),
+  getLegacyFallbacks: vi.fn(() => Promise.resolve({ fallbacks: [], covered: [] } as unknown)),
 }));
-
 
 vi.mock("$lib/api/browser-clients", () => ({
   currentTherapyStateClient: () => ({ getCurrentTherapyState: api.getCurrentTherapyState }),
@@ -58,7 +57,9 @@ import {
   SyncPhase,
   LegacyConsumableKind,
   TrackerRealtimeAction,
+  type LegacyCoverageDto,
   type LegacyFallbackDto,
+  type LegacyFallbacksDto,
   type SensorGlucose,
   type TrackerDefinitionDto,
   type TrackerInstanceDto,
@@ -108,6 +109,7 @@ type TestStore = StoreInternals &
     | "trackerInstances"
     | "trackerDefinitions"
     | "legacyFallbacks"
+    | "legacyCoverage"
     | "apsSnapshots"
     | "carbIntakes"
     | "treatmentRevision"
@@ -129,6 +131,18 @@ function makeStore(url = ""): TestStore {
     pingInterval: 0,
   });
   return store as unknown as TestStore;
+}
+
+function fallback(kind: LegacyConsumableKind, ageHours: number): LegacyFallbackDto {
+  return { kind, ageHours };
+}
+
+function read(fallbacks: LegacyFallbackDto[], covered: LegacyCoverageDto[] = []): LegacyFallbacksDto {
+  return { fallbacks, covered };
+}
+
+function internals(store: TestStore): { readLegacyFallbacks(): Promise<void> } {
+  return store as unknown as { readLegacyFallbacks(): Promise<void> };
 }
 
 function deviceStatus(id: string): StorageEvent {
@@ -1049,7 +1063,7 @@ describe("RealtimeStore tracker definition updates", () => {
   });
 
   beforeEach(() => {
-    api.getLegacyFallbacks.mockResolvedValue([]);
+    api.getLegacyFallbacks.mockResolvedValue(read([]));
   });
 
   afterEach(() => {
@@ -1149,36 +1163,75 @@ describe("RealtimeStore tracker definition updates", () => {
 
   it("swaps a converted fallback for the tracker it became", async () => {
     const store = makeStore();
-    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 50 }];
+    store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 50)];
     api.getTrackerDefinitions.mockResolvedValue([definition("site")]);
     api.getActiveTrackerInstances.mockResolvedValue([instance("run", "site")]);
-    api.getLegacyFallbacks.mockResolvedValue([]);
+    api.getLegacyFallbacks.mockResolvedValue(
+      read([], [{ kind: LegacyConsumableKind.Site, definitionIds: ["site"] }])
+    );
 
     emit(store, "site");
     await settled();
 
     expect(store.legacyFallbacks).toEqual([]);
+    expect(store.legacyCoverage).toEqual([{ kind: LegacyConsumableKind.Site, definitionIds: ["site"] }]);
     expect(store.trackerInstances.map((i) => i.id)).toEqual(["run"]);
+
+    store.destroy();
+  });
+
+  it("keeps the definitions and instances when only the fallback read fails", async () => {
+    const store = makeStore();
+    store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 50)];
+    api.getTrackerDefinitions.mockResolvedValue([definition("site", "Pod")]);
+    api.getActiveTrackerInstances.mockResolvedValue([instance("run", "site", "Pod")]);
+    api.getLegacyFallbacks.mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    emit(store, "site");
+    await settled();
+
+    expect(store.trackerDefinitions.map((d) => d.name)).toEqual(["Pod"]);
+    expect(store.trackerInstances.map((i) => i.id)).toEqual(["run"]);
+    expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([50]);
 
     store.destroy();
   });
 
   it("keeps a fallback read that started later than the definition update's", async () => {
     const store = makeStore();
-    let resolveCombined: (value: LegacyFallbackDto[]) => void = () => {};
-    api.getTrackerDefinitions.mockResolvedValue([]);
-    api.getActiveTrackerInstances.mockResolvedValue([]);
+    let resolveCombined: (value: LegacyFallbacksDto) => void = () => {};
     api.getLegacyFallbacks
-      .mockReturnValueOnce(new Promise<LegacyFallbackDto[]>((resolve) => (resolveCombined = resolve)))
-      .mockResolvedValueOnce([{ kind: LegacyConsumableKind.Sensor, ageHours: 2 }]);
+      .mockReturnValueOnce(new Promise<LegacyFallbacksDto>((resolve) => (resolveCombined = resolve)))
+      .mockResolvedValueOnce(read([fallback(LegacyConsumableKind.Sensor, 2)]));
 
     emit(store, "site");
-    void (store as unknown as { refreshLegacyFallbacks(): Promise<void> }).refreshLegacyFallbacks();
+    void internals(store).readLegacyFallbacks();
     await settled();
-    resolveCombined([{ kind: LegacyConsumableKind.Sensor, ageHours: 200 }]);
+    resolveCombined(read([fallback(LegacyConsumableKind.Sensor, 200)]));
     await settled();
 
     expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([2]);
+
+    store.destroy();
+  });
+
+  it("applies the definition update's fallbacks when a later fallback read failed", async () => {
+    const store = makeStore();
+    let resolveCombined: (value: LegacyFallbacksDto) => void = () => {};
+    api.getLegacyFallbacks
+      .mockReturnValueOnce(new Promise<LegacyFallbacksDto>((resolve) => (resolveCombined = resolve)))
+      .mockRejectedValueOnce(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    emit(store, "site");
+    void internals(store).readLegacyFallbacks();
+    await settled();
+    resolveCombined(read([], [{ kind: LegacyConsumableKind.Site, definitionIds: ["site"] }]));
+    await settled();
+
+    expect(store.legacyFallbacks).toEqual([]);
+    expect(store.legacyCoverage.map((c) => c.kind)).toEqual([LegacyConsumableKind.Site]);
 
     store.destroy();
   });
@@ -1202,8 +1255,8 @@ describe("RealtimeStore legacy fallbacks", () => {
 
   it("re-reads the fallbacks once after a burst of device events", async () => {
     const store = makeStore();
-    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 70 }];
-    api.getLegacyFallbacks.mockResolvedValue([{ kind: LegacyConsumableKind.Site, ageHours: 0 }]);
+    store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 70)];
+    api.getLegacyFallbacks.mockResolvedValue(read([fallback(LegacyConsumableKind.Site, 0)]));
 
     store.handleCreate(deviceEvent("d1"));
     store.handleCreate(deviceEvent("d2"));
@@ -1217,7 +1270,7 @@ describe("RealtimeStore legacy fallbacks", () => {
 
   it("keeps the fallbacks when the read fails", async () => {
     const store = makeStore();
-    store.legacyFallbacks = [{ kind: LegacyConsumableKind.Site, ageHours: 70 }];
+    store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 70)];
     api.getLegacyFallbacks.mockRejectedValue(new Error("offline"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -1225,6 +1278,49 @@ describe("RealtimeStore legacy fallbacks", () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(store.legacyFallbacks.map((f) => f.ageHours)).toEqual([70]);
+
+    store.destroy();
+  });
+
+  it("drops a pending fallback re-read on destroy", async () => {
+    const store = makeStore();
+
+    store.handleCreate(deviceEvent("d1"));
+    store.destroy();
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(api.getLegacyFallbacks).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the fallbacks at once when a tracker run starts", async () => {
+    const store = makeStore();
+    store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 70)];
+    api.getLegacyFallbacks.mockResolvedValue(read([]));
+
+    store.websocketClient.eventHandlers.trackerUpdate?.({
+      action: TrackerRealtimeAction.Create,
+      instance: { id: "run", definitionId: "site", definitionName: "Infusion Site" },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.legacyFallbacks).toEqual([]);
+
+    store.destroy();
+  });
+
+  it("re-reads the trackers and fallbacks when it backfills", async () => {
+    const store = makeStore();
+    api.emptyPage.mockResolvedValue({ data: [] });
+    api.getCurrentTherapyState.mockResolvedValue({ reservoir: null });
+    api.apsGetAll.mockResolvedValue({ data: [] });
+    api.getTrackerDefinitions.mockResolvedValue([{ id: "site", name: "Site" }]);
+    api.getActiveTrackerInstances.mockResolvedValue([]);
+    api.getLegacyFallbacks.mockResolvedValue(read([fallback(LegacyConsumableKind.Sensor, 3)]));
+
+    await store.performBackfillIfNeeded(true);
+
+    expect(store.trackerDefinitions.map((d) => d.id)).toEqual(["site"]);
+    expect(store.legacyFallbacks.map((f) => f.kind)).toEqual([LegacyConsumableKind.Sensor]);
 
     store.destroy();
   });
