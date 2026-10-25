@@ -85,9 +85,17 @@ msgid "Connection failed"
 msgstr "Connection failed"
 
 #: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
+#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
+#: src/lib/components/connectors/ConnectorDetailsDialog.svelte
+#: src/lib/components/connectors/DataSourceManageDialog.svelte
+#: src/lib/components/connectors/GoogleHealthSourceRow.svelte
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 #: src/lib/components/settings/DataSourceRow.svelte
+#: src/lib/components/settings/DataSourceRow.svelte
+#: src/lib/components/settings/DataSourceRow.svelte
 #: src/routes/(authenticated)/settings/admin/connector-cursors/+page.svelte
+#: src/routes/(authenticated)/settings/connectors/google-health/GoogleHealthSyncProgress.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
 msgid "Never"
 msgstr "Never"
@@ -384,10 +392,8 @@ msgstr "Failed to save settings"
 #~ msgid "Failed to save alarm configuration"
 #~ msgstr "Failed to save alarm configuration"
 
-#: src/lib/components/alerts/alertTime.svelte.ts
-#: src/lib/components/settings/DataSourceRow.svelte
-msgid "Just now"
-msgstr "Just now"
+#~ msgid "Just now"
+#~ msgstr "Just now"
 
 #: src/lib/websocket/websocket-client.svelte.ts
 msgid "Failed to create socket connection"
@@ -442,15 +448,23 @@ msgid "Unnamed {0}"
 msgstr "Unnamed {0}"
 
 #: src/lib/components/account/SecurityCredentialCard.svelte
-#: src/lib/components/alerts/alertTime.svelte.ts
+#: src/lib/components/alerts/AlertBanner.svelte
+#: src/lib/components/alerts/CriticalAlertTakeover.svelte
+#: src/lib/components/clock/ClockAlertBand.svelte
 #: src/lib/components/connectors/ConnectorSetup.svelte
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
 #: src/lib/components/connectors/ServerConnectorsCard.svelte
 #: src/lib/components/connectors/ServerConnectorsCard.svelte
 #: src/lib/components/dashboard/BGStatisticsCards.svelte
+#: src/lib/components/dashboard/BGStatisticsCards.svelte
+#: src/lib/components/dashboard/CurrentBGDisplay.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
+#: src/lib/components/dashboard/widgets/BgDeltaWidget.svelte
 #: src/lib/components/dashboard/widgets/LastUpdatedWidget.svelte
+#: src/lib/components/dashboard/widgets/LastUpdatedWidget.svelte
+#: src/lib/components/layout/MobileHeader.svelte
+#: src/lib/components/layout/MobileHeader.svelte
 #: src/lib/components/members/GuestLinksSection.svelte
 #: src/lib/components/members/MemberCard.svelte
 #: src/lib/components/members/MemberCard.svelte
@@ -461,6 +475,7 @@ msgstr "Unnamed {0}"
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/reports/loop-analysis/LoopHealthBody.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
+#: src/lib/components/settings/ClientDevices.svelte
 #: src/lib/components/status-pills/TrackerPill.svelte
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
@@ -1766,7 +1781,6 @@ msgstr "Calendar"
 #: src/lib/components/layout/ReportsFilterSidebar.svelte
 #: src/lib/components/ui/date-range-picker.svelte
 #: src/routes/(authenticated)/reports/+layout.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Today"
 msgstr "Today"
 
@@ -3116,7 +3130,7 @@ msgstr "<0/> Generate API key"
 #~ msgstr "<0/> Demo Mode"
 
 #. 0: formatTimeSinceLastReading()
-#. 0: minutesAgo(lastUpdated, now)
+#. 0: relativeAge(lastUpdated, { now, fallback\\: "Unknown" })
 #: src/lib/components/dashboard/CurrentBGDisplay.svelte
 #: src/lib/components/layout/MobileHeader.svelte
 msgid "Last reading: {0}"
@@ -6414,12 +6428,12 @@ msgstr "Last 24h by type:"
 #~ msgid "{0} synced so far"
 #~ msgstr "{0} synced so far"
 
-#. 0: formatRelativeTime(lastSyncAttempt)
+#. 0: relativeAge(lastSyncAttempt, { fallback\\: "Never" })
 #: src/lib/components/settings/DataSourceRow.svelte
 msgid "Last attempted: {0}"
 msgstr "Last attempted: {0}"
 
-#. 0: formatRelativeTime(lastSuccessfulSync)
+#. 0: relativeAge(lastSuccessfulSync, { fallback\\: "Never" })
 #: src/lib/components/settings/DataSourceRow.svelte
 msgid "<0/> Last successful: {0}"
 msgstr "<0/> Last successful: {0}"
@@ -12788,9 +12802,8 @@ msgstr "<0/> Donate"
 #~ msgid "Redirecting to Profile..."
 #~ msgstr "Redirecting to Profile..."
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Yesterday"
-msgstr "Yesterday"
+#~ msgid "Yesterday"
+#~ msgstr "Yesterday"
 
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Profile - Nocturne"
@@ -15360,40 +15373,14 @@ msgstr "<0/> Device authorized successfully. Prelude is now connected."
 msgid "This application is not in the Nocturne known app directory. Only approve if you trust this application."
 msgstr "This application is not in the Nocturne known app directory. Only approve if you trust this application."
 
-#. 0: seconds
-#. 0: seconds
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
-msgid "{0}s ago"
-msgstr "{0}s ago"
+#~ msgid "{0}s ago"
+#~ msgstr "{0}s ago"
 
-#. 0: minutes
-#. 0: diffMin
-#. 0: minutes
-#. 0: diffMins
-#. 0: mins
-#. 0: diffMins
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/alerts/alertTime.svelte.ts
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
-#: src/lib/components/layout/NotificationItem.svelte
-#: src/lib/components/status-pills/LoopPill.svelte
-#: src/routes/(authenticated)/settings/access-requests/+page.svelte
-msgid "{0}m ago"
-msgstr "{0}m ago"
+#~ msgid "{0}m ago"
+#~ msgstr "{0}m ago"
 
-#. 0: hours
-#. 0: hours
-#. 0: diffHours
-#. 0: hours
-#. 0: diffHours
-#: src/lib/components/WebSocketStatus.svelte
-#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
-#: src/lib/components/layout/NotificationItem.svelte
-#: src/lib/components/status-pills/LoopPill.svelte
-#: src/routes/(authenticated)/settings/access-requests/+page.svelte
-msgid "{0}h ago"
-msgstr "{0}h ago"
+#~ msgid "{0}h ago"
+#~ msgstr "{0}h ago"
 
 #: src/routes/(authenticated)/clock/+page.svelte
 msgid "Failed to load clock faces"
@@ -15719,16 +15706,8 @@ msgstr "Save these recovery codes in a safe place. If you lose access to your pa
 msgid "Screensaver mode (bouncing)"
 msgstr "Screensaver mode (bouncing)"
 
-#. 0: Math.floor(diffHr / 24)
-#. 0: diffDays
-#. 0: days
-#. 0: diffDays
-#: src/lib/components/alerts/alertTime.svelte.ts
-#: src/lib/components/layout/NotificationItem.svelte
-#: src/lib/components/status-pills/LoopPill.svelte
-#: src/routes/(authenticated)/settings/access-requests/+page.svelte
-msgid "{0}d ago"
-msgstr "{0}d ago"
+#~ msgid "{0}d ago"
+#~ msgstr "{0}d ago"
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 msgid "This connector is not currently enabled, but historical data from previous syncs is still stored. Enable the connector in your server configuration to resume syncing, or delete the data below."
@@ -16114,26 +16093,14 @@ msgstr "Remove {0} from the tenant? They will lose access to all tenant data."
 msgid "Restrict this member to only the most recent 24 hours of data."
 msgstr "Restrict this member to only the most recent 24 hours of data."
 
-#. 0: minutes; 1: minutes !== 1 ? "s" \\: ""
-#. 0: diffMins; 1: diffMins !== 1 ? "s" \\: ""
-#: src/lib/components/members/PendingRequestsList.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
-msgid "{0} minute{1} ago"
-msgstr "{0} minute{1} ago"
+#~ msgid "{0} minute{1} ago"
+#~ msgstr "{0} minute{1} ago"
 
-#. 0: hours; 1: hours !== 1 ? "s" \\: ""
-#. 0: diffHours; 1: diffHours !== 1 ? "s" \\: ""
-#: src/lib/components/members/PendingRequestsList.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
-msgid "{0} hour{1} ago"
-msgstr "{0} hour{1} ago"
+#~ msgid "{0} hour{1} ago"
+#~ msgstr "{0} hour{1} ago"
 
-#. 0: days; 1: days !== 1 ? "s" \\: ""
-#. 0: diffDays; 1: diffDays !== 1 ? "s" \\: ""
-#: src/lib/components/members/PendingRequestsList.svelte
-#: src/lib/components/settings/DataSourceRow.svelte
-msgid "{0} day{1} ago"
-msgstr "{0} day{1} ago"
+#~ msgid "{0} day{1} ago"
+#~ msgstr "{0} day{1} ago"
 
 #: src/lib/components/members/PendingRequestsList.svelte
 msgid "<0/> Message"
@@ -16549,7 +16516,7 @@ msgstr "Revoke this device? It will stop receiving alerts until it re-registers.
 msgid "<0/> Rename"
 msgstr "<0/> Rename"
 
-#. 0: timeAgo(new Date(device.lastSeenAt).getTime(), undefined, now.current)
+#. 0: relativeAge(device.lastSeenAt, { now\\: now.current, fallback\\: "Unknown" })
 #: src/lib/components/settings/ClientDevices.svelte
 msgid "<0/> Last seen {0}"
 msgstr "<0/> Last seen {0}"
@@ -17210,25 +17177,17 @@ msgstr "Nocturne will analyze your overnight data and notify you when potential 
 msgid "Your recorded weights over time."
 msgstr "Your recorded weights over time."
 
-#. 0: diffDays
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "{0} days ago"
-msgstr "{0} days ago"
+#~ msgid "{0} days ago"
+#~ msgstr "{0} days ago"
 
-#. 0: Math.floor(diffDays / 7)
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "{0} weeks ago"
-msgstr "{0} weeks ago"
+#~ msgid "{0} weeks ago"
+#~ msgstr "{0} weeks ago"
 
-#. 0: Math.floor(diffDays / 30)
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "{0} months ago"
-msgstr "{0} months ago"
+#~ msgid "{0} months ago"
+#~ msgstr "{0} months ago"
 
-#. 0: Math.floor(diffDays / 365)
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "{0} years ago"
-msgstr "{0} years ago"
+#~ msgid "{0} years ago"
+#~ msgstr "{0} years ago"
 
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Profiles are typically uploaded from your diabetes management app (like AAPS, Loop, or xDrip+). They contain your basal rates, insulin sensitivity factors, and carb ratios."
@@ -20335,7 +20294,7 @@ msgstr "Widget names could not be loaded, so widgets are listed by their interna
 msgid "<0/> Syncing"
 msgstr "<0/> Syncing"
 
-#. 0: minutesAgo(lastReadingAt.getTime())
+#. 0: relativeAge(lastReadingAt)
 #: src/lib/components/tenants/TenantOverviewTile.svelte
 msgid "Last reading {0}"
 msgstr "Last reading {0}"
@@ -23976,8 +23935,8 @@ msgstr "Review available data and confirm the import selection"
 msgid "Choose at least one data type to start importing"
 msgstr "Choose at least one data type to start importing"
 
-#. 0: lastSeen(connection.lastSync)
-#. 0: lastSeen(status.lastSync)
+#. 0: relativeAge(connection.lastSync, { fallback\\: "Never" })
+#. 0: relativeAge(status.lastSync, { fallback\\: "Never" })
 #: src/lib/components/connectors/GoogleHealthSourceRow.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/GoogleHealthSyncProgress.svelte
 msgid "Last successful sync: {0}"
@@ -30869,10 +30828,8 @@ msgstr "A phone number starts with + and a country code, digits only."
 msgid "{0} is required."
 msgstr "{0} is required."
 
-#. 0: diffHr; 1: diffMin % 60
-#: src/lib/components/alerts/alertTime.svelte.ts
-msgid "{0}h {1}m ago"
-msgstr "{0}h {1}m ago"
+#~ msgid "{0}h {1}m ago"
+#~ msgstr "{0}h {1}m ago"
 
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 msgid "Do not disturb · Alerts · Nocturne"
@@ -36822,7 +36779,7 @@ msgstr "This is your default profile. Make another profile the default first, th
 msgid "· Synced from {0}"
 msgstr "· Synced from {0}"
 
-#. 0: formatRelativeTime(therapy.createdAt)
+#. 0: relativeAge(therapy.createdAt)
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Created {0} <0/> <1/>"
 msgstr "Created {0} <0/> <1/>"
