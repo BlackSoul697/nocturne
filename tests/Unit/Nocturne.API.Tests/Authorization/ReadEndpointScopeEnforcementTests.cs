@@ -156,6 +156,7 @@ public class ReadEndpointScopeEnforcementTests
             ["TrackersController.GetActiveInstances"] = V4Reason.TenantTrackers,
             ["TrackersController.GetInstanceHistory"] = V4Reason.TenantTrackers,
             ["TrackersController.GetUpcomingInstances"] = V4Reason.TenantTrackers,
+            ["TrackerLegacyFallbacksController.GetLegacyFallbacks"] = V4Reason.ActionChecksAccess,
 
             ["DeviceCatalogController.GetCatalog"] = V4Reason.StaticReference,
             ["DeviceCatalogController.GetCatalogByCategory"] = V4Reason.StaticReference,

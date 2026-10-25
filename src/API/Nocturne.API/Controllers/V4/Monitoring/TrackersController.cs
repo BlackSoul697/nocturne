@@ -48,6 +48,9 @@ public class TrackersController : ControllerBase, IWriteScopedController
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IAlertAcknowledgementService _acknowledgementService;
     private readonly ILogger<TrackersController> _logger;
+    private readonly TimeProvider _time;
+
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     /// <summary>
     /// Initializes a new instance of <see cref="TrackersController"/>.
@@ -59,6 +62,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
     /// <param name="tenantAccessor">The request's tenant.</param>
     /// <param name="acknowledgementService">Acknowledges alert excursions when a tracker is acked.</param>
     /// <param name="logger">Logger instance.</param>
+    /// <param name="timeProvider">The clock a start or a range defaults from; the system clock when null.</param>
     public TrackersController(
         ITrackerRepository repository,
         ISignalRBroadcastService broadcast,
@@ -66,9 +70,11 @@ public class TrackersController : ControllerBase, IWriteScopedController
         IAlertRepository alerts,
         ITenantAccessor tenantAccessor,
         IAlertAcknowledgementService acknowledgementService,
-        ILogger<TrackersController> logger
+        ILogger<TrackersController> logger,
+        TimeProvider? timeProvider = null
     )
     {
+        _time = timeProvider ?? TimeProvider.System;
         _repository = repository;
         _broadcast = broadcast;
         _ruleSync = ruleSync;
@@ -523,8 +529,8 @@ public class TrackersController : ControllerBase, IWriteScopedController
         if (ReadsNoTrackers)
             return Ok(Array.Empty<TrackerInstanceDto>());
 
-        var fromDate = from ?? DateTime.UtcNow;
-        var toDate = to ?? DateTime.UtcNow.AddDays(30);
+        var fromDate = from ?? UtcNow;
+        var toDate = to ?? UtcNow.AddDays(30);
 
         var instances = await _repository.GetUpcomingInstancesAsync(
             fromDate,
@@ -568,7 +574,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
             userId,
             request.StartNotes,
             request.StartTreatmentId,
-            request.StartedAt ?? DateTime.UtcNow,
+            request.StartedAt ?? UtcNow,
             request.ScheduledAt
         );
         if (succession.Started is not { } instance)
@@ -775,7 +781,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
             userId,
             request?.OverrideNotes ?? preset.DefaultStartNotes,
             startTreatmentId: null,
-            DateTime.UtcNow,
+            UtcNow,
             scheduledAt: null
         );
         if (succession.Started is not { } instance)

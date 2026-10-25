@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getRequestEvent, query } from "$app/server";
 import { ClusterConfidence, SleepSource } from "$lib/api";
 import { fetchAllGlucose } from "./glucose-pagination";
-import { DateRangeSchema, resolveReportRange } from "./report-range";
+import { DateRangeSchema, resolvePatientToday, resolveReportRange } from "./report-range";
 import { readable } from "$lib/server/patient-timezone";
 import { compare } from "$api/generated/cgmComparisons.generated.remote";
 import { getTrends } from "$api/generated/sleepReports.generated.remote";
@@ -25,6 +25,9 @@ export const getReportSubject = query(async () => {
     dateOfBirth: record?.dateOfBirth ?? null,
   };
 });
+
+/** The patient's current calendar day as `YYYY-MM-DD`, which reports build relative windows from. */
+export const getReportsToday = query(async () => resolvePatientToday());
 
 /** Get sensor glucose readings for a date range */
 export const getEntries = query(DateRangeSchema.optional(), async (input) => {

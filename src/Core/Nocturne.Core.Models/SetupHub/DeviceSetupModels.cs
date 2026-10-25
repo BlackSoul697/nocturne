@@ -100,16 +100,20 @@ public enum TrackerOfferState
 
 /// <param name="DeviceName">The catalogue name of the recorded device the tracker follows.</param>
 /// <param name="WearDays">
-/// Whole days of the catalogue's typical wear time; with <paramref name="WearHours"/> it makes the
-/// full time. Both null when the catalogue rates none.
+/// Whole days of the lifespan the tracker gets; with <paramref name="WearHours"/> it makes the full
+/// time.
 /// </param>
 /// <param name="WearHours">Hours past <paramref name="WearDays"/>.</param>
+/// <param name="WearTimeIsTypical">
+/// The catalogue rates no wear time for the device, so the lifespan is the kind's typical one.
+/// </param>
 /// <param name="DefinitionId">The tracker behind <paramref name="State"/>, when it is not off.</param>
 public record TrackerOffer(
     TrackerOfferKind Kind,
     string DeviceName,
-    int? WearDays,
-    int? WearHours,
+    int WearDays,
+    int WearHours,
+    bool WearTimeIsTypical,
     TrackerOfferState State,
     Guid? DefinitionId);
 

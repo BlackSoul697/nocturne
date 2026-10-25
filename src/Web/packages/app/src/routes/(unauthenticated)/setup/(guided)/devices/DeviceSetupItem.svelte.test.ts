@@ -286,4 +286,24 @@ describe("DeviceSetupItem", () => {
     await expect.element(reservoir.getByRole("switch")).not.toBeInTheDocument();
     await expect.element(reservoir.getByRole("link", { name: "Tracker settings" })).toBeVisible();
   });
+
+  it("says when a tracker uses a typical wear time because the device has no rated one", async () => {
+    remote.setup = guessed({
+      trackers: [
+        {
+          kind: TrackerOfferKind.Sensor,
+          deviceName: "My CGM",
+          wearDays: 10,
+          wearHours: 0,
+          wearTimeIsTypical: true,
+          state: TrackerOfferState.Off,
+        },
+      ],
+    });
+    render(DeviceSetupItem);
+
+    await expect
+      .element(page.getByText("My CGM: no rated wear time. The tracker uses a typical wear time of 10 days."))
+      .toBeVisible();
+  });
 });
