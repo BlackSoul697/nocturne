@@ -115,9 +115,16 @@ public static class LocalSlotBinning
     /// The UTC instant local <paramref name="day"/> begins in <paramref name="tz"/>. A zone whose
     /// midnight is skipped by a DST transition begins the day at the first instant after it.
     /// </summary>
-    public static long DayStartMills(DateOnly day, TimeZoneInfo tz)
+    public static long DayStartMills(DateOnly day, TimeZoneInfo tz) => LocalInstantMills(day, 0, tz);
+
+    /// <summary>
+    /// The UTC instant local <paramref name="hour"/> o'clock of <paramref name="day"/> falls at in
+    /// <paramref name="tz"/>. A skipped local time resolves to the first instant after the gap, an
+    /// ambiguous one to its first occurrence.
+    /// </summary>
+    public static long LocalInstantMills(DateOnly day, int hour, TimeZoneInfo tz)
     {
-        var local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var local = day.ToDateTime(new TimeOnly(hour, 0), DateTimeKind.Unspecified);
         while (tz.IsInvalidTime(local))
             local = local.AddMinutes(1);
         var offset = tz.IsAmbiguousTime(local)

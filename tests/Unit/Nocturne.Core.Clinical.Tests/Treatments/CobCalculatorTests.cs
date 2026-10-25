@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -54,10 +55,7 @@ public class CobCalculatorTests
             .ReturnsAsync(Enumerable.Empty<ApsSnapshot>());
 
         // Real IobCalculator — COB calculation calls IOB internally for activity
-        var basalRateResolver = new Mock<IBasalRateResolver>();
-        basalRateResolver
-            .Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => DefaultBasalRate));
+        var basalSegments = MockBasalSegments.Flat(DefaultBasalRate);
 
         var iobApsRepo = new Mock<IApsSnapshotRepository>();
         iobApsRepo
@@ -72,9 +70,10 @@ public class CobCalculatorTests
         var iobCalculator = new IobCalculator(
             therapySettings.Object,
             sensitivityResolver.Object,
-            basalRateResolver.Object,
+            basalSegments.Object,
             iobApsRepo.Object,
-            pumpRepo.Object
+            pumpRepo.Object,
+            MockStateSpans.Empty().Object
         );
 
         _calculator = new CobCalculator(
@@ -130,7 +129,7 @@ public class CobCalculatorTests
         };
 
         var viaAsync = await _calculator.FromCarbIntakesAsync(carbs, boluses, tempBasals, now);
-        var viaSnapshot = _calculator.FromCarbIntakes(carbs, boluses, tempBasals, MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var viaSnapshot = _calculator.FromCarbIntakes(carbs, boluses, tempBasals, MatchingSnapshot(), (_, _) => DefaultBasalRate, now);
 
         Assert.Equal(viaAsync.Cob, viaSnapshot.Cob, 6);
         Assert.Equal(viaAsync.DecayedBy, viaSnapshot.DecayedBy);
@@ -162,8 +161,8 @@ public class CobCalculatorTests
             Origin = TempBasalOrigin.Algorithm,
         };
 
-        var runningSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now + 30 * 60 * 1000)], MatchingSnapshot(), _ => DefaultBasalRate, now);
-        var endedSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now)], MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var runningSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now + 30 * 60 * 1000)], MatchingSnapshot(), (_, _) => DefaultBasalRate, now);
+        var endedSnapshot = _calculator.FromCarbIntakes(carbs, boluses, [HighTemp(now)], MatchingSnapshot(), (_, _) => DefaultBasalRate, now);
         var runningAsync = await _calculator.FromCarbIntakesAsync(carbs, boluses, [HighTemp(null)], now);
         var endedAsync = await _calculator.FromCarbIntakesAsync(carbs, boluses, [HighTemp(now)], now);
         var withoutTemp = await _calculator.FromCarbIntakesAsync(carbs, boluses, [], now);
@@ -189,9 +188,10 @@ public class CobCalculatorTests
         var iobCalculator = new IobCalculator(
             therapySettings.Object,
             sensitivityResolver.Object,
-            Mock.Of<IBasalRateResolver>(MockBehavior.Strict),
+            Mock.Of<IBasalSegmentService>(MockBehavior.Strict),
             Mock.Of<IApsSnapshotRepository>(MockBehavior.Strict),
-            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict));
+            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict),
+            Mock.Of<IStateSpanRepository>(MockBehavior.Strict));
         var calculator = new CobCalculator(
             Mock.Of<ILogger<CobCalculator>>(),
             iobCalculator,
@@ -217,9 +217,10 @@ public class CobCalculatorTests
         var iobCalculator = new IobCalculator(
             therapySettings.Object,
             sensitivityResolver.Object,
-            Mock.Of<IBasalRateResolver>(MockBehavior.Strict),
+            Mock.Of<IBasalSegmentService>(MockBehavior.Strict),
             Mock.Of<IApsSnapshotRepository>(MockBehavior.Strict),
-            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict));
+            Mock.Of<IPumpSnapshotRepository>(MockBehavior.Strict),
+            Mock.Of<IStateSpanRepository>(MockBehavior.Strict));
         var calculator = new CobCalculator(
             Mock.Of<ILogger<CobCalculator>>(),
             iobCalculator,
@@ -238,7 +239,7 @@ public class CobCalculatorTests
             new() { Insulin = 2.0, Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(now - 25 * 60 * 1000).UtcDateTime },
         };
 
-        var result = calculator.FromCarbIntakes(carbs, boluses, [], MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var result = calculator.FromCarbIntakes(carbs, boluses, [], MatchingSnapshot(), (_, _) => DefaultBasalRate, now);
 
         Assert.True(result.Cob > 0);
         therapySettings.VerifyNoOtherCalls();
@@ -256,7 +257,7 @@ public class CobCalculatorTests
         };
 
         var viaAsync = await _calculator.FromCarbIntakesAsync(carbs, null, null, now);
-        var viaSnapshot = _calculator.FromCarbIntakes(carbs, null, null, MatchingSnapshot(), _ => DefaultBasalRate, now);
+        var viaSnapshot = _calculator.FromCarbIntakes(carbs, null, null, MatchingSnapshot(), (_, _) => DefaultBasalRate, now);
 
         Assert.Equal(viaAsync.Cob, viaSnapshot.Cob, 6);
         Assert.Equal(viaAsync.DecayedBy, viaSnapshot.DecayedBy);

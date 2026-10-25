@@ -3,6 +3,7 @@ import {
 	sliceIntoRows,
 	sliceBgIntoRows,
 	findNearestPoint,
+	hasShiftedHourMarks,
 	MS_PER_HOUR,
 	resolveTargetRange,
 	type ActogramPoint,
@@ -171,5 +172,17 @@ describe('sliceBgIntoRows', () => {
 		expect(apr20Row?.bgData).toHaveLength(1);
 		expect(apr20Row?.bgData[0].hoursFromStart).toBeCloseTo(38);
 		expect(apr20Row?.bgData[0].isExtended).toBe(true);
+	});
+});
+
+describe('hasShiftedHourMarks', () => {
+	it.each([
+		{ hours: 24, nextHours: 24, shifted: false },
+		{ hours: 23, nextHours: 24, shifted: true },
+		{ hours: 25, nextHours: 24, shifted: true },
+		{ hours: 24, nextHours: 23, shifted: true },
+		{ hours: 24, nextHours: 25, shifted: true },
+	])('is $shifted for a $hours hour day before a $nextHours hour day', ({ hours, nextHours, shifted }) => {
+		expect(hasShiftedHourMarks(servedDay('2026-03-08', 0, hours, nextHours))).toBe(shifted);
 	});
 });

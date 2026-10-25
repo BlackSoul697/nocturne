@@ -22,12 +22,12 @@ public interface ICobCalculator
     /// IobCobSeries.
     /// </summary>
     /// <param name="tempBasals">Pieces, as for <see cref="IIobCalculator.FromTempBasals"/>.</param>
-    /// <param name="scheduledBasalAt">As for <see cref="IIobCalculator.FromTempBasals"/>.</param>
+    /// <param name="scheduledUnder">As for <see cref="IIobCalculator.FromTempBasals"/>.</param>
     CobResult FromCarbIntakes(
         List<CarbIntake> carbIntakes,
         List<Bolus>? boluses,
         List<TempBasal>? tempBasals,
         TherapySnapshot snapshot,
-        Func<long, double> scheduledBasalAt,
+        Func<TempBasal, long, double> scheduledUnder,
         long time);
 }

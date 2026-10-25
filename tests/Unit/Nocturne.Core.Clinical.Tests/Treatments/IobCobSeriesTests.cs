@@ -1,5 +1,6 @@
 using Moq;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -21,9 +22,10 @@ public class IobCobSeriesTests
     private static readonly IobCalculator Calculator = new(
         new Mock<ITherapySettingsResolver>(MockBehavior.Strict).Object,
         new Mock<ISensitivityResolver>(MockBehavior.Strict).Object,
-        new Mock<IBasalRateResolver>(MockBehavior.Strict).Object,
+        new Mock<IBasalSegmentService>(MockBehavior.Strict).Object,
         new Mock<IApsSnapshotRepository>(MockBehavior.Strict).Object,
-        new Mock<IPumpSnapshotRepository>(MockBehavior.Strict).Object);
+        new Mock<IPumpSnapshotRepository>(MockBehavior.Strict).Object,
+        new Mock<IStateSpanRepository>(MockBehavior.Strict).Object);
 
     private static TherapySnapshot Snapshot(double basalRate) => new(
         dia: 3.0,
@@ -49,7 +51,7 @@ public class IobCobSeriesTests
 
     private static IobCobTick TickAtNow(IEnumerable<Bolus> boluses, IEnumerable<TempBasal> temps, TherapyTimeline timeline) =>
         IobCobSeries.Build(
-                Calculator, new Mock<ICobCalculator>(MockBehavior.Strict).Object, boluses, [], temps, timeline, null,
+                Calculator, new Mock<ICobCalculator>(MockBehavior.Strict).Object, boluses, [], temps, timeline, new ScheduledBasal(timeline.BasalSegments(), []), null,
                 Now, Now, Now, 5 * Minute)
             .Single();
 
@@ -103,7 +105,7 @@ public class IobCobSeriesTests
 
     private static List<IobCobTick> TwoTicks(DeviceReadings device, long nowMills) =>
         IobCobSeries.Build(
-            Calculator, new Mock<ICobCalculator>(MockBehavior.Strict).Object, [], [], null, Flat(1.0), device,
+            Calculator, new Mock<ICobCalculator>(MockBehavior.Strict).Object, [], [], null, Flat(1.0), new ScheduledBasal(Flat(1.0).BasalSegments(), []), device,
             Now - 5 * Minute, Now, nowMills, 5 * Minute);
 
     private static DateTime At(long minutesFromNow) =>

@@ -18,6 +18,33 @@ export const ACTOGRAM_PADDING_DAYS = 14;
 /** A day the API served: the row runs from `startMills` to `endMills`, so a DST day is 23 or 25 hours. */
 export type ActogramDay = Required<ServedActogramDay>;
 
+export const HOUR_MARK_SPACING = 6;
+const HOUR_MARKS_PER_DAY = 3;
+
+export interface HourMark {
+	hour: number;
+	mills: number;
+}
+
+/** The local hour boundaries the row labels: 0h at the day's start and end, and the served marks between. */
+export function hourMarksOf(day: ActogramDay): HourMark[] {
+	if (day.hourMarks.length !== 2 * HOUR_MARKS_PER_DAY) return [];
+	const instants = [
+		day.startMills,
+		...day.hourMarks.slice(0, HOUR_MARKS_PER_DAY),
+		day.endMills,
+		...day.hourMarks.slice(HOUR_MARKS_PER_DAY),
+	];
+	return instants.map((mills, index) => ({ hour: (index * HOUR_MARK_SPACING) % 24, mills }));
+}
+
+/** Whether a DST change inside the row moved an hour mark off an even spacing from the row start. */
+export function hasShiftedHourMarks(day: ActogramDay): boolean {
+	return hourMarksOf(day).some(
+		(mark, index) => mark.mills !== day.startMills + index * HOUR_MARK_SPACING * MS_PER_HOUR,
+	);
+}
+
 export function formatActogramDay(day: ActogramDay): string {
 	return formatShortDate(localDayStart(day.date));
 }

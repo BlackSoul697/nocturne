@@ -14,6 +14,7 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Glucose;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
@@ -26,6 +27,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Models.Widget;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Authorization;
@@ -415,7 +417,7 @@ public partial class AnalyticsReadScopeGuardTests
 
         var controller = new RetrospectiveController(
             iob.Object, cob.Object, entries.Object, boluses.Object, carbs.Object,
-            tempBasals.Object, projectionService: null!, basal.Object, Mock.Of<ITherapyTimelineResolver>(), Mock.Of<IApsSnapshotRepository>(),
+            tempBasals.Object, projectionService: null!, basal.Object, Mock.Of<ITherapyTimelineResolver>(), MockStateSpans.Empty().Object, Mock.Of<IApsSnapshotRepository>(),
             Mock.Of<IPumpSnapshotRepository>(), new IobCobReader(iob.Object, cob.Object, boluses.Object, tempBasals.Object, carbs.Object, TestTenantCache.Create(partition: null), NullLogger<IobCobReader>.Instance),
             NullLogger<RetrospectiveController>.Instance)
         {
