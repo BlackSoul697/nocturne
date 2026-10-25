@@ -9,7 +9,7 @@
     InsulinFormulation,
     CreateBasalInjectionRequest,
   } from "$lib/api";
-  import { InsulinCategory as InsulinCategoryEnum } from "$lib/api";
+  import { InsulinCategory as InsulinCategoryEnum, InsulinRole } from "$lib/api";
   import type { EntryRecord } from "$lib/constants/entry-categories";
   import {
     ENTRY_CATEGORIES,
@@ -193,7 +193,7 @@
     addName = "";
     const isLongActing = addCategory === InsulinCategoryEnum.LongActing
       || addCategory === InsulinCategoryEnum.UltraLongActing;
-    addRole = isLongActing ? "Basal" : "Bolus";
+    addRole = isLongActing ? InsulinRole.Basal : InsulinRole.Bolus;
     addDia = isLongActing ? 24.0 : 4.0;
     addPeak = isLongActing ? 0 : 75;
     addCurve = isLongActing ? "bilinear" : "rapid-acting";
@@ -306,7 +306,7 @@
   let basalEligibleInsulins = $derived.by(() => {
     const ts = editMills;
     return patientInsulins.filter((i) => {
-      if (i.role !== "Basal" && i.role !== "Both") return false;
+      if (i.role !== InsulinRole.Basal && i.role !== InsulinRole.Both) return false;
       const start = i.startDate ? new Date(i.startDate).getTime() : -Infinity;
       const end = i.endDate ? new Date(i.endDate).getTime() : Infinity;
       return ts >= start && ts <= end;
@@ -591,7 +591,7 @@
               if (created?.id) {
                 bolusForm.patientInsulinId = created.id;
                 bolusForm.insulinType = created.name ?? "";
-                if (created.role === "Basal" || created.role === "Both") {
+                if (created.role === InsulinRole.Basal || created.role === InsulinRole.Both) {
                   bolusForm.isBasalInsulin = true;
                 }
               }

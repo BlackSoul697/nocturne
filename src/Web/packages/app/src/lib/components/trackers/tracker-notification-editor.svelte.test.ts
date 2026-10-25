@@ -3,7 +3,7 @@ import { page } from "vitest/browser";
 import { beforeEach, describe, it, expect } from "vitest";
 import { page as pageState } from "$app/state";
 import TrackerNotificationEditor from "./tracker-notification-editor-test-wrapper.svelte";
-import { NotificationUrgency } from "$api";
+import { NotificationUrgency, TrackerMode } from "$api";
 
 describe("TrackerNotificationEditor", () => {
 	beforeEach(() => {
@@ -50,7 +50,7 @@ describe("TrackerNotificationEditor", () => {
 			notifications: [
 				{ urgency: NotificationUrgency.Info, hours: 24, description: "" },
 			],
-			mode: "Event",
+			mode: TrackerMode.Event,
 		});
 
 		await expect.element(page.getByText("Hours", { exact: true })).toBeVisible();
@@ -61,7 +61,7 @@ describe("TrackerNotificationEditor", () => {
 			notifications: [
 				{ urgency: NotificationUrgency.Info, hours: 24, description: "" },
 			],
-			mode: "Duration",
+			mode: TrackerMode.Duration,
 		});
 
 		await expect
@@ -74,7 +74,7 @@ describe("TrackerNotificationEditor", () => {
 			notifications: [
 				{ urgency: NotificationUrgency.Info, hours: 24, description: "" },
 			],
-			mode: "Event",
+			mode: TrackerMode.Event,
 		});
 
 		await expect

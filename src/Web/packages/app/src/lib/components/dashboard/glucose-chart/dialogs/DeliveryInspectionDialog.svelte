@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { DEFAULT_PROFILE_NAME } from "$lib/constants/profile-names";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Badge } from "$lib/components/ui/badge";
   import Activity from "@lucide/svelte/icons/activity";
@@ -116,7 +117,7 @@
   // Whether we have active modifiers to show
   const hasActiveModifiers = $derived(
     !!overrideState ||
-      (!!profileName && profileName !== "Default") ||
+      (!!profileName && profileName !== DEFAULT_PROFILE_NAME) ||
       tempBasalRate != null ||
       (activityStates != null && activityStates.length > 0),
   );
@@ -268,7 +269,7 @@
             </div>
           {/if}
 
-          {#if profileName && profileName !== "Default"}
+          {#if profileName && profileName !== DEFAULT_PROFILE_NAME}
             <div class="flex items-center gap-2">
               <Activity class="h-3.5 w-3.5 text-muted-foreground" />
               <span>Profile: <span class="font-medium">{profileName}</span></span>

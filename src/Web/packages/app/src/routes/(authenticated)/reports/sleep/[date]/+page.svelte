@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SleepScoreSource } from "$api";
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import { getSingleNightByDate } from "$api/generated/sleepReports.generated.remote";
@@ -53,7 +54,7 @@
     period: printedDate && timeSpan ? { label: `${printedDate}, ${timeSpan}` } : undefined,
   }));
 
-  const scoreBadgeLabel = $derived(report?.scoreSource === "Device" ? "Device" : "Estimated");
+  const scoreBadgeLabel = $derived(report?.scoreSource === SleepScoreSource.Device ? "Device" : "Estimated");
 
   const timeAsleepMinutes = $derived.by(() => {
     const b = report?.stageBreakdown;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { GlucoseProcessing } from "$lib/api";
   import { a1cLabel } from "$lib/utils/a1c-formatting";
   import { time } from "$lib/utils/formatting";
   import {
@@ -981,9 +982,9 @@
             >
               <SelectTrigger>
                 <span>
-                  {#if glucoseProcessingPreference === "Smoothed"}
+                  {#if glucoseProcessingPreference === GlucoseProcessing.Smoothed}
                     Smoothed
-                  {:else if glucoseProcessingPreference === "Unsmoothed"}
+                  {:else if glucoseProcessingPreference === GlucoseProcessing.Unsmoothed}
                     Unsmoothed
                   {:else}
                     Default
@@ -992,8 +993,8 @@
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="Smoothed">Smoothed</SelectItem>
-                <SelectItem value="Unsmoothed">Unsmoothed</SelectItem>
+                <SelectItem value={GlucoseProcessing.Smoothed}>Smoothed</SelectItem>
+                <SelectItem value={GlucoseProcessing.Unsmoothed}>Unsmoothed</SelectItem>
               </SelectContent>
             </Select>
           </div>

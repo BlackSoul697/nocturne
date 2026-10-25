@@ -78,6 +78,8 @@ import {
 } from "$api/pills-processor";
 import { isEntryDocument, isRecordDocument } from "$lib/websocket/payloads";
 import { isRecord } from "$lib/utils/type-guards";
+import { SyncPhase } from "$lib/api/generated/nocturne-api-client";
+import { NightscoutEventType } from "$lib/constants/nightscout-event-types";
 import { toIsoString } from "$lib/utils/api-date";
 import {
   resolveChartThresholds,
@@ -650,7 +652,7 @@ export class RealtimeStore {
 
     this.websocketClient.on("syncProgress", (event: SyncProgressEvent) => {
       this.syncProgressByConnector = { ...this.syncProgressByConnector, [event.connectorId]: event };
-      if (event.phase === "Syncing") return;
+      if (event.phase === SyncPhase.Syncing) return;
 
       // Show the completed/failed state briefly, then clear — unless a new run for the same
       // connector has already replaced it.
@@ -824,7 +826,7 @@ export class RealtimeStore {
           : "info";
 
     toast[level](event.message, {
-      description: event.title !== "Announcement" ? event.title : undefined,
+      description: event.title !== NightscoutEventType.Announcement ? event.title : undefined,
     });
   }
 

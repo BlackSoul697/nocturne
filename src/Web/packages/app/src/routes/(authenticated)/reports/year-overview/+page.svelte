@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { BAND_KEY_SUFFIX } from "$lib/constants/year-overview-keys";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -122,7 +123,7 @@
     if (!("advancedMode" in stored) || stored.advancedMode === true) return stored;
     return Object.fromEntries(
       Object.entries(stored).filter(
-        ([key]) => !key.endsWith("Band") && key !== "outOfBandTransparency"
+        ([key]) => !key.endsWith(BAND_KEY_SUFFIX) && key !== "outOfBandTransparency"
       )
     );
   });

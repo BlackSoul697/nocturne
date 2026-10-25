@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SyncPhase } from "$lib/api";
   import { getStatus as getConnectorStatuses } from "$api/generated/connectorStatus.generated.remote";
   import { getGoogleHealth } from "$api/generated/googleHealths.generated.remote";
   import {
@@ -132,7 +133,7 @@
   let syncProgressByConnector = $derived(realtimeStore.syncProgressByConnector);
   let activeSyncProgress = $derived.by(() => {
     const entries = Object.values(syncProgressByConnector);
-    return entries.find((p) => p.phase === "Syncing") ?? entries.at(-1) ?? null;
+    return entries.find((p) => p.phase === SyncPhase.Syncing) ?? entries.at(-1) ?? null;
   });
 
   const terminalRuns = createTerminalRunTracker();
