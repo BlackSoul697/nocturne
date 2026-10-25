@@ -23,7 +23,7 @@
     gates?: CoachGates;
     settleDelay?: number;
     seenDwellMs?: number;
-    /** Without one, the history entry an overlay holds can cancel, or strand under, a navigation. */
+    /** Without one, the back button leaves the page instead of dismissing an overlay. */
     router?: CoachRouter;
     children: Snippet;
   } = $props();

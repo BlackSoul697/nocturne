@@ -19,7 +19,7 @@
   import type { AlarmVisualSettings } from "$lib/types/alarm-profile";
   import type { TitleFaviconSettings } from "$lib/stores/serverSettings";
   import { browser, dev } from "$app/environment";
-  import { beforeNavigate, goto, invalidate } from "$app/navigation";
+  import { invalidate } from "$app/navigation";
   import { refreshOnVisible } from "$lib/utils/refresh-on-return.svelte";
   import { SHELL_DATA_KEY, SHELL_REVALIDATE_INTERVAL_MS } from "$lib/constants/shell-data";
   import { createShellRevalidator } from "$lib/utils/shell-session";
@@ -33,10 +33,11 @@
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
-  import { CoachMarkProvider, type CoachRouter } from "@nocturne/coach";
+  import { CoachMarkProvider } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";
   import "../../styles/coach-theme-overrides.css";
   import { createCoachMarkAdapter } from "$lib/coach-marks/adapter";
+  import { createCoachRouter } from "$lib/coach-marks/router";
   import { ONBOARDING_CORE_GATE, sequences } from "$lib/coach-marks/sequences";
   import { coachLabels } from "$lib/coach-marks/copy.svelte";
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
@@ -107,7 +108,7 @@
   let bannerStripHeight = $state(0);
 
   const coachMarkAdapter = createCoachMarkAdapter(tenantless);
-  const coachRouter: CoachRouter = { beforeNavigate, goto };
+  const coachRouter = createCoachRouter();
 
   // Title/Favicon service for dynamic updates
   const titleFaviconService = getTitleFaviconService();
