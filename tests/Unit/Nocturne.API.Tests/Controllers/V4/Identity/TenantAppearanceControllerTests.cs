@@ -141,10 +141,13 @@ public sealed class TenantAppearanceControllerTests
         // declarations is what makes adding one a decision rather than a default.
         PropertyNames(typeof(YearOverviewColorPreferences)).Should().BeEquivalentTo(
             "OutOfBandTransparency",
-            "AvgGlucoseBand", "AvgGlucoseBoundaries", "TirBand", "TirBoundaries",
-            "BolusBand", "BolusBoundaries", "BasalBand", "BasalBoundaries",
-            "TddBand", "TddBoundaries", "CarbsBand", "CarbsBoundaries");
-        PropertyNames(typeof(YearOverviewColorBoundary)).Should().BeEquivalentTo("Value", "Position");
+            "AvgGlucoseBand", "AvgGlucoseBoundaries", "AvgGlucoseLowColor", "AvgGlucoseHighColor",
+            "TirBand", "TirBoundaries", "TirLowColor", "TirHighColor",
+            "BolusBand", "BolusBoundaries", "BolusLowColor", "BolusHighColor",
+            "BasalBand", "BasalBoundaries", "BasalLowColor", "BasalHighColor",
+            "TddBand", "TddBoundaries", "TddLowColor", "TddHighColor",
+            "CarbsBand", "CarbsBoundaries", "CarbsLowColor", "CarbsHighColor");
+        PropertyNames(typeof(YearOverviewColorBoundary)).Should().BeEquivalentTo("Value", "Position", "Color");
         PropertyNames(typeof(PredictionPreferences)).Should().BeEquivalentTo(
             "Enabled", "Minutes", "DisplayMode");
         PropertyNames(typeof(ChartPreferences)).Should().BeEquivalentTo(

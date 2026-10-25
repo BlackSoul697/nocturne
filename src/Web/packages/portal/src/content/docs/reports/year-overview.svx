@@ -78,9 +78,23 @@ To filter the data:
   calendars load again.
 - Use **Types** to choose which record types the counts include.
 
-To change the colour scale, select **Advanced**. You can then set the range of
-values that the colours cover, change the colours, and fade the days outside a
-band. To move the scale panel to the corner of the screen, select **Float**.
+To change the colour scale:
+
+- Move the two handles on the scale, or type a value above each handle, to set
+  the range of values that the colours cover. The days outside the range fade.
+  Type a value in **Dim outside** to set how much they fade.
+- Select **Color boundary** to add a point to the scale. Move the point to
+  change where the colours change.
+- Select the circle at an end of the scale, or next to a point, to choose a
+  different colour for it.
+- Select **Swap colors** to put the colours at the two ends in the opposite
+  order. For example, to make low values the brightest.
+- Select **Reset** to go back to the default scale.
+
+When you scroll down, the scale panel moves out of view. Scroll up a small
+distance to show it again at the top of the screen. To make the panel smaller,
+select the arrow at its right side. The smaller panel shows only the menu and
+the colour scale.
 
 ## Good to know
 
