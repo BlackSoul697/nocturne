@@ -7,6 +7,7 @@
   import TimezoneCombobox from "$lib/components/patient/TimezoneCombobox.svelte";
   import X from "@lucide/svelte/icons/x";
   import { bg, bgLabel, convertFromDisplayUnits } from "$lib/utils/formatting";
+  import { alertWeekdayLabel } from "./summarizeCondition.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { untrack } from "svelte";
   import { getDefinitions } from "$api/generated/trackers.generated.remote";
@@ -120,15 +121,6 @@
     AlertWeekday.Saturday,
     AlertWeekday.Sunday,
   ];
-  const weekdayLabels: Record<AlertWeekday, string> = {
-    [AlertWeekday.Sunday]: "Sun",
-    [AlertWeekday.Monday]: "Mon",
-    [AlertWeekday.Tuesday]: "Tue",
-    [AlertWeekday.Wednesday]: "Wed",
-    [AlertWeekday.Thursday]: "Thu",
-    [AlertWeekday.Friday]: "Fri",
-    [AlertWeekday.Saturday]: "Sat",
-  };
 
   /** Label for a stored key, or undefined when the key is not one the editor offers. */
   function labelFor(labels: Partial<Record<string, string>>, key: string): string | undefined {
@@ -634,8 +626,8 @@
       class="flex-wrap"
     >
       {#each weekdayOrder as day (day)}
-        <ToggleGroup.Item value={day} aria-label={weekdayLabels[day]}>
-          {weekdayLabels[day]}
+        <ToggleGroup.Item value={day} aria-label={alertWeekdayLabel(day)}>
+          {alertWeekdayLabel(day)}
         </ToggleGroup.Item>
       {/each}
     </ToggleGroup.Root>
