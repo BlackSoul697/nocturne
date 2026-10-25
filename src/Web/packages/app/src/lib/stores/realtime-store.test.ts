@@ -45,6 +45,7 @@ import {
   loadInitialGlucose,
   sensorGlucoseToEntry,
 } from "./realtime-store.svelte";
+import { GLUCOSE_WINDOW_HOURS, initialReadWindows } from "./initial-reads";
 import type {
   ConnectionInfo,
   StorageEvent,
@@ -1909,6 +1910,25 @@ describe("loadInitialGlucose", () => {
     expect(entries).toHaveLength(RECENT_READINGS);
   });
 
+  it("covers the sidebar sparkline's whole window, which draws from the store alone", async () => {
+    const NOW = Date.parse("2026-10-10T12:00:00.000Z");
+    const { glucoseFrom } = initialReadWindows(NOW);
+    const FIVE_MINUTES = 5 * 60_000;
+    const window = Array.from({ length: GLUCOSE_WINDOW_HOURS * 12 + 1 }, (_, i) => ({
+      id: `r${i}`,
+      mills: NOW - i * FIVE_MINUTES,
+      mgdl: 100 + i,
+    }));
+    const getAll = vi.fn(async (from?: string) => ({
+      data: window.filter((r) => r.mills >= Date.parse(from ?? "0")),
+    }));
+
+    const entries = await loadInitialGlucose(clientWith(getAll as never), glucoseFrom);
+
+    expect(Math.min(...entries.map((e) => e.mills ?? 0))).toBe(NOW - GLUCOSE_WINDOW_HOURS * 3_600_000);
+    expect(entries).toHaveLength(window.length);
+  });
+
   it("tops up a window holding a single reading so the delta has a previous reading", async () => {
     const getAll = vi
       .fn()
@@ -1932,7 +1952,7 @@ describe("loadInitialGlucose", () => {
     expect(entries.map((e) => e.sgv).sort()).toEqual([118, 120, 122, 125, 130]);
   });
 
-  it("falls back to the newest readings when the window is empty", async () => {
+  it("falls back to the newest readings when the window is empty, so a tenant with only old readings has a current one", async () => {
     const getAll = vi.fn().mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce(readings(140));
 
     const entries = await loadInitialGlucose(clientWith(getAll), FROM);
