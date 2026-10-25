@@ -60,7 +60,7 @@
       // profile whose settings have vanished.
       await goto(resolve("/settings/profile"), { replaceState: true, noScroll: true });
     } catch (err) {
-      deleteError = describeSubmitError(err, "We couldn't delete this profile.");
+      deleteError = describeSubmitError(err, "We could not delete this profile.");
     } finally {
       deleting = false;
     }

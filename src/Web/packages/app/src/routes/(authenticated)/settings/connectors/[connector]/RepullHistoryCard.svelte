@@ -29,7 +29,7 @@
 
   let { connectorId }: { connectorId: string } = $props();
 
-  const FALLBACK_ERROR = "We couldn't start the re-download. Please try again.";
+  const FALLBACK_ERROR = "We could not start the re-download. Try again.";
 
   const effectivePermissions: string[] = $derived(
     page.data.effectivePermissions ?? []
@@ -140,7 +140,7 @@
         <Alert.Description>
           A long date range can take several minutes. Keep this tab open. If the
           page stops waiting before it finishes, the download usually carries on
-          in the background &mdash; check your data again in a few minutes
+          in the background. Check your data again in a few minutes
           before starting another one. Choose the shortest range and the fewest
           kinds of data that cover your gap.
         </Alert.Description>
@@ -208,7 +208,7 @@
           <AlertTriangle class="h-4 w-4" />
           <Alert.Description>
             {errorMessage} If it ran for a long time before this, it may still be
-            finishing on the server &mdash; check your data before trying again.
+            finishing on the server. Check your data before trying again.
           </Alert.Description>
         </Alert.Root>
       {:else if result}
