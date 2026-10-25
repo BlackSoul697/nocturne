@@ -1,6 +1,6 @@
 <script lang="ts" generics="T extends ActogramPoint">
   import type { Snippet } from 'svelte';
-  import { Chart, Svg, Spline, Circle, Tooltip } from 'layerchart';
+  import { Chart, Svg, Spline, Circle, Text, Tooltip } from 'layerchart';
   import { scaleTime } from 'd3-scale';
   import { timeScale } from '$lib/components/charts/scale-guards';
   import { curveMonotoneX } from 'd3';
@@ -14,6 +14,8 @@
     MS_PER_HOUR,
     HOURS_PER_ROW,
     findNearestPoint,
+    hasShiftedHourMarks,
+    hourMarksOf,
     type ActogramDay,
     type ActogramPoint,
     type ActogramRowContext,
@@ -39,6 +41,7 @@
   const dayStart = $derived(new Date(day.startMills));
   const xDomainEnd = $derived(new Date(day.startMills + HOURS_PER_ROW * MS_PER_HOUR));
   const midpoint = $derived(new Date(day.endMills));
+  const shiftedHourMarks = $derived(hasShiftedHourMarks(day));
 
   // Map RowDataPoints to chart-plottable objects for BG overlay
   const bgChartData = $derived(
@@ -120,6 +123,7 @@
 
       <!-- Dimming overlay for the extended (24–48h) half (top layer) -->
       <rect
+        data-testid="actogram-dim-boundary"
         x={context.xScale(midpoint)}
         y={0}
         width={context.xScale(xDomainEnd) - context.xScale(midpoint)}
@@ -127,6 +131,21 @@
         fill="var(--background)"
         opacity={0.6}
       />
+
+      <!-- The shared header sits on an even spacing, so a row a DST change shifted names its own hours. -->
+      {#if shiftedHourMarks}
+        {#each hourMarksOf(day) as mark, index (index)}
+          <Text
+            data-testid="actogram-hour-mark"
+            value="{mark.hour}h"
+            x={context.xScale(new Date(mark.mills))}
+            y={1}
+            textAnchor={index === 0 ? 'start' : 'middle'}
+            verticalAnchor="start"
+            class="fill-muted-foreground text-2xs"
+          />
+        {/each}
+      {/if}
 
       <!-- Interaction overlay for tooltip (topmost layer) -->
       <rect

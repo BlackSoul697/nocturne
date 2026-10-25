@@ -65,4 +65,11 @@ public class ActogramDay
     public long StartMills { get; set; }
     /// <summary>Exclusive. A day that crosses a DST change is 23 or 25 hours long.</summary>
     public long EndMills { get; set; }
+
+    /// <summary>
+    /// The instants of local 6h, 12h and 18h of this day, then of the next day, for the row's double
+    /// plot. The row's own 0h marks are <see cref="StartMills"/> and <see cref="EndMills"/>. A DST
+    /// change moves these off a fixed spacing from <see cref="StartMills"/>.
+    /// </summary>
+    public List<long> HourMarks { get; set; } = new();
 }
