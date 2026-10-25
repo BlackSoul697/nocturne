@@ -2,6 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { error } from "@sveltejs/kit";
+import { formatLocale } from "$lib/utils/formatting";
 import { GuestLinkStatus, type GuestLinkInfo } from "$api-clients";
 import {
   remoteCommand,
@@ -154,6 +155,35 @@ describe("GuestLinksSection", () => {
     expect(page.getByText("npgsql: connection reset").elements()).toHaveLength(
       0
     );
+  });
+
+  it("words the expiry of a live link and of an expired one through the regional formatter", async () => {
+    const narrow = new Intl.RelativeTimeFormat(formatLocale(), {
+      style: "narrow",
+      numeric: "auto",
+    });
+    const offset = 3 * 3_600_000 + 5 * 60_000;
+    links = [
+      {
+        ...existingLink,
+        id: "22222222-2222-2222-2222-222222222222",
+        expiresAt: new Date(Date.now() + offset).toISOString() as never,
+      },
+      {
+        ...existingLink,
+        id: "33333333-3333-3333-3333-333333333333",
+        status: GuestLinkStatus.Expired,
+        expiresAt: new Date(Date.now() - offset).toISOString() as never,
+      },
+    ];
+    render(GuestLinksSection);
+
+    await expect
+      .element(page.getByText(`Expires ${narrow.format(3, "hour")}`))
+      .toBeInTheDocument();
+    await expect
+      .element(page.getByText(`Expired ${narrow.format(-3, "hour")}`))
+      .toBeInTheDocument();
   });
 
   it("refreshes the guest links the section reads when a link is revoked", async () => {

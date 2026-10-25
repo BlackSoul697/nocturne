@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatDayTime } from "$lib/utils/formatting";
+  import { formatDayTime, relativeTime } from "$lib/utils/formatting";
   import { page } from "$app/state";
   import type { RemoteCommand } from "@sveltejs/kit";
   import { satisfiesScope } from "$lib/authorization/scopes";
@@ -121,23 +121,9 @@
 
   function formatRelativeExpiry(date: string | undefined | null): string {
     if (!date) return "";
-    const d = new Date(date);
-    const now = Date.now();
-    const diffMs = d.getTime() - now;
-    const absDiffMs = Math.abs(diffMs);
-
-    const minutes = Math.round(absDiffMs / 60_000);
-    const hours = Math.round(absDiffMs / 3_600_000);
-    const days = Math.round(absDiffMs / 86_400_000);
-
-    let relative: string;
-    if (minutes < 1) relative = "less than a minute";
-    else if (minutes < 60)
-      relative = `${minutes} minute${minutes !== 1 ? "s" : ""}`;
-    else if (hours < 48) relative = `${hours} hour${hours !== 1 ? "s" : ""}`;
-    else relative = `${days} day${days !== 1 ? "s" : ""}`;
-
-    return diffMs > 0 ? `Expires in ${relative}` : `Expired ${relative} ago`;
+    const expiresAt = new Date(date).getTime();
+    const relative = relativeTime(expiresAt);
+    return expiresAt > Date.now() ? `Expires ${relative}` : `Expired ${relative}`;
   }
 
   function isTerminal(link: GuestLinkInfo): boolean {
