@@ -24969,10 +24969,8 @@ msgstr ""
 msgid "Once the script reports that Nocturne is answering, open <0/> in a browser. You are taken to the setup page to name your first site and create the owner account, with a passkey or a sign-in provider. A passkey is your phone's or computer's built-in unlock. If you choose one, register a second device as soon as you can, because there is no password to fall back on."
 msgstr ""
 
-#. 0: daysOfData; 1: daysOfData === 1 ? "day" \\: "days"; 2: reliability.recommendedMinimumDays ?? 14
-#: src/lib/components/reports/ReliabilityBadge.svelte
-msgid "Based on {0} {1} of data ({2} recommended)"
-msgstr ""
+#~ msgid "Based on {0} {1} of data ({2} recommended)"
+#~ msgstr ""
 
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
 msgid "Nocturne inferred this sensor start from the warm-up gap in your CGM's readings. Correct the time if it is off, or delete it if this was not a sensor change."
@@ -36983,4 +36981,29 @@ msgstr ""
 #. 0: selectedDataTypes.length === dataTypes.length ? "every kind of data" \\: `${selectedDataTypes.length} kind(s) of data`; 1: fromDate
 #: src/routes/(authenticated)/settings/connectors/[connector]/RepullHistoryCard.svelte
 msgid "This downloads {0} from {1} up to now. It runs while you wait and can take several minutes, so keep this tab open until it finishes."
+msgstr ""
+
+#: src/lib/components/reports/ReliabilityBadge.svelte
+msgid "Days of data are counted on UTC days."
+msgstr ""
+
+#. 0: daysOfData; 1: daysOfData === 1 ? "day" \\: "days"; 2: reliability.recommendedMinimumDays ?? 14
+#: src/lib/components/reports/ReliabilityBadge.svelte
+msgid "Based on {0} {1} of data ({2} recommended) <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Time in a personal target range that changes through the day is not shown. Days of data are counted on UTC days."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/comparison/+page.svelte
+msgid "The average daily risk range (ADRR) is not shown for either period, and days with data are counted on UTC days."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/idp/+page.svelte
+msgid "The hourly figures place each reading at the local time its device reported. Days of data are counted on UTC days."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/sleep/+page.svelte
+msgid "Days in range, the weekly breakdown and the composition chart use UTC days."
 msgstr ""
