@@ -187,6 +187,7 @@
   --report-treatment: oklch(0.666 0.179 58.318);
 }
 
+@media not print {
 .dark {
   /* Prediction bias: a prediction that ran high or low, as the Loop Analysis heatmap tints it. */
   --bias-high: #5b97e0;
@@ -240,6 +241,7 @@
   --report-patterns: oklch(0.811 0.111 293.571);
   --report-lifestyle: oklch(0.845 0.143 164.978);
   --report-treatment: oklch(0.879 0.169 91.605);
+}
 }
 
 /* Tailwind theme integration */
