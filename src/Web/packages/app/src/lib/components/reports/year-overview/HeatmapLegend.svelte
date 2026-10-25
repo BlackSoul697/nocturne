@@ -54,7 +54,11 @@
   const formatted = (value: number) =>
     glucose ? formatGlucoseValue(value, units) : String(Math.round(value * 1000) / 1000);
 
-  const collapsed = new PersistedState("year-overview-color-panel-collapsed", false);
+  // Each page keeps the state it was opened with; another tab or frame clearing storage
+  // does not expand it.
+  const collapsed = new PersistedState("year-overview-color-panel-collapsed", false, {
+    syncTabs: false,
+  });
 
   const bandKey = $derived.by(() => {
     if (glucoseBands.length < 4) return [];
