@@ -31772,10 +31772,8 @@ msgstr ""
 msgid "{0} reservoir"
 msgstr ""
 
-#. 0: offer.deviceName
-#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
-msgid "{0}: no typical wear time, so it counts the days since the last change"
-msgstr ""
+#~ msgid "{0}: no typical wear time, so it counts the days since the last change"
+#~ msgstr ""
 
 #. 0: offer.deviceName
 #: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
@@ -36834,4 +36832,9 @@ msgstr ""
 #. 0: formatInsulinToCarbRatio(insulinStats.icRatio); 1: insulinStats.icRatio.toFixed(1)
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "<0>ICR check:</0> Your insulin-to-carb ratio of {0} means you use about 1 unit of insulin for every {1} grams of carbs."
+msgstr ""
+
+#. 0: offer.deviceName; 1: days
+#: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
+msgid "{0}: no rated wear time. The tracker uses a typical wear time of {1} days."
 msgstr ""
