@@ -56,12 +56,8 @@ public static class LegacyFallbackRules
     }
 
     /// <summary>
-    /// Whether <paramref name="definition"/> already does the job of a tracker of
-    /// <paramref name="spec"/>, so a second one would duplicate it: it <see cref="Covers"/> the
-    /// spec's kind and, for a site, follows the same hardware. A pod is restarted by pod changes and
-    /// an infusion set by site and cannula changes, so a site tracker follows a pod spec when it
-    /// restarts on pod changes, and an infusion-set spec when it does not, or when it restarts on
-    /// every change the spec does. A site tracker that restarts on nothing follows either.
+    /// Whether <paramref name="definition"/> already does <paramref name="spec"/>'s job: it
+    /// <see cref="Covers"/> the kind and, for a site, follows the same hardware (pod or infusion set).
     /// </summary>
     public static bool Follows(TrackerDefinitionEntity definition, ConsumableTrackerSpec spec)
     {

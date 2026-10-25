@@ -14,14 +14,18 @@ namespace Nocturne.API.Services.Monitoring;
 /// <param name="Run">Its first run, or null when no event started one.</param>
 /// <param name="StartEvent">The device event <paramref name="Run"/> started at.</param>
 public sealed record CreatedConsumableTracker(
-    TrackerDefinitionEntity Definition, ConsumableTrackerSpec Spec, TrackerInstanceEntity? Run, DeviceEvent? StartEvent);
+    TrackerDefinitionEntity Definition,
+    ConsumableTrackerSpec Spec,
+    TrackerInstanceEntity? Run,
+    DeviceEvent? StartEvent);
 
 /// <summary>
 /// Creates a tracker for a piece of consumable hardware, as the legacy conversion, the device
-/// provisioner and the setup hub all do: the definition, its managed alert rules when it has a ladder, and a first
-/// run started at the latest device event that restarts it, in the caller's transaction under the
-/// consumable lock (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), then
-/// announced after the commit.
+/// provisioner and the setup hub all do: the definition, its managed alert rules when it has a
+/// ladder, and a first run started at the latest device event that restarts it, in the caller's
+/// transaction under the consumable lock
+/// (<see cref="ITrackerRepository.ExecuteUnderConsumableLockAsync{T}"/>), then announced after the
+/// commit.
 /// </summary>
 public sealed class ConsumableTrackerWriter(
     IDeviceEventRepository deviceEvents,

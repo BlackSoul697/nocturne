@@ -105,6 +105,34 @@ public class LegacyFallbackRulesTests
             .Should().OnlyContain(kind => !LegacyFallbackRules.IsCovered(kind, definitions));
     }
 
+    [Theory]
+    [InlineData("pod", "pod", true)]
+    [InlineData("pod", "infusion set", false)]
+    [InlineData("pod", "generic", true)]
+    [InlineData("pod", "no triggers", true)]
+    [InlineData("infusion set", "pod", false)]
+    [InlineData("infusion set", "infusion set", true)]
+    [InlineData("infusion set", "generic", true)]
+    [InlineData("infusion set", "no triggers", true)]
+    public void ASiteTracker_FollowsASiteSpecOfTheSameHardware(string spec, string tracker, bool follows)
+    {
+        var specs = new Dictionary<string, ConsumableTrackerSpec>
+        {
+            ["pod"] = ConsumableTrackerSpecs.SpecsFor(DeviceCatalog.GetById("omnipod-dash")!).Single(),
+            ["infusion set"] = ConsumableTrackerSpecs.SpecsFor(DeviceCatalog.GetById("dana-i")!)
+                .Single(s => s.Category == TrackerCategory.Cannula),
+        };
+        var trackers = new Dictionary<string, TrackerDefinitionEntity>
+        {
+            ["pod"] = Definition(category: TrackerCategory.Cannula, triggers: ["Pod Change", "Site Change"]),
+            ["infusion set"] = Definition(category: TrackerCategory.Cannula, triggers: ["Site Change", "Cannula Change"]),
+            ["generic"] = ConsumableTrackerSpecs.ToDefinition(ConsumableTrackerSpecs.Generic(LegacyConsumableKind.Site), "member"),
+            ["no triggers"] = Definition(category: TrackerCategory.Cannula),
+        };
+
+        LegacyFallbackRules.Follows(trackers[tracker], specs[spec]).Should().Be(follows);
+    }
+
     [Fact]
     public void AnEventOlderThanThreeLifespans_IsStale()
     {
