@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
+using Nocturne.Infrastructure.Cache.Abstractions;
 
 namespace Nocturne.API.Services.Caching;
 
 /// <summary>
-/// The loads of cold <see cref="TenantCache"/> keys in progress, so concurrent readers of one full
-/// key run one load between them. A singleton: the key already names tenant, partition and demo
-/// segment, so two partitions never share a run.
+/// The loads of cold cache keys in progress, so concurrent readers of one full key run one load
+/// between them. A singleton: a <see cref="TenantCache"/> key already names tenant, partition and
+/// demo segment, so two partitions never share a run.
 /// </summary>
 /// <remarks>
 /// A load's factory captures its own caller's request scope and token, so the caller that starts
@@ -15,6 +16,24 @@ namespace Nocturne.API.Services.Caching;
 public sealed class CacheFlights
 {
     private readonly ConcurrentDictionary<(string Key, Type Type), Task> _flights = new();
+
+    /// <summary>
+    /// Reads <paramref name="key"/> from <paramref name="cache"/>, and on a miss runs one
+    /// <paramref name="load"/> between concurrent readers and caches its value for the TTL it returns.
+    /// </summary>
+    public async Task<T?> GetOrSetAsync<T>(
+        ICacheService cache, string key, Func<Task<CacheResult<T>>> load, CancellationToken ct) where T : class =>
+        await cache.GetAsync<T>(key, ct)
+            ?? await RunAsync(key, async () =>
+            {
+                if (await cache.GetAsync<T>(key, ct) is { } again)
+                    return again;
+
+                var (value, ttl) = await load();
+                if (value is not null && ttl is { } expiry)
+                    await cache.SetAsync(key, value, expiry, ct);
+                return value;
+            }, ct);
 
     public async Task<T> RunAsync<T>(string key, Func<Task<T>> load, CancellationToken ct)
     {

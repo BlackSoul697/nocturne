@@ -63,11 +63,11 @@ public sealed class TenantCacheTests : IDisposable
             Mock.Of<IDemoModeService>(d => d.IsEnabled == demo));
     }
 
-    private static async Task<string?> ReadAsync(ITenantCache cache) =>
-        (await cache.GetAsync<Box>("family:key"))?.Value;
+    private static async Task<string?> ReadAsync(ITenantCache cache, string key = "family:key") =>
+        (await cache.GetOrSetUnlessNullAsync<Box>(key, () => Task.FromResult<Box?>(null), Ttl))?.Value;
 
-    private static Task WriteAsync(ITenantCache cache, string value) =>
-        cache.SetAsync("family:key", new Box(value), Ttl);
+    private static Task WriteAsync(ITenantCache cache, string value, string key = "family:key") =>
+        cache.GetOrSetAsync(key, () => Task.FromResult(new Box(value)), Ttl);
 
     private sealed record Box(string Value);
 
@@ -183,7 +183,7 @@ public sealed class TenantCacheTests : IDisposable
         await WriteAsync(Cache(Owner()), "owner");
         await WriteAsync(Cache(Owner(), demo: true), "demo");
         await WriteAsync(Cache(share), "share");
-        await Cache(Owner()).SetAsync("other:key", new Box("other family"), Ttl);
+        await WriteAsync(Cache(Owner()), "other family", "other:key");
         await WriteAsync(Cache(Owner(), TenantB), "tenant b");
 
         await Cache(ClampedMember()).RemoveFamilyAsync("family");
@@ -191,7 +191,7 @@ public sealed class TenantCacheTests : IDisposable
         (await ReadAsync(Cache(Owner()))).Should().BeNull();
         (await ReadAsync(Cache(Owner(), demo: true))).Should().BeNull();
         (await ReadAsync(Cache(share))).Should().BeNull();
-        (await Cache(Owner()).GetAsync<Box>("other:key")).Should().NotBeNull();
+        (await ReadAsync(Cache(Owner()), "other:key")).Should().Be("other family");
         (await ReadAsync(Cache(Owner(), TenantB))).Should().Be("tenant b");
     }
 
@@ -199,13 +199,13 @@ public sealed class TenantCacheTests : IDisposable
     public async Task Removing_a_tenant_clears_every_family_of_that_tenant_only()
     {
         await WriteAsync(Cache(Share(Scope.GlucoseRead)), "share");
-        await Cache(Owner()).SetAsync("other:key", new Box("other family"), Ttl);
+        await WriteAsync(Cache(Owner()), "other family", "other:key");
         await WriteAsync(Cache(Owner(), TenantB), "tenant b");
 
         await Cache(Owner()).RemoveTenantAsync(TenantA);
 
         (await ReadAsync(Cache(Share(Scope.GlucoseRead)))).Should().BeNull();
-        (await Cache(Owner()).GetAsync<Box>("other:key")).Should().BeNull();
+        (await ReadAsync(Cache(Owner()), "other:key")).Should().BeNull();
         (await ReadAsync(Cache(Owner(), TenantB))).Should().Be("tenant b");
     }
 
