@@ -12,6 +12,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Battery;
 using Nocturne.Core.Models.V4;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Treatments;
@@ -501,34 +502,32 @@ public class PropertiesService : IPropertiesService
         };
     }
 
-    /// <summary>
-    /// Set battery level properties
-    /// </summary>
     private void SetBatteryProperties(Dictionary<string, object> properties, DData ddata)
     {
+        var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
+
         // Only statuses that actually carry an uploader battery: AID systems interleave
         // pump-only device statuses, and the newest record is often one of those.
         var batteryReports = (ddata.DeviceStatus ?? [])
             .Where(d => d.Uploader?.Battery != null)
             .ToList();
 
-        if (batteryReports.Count == 0)
+        var weakest = UploaderBatterySelection.Select(
+            batteryReports.Select(ToBatteryReading),
+            now);
+        if (weakest == null)
             return;
 
         // The most recent report from each uploader, weakest battery first. Legacy
         // clients read this list to show more than one phone.
-        var latestPerDevice = batteryReports
-            .GroupBy(d => string.IsNullOrEmpty(d.Device) ? "unknown" : d.Device)
+        var devices = batteryReports
+            .GroupBy(DeviceKey)
             .Select(g => g.OrderByDescending(d => d.Mills).First())
             .OrderBy(d => d.Uploader!.Battery)
-            .ToList();
-
-        var devices = latestPerDevice
             .Select(d => new Dictionary<string, object?>
             {
-                ["name"] = d.Uploader!.Name
-                    ?? (string.IsNullOrEmpty(d.Device) ? "unknown" : d.Device),
-                ["device"] = string.IsNullOrEmpty(d.Device) ? "unknown" : d.Device,
+                ["name"] = d.Uploader!.Name ?? DeviceKey(d),
+                ["device"] = DeviceKey(d),
                 ["value"] = d.Uploader.Battery,
                 ["voltage"] = d.Uploader.BatteryVoltage,
                 ["isCharging"] = d.Uploader.IsCharging,
@@ -537,21 +536,28 @@ public class PropertiesService : IPropertiesService
             })
             .ToList();
 
-        // `level` stays the newest reported battery, as before — not the weakest — so
-        // single-uploader setups keep their existing reading.
-        var batteryLevel = batteryReports
-            .OrderByDescending(d => d.Mills)
-            .First()
-            .Uploader!.Battery!.Value;
-
         properties["upbat"] = new Dictionary<string, object>
         {
-            ["level"] = batteryLevel,
-            ["display"] = $"{batteryLevel}%",
-            ["displayLine"] = $"Battery: {batteryLevel}%",
+            ["level"] = weakest.Level,
+            ["display"] = $"{weakest.Battery}%",
+            ["displayLine"] = $"Battery: {weakest.Battery}%",
             ["devices"] = devices,
         };
     }
+
+    private static string DeviceKey(DeviceStatus status) =>
+        string.IsNullOrEmpty(status.Device) ? "unknown" : status.Device;
+
+    private static BatteryReading ToBatteryReading(DeviceStatus status) =>
+        new()
+        {
+            Device = DeviceKey(status),
+            Battery = status.Uploader!.Battery,
+            Voltage = status.Uploader.BatteryVoltage,
+            IsCharging = status.Uploader.IsCharging ?? false,
+            Temperature = status.Uploader.Temperature,
+            Mills = status.Mills,
+        };
 
     /// <summary>
     /// Set the legacy device-age plugin properties: cannula (cage), sensor (sage),
