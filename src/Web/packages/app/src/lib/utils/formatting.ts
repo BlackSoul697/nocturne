@@ -213,7 +213,7 @@ export function hourLabel(date: Date | number): string {
   });
 }
 
-const relativeAgeFormatter = (() => {
+function cachedRelativeFormatter(numeric: Intl.RelativeTimeFormatNumeric) {
   let formatter: Intl.RelativeTimeFormat | null = null;
   let cachedFor: string | null = null;
   return (locale: string) => {
@@ -224,12 +224,16 @@ const relativeAgeFormatter = (() => {
       cachedFor = locale;
       formatter = new Intl.RelativeTimeFormat(locale, {
         style: "narrow",
-        numeric: "auto",
+        numeric,
       });
     }
     return formatter;
   };
-})();
+}
+
+const pastFormatter = cachedRelativeFormatter("auto");
+// "auto" words a day ahead as "tomorrow", which is wrong for 47 hours away.
+const futureFormatter = cachedRelativeFormatter("always");
 
 /**
  * How long ago a moment was, in the largest whole unit: "now", "5m ago", "3h ago",
@@ -246,19 +250,36 @@ export function relativeAge(
   at: Date | string | number | null | undefined,
   opts: { now?: number; fallback?: string } = {}
 ): string {
+  const { now = Date.now() } = opts;
+  const d = at ? toDate(at) : null;
+  return relativeTime(d && d.getTime() > now ? now : at, { ...opts, now });
+}
+
+/**
+ * How far a moment is from `now`, in either direction: "3h ago" or "in 3h". A
+ * moment behind reads in the largest whole unit, as in `relativeAge`. A moment
+ * ahead reads in the nearest whole unit, so 47 hours is "in 2d", never "tomorrow".
+ */
+export function relativeTime(
+  at: Date | string | number | null | undefined,
+  opts: { now?: number; fallback?: string } = {}
+): string {
   const { now = Date.now(), fallback = "" } = opts;
   if (!at) return fallback;
   const d = toDate(at);
   if (!d) return fallback;
 
-  const minutes = Math.max(0, Math.floor((now - d.getTime()) / 60000));
-  const formatter = relativeAgeFormatter(formatLocale());
-  if (minutes < 1) return formatter.format(0, "second");
-  if (minutes < 60) return formatter.format(-minutes, "minute");
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return formatter.format(-hours, "hour");
-  const days = Math.floor(hours / 24);
-  if (days < 7) return formatter.format(-days, "day");
+  const ahead = d.getTime() > now;
+  const sign = ahead ? 1 : -1;
+  const round = ahead ? Math.round : Math.floor;
+  const formatter = (ahead ? futureFormatter : pastFormatter)(formatLocale());
+  const minutes = round(Math.abs(now - d.getTime()) / 60000);
+  if (minutes < 1) return pastFormatter(formatLocale()).format(0, "second");
+  if (minutes < 60) return formatter.format(sign * minutes, "minute");
+  const hours = round(minutes / 60);
+  if (hours < 24) return formatter.format(sign * hours, "hour");
+  const days = round(hours / 24);
+  if (days < 7) return formatter.format(sign * days, "day");
   return formatNumericDate(d);
 }
 

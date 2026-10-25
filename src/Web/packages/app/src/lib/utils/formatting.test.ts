@@ -55,6 +55,7 @@ const {
 	formatDateForInput,
 	formatDateTimeCompact,
 	relativeAge,
+	relativeTime,
 	formatInsulinDisplay,
 	formatCarbDisplay,
 	formatPercentageDisplay,
@@ -249,6 +250,41 @@ describe("Date formatting", () => {
 			expect(narrow("de").format(-5, "minute")).not.toBe(
 				narrow("en").format(-5, "minute")
 			);
+		});
+
+		it("reads a moment ahead in the future tense and one behind in the past", () => {
+			const at = (ms: number) => relativeTime(NOW + ms, { now: NOW });
+			expect(at(5 * MIN)).toBe(narrow("en").format(5, "minute"));
+			expect(at(3 * HOUR + 5 * MIN)).toBe(narrow("en").format(3, "hour"));
+			expect(at(2 * DAY + 7 * HOUR)).toBe(narrow("en").format(2, "day"));
+			expect(at(-3 * HOUR)).toBe(narrow("en").format(-3, "hour"));
+			expect(at(29_000)).toBe(narrow("en").format(0, "second"));
+			expect(at(7 * DAY)).toBe(formatNumericDate(NOW + 7 * DAY));
+			expect(at(5 * MIN)).not.toBe(at(-5 * MIN));
+		});
+
+		it("never words a future moment under two days as tomorrow", () => {
+			const always = (locale: string) =>
+				new Intl.RelativeTimeFormat(locale, { style: "narrow", numeric: "always" });
+			const at = (ms: number) => relativeTime(NOW + ms, { now: NOW });
+			expect(at(47 * HOUR)).toBe(always("en").format(2, "day"));
+			expect(at(25 * HOUR)).toBe(always("en").format(1, "day"));
+			expect(at(90 * MIN)).toBe(always("en").format(2, "hour"));
+			withRegion("de-DE", () => {
+				expect(at(47 * HOUR)).toBe(always("de").format(2, "day"));
+				expect(at(25 * HOUR)).toBe(always("de").format(1, "day"));
+				expect(at(90 * MIN)).toBe(always("de").format(2, "hour"));
+			});
+			expect(at(25 * HOUR)).not.toBe(narrow("en").format(1, "day"));
+		});
+
+		it("writes a future moment in the regional format's language", () => {
+			withRegion("de-DE", () => {
+				expect(relativeTime(NOW + 3 * HOUR, { now: NOW })).toBe(
+					narrow("de").format(3, "hour")
+				);
+			});
+			expect(narrow("de").format(3, "hour")).not.toBe(narrow("en").format(3, "hour"));
 		});
 
 		it("builds one formatter per locale, however many times it is called", () => {
