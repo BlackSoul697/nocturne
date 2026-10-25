@@ -47,22 +47,24 @@
   // LocalStorage key for title/favicon settings
   const SETTINGS_STORAGE_KEY = "nocturne-title-favicon-settings";
 
-  // WebSocket config - defaults, can be overridden in production
-  const config = {
-    url: typeof window !== "undefined" ? window.location.origin : "",
-    reconnectAttempts: Infinity,
-    reconnectDelay: 5000,
-    maxReconnectDelay: 30000,
-    pingTimeout: 60000,
-    pingInterval: 25000,
-  };
-
   interface Props {
     data: LayoutData;
     children: Snippet;
   }
 
   const { data, children }: Props = $props();
+
+  // WebSocket config - defaults, can be overridden in production. A share host has no realtime feed.
+  // svelte-ignore state_referenced_locally
+  const config = {
+    url: typeof window !== "undefined" ? window.location.origin : "",
+    disabled: data.isShareHost === true,
+    reconnectAttempts: Infinity,
+    reconnectDelay: 5000,
+    maxReconnectDelay: 30000,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+  };
 
   // A tenantless host leaves the tenant-scoped surfaces below unmounted; see
   // tenantless-navigation. Read once: the host cannot change without a fresh load.
