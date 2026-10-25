@@ -934,6 +934,19 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void MultiPeriod_GlucoseOnlyGrant_KeepsTheTimeZoneReasonOfEachPeriod()
+    {
+        var cached = AllPeriodsWithTreatments();
+        foreach (var period in Periods(cached))
+            period.Analytics!.TimeZoneUnavailableReason = TimeZoneUnavailableReason.NotConfigured;
+
+        var redacted = StatisticsReadScopeGuard.Redact(cached, Granted(Scope.GlucoseRead));
+
+        Periods(redacted).Should().OnlyContain(p =>
+            p.Analytics!.TimeZoneUnavailableReason == TimeZoneUnavailableReason.NotConfigured);
+    }
+
+    [Fact]
     public void MultiPeriod_ReportsReadGrant_KeepsTreatmentAggregates()
     {
         var cached = AllPeriodsWithTreatments();
@@ -1001,6 +1014,7 @@ public partial class AnalyticsReadScopeGuardTests
             nameof(GlucoseAnalytics.Reliability),
             nameof(GlucoseAnalytics.Time),
             nameof(GlucoseAnalytics.ClinicalAssessment),
+            nameof(GlucoseAnalytics.TimeZoneUnavailableReason),
         ]);
     }
 

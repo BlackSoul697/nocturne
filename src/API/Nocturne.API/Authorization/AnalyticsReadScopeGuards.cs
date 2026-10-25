@@ -401,6 +401,7 @@ internal static class StatisticsReadScopeGuard
                 Reliability = analytics.Reliability,
                 Time = analytics.Time,
                 ClinicalAssessment = analytics.ClinicalAssessment,
+                TimeZoneUnavailableReason = analytics.TimeZoneUnavailableReason,
             };
 }
 
