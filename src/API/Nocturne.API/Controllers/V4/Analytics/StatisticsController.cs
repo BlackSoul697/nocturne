@@ -15,6 +15,8 @@ using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Basal;
@@ -60,7 +62,7 @@ public class StatisticsController : ControllerBase
     private readonly IStatisticsService _statisticsService;
     private readonly ITenantCache _cache;
     private readonly IProfileProjectionService _profileProjectionService;
-    private readonly IBasalRateResolver _basalRateResolver;
+    private readonly IStateSpanRepository _stateSpanRepository;
     private readonly IBasalSegmentService _basalSegments;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
@@ -82,7 +84,7 @@ public class StatisticsController : ControllerBase
         IStatisticsService statisticsService,
         ITenantCache cache,
         IProfileProjectionService profileProjectionService,
-        IBasalRateResolver basalRateResolver,
+        IStateSpanRepository stateSpanRepository,
         IBasalSegmentService basalSegments,
         ITherapySettingsResolver therapySettingsResolver,
         ISensorGlucoseRepository sensorGlucoseRepository,
@@ -104,7 +106,7 @@ public class StatisticsController : ControllerBase
         _statisticsService = statisticsService;
         _cache = cache;
         _profileProjectionService = profileProjectionService;
-        _basalRateResolver = basalRateResolver;
+        _stateSpanRepository = stateSpanRepository;
         _basalSegments = basalSegments;
         _therapySettingsResolver = therapySettingsResolver;
         _sensorGlucoseRepository = sensorGlucoseRepository;
@@ -166,7 +168,7 @@ public class StatisticsController : ControllerBase
         StatisticsService.UntilMills(endUtc, _timeProvider.GetUtcNow());
 
     /// <summary>
-    /// Fills <see cref="TempBasal.ScheduledRate"/> from the profile's scheduled rate at each
+    /// Fills <see cref="TempBasal.ScheduledRate"/> from <see cref="ScheduledBasal"/> at each
     /// temp's start, for records that have none. Legacy-sourced temps arrive with a null rate and
     /// <see cref="IStatisticsService.CalculateBasalAnalysis"/> can only classify a temp as high or
     /// low against it. Scheduled-origin records are the profile baseline itself and are skipped.
@@ -176,25 +178,28 @@ public class StatisticsController : ControllerBase
     private async Task FillMissingScheduledRatesAsync(
         IList<TempBasal> tempBasals, DateTime startUtc, DateTime endUtc, CancellationToken ct)
     {
-        var startMills = StatisticsService.TempBasalReadStart(startUtc).ToMills();
-        var endMills = endUtc.ToMills();
-        var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, ct);
-        foreach (var tb in tempBasals)
-        {
-            if (!tb.ScheduledRate.HasValue && tb.Origin != TempBasalOrigin.Scheduled)
-                tb.ScheduledRate = rateAt(tb.StartMills);
-        }
+        var unfilled = tempBasals.Where(tb => !tb.ScheduledRate.HasValue && tb.Origin != TempBasalOrigin.Scheduled).ToList();
+        if (unfilled.Count == 0)
+            return;
+
+        var readStart = StatisticsService.TempBasalReadStart(startUtc);
+        var scheduled = new ScheduledBasal(
+            await ReadProfileBasalSegmentsAsync(readStart, endUtc, ct),
+            await ScheduledBasal.OverridesAsync(_stateSpanRepository, readStart.ToMills(), endUtc.ToMills(), ct));
+        foreach (var tb in unfilled)
+            tb.ScheduledRate = scheduled.At(tb.StartMills);
     }
 
     /// <summary>
-    /// Appends one <see cref="TempBasalOrigin.Scheduled"/> TempBasal per profile basal segment
-    /// when the pump reported none.
+    /// Appends one <see cref="TempBasalOrigin.Scheduled"/> TempBasal per step of
+    /// <see cref="ScheduledBasal"/> when the pump reported none.
     /// </summary>
     /// <remarks>
     /// <paramref name="recordedBasal"/> is basal delivered by a route other than TempBasals. A
     /// non-empty one suppresses the fallback: a profile baseline on top of MDI injections would
     /// double-count the day's coverage. <c>null</c> where the caller does not read injections.
-    /// <paramref name="profileSegments"/> is the schedule when the caller already read it.
+    /// <paramref name="profileSegments"/> is the schedule when the caller already read it, and
+    /// <paramref name="overrides"/> the override scale factors when it already read those.
     /// </remarks>
     private async Task AddScheduledBasalFallbackAsync(
         List<TempBasal> tempBasals,
@@ -202,19 +207,23 @@ public class StatisticsController : ControllerBase
         DateTime endUtc,
         IReadOnlyCollection<BasalInjection>? recordedBasal,
         CancellationToken ct,
-        IReadOnlyList<BasalSegment>? profileSegments = null)
+        IReadOnlyList<BasalSegment>? profileSegments = null,
+        IReadOnlyList<ScaleFactorInterval>? overrides = null)
     {
         if (recordedBasal is { Count: > 0 }
             || StatisticsService.DeliveredWithin(tempBasals, startUtc, UntilMills(endUtc)).Count > 0)
             return;
 
-        foreach (var seg in profileSegments ?? await ReadProfileBasalSegmentsAsync(startUtc, endUtc, ct))
+        var scheduled = new ScheduledBasal(
+            profileSegments ?? await ReadProfileBasalSegmentsAsync(startUtc, endUtc, ct),
+            overrides ?? await ScheduledBasal.OverridesAsync(_stateSpanRepository, startUtc.ToMills(), endUtc.ToMills(), ct));
+        foreach (var step in scheduled.Segments([]))
         {
             tempBasals.Add(new TempBasal
             {
-                StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(seg.StartMills).UtcDateTime,
-                EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(seg.EndMills).UtcDateTime,
-                Rate = seg.UnitsPerHour,
+                StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(step.Start).UtcDateTime,
+                EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(step.End).UtcDateTime,
+                Rate = step.Rate,
                 Origin = TempBasalOrigin.Scheduled,
             });
         }
@@ -824,6 +833,8 @@ public class StatisticsController : ControllerBase
         var allCarbs = (await carbTask).ToList();
         var allDeviceEvents = await sessionTask;
         var clock = await _tenantClock.ResolveAsync(cancellationToken);
+        var overrides = await ScheduledBasal.OverridesAsync(
+            _stateSpanRepository, widestStart.ToMills(), now.ToMills(), cancellationToken);
 
         foreach (var days in periods)
         {
@@ -839,7 +850,8 @@ public class StatisticsController : ControllerBase
             var filteredCarbs    = allCarbs.Where(c => c.Timestamp >= startDate).ToList();
 
             if (StatisticsService.HasSufficientPeriodData(filteredEntries.Count))
-                await AddScheduledBasalFallbackAsync(tempBasals, startDate, endDate, basalInjections, cancellationToken);
+                await AddScheduledBasalFallbackAsync(
+                    tempBasals, startDate, endDate, basalInjections, cancellationToken, overrides: overrides);
 
             periodResults.Add(
                 (

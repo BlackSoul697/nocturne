@@ -42,8 +42,9 @@ public class IobCobComputeStageTests
                 It.IsAny<long>(),
                 It.IsAny<long>(),
                 It.IsAny<double>(),
+                It.IsAny<IReadOnlyList<ScaleFactorInterval>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, CancellationToken _) =>
+            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, IReadOnlyList<ScaleFactorInterval> _, CancellationToken _) =>
                 new List<BasalPoint>
                 {
                     new()
@@ -305,7 +306,7 @@ public class IobCobComputeStageTests
                 new TherapyTimeline(new[] { new TherapySegment(from, to, snapshot) }));
         var basalSeriesBuilder = new Mock<IBasalSeriesBuilder>();
         basalSeriesBuilder
-            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<IReadOnlyList<ScaleFactorInterval>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<BasalPoint>());
 
         var stage = new IobCobComputeStage(
@@ -759,7 +760,30 @@ public class IobCobComputeStageTests
         result.IobSeries[0].Value.Should().BeApproximately(0.4, 1e-9);
         _mockBasalSeriesBuilder.Verify(b => b.BuildAsync(
             It.Is<List<TempBasal>>(l => l.Count == 0),
-            startTime, endTime, It.IsAny<double>(), It.IsAny<CancellationToken>()),
+            startTime, endTime, It.IsAny<double>(), It.IsAny<IReadOnlyList<ScaleFactorInterval>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BasalSeriesGetsTheOverridesTheContextHolds()
+    {
+        var startTime = TestMills;
+        var endTime = TestMills + 30 * 60 * 1000;
+        ScaleFactorInterval[] overrides = [new(startTime - 60 * 60 * 1000, endTime, 0.5)];
+        var context = new ChartDataContext
+        {
+            StartTime = startTime,
+            EndTime = endTime,
+            IntervalMinutes = 5,
+            DefaultBasalRate = 1.0,
+            Overrides = overrides,
+        };
+
+        await _stage.ExecuteAsync(context, CancellationToken.None);
+
+        _mockBasalSeriesBuilder.Verify(b => b.BuildAsync(
+            It.IsAny<List<TempBasal>>(), startTime, endTime, It.IsAny<double>(),
+            It.Is<IReadOnlyList<ScaleFactorInterval>>(o => o.SequenceEqual(overrides)), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

@@ -53,7 +53,6 @@ public class RetrospectiveController : ControllerBase
     private readonly ICarbIntakeRepository _carbIntakeRepository;
     private readonly ITempBasalRepository _tempBasalRepository;
     private readonly DeviceStatusProjectionService _projectionService;
-    private readonly IBasalRateResolver _basalRateResolver;
     private readonly ITherapyTimelineResolver _therapyTimelineResolver;
     private readonly IStateSpanRepository _stateSpanRepository;
     private readonly IApsSnapshotRepository _apsSnapshotRepository;
@@ -68,7 +67,6 @@ public class RetrospectiveController : ControllerBase
         ICarbIntakeRepository carbIntakeRepository,
         ITempBasalRepository tempBasalRepository,
         DeviceStatusProjectionService projectionService,
-        IBasalRateResolver basalRateResolver,
         ITherapyTimelineResolver therapyTimelineResolver,
         IStateSpanRepository stateSpanRepository,
         IApsSnapshotRepository apsSnapshotRepository,
@@ -84,7 +82,6 @@ public class RetrospectiveController : ControllerBase
         _carbIntakeRepository = carbIntakeRepository;
         _tempBasalRepository = tempBasalRepository;
         _projectionService = projectionService;
-        _basalRateResolver = basalRateResolver;
         _therapyTimelineResolver = therapyTimelineResolver;
         _stateSpanRepository = stateSpanRepository;
         _apsSnapshotRepository = apsSnapshotRepository;
@@ -137,9 +134,11 @@ public class RetrospectiveController : ControllerBase
         // Get glucose at the specified time (interpolated)
         var glucoseData = GetGlucoseAtTime(entryList, time);
         // Get basal rate at the specified time
-        var basalData = await GetBasalRateAtTimeAsync(
+        var scheduledAtTime = await ScheduledBasalAsync(time, time + 1, cancellationToken);
+        var basalData = GetBasalRateAtTime(
             StatisticsService.ClipOverlappingTempBasals(tempBasals, Math.Min(time + 1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())),
-            time);
+            time,
+            scheduledAtTime.At);
         // Get recent treatments as summary data (boluses and carb intakes within 30 minutes)
         var recentTreatments = new List<TreatmentSummaryData>();
         var recentCutoff = time - 30 * 60 * 1000;
@@ -259,7 +258,6 @@ public class RetrospectiveController : ControllerBase
             .Where(d => d.Mills >= startMills && d.Mills <= endMills)
             .ToList() ?? new List<DeviceStatus>();
         // Calculate data points at each interval
-        var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, cancellationToken);
         var delivered = StatisticsService.ClipOverlappingTempBasals(
             tempBasals, Math.Min(endMills, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         var dataPoints = new List<RetrospectiveDataPoint>();
@@ -288,7 +286,7 @@ public class RetrospectiveController : ControllerBase
             // Get glucose at this time
             var glucose = GetGlucoseAtTime(entryList, pointTime);
             // Get basal rate
-            var basal = GetBasalRateAtTime(delivered, pointTime, rateAt);
+            var basal = GetBasalRateAtTime(delivered, pointTime, scheduled.At);
             dataPoints.Add(new RetrospectiveDataPoint
             {
                 Time = pointTime,
@@ -354,14 +352,14 @@ public class RetrospectiveController : ControllerBase
         var delivered = StatisticsService.ClipOverlappingTempBasals(
             tempBasals, Math.Min(endMills, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         // Generate basal timeline
-        var rateAt = await _basalRateResolver.BuildResolverAsync(startMills, endMills, cancellationToken);
+        var scheduled = await ScheduledBasalAsync(startMills, endMills, cancellationToken);
         var dataPoints = new List<BasalDataPoint>();
         var totalIntervals = (24 * 60) / intervalMinutes;
         for (int i = 0; i < totalIntervals; i++)
         {
             var pointTime = startMills + (i * intervalMinutes * 60 * 1000);
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(pointTime);
-            var basal = GetBasalRateAtTime(delivered, pointTime, rateAt);
+            var basal = GetBasalRateAtTime(delivered, pointTime, scheduled.At);
             dataPoints.Add(new BasalDataPoint
             {
                 Time = pointTime,
@@ -473,51 +471,15 @@ public class RetrospectiveController : ControllerBase
         }
         return null;
     }
-    /// <summary>
-    /// Get basal rate at a specific time (checking for active V4 temp basals)
-    /// </summary>
-    private async Task<BasalData?> GetBasalRateAtTimeAsync(List<TempBasal> tempBasals, long targetTime)
+    private async Task<ScheduledBasal> ScheduledBasalAsync(long from, long to, CancellationToken ct)
     {
-        // Look for active temp basal at target time
-        foreach (var tb in tempBasals)
-        {
-            var startTime = tb.StartMills;
-            var endTime = tb.EndMills;
-            if (endTime == null || tb.Rate is not { } rate) continue;
-            if (targetTime >= startTime && targetTime < endTime)
-            {
-                return new BasalData
-                {
-                    Rate = rate,
-                    IsTemp = true
-                };
-            }
-        }
-        // Return scheduled basal rate
-        return new BasalData
-        {
-            Rate = await GetScheduledBasalRateAsync(targetTime),
-            IsTemp = false
-        };
+        var timeline = await _therapyTimelineResolver.BuildAsync(from, to + 1, ct: ct);
+        return new ScheduledBasal(
+            timeline.BasalSegments(), await ScheduledBasal.OverridesAsync(_stateSpanRepository, from, to, ct));
     }
+
     /// <summary>
-    /// Get scheduled basal rate from profile
-    /// </summary>
-    private async Task<double> GetScheduledBasalRateAsync(long time)
-    {
-        try
-        {
-            return await _basalRateResolver.GetBasalRateAsync(time);
-        }
-        catch
-        {
-            return 0.8; // Default basal rate if profile not available
-        }
-    }
-    /// <summary>
-    /// Synchronous variant for use inside loops where the scheduled-rate delegate has been
-    /// pre-built via BuildResolverAsync. The async GetBasalRateAtTimeAsync is kept for the
-    /// single-point GetRetrospectiveData endpoint.
+    /// The temp basal in force at <paramref name="targetTime"/>, else <paramref name="scheduledRateAt"/>.
     /// </summary>
     private static BasalData GetBasalRateAtTime(
         List<TempBasal> tempBasals, long targetTime, Func<long, double> scheduledRateAt)

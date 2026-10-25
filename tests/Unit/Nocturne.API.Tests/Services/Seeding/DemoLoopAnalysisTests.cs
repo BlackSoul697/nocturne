@@ -79,7 +79,7 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
 
         var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, to);
         var scheduled = new ScheduledBasal(timeline.BasalSegments(), []);
-        var series = builder.BuildAsync(clipped, from, to, snapshot.BasalRateAt(from)).GetAwaiter().GetResult();
+        var series = builder.BuildAsync(clipped, from, to, snapshot.BasalRateAt(from), []).GetAwaiter().GetResult();
         var iob = new IobCalculator(null!, null!, null!, null!, null!, null!);
         var cob = new CobCalculator(NullLogger<CobCalculator>.Instance, iob, null!, null!, null!, null!);
 

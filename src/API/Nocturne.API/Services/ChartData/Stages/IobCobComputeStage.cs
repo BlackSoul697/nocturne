@@ -28,8 +28,8 @@ namespace Nocturne.API.Services.ChartData.Stages;
 /// <para>
 /// Basal series construction is delegated to <see cref="IBasalSeriesBuilder"/>, which uses
 /// v4 <see cref="TempBasal"/> records as the source of truth and fills any gaps with
-/// profile-inferred rates at the schedule's exact boundaries. When no TempBasal records
-/// exist the entire series is inferred from the profile. The y-axis maximum is clamped to at least
+/// <see cref="ScheduledBasal"/> at its exact boundaries. When no TempBasal records
+/// exist the entire series is inferred from it. The y-axis maximum is clamped to at least
 /// 2.5× the default basal rate so the chart always shows meaningful scale.
 /// </para>
 /// <para>
@@ -73,6 +73,7 @@ internal sealed class IobCobComputeStage(
             startTime,
             endTime,
             defaultBasalRate,
+            context.Overrides,
             cancellationToken
         );
 

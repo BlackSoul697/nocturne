@@ -3,8 +3,10 @@ using Nocturne.API.Helpers;
 using Nocturne.API.Services.ChartData;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -34,6 +36,7 @@ public class ChartDataService : IChartDataService
     private readonly IChartDataAssembler _assembler;
     private readonly IBasalSeriesBuilder _basalSeriesBuilder;
     private readonly ITempBasalRepository _tempBasalRepository;
+    private readonly IStateSpanRepository _stateSpanRepository;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly IBasalRateResolver _basalRateResolver;
     private readonly TimeProvider _timeProvider;
@@ -46,6 +49,7 @@ public class ChartDataService : IChartDataService
     /// <param name="assembler">The assembler that converts the completed context into the final DTO.</param>
     /// <param name="basalSeriesBuilder">Builds basal delivery series from temp basals and profile rates.</param>
     /// <param name="tempBasalRepository">Repository for fetching temp basal records.</param>
+    /// <param name="stateSpanRepository">Repository for fetching the override spans that scale the scheduled basal.</param>
     /// <param name="therapySettingsResolver">Resolves whether therapy settings (profile) data exists.</param>
     /// <param name="basalRateResolver">Resolves the active basal rate at a point in time.</param>
     /// <param name="timeProvider">The clock a temp basal still running stops at.</param>
@@ -55,6 +59,7 @@ public class ChartDataService : IChartDataService
         IChartDataAssembler assembler,
         IBasalSeriesBuilder basalSeriesBuilder,
         ITempBasalRepository tempBasalRepository,
+        IStateSpanRepository stateSpanRepository,
         ITherapySettingsResolver therapySettingsResolver,
         IBasalRateResolver basalRateResolver,
         TimeProvider timeProvider,
@@ -65,6 +70,7 @@ public class ChartDataService : IChartDataService
         _assembler = assembler;
         _basalSeriesBuilder = basalSeriesBuilder;
         _tempBasalRepository = tempBasalRepository;
+        _stateSpanRepository = stateSpanRepository;
         _therapySettingsResolver = therapySettingsResolver;
         _basalRateResolver = basalRateResolver;
         _timeProvider = timeProvider;
@@ -114,6 +120,7 @@ public class ChartDataService : IChartDataService
             startTime,
             endTime,
             defaultBasalRate,
+            await ScheduledBasal.OverridesAsync(_stateSpanRepository, startTime, endTime, cancellationToken),
             cancellationToken
         );
     }

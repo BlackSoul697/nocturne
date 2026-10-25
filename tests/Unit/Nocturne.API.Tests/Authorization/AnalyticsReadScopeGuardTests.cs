@@ -412,12 +412,15 @@ public partial class AnalyticsReadScopeGuardTests
                 It.IsAny<List<TempBasal>?>(), It.IsAny<long>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CobResult());
 
-        var basal = new Mock<IBasalRateResolver>();
-        basal.Setup(r => r.GetBasalRateAsync(It.IsAny<long>())).ReturnsAsync(0.8);
+        var timelines = new Mock<ITherapyTimelineResolver>();
+        timelines
+            .Setup(r => r.BuildAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long from, long to, string? _, CancellationToken _) =>
+                new TherapyTimeline([new TherapySegment(from, to, new TherapySnapshot(3.0, 75, 30.0, null, null, 0, null, null, null))]));
 
         var controller = new RetrospectiveController(
             iob.Object, cob.Object, entries.Object, boluses.Object, carbs.Object,
-            tempBasals.Object, projectionService: null!, basal.Object, Mock.Of<ITherapyTimelineResolver>(), MockStateSpans.Empty().Object, Mock.Of<IApsSnapshotRepository>(),
+            tempBasals.Object, projectionService: null!, timelines.Object, MockStateSpans.Empty().Object, Mock.Of<IApsSnapshotRepository>(),
             Mock.Of<IPumpSnapshotRepository>(), new IobCobReader(iob.Object, cob.Object, boluses.Object, tempBasals.Object, carbs.Object, TestTenantCache.Create(partition: null), NullLogger<IobCobReader>.Instance),
             NullLogger<RetrospectiveController>.Instance)
         {
