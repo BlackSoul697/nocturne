@@ -5,11 +5,7 @@ import { TimeZoneUnavailableReason } from "$lib/api";
 import { reactiveFields } from "$lib/test-stubs/reactive-fields.svelte";
 
 const statistics = vi.hoisted(() => ({ resolve: (_stats: unknown) => {} }));
-const store = reactiveFields({
-  entries: [] as { mills: number; sgv: number }[],
-  currentReadingLoaded: false,
-  nowMinute: Date.now(),
-});
+const store = reactiveFields({});
 
 vi.mock("$lib/stores/realtime-store.svelte", async () => {
   const { resolveChartThresholds } = await import("$lib/constants/glucose-thresholds");
@@ -39,6 +35,8 @@ const stats = {
   lastDay: {
     entryCount: 288,
     analytics: {
+      basicStats: { count: 288, mean: 144, min: 60, max: 260 },
+      glycemicVariability: { coefficientOfVariation: 40 },
       timeInRange: {
         percentages: { veryLow: 1, low: 3, target: 70, high: 20, veryHigh: 6 },
       },
@@ -154,27 +152,38 @@ describe("stat widgets", () => {
     await expect.element(page.getByText("40.0", { exact: true })).toBeVisible();
   });
 
-  it("Today's Summary keeps its height when the day's readings arrive, in three columns and in one", async () => {
+  it("Last 24h summary keeps its height when its statistics arrive, in three columns and in one", async () => {
     for (const width of [1440, 375]) {
       await page.viewport(width, 900);
-      store.entries = [];
-      store.currentReadingLoaded = false;
       const { container, unmount } = render(DailySummaryWidget);
       const skeletonHeight = cellHeight(container);
 
-      // Midday on the store's own clock: readings minutes before a wall-clock "now" fall on
-      // yesterday when the run is in the first minutes after midnight.
-      const now = new Date(2026, 9, 21, 12, 0).getTime();
-      store.nowMinute = now;
-      store.entries = [
-        { mills: now - 600_000, sgv: 110 },
-        { mills: now - 300_000, sgv: 150 },
-      ];
-      store.currentReadingLoaded = true;
+      statistics.resolve(stats);
       await expect.element(page.getByText("readings")).toBeVisible();
 
       expect(cellHeight(container)).toBe(skeletonHeight);
       unmount();
     }
+  });
+
+  it("Last 24h summary shows the backend's figures as given, with no figure of its own", async () => {
+    await page.viewport(1440, 900);
+    render(DailySummaryWidget);
+    statistics.resolve(stats);
+
+    await expect.element(page.getByText("144", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("↓ 60", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("↑ 260", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("70%", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Moderate (40% CV)")).toBeVisible();
+    await expect.element(page.getByText("288 readings")).toBeVisible();
+  });
+
+  it("Last 24h summary says so when the last 24 hours hold no readings", async () => {
+    await page.viewport(1440, 900);
+    render(DailySummaryWidget);
+    statistics.resolve({ lastDay: { entryCount: 0, analytics: { basicStats: { count: 0 } } } });
+
+    await expect.element(page.getByText("No data in the last 24h")).toBeVisible();
   });
 });

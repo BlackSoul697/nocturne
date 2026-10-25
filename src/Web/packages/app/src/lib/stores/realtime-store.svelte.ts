@@ -121,11 +121,11 @@ export function sensorGlucoseToEntry(sg: SensorGlucose): Entry {
 export const RECENT_READINGS = 5;
 
 /**
- * The readings the store starts from: those since `from`, which the caller sets to cover today and
- * the last day. The window is left open-ended so a reading stamped ahead of the browser's clock is
- * still the current one. An uploader that has been quiet for most of the window still has a
- * current reading, delta and recent list to show, so a sparse window is topped up with the newest
- * readings.
+ * The readings the store starts from: those since `from`, which the caller sets to the sidebar
+ * sparkline's window ({@link GLUCOSE_WINDOW_HOURS}), the only reader of the store's history. The
+ * window is left open-ended so a reading stamped ahead of the browser's clock is still the current
+ * one. An uploader that has been quiet for most of the window still has a current reading, delta and
+ * recent list to show, so a sparse window is topped up with the newest readings.
  */
 export async function loadInitialGlucose(
   sensorGlucose: SensorGlucoseClient,
