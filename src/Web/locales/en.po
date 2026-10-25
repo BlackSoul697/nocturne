@@ -36585,6 +36585,7 @@ msgstr "<0/> Status Pills"
 msgid "Select the pills that show next to the glucose value. Drag a pill to change its position."
 msgstr "Select the pills that show next to the glucose value. Drag a pill to change its position."
 
+#: src/lib/coach-marks/copy.svelte.ts
 #: src/lib/components/settings/DashboardRailConfigurator.svelte
 #: src/lib/components/status-pills/LegacyAgePill.test-host.svelte
 #: src/lib/components/status-pills/StatusRail.svelte
@@ -36946,3 +36947,31 @@ msgstr "Reservoir (IAGE)"
 #: src/lib/components/trackers/legacy-kind-label.svelte.ts
 msgid "Pump battery (BAGE)"
 msgstr "Pump battery (BAGE)"
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Tracker pill"
+msgstr "Tracker pill"
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance."
+msgstr "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance."
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Record a change"
+msgstr "Record a change"
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers."
+msgstr "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers."
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Lifespan and thresholds"
+msgstr "Lifespan and thresholds"
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Select Definitions. Then select the pencil icon of a tracker to edit it. The expected lifespan is the usual time between changes. Warning and Hazard alerts come from the notification thresholds."
+msgstr "Select Definitions. Then select the pencil icon of a tracker to edit it. The expected lifespan is the usual time between changes. Warning and Hazard alerts come from the notification thresholds."
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again."
+msgstr "Use this list to change the order of the status pills or to hide a pill. If you hid a legacy age from the dashboard, that age shows under Hidden legacy ages. Select Show to show the age on the dashboard again."
