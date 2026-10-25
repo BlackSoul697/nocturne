@@ -227,6 +227,9 @@ internal sealed class DataFetchStage(
                 cancellationToken
             );
 
+            var overrides = await ScheduledBasal.OverridesAsync(
+                stateSpanRepository, bufferStartTime, endTime, cancellationToken);
+
             var profileSegments = await profileActivationResolver.GetRangeAsync(startTime, endTime, cancellationToken);
 
             var systemEventsResult = await systemEventRepository.GetSystemEventsAsync(
@@ -269,6 +272,7 @@ internal sealed class DataFetchStage(
             return context with
             {
                 StateSpans = stateSpansReadOnly,
+                Overrides = overrides,
                 ProfileSegments = profileSegments,
                 SystemEvents = systemEventsResult?.ToList() ?? [],
                 TrackerDefinitions = trackerDefs?.ToList() ?? [],

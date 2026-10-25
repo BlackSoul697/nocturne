@@ -18,6 +18,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.V4;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V4.Analytics;
@@ -62,6 +63,7 @@ public class RetrospectiveControllerTests
             CreateProjectionService(),
             _basalRateResolverMock.Object,
             _therapyTimelineResolverMock.Object,
+            MockStateSpans.Empty().Object,
             Mock.Of<IApsSnapshotRepository>(),
             Mock.Of<IPumpSnapshotRepository>(),
             new IobCobReader(_iobCalculatorMock.Object, _cobCalculatorMock.Object, _bolusRepoMock.Object,
