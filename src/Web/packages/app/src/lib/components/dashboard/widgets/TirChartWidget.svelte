@@ -102,7 +102,12 @@
         <span>Below {(veryLow + low).toFixed(0)}%</span>
         <span>Above {(high + veryHigh).toFixed(0)}%</span>
       </div>
-      <ReliabilityBadge reliability={showAverage ? stats?.last90Days?.reliability : stats?.lastDay?.reliability} />
+      {@const period = showAverage ? stats?.last90Days : stats?.lastDay}
+      <ReliabilityBadge
+        compact
+        reliability={period?.reliability}
+        timeZoneUnavailableReason={period?.analytics?.timeZoneUnavailableReason}
+      />
     {:else}
       <div class="flex flex-col items-center justify-center text-muted-foreground py-4">
         <p class="text-xs">{showAverage ? "No 90-day data available" : "No data available"}</p>

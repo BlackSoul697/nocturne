@@ -1,6 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, expect, it, vi } from "vitest";
+import { TimeZoneUnavailableReason } from "$lib/api";
 import { reactiveFields } from "$lib/test-stubs/reactive-fields.svelte";
 
 const statistics = vi.hoisted(() => ({ resolve: (_stats: unknown) => {} }));
@@ -29,6 +30,7 @@ vi.mock("$api/generated/statistics.generated.remote", () => ({
     }),
 }));
 
+import WithTooltipProvider from "$lib/test-stubs/WithTooltipProvider.test-stub.svelte";
 import TirChartWidget from "./TirChartWidget.svelte";
 import TddWidget from "./TddWidget.svelte";
 import DailySummaryWidget from "./DailySummaryWidget.svelte";
@@ -60,6 +62,16 @@ const stats = {
 const withMicroboluses = structuredClone(stats);
 withMicroboluses.lastDay.insulinDelivery.automaticBolusPerDay = 6;
 withMicroboluses.last90Days.insulinDelivery.automaticBolusPerDay = 5;
+
+const unreliable = { meetsReliabilityCriteria: false, daysOfData: 1, recommendedMinimumDays: 14 };
+const withoutZone = {
+  lastDay: {
+    ...stats.lastDay,
+    reliability: unreliable,
+    analytics: { ...stats.lastDay.analytics, timeZoneUnavailableReason: TimeZoneUnavailableReason.NotConfigured },
+  },
+  last90Days: { ...stats.last90Days, reliability: unreliable },
+};
 
 const cellHeight = (container: HTMLElement) =>
   container.querySelector("section")!.getBoundingClientRect().height;
@@ -97,6 +109,23 @@ describe("stat widgets", () => {
     render(TddWidget);
     statistics.resolve(withMicroboluses);
     await expect.element(page.getByText("Auto", { exact: true })).toBeVisible();
+  });
+
+  it.each([
+    ["Time in range", TirChartWidget],
+    ["Total daily dose", TddWidget],
+  ])("%s says days are UTC days only for the period whose data has no time zone", async (_name, Widget) => {
+    await page.viewport(1440, 900);
+    render(WithTooltipProvider, { props: { component: Widget } });
+    statistics.resolve(withoutZone);
+
+    await expect.element(page.getByRole("button", { name: "Counted on UTC days" })).toBeVisible();
+    await expect.element(page.getByText("Days of data are counted on UTC days.")).not.toBeInTheDocument();
+
+    await page.getByRole("button", { name: "Last 24h" }).click();
+
+    await expect.element(page.getByText("90-Day Avg", { exact: true })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Counted on UTC days" })).not.toBeInTheDocument();
   });
 
   it("Total Daily Dose labels its 24-hour view Last 24h", async () => {
