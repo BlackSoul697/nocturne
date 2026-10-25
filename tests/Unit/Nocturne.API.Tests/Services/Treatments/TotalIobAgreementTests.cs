@@ -85,9 +85,6 @@ public class TotalIobAgreementTests
         therapy.Setup(t => t.GetDIAAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(3.0);
         var sensitivity = new Mock<ISensitivityResolver>();
         sensitivity.Setup(s => s.GetSensitivityAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(95.0);
-        var basalRate = new Mock<IBasalRateResolver>();
-        basalRate.Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => 1.0));
         _aps.Setup(r => r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTime? from, DateTime? to, string? _, string? _, int limit, int _, bool _, CancellationToken _) =>
                 (IEnumerable<ApsSnapshot>)_apsRows.Where(s => s.Timestamp >= from && s.Timestamp <= to)
@@ -102,7 +99,8 @@ public class TotalIobAgreementTests
         _pump.Setup(r => r.GetIobPointsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTime from, DateTime to, CancellationToken _) =>
                 (IReadOnlyList<PumpIobPoint>)PumpPoints(from, to));
-        _calculator = new IobCalculator(therapy.Object, sensitivity.Object, basalRate.Object, _aps.Object, _pump.Object);
+        _calculator = new IobCalculator(
+            therapy.Object, sensitivity.Object, MockBasalSegments.Flat(1.0).Object, _aps.Object, _pump.Object, MockStateSpans.Empty().Object);
 
         _cob
             .Setup(c => c.CalculateTotalAsync(
@@ -440,7 +438,7 @@ public class TotalIobAgreementTests
             });
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
 
         var atTime = (await controller.GetCurrentIob(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
@@ -456,7 +454,7 @@ public class TotalIobAgreementTests
     {
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
 
         var result = (await controller.GetIobFromTreatments(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
@@ -476,7 +474,7 @@ public class TotalIobAgreementTests
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         var controller = new IobController(
-            _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), temps.Object,
+            _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), temps.Object, MockStateSpans.Empty().Object,
             Reader(ReadingMills), NullLogger<IobController>.Instance);
 
         await controller.GetHourlyIob(intervalMinutes: 5, hours: 168, startTime: ReadingMills - 168 * 60 * Minute);
@@ -507,7 +505,7 @@ public class TotalIobAgreementTests
             .ReturnsAsync([]);
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, boluses.Object, temps.Object,
-            Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
 
         await controller.GetHourlyIob(intervalMinutes: 5, hours: 1, startTime: ReadingMills - 55 * Minute);
 
@@ -520,7 +518,7 @@ public class TotalIobAgreementTests
     {
         var controller = new IobController(
             _calculator, _cob.Object, _timelines.Object, _aps.Object, _pump.Object, Boluses(ReadingMills), TempBasals(ReadingMills),
-            Reader(ReadingMills), NullLogger<IobController>.Instance);
+            MockStateSpans.Empty().Object, Reader(ReadingMills), NullLogger<IobController>.Instance);
 
         var current = (await controller.GetCurrentIob(time: ReadingMills)).Result
             .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<IobResult>().Subject;
@@ -546,12 +544,12 @@ public class TotalIobAgreementTests
             Mock.Of<IApsSnapshotRepository>(),
             Mock.Of<IPumpSnapshotRepository>(),
             Mock.Of<IUploaderSnapshotRepository>(),
-            Mock.Of<IStateSpanRepository>(),
+            MockStateSpans.Empty().Object,
             Mock.Of<IDeviceStatusExtrasRepository>(),
             NullLogger<DeviceStatusProjectionService>.Instance);
         var controller = new RetrospectiveController(
             _calculator, _cob.Object, entries.Object, Boluses(ReadingMills), _carbs.Object, TempBasals(ReadingMills),
-            projection, basalRate.Object, _timelines.Object, _aps.Object, _pump.Object, Reader(ReadingMills),
+            projection, basalRate.Object, _timelines.Object, MockStateSpans.Empty().Object, _aps.Object, _pump.Object, Reader(ReadingMills),
             NullLogger<RetrospectiveController>.Instance);
         var http = new DefaultHttpContext();
         http.Items["GrantedScopes"] = new HashSet<string> { Scope.GlucoseRead, Scope.TreatmentsRead };

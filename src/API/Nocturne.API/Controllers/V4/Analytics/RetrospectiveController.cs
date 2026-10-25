@@ -5,6 +5,7 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.API.Services.Devices;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
@@ -54,6 +55,7 @@ public class RetrospectiveController : ControllerBase
     private readonly DeviceStatusProjectionService _projectionService;
     private readonly IBasalRateResolver _basalRateResolver;
     private readonly ITherapyTimelineResolver _therapyTimelineResolver;
+    private readonly IStateSpanRepository _stateSpanRepository;
     private readonly IApsSnapshotRepository _apsSnapshotRepository;
     private readonly IPumpSnapshotRepository _pumpSnapshotRepository;
     private readonly IIobCobReader _iobCobReader;
@@ -68,6 +70,7 @@ public class RetrospectiveController : ControllerBase
         DeviceStatusProjectionService projectionService,
         IBasalRateResolver basalRateResolver,
         ITherapyTimelineResolver therapyTimelineResolver,
+        IStateSpanRepository stateSpanRepository,
         IApsSnapshotRepository apsSnapshotRepository,
         IPumpSnapshotRepository pumpSnapshotRepository,
         IIobCobReader iobCobReader,
@@ -83,6 +86,7 @@ public class RetrospectiveController : ControllerBase
         _projectionService = projectionService;
         _basalRateResolver = basalRateResolver;
         _therapyTimelineResolver = therapyTimelineResolver;
+        _stateSpanRepository = stateSpanRepository;
         _apsSnapshotRepository = apsSnapshotRepository;
         _pumpSnapshotRepository = pumpSnapshotRepository;
         _iobCobReader = iobCobReader;
@@ -264,13 +268,17 @@ public class RetrospectiveController : ControllerBase
         var lastPoint = startMills + (totalIntervals - 1) * intervalMs;
         var timeline = await _therapyTimelineResolver.BuildAsync(
             startMills - DailyProfileCalculator.ActingMs, lastPoint + 1, ct: cancellationToken);
+        var scheduled = new ScheduledBasal(
+            timeline.BasalSegments(),
+            await ScheduledBasal.OverridesAsync(
+                _stateSpanRepository, startMills - DailyProfileCalculator.ActingMs, lastPoint, cancellationToken));
         var deviceFrom = DateTimeOffset.FromUnixTimeMilliseconds(startMills - DeviceReportedValues.RecencyThresholdMs).UtcDateTime;
         var deviceTo = DateTimeOffset.FromUnixTimeMilliseconds(lastPoint + DeviceReportedValues.FutureSkewToleranceMs).UtcDateTime;
         var devices = DeviceReadings.Of(
             await _apsSnapshotRepository.GetIobCobPointsAsync(deviceFrom, deviceTo, cancellationToken),
             await _pumpSnapshotRepository.GetIobPointsAsync(deviceFrom, deviceTo, cancellationToken));
         var ticks = IobCobSeries.Build(
-            _iobCalculator, _cobCalculator, boluses, carbIntakes, tempBasals, timeline, devices,
+            _iobCalculator, _cobCalculator, boluses, carbIntakes, tempBasals, timeline, scheduled, devices,
             startMills, lastPoint, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), intervalMs,
             cancellationToken);
         foreach (var tick in ticks)

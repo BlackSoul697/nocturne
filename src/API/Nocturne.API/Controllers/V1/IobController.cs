@@ -4,6 +4,7 @@ using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Authorization;
@@ -31,6 +32,7 @@ public class IobController : ControllerBase
     private readonly IPumpSnapshotRepository _pumpSnapshotRepository;
     private readonly IBolusRepository _bolusRepository;
     private readonly ITempBasalRepository _tempBasalRepository;
+    private readonly IStateSpanRepository _stateSpanRepository;
     private readonly IIobCobReader _iobCobReader;
     private readonly ILogger<IobController> _logger;
 
@@ -44,6 +46,7 @@ public class IobController : ControllerBase
     /// <param name="pumpSnapshotRepository">Pump snapshots the hourly series prefers after them.</param>
     /// <param name="bolusRepository">Repository for bolus records.</param>
     /// <param name="tempBasalRepository">Repository for temp basal records.</param>
+    /// <param name="stateSpanRepository">Overrides, which scale the schedule the hourly series' net basal is measured against.</param>
     /// <param name="iobCobReader">Reader of the total IOB at an instant.</param>
     /// <param name="logger">Logger instance.</param>
     public IobController(
@@ -54,6 +57,7 @@ public class IobController : ControllerBase
         IPumpSnapshotRepository pumpSnapshotRepository,
         IBolusRepository bolusRepository,
         ITempBasalRepository tempBasalRepository,
+        IStateSpanRepository stateSpanRepository,
         IIobCobReader iobCobReader,
         ILogger<IobController> logger
     )
@@ -65,6 +69,7 @@ public class IobController : ControllerBase
         _pumpSnapshotRepository = pumpSnapshotRepository;
         _bolusRepository = bolusRepository;
         _tempBasalRepository = tempBasalRepository;
+        _stateSpanRepository = stateSpanRepository;
         _iobCobReader = iobCobReader;
         _logger = logger;
     }
@@ -194,13 +199,16 @@ public class IobController : ControllerBase
             )).ToList();
 
             var timeline = await _therapyTimelineResolver.BuildAsync(fetchFromMills, lastSlot + 1, ct: cancellationToken);
+            var scheduled = new ScheduledBasal(
+                timeline.BasalSegments(),
+                await ScheduledBasal.OverridesAsync(_stateSpanRepository, fetchFromMills, lastSlot, cancellationToken));
             var deviceFrom = DateTimeOffset.FromUnixTimeMilliseconds(calculationStartTime - DeviceReportedValues.RecencyThresholdMs).UtcDateTime;
             var deviceTo = DateTimeOffset.FromUnixTimeMilliseconds(lastSlot + DeviceReportedValues.FutureSkewToleranceMs).UtcDateTime;
             var devices = DeviceReadings.Of(
                 await _apsSnapshotRepository.GetIobCobPointsAsync(deviceFrom, deviceTo, cancellationToken),
                 await _pumpSnapshotRepository.GetIobPointsAsync(deviceFrom, deviceTo, cancellationToken));
             var ticks = IobCobSeries.Build(
-                _iobCalculator, _cobCalculator, boluses, [], tempBasals, timeline, devices,
+                _iobCalculator, _cobCalculator, boluses, [], tempBasals, timeline, scheduled, devices,
                 calculationStartTime, lastSlot, endTime, intervalMs, cancellationToken);
 
             var hourlyData = ticks.Select(tick =>

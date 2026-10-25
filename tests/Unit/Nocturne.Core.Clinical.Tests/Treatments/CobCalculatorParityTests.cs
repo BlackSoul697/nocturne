@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -60,10 +61,7 @@ public class CobCalculatorParityTests
             .ReturnsAsync(Enumerable.Empty<ApsSnapshot>());
 
         // Real IobCalculator (not mocked) — COB calculation calls IOB internally for activity
-        var basalRateResolver = new Mock<IBasalRateResolver>();
-        basalRateResolver
-            .Setup(b => b.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Func<long, double>)(_ => DefaultBasalRate));
+        var basalSegments = MockBasalSegments.Flat(DefaultBasalRate);
 
         var iobApsRepo = new Mock<IApsSnapshotRepository>();
         iobApsRepo
@@ -78,9 +76,10 @@ public class CobCalculatorParityTests
         var iobCalculator = new IobCalculator(
             therapySettings.Object,
             sensitivityResolver.Object,
-            basalRateResolver.Object,
+            basalSegments.Object,
             iobApsRepo.Object,
-            pumpRepo.Object
+            pumpRepo.Object,
+            MockStateSpans.Empty().Object
         );
 
         _calculator = new CobCalculator(
