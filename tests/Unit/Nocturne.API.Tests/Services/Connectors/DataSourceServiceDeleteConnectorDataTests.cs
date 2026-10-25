@@ -1,10 +1,12 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Connectors;
 using Nocturne.API.Services.Health.GoogleHealth;
+using Nocturne.API.Services.ProfileActivations;
 using Nocturne.API.Services.V4;
 using Nocturne.API.Tests.Health.GoogleHealth;
 using Nocturne.API.Tests.Infrastructure;
@@ -279,6 +281,146 @@ public class DataSourceServiceDeleteConnectorDataTests : IDisposable
         await using var db = NewContext();
         (await db.ProfileActivations.IgnoreQueryFilters().SingleAsync(a => a.LegacyId == "ps-1")).DeletedAt.Should().NotBeNull();
         (await db.ProfileActivations.IgnoreQueryFilters().SingleAsync(a => a.LegacyId == "ps-2")).DeletedAt.Should().BeNull();
+    }
+
+    private void SeedProfileRows(string source, string profileName, bool userDeleted = false)
+    {
+        using var db = NewContext();
+        var deletedAt = userDeleted ? DateTime.UtcNow : (DateTime?)null;
+        T Row<T>() where T : V4TimeSeriesEntityBase, new() => new()
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, DataSource = source,
+            Timestamp = DateTime.UtcNow, DeletedAt = deletedAt,
+        };
+
+        var therapy = Row<TherapySettingsEntity>(); therapy.ProfileName = profileName;
+        var basal = Row<BasalScheduleEntity>(); basal.ProfileName = profileName;
+        var carbRatio = Row<CarbRatioScheduleEntity>(); carbRatio.ProfileName = profileName;
+        var sensitivity = Row<SensitivityScheduleEntity>(); sensitivity.ProfileName = profileName;
+        var targetRange = Row<TargetRangeScheduleEntity>(); targetRange.ProfileName = profileName;
+        db.TherapySettings.Add(therapy);
+        db.BasalSchedules.Add(basal);
+        db.CarbRatioSchedules.Add(carbRatio);
+        db.SensitivitySchedules.Add(sensitivity);
+        db.TargetRangeSchedules.Add(targetRange);
+        db.SaveChanges();
+
+        if (userDeleted)
+        {
+            db.TherapySettings.IgnoreQueryFilters().Where(e => e.DataSource == source && e.ProfileName == profileName)
+                .ExecuteUpdate(MarkUserDeleted<TherapySettingsEntity>());
+            db.BasalSchedules.IgnoreQueryFilters().Where(e => e.DataSource == source && e.ProfileName == profileName)
+                .ExecuteUpdate(MarkUserDeleted<BasalScheduleEntity>());
+            db.CarbRatioSchedules.IgnoreQueryFilters().Where(e => e.DataSource == source && e.ProfileName == profileName)
+                .ExecuteUpdate(MarkUserDeleted<CarbRatioScheduleEntity>());
+            db.SensitivitySchedules.IgnoreQueryFilters().Where(e => e.DataSource == source && e.ProfileName == profileName)
+                .ExecuteUpdate(MarkUserDeleted<SensitivityScheduleEntity>());
+            db.TargetRangeSchedules.IgnoreQueryFilters().Where(e => e.DataSource == source && e.ProfileName == profileName)
+                .ExecuteUpdate(MarkUserDeleted<TargetRangeScheduleEntity>());
+        }
+    }
+
+    private static Action<UpdateSettersBuilder<T>> MarkUserDeleted<T>() where T : class =>
+        s => s.SetProperty(e => EF.Property<bool>(e, "DeletedByUser"), true);
+
+    private static async Task<int[]> LiveProfileRowsAsync(NocturneDbContext db, string source) =>
+    [
+        await db.TherapySettings.CountAsync(e => e.DataSource == source),
+        await db.BasalSchedules.CountAsync(e => e.DataSource == source),
+        await db.CarbRatioSchedules.CountAsync(e => e.DataSource == source),
+        await db.SensitivitySchedules.CountAsync(e => e.DataSource == source),
+        await db.TargetRangeSchedules.CountAsync(e => e.DataSource == source),
+    ];
+
+    private static async Task<int[]> ProfileTombstonesAsync(NocturneDbContext db, string source) =>
+    [
+        await db.UserTombstones<TherapySettingsEntity>().CountAsync(e => e.DataSource == source),
+        await db.UserTombstones<BasalScheduleEntity>().CountAsync(e => e.DataSource == source),
+        await db.UserTombstones<CarbRatioScheduleEntity>().CountAsync(e => e.DataSource == source),
+        await db.UserTombstones<SensitivityScheduleEntity>().CountAsync(e => e.DataSource == source),
+        await db.UserTombstones<TargetRangeScheduleEntity>().CountAsync(e => e.DataSource == source),
+    ];
+
+    [Fact]
+    public async Task DeleteConnectorData_DeletesTheSourcesTherapySettingsAndSchedulesOnly()
+    {
+        SeedProfileRows(_deviceId, "Imported");
+        SeedProfileRows("loop", "Loop");
+
+        await using (var ctx = NewContext())
+        {
+            var result = await CreateService(ctx).DeleteConnectorDataAsync(ConnectorId);
+            result.Success.Should().BeTrue();
+            result.DeletedCounts["Profiles"].Should().Be(5);
+        }
+
+        await using var db = NewContext();
+        (await LiveProfileRowsAsync(db, _deviceId)).Should().Equal(0, 0, 0, 0, 0);
+        (await LiveProfileRowsAsync(db, "loop")).Should().Equal(1, 1, 1, 1, 1);
+        (await ProfileTombstonesAsync(db, _deviceId)).Should().Equal(1, 1, 1, 1, 1);
+    }
+
+    [Fact]
+    public async Task Summary_CountsTheSourcesTherapySettingsAndSchedulesUnderProfiles()
+    {
+        SeedProfileRows(_deviceId, "Imported");
+        SeedProfileRows("loop", "Loop");
+
+        await using var ctx = NewContext();
+        var summary = await CreateService(ctx).GetConnectorDataSummaryAsync(ConnectorId);
+
+        summary.RecordCounts.Should().BeEquivalentTo(new Dictionary<string, long> { ["Profiles"] = 5 });
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_AllowingReimport_ReleasesTheSourcesTherapySettingsAndSchedules()
+    {
+        SeedProfileRows(_deviceId, "Imported");
+        SeedProfileRows(_deviceId, "Earlier", userDeleted: true);
+        SeedProfileRows("loop", "Loop", userDeleted: true);
+
+        await using (var ctx = NewContext())
+            (await CreateService(ctx).DeleteConnectorDataAsync(ConnectorId, allowReimport: true))
+                .Success.Should().BeTrue();
+
+        await using var db = NewContext();
+        (await LiveProfileRowsAsync(db, _deviceId)).Should().Equal(0, 0, 0, 0, 0);
+        (await ProfileTombstonesAsync(db, _deviceId)).Should().Equal(0, 0, 0, 0, 0);
+        (await ProfileTombstonesAsync(db, "loop")).Should().Equal(1, 1, 1, 1, 1);
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_RefreshesThePurgedProfilesTempBasalRates()
+    {
+        SeedProfileRows(_deviceId, "Imported");
+        SeedProfileRows("loop", "Loop");
+        var reresolver = new Mock<ITempBasalRateReresolver>();
+
+        await using (var ctx = NewContext())
+        {
+            var writer = new ProfileActivationWriter(
+                ProfileActivationTestDeps.Repository(ctx), TestTenantCache.Create(), reresolver.Object);
+            var service = new DataSourceService(
+                ctx.AsFactory(), _sensorGlucose.Object, _meterGlucose.Object, _calibrations.Object, _auditContext,
+                _connectorConfig.Object, writer, [], [], NullLogger<DataSourceService>.Instance);
+            (await service.DeleteConnectorDataAsync(ConnectorId)).Success.Should().BeTrue();
+        }
+
+        reresolver.Verify(r => r.AfterProfilesChangedAsync(
+            It.Is<IReadOnlyCollection<string>>(names => names.SequenceEqual(new[] { "Imported" })),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteConnectorData_WithoutReimport_KeepsTheSourcesProfileTombstones()
+    {
+        SeedProfileRows(_deviceId, "Imported");
+
+        await using (var ctx = NewContext())
+            await CreateService(ctx).DeleteConnectorDataAsync(ConnectorId);
+
+        await using var db = NewContext();
+        (await ProfileTombstonesAsync(db, _deviceId)).Should().Equal(1, 1, 1, 1, 1);
     }
 
     [Fact]

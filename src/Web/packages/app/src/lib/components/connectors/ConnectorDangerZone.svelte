@@ -61,6 +61,12 @@
     DeviceEvents: "device events",
     StateSpans: "state spans",
     DeviceStatus: "device statuses",
+    TempBasals: "temp basals",
+    HeartRate: "heart rate readings",
+    Steps: "step counts",
+    BodyWeight: "body weights",
+    Sleep: "sleep sessions",
+    Profiles: "profile records",
   };
 
   function formatCountLabel(key: string): string {
