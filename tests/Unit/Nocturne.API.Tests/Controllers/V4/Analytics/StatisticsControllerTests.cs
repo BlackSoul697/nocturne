@@ -13,6 +13,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Devices;
+using Nocturne.API.Tests.Infrastructure;
 using Nocturne.API.Tests.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
@@ -84,7 +85,7 @@ public partial class StatisticsControllerTests
 
         var controller = new StatisticsController(
             statisticsService ?? _statsServiceMock.Object,
-            cache ?? Mock.Of<ITenantCache>(),
+            cache ?? TestTenantCache.Create(partition: null),
             Mock.Of<IProfileProjectionService>(),
             _stateSpanRepoMock.Object,
             _basalSegmentsMock.Object,
@@ -3005,7 +3006,9 @@ public partial class StatisticsControllerTests
     {
         var cached = new MultiPeriodStatistics();
         var cache = new Mock<ITenantCache>();
-        cache.Setup(c => c.GetAsync<MultiPeriodStatistics>(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        cache.Setup(c => c.GetOrSetAsync(
+                It.IsAny<string>(), It.IsAny<Func<Task<MultiPeriodStatistics>>>(),
+                It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(cached);
 
         var result = await CreateController(cache: cache.Object).GetMultiPeriodStatistics();

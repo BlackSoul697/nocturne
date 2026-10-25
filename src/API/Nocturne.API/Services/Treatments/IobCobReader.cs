@@ -50,7 +50,7 @@ public sealed class IobCobReader(
     /// <inheritdoc />
     public Task<IobCobReading> ReadTotalAsync(long at, bool live, CancellationToken ct = default) =>
         live
-            ? cache.GetOrCreateLocalAsync(LiveCacheKey, () => ComputeAsync(at, live: true, ct), LiveCacheDuration)
+            ? cache.GetOrCreateLocalAsync(LiveCacheKey, () => ComputeAsync(at, live: true, ct), LiveCacheDuration, ct)
             : ComputeAsync(at, live: false, ct);
 
     private async Task<IobCobReading> ComputeAsync(long at, bool live, CancellationToken ct)
