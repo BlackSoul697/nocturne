@@ -3102,7 +3102,7 @@ public partial class StatisticsControllerTests
                 TotalInsulin = totalBolus + totalBasal,
                 TotalBolus = totalBolus,
                 TotalBasal = totalBasal,
-                CarbToInsulinRatio = treatment?.CarbToInsulinRatio ?? 0,
+                CarbToInsulinRatio = treatment?.CarbToInsulinRatio,
                 Entries = entries,
             });
         }

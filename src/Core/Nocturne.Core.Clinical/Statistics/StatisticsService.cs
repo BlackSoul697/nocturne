@@ -2056,9 +2056,7 @@ public partial class StatisticsService : IStatisticsService
         summary.DailyBoluses = (double)summary.BolusCount / days;
         summary.DailyCarbs = summary.Totals.Food.Carbs / days;
 
-        var bolusInsulin = summary.Totals.Insulin.Bolus;
-        summary.CarbToInsulinRatio =
-            bolusInsulin > 0 ? Math.Round(summary.Totals.Food.Carbs / bolusInsulin * 10) / 10 : 0;
+        summary.CarbToInsulinRatio = PairMealBoluses(bolusList, carbIntakeList).Ratio;
 
         return summary;
     }
@@ -2145,33 +2143,21 @@ public partial class StatisticsService : IStatisticsService
 
         var dayCount = WindowDays(startDate, endDate);
 
+        var pairing = PairMealBoluses([.. manualList, .. automaticList], carbList);
+
         double manualBolus = 0;
         int correctionBoluses = 0;
         int mealBoluses = 0;
-        int carbBolusCount = 0;
 
-        const long mealWindowMs = 15 * 60 * 1000;
-        var carbTimestamps = carbList.Select(c => c.Mills).ToList();
-
-        bool IsMealBolus(Bolus bolus) =>
-            (
-                bolus.CorrelationId.HasValue
-                && carbList.Any(c => c.CorrelationId == bolus.CorrelationId)
-            ) || carbTimestamps.Any(ct => Math.Abs(bolus.Mills - ct) <= mealWindowMs);
-
-        foreach (var bolus in manualList)
+        for (var i = 0; i < manualList.Count; i++)
         {
+            var bolus = manualList[i];
             manualBolus += bolus.Insulin;
 
-            if (IsMealBolus(bolus))
-            {
+            if (pairing.Paired[i])
                 mealBoluses++;
-                carbBolusCount++;
-            }
             else if (!bolus.Automatic)
-            {
                 correctionBoluses++;
-            }
         }
 
         var automaticBolus = automaticList.Sum(b => b.Insulin);
@@ -2179,9 +2165,6 @@ public partial class StatisticsService : IStatisticsService
 
         double totalCarbs = carbList.Sum(c => c.Carbs);
         int carbCount = carbList.Count;
-
-        var mealWindowInsulin = manualList.Concat(automaticList).Where(IsMealBolus).Sum(b => b.Insulin);
-        double icRatio = mealWindowInsulin > 0 && totalCarbs > 0 ? totalCarbs / mealWindowInsulin : 0;
 
         var manualCount = manualList.Count;
         var bolusesPerDay = (double)manualCount / dayCount;
@@ -2207,15 +2190,63 @@ public partial class StatisticsService : IStatisticsService
             AvgBolus = manualCount > 0 ? Math.Round(manualBolus / manualCount * 100) / 100 : 0,
             MealBoluses = mealBoluses,
             CorrectionBoluses = correctionBoluses,
-            IcRatio = Math.Round(icRatio * 10) / 10,
+            IcRatio = pairing.Ratio,
+            UnpairedCarbs = Math.Round(pairing.UnpairedCarbs * 10) / 10,
             BolusesPerDay = Math.Round(bolusesPerDay * 10) / 10,
             WindowDays = dayCount,
             StartDate = startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             EndDate = endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             CarbCount = carbCount,
-            CarbBolusCount = carbBolusCount,
+            CarbBolusCount = mealBoluses,
         };
     }
+
+    /// <summary>
+    /// The insulin-to-carb ratio as dosed: grams of the meals <see cref="MealPairing"/> pairs a manual
+    /// bolus with, over the units of every bolus paired with those meals, to one decimal, or null with
+    /// none. An automatic bolus never pairs a meal on its own: the loop gives one before most carb
+    /// entries, hypo treatments included. Grams of the other meals are
+    /// <see cref="MealBolusPairing.UnpairedCarbs"/>.
+    /// </summary>
+    private static MealBolusPairing PairMealBoluses(IReadOnlyList<Bolus> boluses, IReadOnlyList<CarbIntake> carbIntakes)
+    {
+        var pairing = new MealPairing(carbIntakes.Select(c => new CarbEvent(c.Mills, c.Carbs, c.CorrelationId)));
+        var mealOf = new int?[boluses.Count];
+        var bolusedMeal = new bool[pairing.Meals.Count];
+        for (var i = 0; i < boluses.Count; i++)
+        {
+            var bolus = boluses[i];
+            mealOf[i] = pairing.MealOf(new InsulinDose(bolus.Mills, bolus.Insulin, bolus.Automatic, bolus.CorrelationId));
+            if (mealOf[i] is { } meal && !bolus.Automatic && bolus.Insulin > 0)
+                bolusedMeal[meal] = true;
+        }
+
+        var mealInsulin = new double[pairing.Meals.Count];
+        var paired = new bool[boluses.Count];
+        for (var i = 0; i < boluses.Count; i++)
+        {
+            if (mealOf[i] is not { } meal || !bolusedMeal[meal])
+                continue;
+            mealInsulin[meal] += boluses[i].Insulin;
+            paired[i] = true;
+        }
+
+        double pairedGrams = 0, unpairedGrams = 0;
+        for (var m = 0; m < pairing.Meals.Count; m++)
+        {
+            if (mealInsulin[m] > 0)
+                pairedGrams += pairing.Meals[m].Grams!.Value;
+            else
+                unpairedGrams += pairing.Meals[m].Grams!.Value;
+        }
+
+        var units = mealInsulin.Sum();
+        double? ratio = units > 0 ? Math.Round(pairedGrams / units * 10) / 10 : null;
+        return new MealBolusPairing(ratio, unpairedGrams, paired);
+    }
+
+    /// <param name="Paired">Per bolus, in the order given, whether it pairs with a meal.</param>
+    private readonly record struct MealBolusPairing(double? Ratio, double UnpairedCarbs, bool[] Paired);
 
     /// <summary>
     /// The boluses that <see cref="InsulinDeliveryStatistics.TotalBolus"/> and the bolus counts

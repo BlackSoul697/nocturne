@@ -209,7 +209,7 @@ describe("grouped comparison rows", () => {
       "Basal share of insulin",
       "Manual boluses / day",
       "Carbs / day",
-      "Carb-to-insulin ratio",
+      "ICR",
       "CGM active time",
       "Days with data",
       "Readings / day",
@@ -228,7 +228,7 @@ describe("grouped comparison rows", () => {
     expect(insulin[4]).toBe("+2.7 U");
     expect((await cells("Basal / day")).slice(1, 3)).toEqual(["20.5 U", "24.6 U"]);
     expect((await cells("Carbs / day")).slice(1, 3)).toEqual(["150 g", "180 g"]);
-    expect((await cells("Carb-to-insulin ratio")).slice(1, 3)).toEqual(["11.5 g/U", "13.8 g/U"]);
+    expect((await cells("ICR")).slice(1, 3)).toEqual(["1:11.5", "1:13.8"]);
   });
 
   it("shows no data for insulin figures of a period with no insulin records", async () => {

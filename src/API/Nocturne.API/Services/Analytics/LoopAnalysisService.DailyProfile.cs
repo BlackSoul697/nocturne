@@ -57,7 +57,7 @@ internal sealed partial class LoopAnalysisService
             Zone = zone,
             Glucose = [.. common.Glucose.Select(g => new GlucoseSample(g.Mills, g.Mgdl))],
             Insulin = delivery.Insulin,
-            Carbs = [.. carbs.Where(c => c.Mills >= from && c.Mills < to).Select(c => new CarbEvent(c.Mills, c.Carbs))],
+            Carbs = [.. carbs.Where(c => c.Mills >= from && c.Mills < to).Select(c => new CarbEvent(c.Mills, c.Carbs, c.CorrelationId))],
             IobCob = iobCob,
             IobCobIntervalMs = TickMs,
             HistoryVisibleFrom = filter.HistoryVisibleFrom is { } edge ? edge.ToMills() : null,

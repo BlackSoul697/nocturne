@@ -17,7 +17,13 @@
     getReportsInsulinDelivery,
     type DateRangeInput,
   } from "$api/reports.remote";
-  import { bg, bgDelta, bgLabel, formatShortDate } from "$lib/utils/formatting";
+  import {
+    bg,
+    bgDelta,
+    bgLabel,
+    formatInsulinToCarbRatio,
+    formatShortDate,
+  } from "$lib/utils/formatting";
   import { formatMinutesDuration } from "$lib/utils/duration";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { parseDate } from "@internationalized/date";
@@ -363,12 +369,10 @@
     basalPercent: percent("Basal share of insulin", insulinFigure((i) => i.basalPercent)),
     bolusesPerDay: figure("Manual boluses / day", insulinFigure((i) => i.bolusesPerDay), 1),
     carbsPerDay: figure("Carbs / day", carbFigure((i) => i.carbsPerDay), 0, " g"),
-    carbToInsulin: figure(
-      "Carb-to-insulin ratio",
-      (p) => p.insulin?.icRatio || null,
-      1,
-      " g/U"
-    ),
+    icr: {
+      ...figure("ICR", (p) => p.insulin?.icRatio ?? null, 1),
+      format: formatInsulinToCarbRatio,
+    },
 
     cgmActivePercent: percent("CGM active time", (p) => p.analysis.dataQuality?.cgmActivePercent),
     daysWithData: figure("Days with data", (p) => p.analysis.dataSufficiency?.daysWithData, 0),
@@ -418,7 +422,7 @@
         "basalPercent",
         "bolusesPerDay",
         "carbsPerDay",
-        "carbToInsulin",
+        "icr",
       ],
     },
     {

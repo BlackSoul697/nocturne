@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { formatNumber, formatNumericDate } from "$lib/utils/formatting";
+  import {
+    formatInsulinToCarbRatio,
+    formatNumber,
+    formatNumericDate,
+  } from "$lib/utils/formatting";
   import {
     Card,
     CardContent,
@@ -97,7 +101,7 @@
     avgBolus: 0,
     mealBoluses: 0,
     correctionBoluses: 0,
-    icRatio: 0,
+    unpairedCarbs: 0,
     bolusesPerDay: 0,
     carbCount: 0,
     carbBolusCount: 0,
@@ -182,7 +186,7 @@
       { label: "Basal", value: (insulinStats.basalPercent ?? 0).toFixed(0), unit: "%", note: `${(insulinStats.totalBasal ?? 0).toFixed(1)}U total` },
       { label: "Bolus", value: (insulinStats.bolusPercent ?? 0).toFixed(0), unit: "%", note: `${(insulinStats.totalBolus ?? 0).toFixed(1)}U total`, detail: `manual ${(insulinStats.manualBolus ?? 0).toFixed(1)} U / automatic ${(insulinStats.automaticBolus ?? 0).toFixed(1)} U` },
       { label: "Boluses/Day", value: (insulinStats.bolusesPerDay ?? 0).toFixed(1), note: `avg ${(insulinStats.avgBolus ?? 0).toFixed(1)}U each` },
-      { label: "Avg I:C", value: (insulinStats.icRatio ?? 0) > 0 ? `1:${(insulinStats.icRatio ?? 0).toFixed(0)}` : "–", note: `${(insulinStats.totalCarbs ?? 0).toFixed(0)}g carbs` },
+      { label: "ICR", value: formatInsulinToCarbRatio(insulinStats.icRatio), note: (insulinStats.unpairedCarbs ?? 0) > 0 ? `${(insulinStats.unpairedCarbs ?? 0).toFixed(0)} g not paired with a bolus` : undefined },
     ]}
   />
 
@@ -296,17 +300,14 @@
         <strong>{(insulinStats.tdd ?? 0).toFixed(1)}U/day</strong>
         can be compared to this reference.
       </p>
-      <p>
-        <strong>I:C ratio check:</strong>
-        Your average insulin-to-carb ratio of 1:{(insulinStats.icRatio ?? 0).toFixed(
-          0
-        )}
-        {#if (insulinStats.icRatio ?? 0) > 0}
-          means you use about 1 unit of insulin for every {(insulinStats.icRatio ?? 0).toFixed(
-            0
-          )} grams of carbs.
-        {/if}
-      </p>
+      {#if insulinStats.icRatio != null}
+        <p>
+          <strong>ICR check:</strong>
+          Your insulin-to-carb ratio of {formatInsulinToCarbRatio(insulinStats.icRatio)}
+          means you use about 1 unit of insulin for every {insulinStats.icRatio.toFixed(1)}
+          grams of carbs.
+        </p>
+      {/if}
     </CardContent>
   </Card>
 
