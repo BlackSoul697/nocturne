@@ -19,6 +19,7 @@
   import { consentForm, getClientInfo } from "../oauth.remote";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
   import { retainQuery } from "$lib/api/retain-query.svelte";
+  import { canDeleteRecords } from "$lib/authorization/oauth-scope-capabilities";
 
   // Auth guard: redirect to login if not authenticated
   $effect(() => {
@@ -51,6 +52,7 @@
 
   const scopes = $derived(scope.split(" ").filter(Boolean));
   const hasFullAccess = $derived(scopes.includes("*"));
+  const canDelete = $derived(canDeleteRecords(scopes));
   const appName = $derived(clientInfo.displayName ?? clientId);
 
   /** Previously-approved scopes parsed from the query parameter. */
@@ -243,7 +245,7 @@
           </div>
         {/if}
 
-        {#if !hasFullAccess}
+        {#if !canDelete}
           <div class="flex items-start gap-3 rounded-md bg-muted/50 p-3">
             <Shield class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p class="text-sm text-muted-foreground">
@@ -256,8 +258,12 @@
           >
             <ShieldAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <p class="text-sm text-destructive">
-              This app is requesting full access, including the ability to delete
-              data.
+              {#if hasFullAccess}
+                This app is requesting full access, including the ability to delete
+                data.
+              {:else}
+                This app can change or delete data covered by these permissions.
+              {/if}
             </p>
           </div>
         {/if}

@@ -27,6 +27,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Separator } from "$lib/components/ui/separator";
   import DeviceAppClaimNotice from "$lib/components/auth/DeviceAppClaimNotice.svelte";
+  import { canDeleteRecords } from "$lib/authorization/oauth-scope-capabilities";
   import QRCode from "qrcode";
 
   import { createCopyFeedback } from "$lib/hooks/copy-feedback.svelte";
@@ -337,10 +338,10 @@
               </ul>
             </div>
 
-            {#if deviceInfo.scopes.includes("*")}
+            {#if canDeleteRecords(deviceInfo.scopes)}
               <div class="flex items-start gap-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
                 <ShieldAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                <p class="text-sm text-destructive">This app is requesting full access, including the ability to delete data.</p>
+                <p class="text-sm text-destructive">This app can change or delete data covered by these permissions.</p>
               </div>
             {:else}
               <div class="flex items-start gap-3 rounded-md bg-muted/50 p-3">
