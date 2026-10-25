@@ -34,6 +34,7 @@ public class IobController : ControllerBase
     private readonly ITempBasalRepository _tempBasalRepository;
     private readonly IStateSpanRepository _stateSpanRepository;
     private readonly IIobCobReader _iobCobReader;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<IobController> _logger;
 
     /// <summary>
@@ -48,6 +49,7 @@ public class IobController : ControllerBase
     /// <param name="tempBasalRepository">Repository for temp basal records.</param>
     /// <param name="stateSpanRepository">Overrides, which scale the schedule the hourly series' net basal is measured against.</param>
     /// <param name="iobCobReader">Reader of the total IOB at an instant.</param>
+    /// <param name="timeProvider">Clock for the default calculation time and the end of the hourly window.</param>
     /// <param name="logger">Logger instance.</param>
     public IobController(
         IIobCalculator iobCalculator,
@@ -59,6 +61,7 @@ public class IobController : ControllerBase
         ITempBasalRepository tempBasalRepository,
         IStateSpanRepository stateSpanRepository,
         IIobCobReader iobCobReader,
+        TimeProvider timeProvider,
         ILogger<IobController> logger
     )
     {
@@ -71,6 +74,7 @@ public class IobController : ControllerBase
         _tempBasalRepository = tempBasalRepository;
         _stateSpanRepository = stateSpanRepository;
         _iobCobReader = iobCobReader;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -94,7 +98,7 @@ public class IobController : ControllerBase
     {
         try
         {
-            var calculationTime = time ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var calculationTime = time ?? _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
             var reading = await _iobCobReader.ReadTotalAsync(calculationTime, live: time is null, cancellationToken);
 
@@ -127,7 +131,7 @@ public class IobController : ControllerBase
     {
         try
         {
-            var calculationTime = time ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var calculationTime = time ?? _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
             var (boluses, tempBasals, _) = await _iobCobReader.ReadInputsAsync(calculationTime, cancellationToken);
 
@@ -179,7 +183,7 @@ public class IobController : ControllerBase
                 return BadRequest(new { error = "Hours must be between 1 and 168" });
             }
 
-            var endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var endTime = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             var calculationStartTime = startTime ?? (endTime - (hours * 60 * 60 * 1000));
 
             var totalIntervals = (hours * 60) / intervalMinutes;

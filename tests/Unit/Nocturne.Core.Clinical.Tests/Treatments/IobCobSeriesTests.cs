@@ -146,4 +146,34 @@ public class IobCobSeriesTests
         Assert.Equal((15.0, IobCobSource.Device), (tick.Cob, tick.CobSource));
         Assert.Null(tick.BolusIob);
     }
+
+    [Fact]
+    public void ABolusWithItsOwnLongerDia_IsInTheSeriesForAsLongAsTheSingleTickCountsIt()
+    {
+        var bolus = new Bolus
+        {
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(Now - 6 * 60 * Minute).UtcDateTime,
+            Insulin = 4,
+            InsulinContext = new TreatmentInsulinContext { Dia = 7, Peak = 75 },
+        };
+        var timeline = Flat(1.0);
+
+        var tick = TickAtNow([bolus], [], timeline);
+
+        var single = Calculator.CalcBolus(bolus, timeline.SnapshotAt(Now), Now).IobContrib;
+        Assert.True(single > 0);
+        Assert.Equal(single, tick.BolusIob!.Value, 3);
+    }
+
+    [Fact]
+    public void ATempBasalWithItsOwnLongerDia_IsInTheSeriesWhileItsInsulinIsOnBoard()
+    {
+        var temp = Temp(Now - 380 * Minute, Now - 350 * Minute, rate: 3);
+        temp.InsulinContext = new TreatmentInsulinContext { Dia = 7, Peak = 75 };
+        var timeline = Flat(1.0);
+
+        var tick = TickAtNow([], [temp], timeline);
+
+        Assert.True(tick.BasalIob > 0);
+    }
 }
