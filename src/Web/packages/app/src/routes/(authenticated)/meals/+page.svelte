@@ -75,8 +75,10 @@
     attributed: filterMode === "unattributed" ? false : undefined,
   });
 
-  const mealsQuery = $derived(getMeals(queryParams));
-  const meals = $derived<MealEvent[]>(mealsQuery.current ?? []);
+  // Not before the filter bar's date picker has reported its range: a query without one reads
+  // every meal, and the picker replaces it as it mounts.
+  const mealsQuery = $derived(dateRange.from ? getMeals(queryParams) : null);
+  const meals = $derived<MealEvent[]>(mealsQuery?.current ?? []);
   const bolusMeal = $derived(
     meals.find((m) => m.carbIntakes?.[0]?.id === bolusMealCarbId) ?? null
   );
@@ -97,7 +99,7 @@
   );
 
   // Loading state - check if data has arrived yet
-  const isLoading = $derived(mealsQuery.current === undefined);
+  const isLoading = $derived(mealsQuery?.current === undefined);
 
   // Create a map of carbIntakeId -> suggestions for easy lookup
   const suggestionsByCarbIntake = $derived.by(() => {
@@ -272,12 +274,12 @@
       toast.success("Food unlinked");
       showUnlinkConfirm = false;
       unlinkTarget = null;
-      mealsQuery.refresh();
+      mealsQuery?.refresh();
     });
   }
 
   async function handleFoodEntrySaved() {
-    await mealsQuery.refresh();
+    await mealsQuery?.refresh();
   }
 
   async function handleAddFoodSubmit(request: CarbIntakeFoodRequest) {
@@ -292,7 +294,7 @@
       toast.success("Food added");
       showAddFoodDialog = false;
       addFoodMeal = null;
-      mealsQuery.refresh();
+      mealsQuery?.refresh();
     });
   }
 
@@ -334,7 +336,7 @@
 
   function handleReviewComplete() {
     reviewMatch = null;
-    mealsQuery.refresh();
+    mealsQuery?.refresh();
     suggestionsQuery.refresh();
   }
 </script>
@@ -439,7 +441,7 @@
     if (!value) bolusMealCarbId = null;
   }}
   meal={bolusMeal}
-  onSave={() => mealsQuery.refresh()}
+  onSave={() => mealsQuery?.refresh()}
 />
 
 <MealMatchReviewDialog

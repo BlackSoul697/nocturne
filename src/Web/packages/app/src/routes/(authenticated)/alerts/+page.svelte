@@ -1,6 +1,7 @@
 <script lang="ts">
   import BellRing from "@lucide/svelte/icons/bell-ring";
   import { isoNow } from "$lib/utils/now";
+  import { startQueries } from "$lib/utils/start-queries";
   import { formatClock } from "$lib/utils/formatting";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
@@ -69,6 +70,7 @@
   const activeAlertsQuery = getActiveAlerts();
   const historyQuery = getAlertHistory({ page: 1, pageSize: 50 });
   const dndQuery = getTenantAlertSettings();
+  startQueries(rulesQuery, activeAlertsQuery, historyQuery, dndQuery);
   refreshOnReturn(() => void dndQuery.refresh());
 
   // ---- Mutation state ----

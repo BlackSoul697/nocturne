@@ -62,7 +62,7 @@
 
   const isLoading = $derived(reportsResource.loading);
   const queryData = $derived(reportsResource.current);
-  const entries = $derived(queryData?.entries ?? []);
+  const readingCount = $derived(queryData?.readingCount ?? 0);
   const analysis = $derived(queryData?.analysis);
   const averagedStats = $derived(queryData?.averagedStats);
   const startDate = $derived(reportsResource.date.from);
@@ -139,7 +139,7 @@
         <p class="mt-1 text-muted-foreground tabular-nums">
           {formatShortDate(startDate)} – {formatShortDate(endDate, true)}
           {#if canLoadSummary}
-            · {formatNumber(entries.length)} readings
+            · {formatNumber(readingCount)} readings
           {/if}
         </p>
       </div>

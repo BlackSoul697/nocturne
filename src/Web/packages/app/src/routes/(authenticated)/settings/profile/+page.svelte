@@ -26,6 +26,8 @@
     setDefaultProfile,
     deleteProfileByName,
   } from "$api/generated/profiles.generated.remote";
+  import { getActivationStatus } from "$api/generated/profileActivations.generated.remote";
+  import { startQueries } from "$lib/utils/start-queries";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { relativeAge } from "$lib/utils/formatting";
   import { describeSubmitError } from "$lib/forms/submit-error";
@@ -93,6 +95,8 @@
   // server but serializes no hydratable, so the client throws
   // hydratable_missing_but_required and falls into the error state.
   const summaryQuery = getProfileSummary(undefined);
+  // ActiveProfileActivation reads the same query once the summary has rendered it.
+  startQueries(summaryQuery, getActivationStatus(undefined));
   const data = $derived(summaryQuery.current);
   const loadError = $derived(summaryQuery.error);
 
