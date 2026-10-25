@@ -57,12 +57,6 @@ public interface ISensorGlucoseRepository
         DateTime? afterTimestamp = null, Guid? afterId = null,
         CancellationToken ct = default, Guid? patientDeviceId = null);
 
-    // Explicit base-interface bridge — delegates to the extended overload
-    Task<IEnumerable<SensorGlucose>> IV4Repository<SensorGlucose>.GetAsync(
-        DateTime? from, DateTime? to, string? device, string? source,
-        int limit, int offset, bool descending, CancellationToken ct)
-        => GetAsync(from, to, device, source, limit, offset, descending, null, null, ct);
-
     /// <summary>
     /// Partial readings for canonical selection and <see cref="EntryProjection.FromSensorGlucose"/>
     /// only; omitted V4 fields must not leak into raw record responses.
