@@ -9223,7 +9223,7 @@ msgstr ""
 msgid "Variability:"
 msgstr ""
 
-#. 0: cvText; 1: cv.toFixed(0)
+#. 0: status.label; 1: (gv?.coefficientOfVariation ?? 0).toFixed(0)
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 msgid "<0/> {0} ({1}% CV)"
 msgstr ""
