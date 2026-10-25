@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.API.Services.Profiles;
@@ -13,7 +14,9 @@ using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
@@ -96,6 +99,7 @@ public class CompressionLowDetectionServiceTests
         new(
             Mock.Of<IServiceProvider>(),
             ActiveTenantSnapshotTestDoubles.Unread(),
+            TimeProvider.System,
             NullLogger<CompressionLowDetectionService>.Instance
         );
 
@@ -142,6 +146,219 @@ public class CompressionLowDetectionServiceTests
 
         named.Should().ContainSingle().Which.LowestGlucose.Should().Be(60);
         unnamed.Should().Equal(named);
+    }
+
+    private static readonly DateTimeOffset BeforeEastWake = new(2026, 10, 20, 0, 50, 0, TimeSpan.Zero);
+
+    private const string SixHoursEast = "Etc/GMT-6";
+    private const string SixHoursWest = "Etc/GMT+6";
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_doesNotScanANightWhoseWindowIsStillOpen()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursEast);
+
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+
+        fixture.Scans.Should().Equal(new DateOnly(2026, 10, 18));
+    }
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_scansTheWholeNightOnceItsWindowHasEnded()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursEast);
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+
+        fixture.Clock.Advance(TimeSpan.FromMinutes(24));
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        fixture.Scans.Should().Equal(new DateOnly(2026, 10, 18));
+
+        fixture.Clock.Advance(TimeSpan.FromMinutes(1));
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        fixture.Scans.Should().Equal(new DateOnly(2026, 10, 18), new DateOnly(2026, 10, 19));
+    }
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_scansEachTenantOncePerNightAfterItsOwnWindowEnds()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursEast, SixHoursWest);
+        var east = fixture.TenantIds[0];
+        var west = fixture.TenantIds[1];
+
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(25));
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        fixture.Clock.Advance(TimeSpan.FromHours(6));
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        fixture.Clock.Advance(TimeSpan.FromHours(6));
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+
+        fixture.TenantScans.Should().BeEquivalentTo(
+            [
+                (east, new DateOnly(2026, 10, 18)),
+                (west, new DateOnly(2026, 10, 18)),
+                (east, new DateOnly(2026, 10, 19)),
+                (west, new DateOnly(2026, 10, 19)),
+            ],
+            options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_sleepsUntilTheEarliestNightEndsAcrossTenants()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursWest, SixHoursEast);
+
+        var untilEast = await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+
+        untilEast.Should().Be(TimeSpan.FromMinutes(25));
+    }
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_boundsTheSleepByTheFloorAndTheCeiling()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursEast);
+
+        fixture.Clock.Advance(TimeSpan.FromMinutes(24) + TimeSpan.FromSeconds(50));
+        (await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None))
+            .Should().Be(CompressionLowDetectionService.MinSleep);
+
+        fixture.Clock.Advance(TimeSpan.FromMinutes(1));
+        (await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None))
+            .Should().Be(CompressionLowDetectionService.MaxSleep);
+    }
+
+    [Fact]
+    public async Task ScanReadyNightsAsync_doesNotRescanANightWhoseSuggestionsWereAllDismissed()
+    {
+        using var fixture = await ScheduleFixture.CreateAsync(BeforeEastWake, SixHoursEast);
+        fixture.NightsWithSuggestions.Add(new DateOnly(2026, 10, 18));
+
+        await fixture.Sut.ScanReadyNightsAsync(CancellationToken.None);
+
+        fixture.Scans.Should().BeEmpty();
+    }
+
+    private sealed class ScheduleFixture : IDisposable
+    {
+        private readonly SqliteTestDatabase _database;
+        private readonly ServiceProvider _provider;
+
+        public FakeTimeProvider Clock { get; }
+        public CompressionLowDetectionService Sut { get; }
+        public IReadOnlyList<Guid> TenantIds { get; }
+        public HashSet<DateOnly> NightsWithSuggestions { get; }
+        public List<(Guid Tenant, DateOnly Night)> TenantScans { get; }
+        public List<DateOnly> Scans => TenantScans.Select(s => s.Night).ToList();
+
+        private ScheduleFixture(
+            SqliteTestDatabase database,
+            ServiceProvider provider,
+            FakeTimeProvider clock,
+            CompressionLowDetectionService sut,
+            IReadOnlyList<Guid> tenantIds,
+            HashSet<DateOnly> nightsWithSuggestions,
+            List<(Guid Tenant, DateOnly Night)> scans)
+        {
+            _database = database;
+            _provider = provider;
+            Clock = clock;
+            Sut = sut;
+            TenantIds = tenantIds;
+            NightsWithSuggestions = nightsWithSuggestions;
+            TenantScans = scans;
+        }
+
+        public static Task<ScheduleFixture> CreateAsync(DateTimeOffset now, params string[] tenantTimezones)
+        {
+            var clock = new FakeTimeProvider(now);
+            var tenantIds = tenantTimezones.Select(_ => Guid.NewGuid()).ToList();
+            var database = TestDbContextFactory.CreateSqlite();
+            for (var i = 0; i < tenantIds.Count; i++)
+                database.SeedTenant(tenantIds[i], $"tenant-{i}");
+
+            var settingsByTenant = tenantIds
+                .Zip(tenantTimezones)
+                .ToDictionary(
+                    pair => pair.First,
+                    pair => new UISettingsConfiguration
+                    {
+                        DataQuality = new DataQualitySettings
+                        {
+                            SleepSchedule = new SleepScheduleSettings { Timezone = pair.Second },
+                        },
+                    });
+            var nightsWithSuggestions = new HashSet<DateOnly>();
+            var scans = new List<(Guid Tenant, DateOnly Night)>();
+
+            var services = new ServiceCollection();
+            database.AddToServices(services);
+            services.AddSingleton(sp => new ActiveTenantSnapshot(
+                sp.GetRequiredService<INocturneDbContextFactory>(),
+                clock,
+                NullLogger<ActiveTenantSnapshot>.Instance));
+            services.AddScoped<ITenantAccessor, RecordingTenantAccessor>();
+            services.AddScoped(sp =>
+            {
+                var tenantId = sp.GetRequiredService<ITenantAccessor>().TenantId;
+                var settings = new Mock<IUISettingsService>();
+                settings
+                    .Setup(s => s.GetSettingsAsync(It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(settingsByTenant[tenantId]);
+                return settings.Object;
+            });
+            services.AddScoped(sp =>
+            {
+                var tenantId = sp.GetRequiredService<ITenantAccessor>().TenantId;
+                var repository = new Mock<ICompressionLowRepository>();
+                repository
+                    .Setup(r => r.AnySuggestionExistsForNightAsync(It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync((DateOnly night, CancellationToken _) => nightsWithSuggestions.Contains(night));
+                repository
+                    .Setup(r => r.ActiveSuggestionsExistForNightAsync(It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
+                    .Callback((DateOnly night, CancellationToken _) => scans.Add((tenantId, night)))
+                    .ReturnsAsync(false);
+                return repository.Object;
+            });
+            services.AddScoped(_ =>
+            {
+                var entries = new Mock<IEntryService>();
+                entries
+                    .Setup(e => e.GetEntriesAsync(
+                        It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Array.Empty<Entry>());
+                return entries.Object;
+            });
+            services.AddScoped(_ => Mock.Of<ITreatmentService>());
+            services.AddScoped(_ => Mock.Of<IInAppNotificationService>());
+            services.AddScoped(_ => Mock.Of<ITherapySettingsResolver>());
+            var provider = services.BuildServiceProvider();
+
+            var sut = new CompressionLowDetectionService(
+                provider,
+                provider.GetRequiredService<ActiveTenantSnapshot>(),
+                clock,
+                NullLogger<CompressionLowDetectionService>.Instance);
+
+            return Task.FromResult(
+                new ScheduleFixture(database, provider, clock, sut, tenantIds, nightsWithSuggestions, scans));
+        }
+
+        public void Dispose()
+        {
+            _provider.Dispose();
+            _database.Dispose();
+        }
+    }
+
+    private sealed class RecordingTenantAccessor : ITenantAccessor
+    {
+        public TenantContext? Context { get; private set; }
+        public Guid TenantId => Context?.TenantId ?? Guid.Empty;
+        public bool IsResolved => Context is not null;
+
+        public void SetTenant(TenantContext context) => Context = context;
     }
 
     /// <summary>
