@@ -18,7 +18,6 @@ public class NotificationV1ServiceTests
     private readonly Mock<ILogger<NotificationV1Service>> _mockLogger;
     private readonly Mock<IAuthorizationService> _mockAuthorizationService;
     private readonly Mock<ISignalRBroadcastService> _mockSignalRBroadcastService;
-    private readonly Mock<IPushoverService> _mockPushoverService;
     private readonly LegacyAlarmSnoozeStore _snoozes = new(TimeProvider.System);
     private readonly LegacyNotificationStore _notifications = new(TimeProvider.System);
     private static readonly Guid TenantA = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -30,19 +29,17 @@ public class NotificationV1ServiceTests
         _mockLogger = new Mock<ILogger<NotificationV1Service>>();
         _mockAuthorizationService = new Mock<IAuthorizationService>();
         _mockSignalRBroadcastService = new Mock<ISignalRBroadcastService>();
-        _mockPushoverService = new Mock<IPushoverService>();
-        _service = CreateService(TenantA, _mockPushoverService.Object);
+        _service = CreateService(TenantA);
     }
 
-    private NotificationV1Service CreateService(Guid tenantId, IPushoverService? pushover = null) =>
+    private NotificationV1Service CreateService(Guid tenantId) =>
         new(
             _mockLogger.Object,
             _mockAuthorizationService.Object,
             _mockSignalRBroadcastService.Object,
             Mock.Of<ITenantAccessor>(a => a.TenantId == tenantId),
             _snoozes,
-            _notifications,
-            pushover
+            _notifications
         );
 
     [Fact]
@@ -146,49 +143,6 @@ public class NotificationV1ServiceTests
     }
 
     [Fact]
-    public async Task ProcessPushoverCallbackAsync_ReceiptRegisteredInAnotherRequest_AcknowledgesItsAlarm()
-    {
-        CreateService(TenantA).RegisterPushoverReceipt("receipt-1", 1, "default");
-        var callback = new PushoverCallbackRequest
-        {
-            Receipt = "receipt-1",
-            Status = 1,
-            AcknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        };
-
-        var result = await CreateService(TenantA).ProcessPushoverCallbackAsync(callback, CancellationToken.None);
-
-        Assert.True(result.Success);
-        var snoozeAgain = await CreateService(TenantA).AckNotificationAsync(
-            new NotificationAckRequest { Level = 1, Group = "default" },
-            CancellationToken.None
-        );
-        Assert.False(snoozeAgain.Success);
-        Assert.Equal(0, CreateService(TenantA).GetActivePushoverReceiptCount());
-    }
-
-    [Fact]
-    public async Task ProcessPushoverCallbackAsync_ReceiptOfAnotherTenant_LeavesAlarmAndReceiptAlone()
-    {
-        CreateService(TenantA).RegisterPushoverReceipt("receipt-1", 1, "default");
-        var callback = new PushoverCallbackRequest
-        {
-            Receipt = "receipt-1",
-            Status = 1,
-            AcknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        };
-
-        await CreateService(TenantB).ProcessPushoverCallbackAsync(callback, CancellationToken.None);
-
-        var snooze = await CreateService(TenantA).AckNotificationAsync(
-            new NotificationAckRequest { Level = 1, Group = "default" },
-            CancellationToken.None
-        );
-        Assert.True(snooze.Success);
-        Assert.Equal(1, CreateService(TenantA).GetActivePushoverReceiptCount());
-    }
-
-    [Fact]
     public async Task GetAdminNotifiesAsync_NotificationAddedInAnotherRequest_IsStillThere()
     {
         _mockAuthorizationService
@@ -239,211 +193,6 @@ public class NotificationV1ServiceTests
         var b = await CreateService(TenantB).GetAdminNotifiesAsync(null, CancellationToken.None);
         Assert.Equal(0, a.Message.NotifyCount);
         Assert.Equal(1, b.Message.NotifyCount);
-    }
-
-    [Fact]
-    public async Task ProcessPushoverCallbackAsync_WithAcknowledgedStatus_ReturnsSuccess()
-    {
-        // Arrange
-        var request = new PushoverCallbackRequest
-        {
-            Receipt = "test-receipt-123",
-            Status = 1, // Acknowledged
-            AcknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            AcknowledgedBy = "test-user",
-        };
-
-        // Act
-        var result = await _service.ProcessPushoverCallbackAsync(request, CancellationToken.None);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal("Pushover callback processed successfully", result.Message);
-    }
-
-    [Fact]
-    public async Task ProcessPushoverCallbackAsync_WithoutAcknowledgment_ReturnsNoAction()
-    {
-        // Arrange
-        var request = new PushoverCallbackRequest
-        {
-            Receipt = "test-receipt-456",
-            Status = 0, // Not acknowledged
-        };
-
-        // Act
-        var result = await _service.ProcessPushoverCallbackAsync(request, CancellationToken.None);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal("Pushover callback received but no action taken", result.Message);
-    }
-
-    [Fact]
-    public async Task SendPushoverNotificationAsync_WithNoPushoverService_ReturnsSuccess()
-    { // Arrange
-        var serviceWithoutPushover = CreateService(TenantA);
-        var level = 1;
-        var group = "test-group";
-        var title = "Test Alert";
-        var message = "Test message";
-
-        // Act
-        var result = await serviceWithoutPushover.SendPushoverNotificationAsync(
-            level,
-            group,
-            title,
-            message,
-            cancellationToken: CancellationToken.None
-        );
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal("Pushover service not configured", result.Message);
-    }
-
-    [Fact]
-    public async Task SendPushoverNotificationAsync_WithValidRequest_ReturnsSuccess()
-    {
-        // Arrange
-        var level = 2;
-        var group = "urgent-group";
-        var title = "Urgent Alert";
-        var message = "This is an urgent alert";
-        var sound = "persistent";
-
-        var pushoverRequest = new PushoverNotificationRequest
-        {
-            Title = title,
-            Message = message,
-            Level = level,
-            Group = group,
-            Sound = sound,
-            Priority = 2,
-        };
-
-        var pushoverResponse = new PushoverResponse
-        {
-            Success = true,
-            Receipt = "test-receipt-123",
-        };
-
-        _mockPushoverService
-            .Setup(p => p.CreateAlarmNotification(level, group, title, message, sound))
-            .Returns(pushoverRequest);
-
-        _mockPushoverService
-            .Setup(p => p.SendNotificationAsync(pushoverRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(pushoverResponse);
-
-        // Act
-        var result = await _service.SendPushoverNotificationAsync(
-            level,
-            group,
-            title,
-            message,
-            sound,
-            CancellationToken.None
-        );
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal("Pushover notification sent successfully", result.Message);
-        _mockPushoverService.Verify(
-            p => p.CreateAlarmNotification(level, group, title, message, sound),
-            Times.Once
-        );
-        _mockPushoverService.Verify(
-            p => p.SendNotificationAsync(pushoverRequest, It.IsAny<CancellationToken>()),
-            Times.Once
-        );
-    }
-
-    [Fact]
-    public async Task SendPushoverNotificationAsync_WithFailedSend_ReturnsFailure()
-    {
-        // Arrange
-        var level = 1;
-        var group = "test-group";
-        var title = "Test Alert";
-        var message = "Test message";
-
-        var pushoverRequest = new PushoverNotificationRequest
-        {
-            Title = title,
-            Message = message,
-            Level = level,
-            Group = group,
-        };
-
-        var pushoverResponse = new PushoverResponse { Success = false, Error = "Invalid user key" };
-
-        _mockPushoverService
-            .Setup(p => p.CreateAlarmNotification(level, group, title, message, null))
-            .Returns(pushoverRequest);
-
-        _mockPushoverService
-            .Setup(p => p.SendNotificationAsync(pushoverRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(pushoverResponse);
-
-        // Act
-        var result = await _service.SendPushoverNotificationAsync(
-            level,
-            group,
-            title,
-            message,
-            cancellationToken: CancellationToken.None
-        );
-
-        // Assert
-        Assert.False(result.Success);
-        Assert.Equal("Failed to send Pushover notification: Invalid user key", result.Message);
-    }
-
-    [Fact]
-    public void GetActivePushoverReceiptCount_ReturnsCorrectCount()
-    {
-        // Arrange
-        _service.RegisterPushoverReceipt("receipt1", 1, "group1");
-        _service.RegisterPushoverReceipt("receipt2", 2, "group2");
-
-        // Act
-        var count = _service.GetActivePushoverReceiptCount();
-
-        // Assert
-        Assert.Equal(2, count);
-    }
-
-    [Fact]
-    public void RegisterPushoverReceipt_WithValidData_RegistersSuccessfully()
-    {
-        // Arrange
-        var receipt = "test-receipt-456";
-        var level = 2;
-        var group = "urgent";
-
-        var initialCount = _service.GetActivePushoverReceiptCount();
-
-        // Act
-        _service.RegisterPushoverReceipt(receipt, level, group);
-
-        // Assert
-        var newCount = _service.GetActivePushoverReceiptCount();
-        Assert.Equal(initialCount + 1, newCount);
-    }
-
-    [Fact]
-    public void RegisterPushoverReceipt_WithEmptyReceipt_DoesNotRegister()
-    {
-        // Arrange
-        var initialCount = _service.GetActivePushoverReceiptCount();
-
-        // Act
-        _service.RegisterPushoverReceipt("", 1, "group");
-
-        // Assert
-        var newCount = _service.GetActivePushoverReceiptCount();
-        Assert.Equal(initialCount, newCount);
     }
 
     [Fact]
