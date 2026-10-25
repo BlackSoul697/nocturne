@@ -6,6 +6,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import HeartPulse from "@lucide/svelte/icons/heart-pulse";
   import FigureStrip from "$lib/components/reports/FigureStrip.svelte";
   import {
@@ -23,6 +24,8 @@
 
   const report = useActogramReport("Error loading heart rate report");
   const { params: reportsParams, resource: actogramResource } = report;
+
+  const noZoneReason = $derived(actogramResource.current?.timeZoneUnavailableReason);
 
   // HR data as ActogramPoints
   const hrPoints = $derived(
@@ -82,6 +85,12 @@
     ]}
   />
 
+  {#if noZoneReason}
+    <p class="text-sm text-muted-foreground">
+      <TimeZoneNote reason={noZoneReason}>The rows use UTC days.</TimeZoneNote>
+    </p>
+  {/if}
+
   <Card class="print:break-inside-auto!">
     <CardHeader>
       <CardTitle class="flex items-center gap-2">
@@ -119,7 +128,7 @@
             {@const bpm = typeof point.bpm === "number" ? point.bpm : 0}
             {@const yNorm = (bpm - bpmMin) / (bpmMax - bpmMin)}
             {@const y = ctx.height - yNorm * ctx.height}
-            {@const x = ctx.xScale(new Date(ctx.day.getTime() + hoursFromStart * MS_PER_HOUR))}
+            {@const x = ctx.xScale(new Date(ctx.day.startMills + hoursFromStart * MS_PER_HOUR))}
             <circle
               cx={x}
               cy={y}

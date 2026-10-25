@@ -2,19 +2,22 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { TimeZoneUnavailableReason } from "$lib/api";
 import { describe, expect, it, vi } from "vitest";
+import { servedDays } from "$lib/test-stubs/actogram-days";
+
+const CHATHAM_MINUTES = 13 * 60 + 45;
 
 const hoisted = vi.hoisted(() => ({ trends: {} as Record<string, unknown> }));
 
 vi.mock("$lib/hooks/actogram-report.svelte", () => ({
   useActogramReport: () => ({
     params: {
-      dateRangeMillis: { from: new Date(2026, 0, 1).getTime(), to: new Date(2026, 0, 1).getTime() },
+      dateRangeMillis: { from: 0, to: 0 },
       dateRangeInput: {},
       dayCount: 1,
     },
     resource: { current: { sleepSpans: [], glucoseData: [] } },
-    days: [new Date(2026, 0, 1)],
-    rangeDayCount: 1,
+    days: servedDays("2026-01-10", 3, CHATHAM_MINUTES).reverse(),
+    rangeDayCount: 3,
   }),
 }));
 vi.mock("$api/reports.remote", () => ({ getSleepTrends: vi.fn() }));
@@ -64,7 +67,36 @@ describe("sleep report page", () => {
     await expect.poll(() => compositionColumns(container).length).toBe(3);
   });
 
-  const NOTE = /Days in range, the weekly breakdown and the composition chart use\s+UTC days/;
+  it("links each actogram row to the night the composition chart shows for that day", async () => {
+    const night = (displayDate: string) => ({
+      sessionId: displayDate,
+      displayDate,
+      inBedAt: new Date(`${displayDate}T03:00:00Z`),
+      deepMinutes: 60,
+      remMinutes: 90,
+      lightMinutes: 240,
+      sleepMinutes: 390,
+    });
+    hoisted.trends = {
+      days: ["2026-01-10", "2026-01-11", "2026-01-12"],
+      nights: [night("2026-01-10"), night("2026-01-12")],
+      weeks: [],
+      summary: { nightCount: 2 },
+    };
+
+    const { container } = render(SleepPage);
+
+    await expect.poll(() => compositionColumns(container).length).toBe(3);
+    const chartLinks = compositionColumns(container).map((column) => column.getAttribute("role") === "link");
+    expect(chartLinks).toEqual([true, false, true]);
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-testid='actogram-row']"));
+    expect(rows.map((row) => row.dataset.day)).toEqual(["2026-01-12", "2026-01-11", "2026-01-10"]);
+    const rowLinked = rows.map((row) => row.querySelector("a") !== null);
+    expect(rowLinked).toEqual([...chartLinks].reverse());
+  });
+
+  const NOTE = /Days in range, the weekly breakdown, the composition chart and the actogram rows\s+use UTC days/;
 
   it("says why the days are UTC days when the trends report carries a reason", async () => {
     hoisted.trends = {

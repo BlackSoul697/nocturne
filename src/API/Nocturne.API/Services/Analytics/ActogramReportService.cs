@@ -1,3 +1,5 @@
+using System.Globalization;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
@@ -103,6 +105,8 @@ public sealed class ActogramReportService : IActogramReportService
         var thresholdsRaw = await BuildThresholdsAsync(endTime, cancellationToken);
 
         var clock = await _tenantClock.ResolveAsync(cancellationToken);
+        var zone = clock.Zone ?? TimeZoneInfo.Utc;
+        var days = BuildDays(startTime, endTime, zone);
 
         var (glucoseData, glucoseYMax) = ChartDataService.BuildGlucoseData(
             glucoseRecords.ToList()
@@ -167,33 +171,23 @@ public sealed class ActogramReportService : IActogramReportService
             Thresholds = thresholds,
             HeartRates = heartRates,
             StepCounts = stepCounts,
-            StepDayTotals = clock.Zone is { } tz
-                ? SumStepsByLocalDay(stepRecords, startTime, endTime, tz)
-                : new Dictionary<string, int>(),
+            Days = days,
+            StepDayTotals = SumStepsByDay(stepRecords, days, zone),
             TimeZoneUnavailableReason = clock.Reason,
             SleepSpans = sleepSpans,
         };
     }
 
-    /// <summary>
-    /// Total steps per tenant-local calendar day, with every day the half-open window touches
-    /// present so a day without samples reads as 0 rather than as missing.
-    /// </summary>
-    private static Dictionary<string, int> SumStepsByLocalDay(
+    private static Dictionary<string, int> SumStepsByDay(
         IEnumerable<StepCount> steps,
-        long startTime,
-        long endTime,
-        TimeZoneInfo tz
+        IReadOnlyList<ActogramDay> days,
+        TimeZoneInfo zone
     )
     {
-        var totals = new Dictionary<string, int>(StringComparer.Ordinal);
-        var lastDay = LocalDate(endTime - 1, tz);
-        for (var day = LocalDate(startTime, tz); day <= lastDay; day = day.AddDays(1))
-            totals[day.ToString("O")] = 0;
-
+        var totals = days.ToDictionary(day => day.Date, _ => 0, StringComparer.Ordinal);
         foreach (var step in steps)
         {
-            var key = LocalDate(step.Mills, tz).ToString("O");
+            var key = LocalSlotBinning.LocalDay(step.Mills, zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (totals.ContainsKey(key))
                 totals[key] += step.Metric;
         }
@@ -201,10 +195,18 @@ public sealed class ActogramReportService : IActogramReportService
         return totals;
     }
 
-    private static DateOnly LocalDate(long mills, TimeZoneInfo tz) =>
-        DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(mills), tz).DateTime
-        );
+    private static List<ActogramDay> BuildDays(long startTime, long endTime, TimeZoneInfo zone)
+    {
+        var (firstDay, starts) = LocalSlotBinning.DayStarts(startTime, endTime, zone);
+        return Enumerable.Range(0, starts.Length - 1)
+            .Select(d => new ActogramDay
+            {
+                Date = firstDay.AddDays(d).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                StartMills = starts[d],
+                EndMills = starts[d + 1],
+            })
+            .ToList();
+    }
 
     private async Task<ChartThresholdsDto> BuildThresholdsAsync(long atMills, CancellationToken ct)
     {

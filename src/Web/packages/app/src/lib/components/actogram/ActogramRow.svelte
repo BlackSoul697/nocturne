@@ -12,9 +12,9 @@
   import { dashClass } from '$lib/components/charts/print/chart-print-patterns';
   import {
     MS_PER_HOUR,
-    HOURS_PER_DAY,
     HOURS_PER_ROW,
     findNearestPoint,
+    type ActogramDay,
     type ActogramPoint,
     type ActogramRowContext,
     type ActogramTooltipData,
@@ -24,27 +24,28 @@
   } from './actogram';
 
   interface Props {
-    day: Date;
+    day: ActogramDay;
     data: RowDataPoint<T>[];
     bgData: RowDataPoint<GlucosePoint>[];
     thresholds: ChartThresholds | undefined;
     height: number;
     row: Snippet<[ActogramRowContext<T>]>;
-    tooltipValue?: Snippet<[{ point: T; day: Date }]>;
+    tooltipValue?: Snippet<[{ point: T; day: ActogramDay }]>;
   }
 
   let { day, data, bgData, thresholds, height, row, tooltipValue }: Props = $props();
 
-  // X domain: 0–48 hours from day start
-  const xDomainEnd = $derived(new Date(day.getTime() + HOURS_PER_ROW * MS_PER_HOUR));
-  const midpoint = $derived(new Date(day.getTime() + HOURS_PER_DAY * MS_PER_HOUR));
+  // X domain: 0–48 hours from day start; the dimmed half starts where the served day ends.
+  const dayStart = $derived(new Date(day.startMills));
+  const xDomainEnd = $derived(new Date(day.startMills + HOURS_PER_ROW * MS_PER_HOUR));
+  const midpoint = $derived(new Date(day.endMills));
 
   // Map RowDataPoints to chart-plottable objects for BG overlay
   const bgChartData = $derived(
     bgData
       .toSorted((a, b) => a.hoursFromStart - b.hoursFromStart)
       .map((d) => ({
-        time: new Date(day.getTime() + d.hoursFromStart * MS_PER_HOUR),
+        time: new Date(day.startMills + d.hoursFromStart * MS_PER_HOUR),
         sgv: d.point.sgv,
         color: d.point.color,
       })),
@@ -57,7 +58,7 @@
   x="time"
   y="sgv"
   xScale={scaleTime()}
-  xDomain={[day, xDomainEnd]}
+  xDomain={[dayStart, xDomainEnd]}
   yDomain={[0, thresholds?.glucoseYMax ?? FALLBACK_GLUCOSE_Y_MAX]}
   padding={{ left: 0, top: 0, bottom: 0, right: 0 }}
   tooltipContext={{ mode: "manual" }}
@@ -140,7 +141,7 @@
           if (!svgRect) return;
           const localX = e.clientX - svgRect.left;
           const time = rowContext.xScale.invert(localX);
-          const hoursFromStart = (time.getTime() - day.getTime()) / MS_PER_HOUR;
+          const hoursFromStart = (time.getTime() - day.startMills) / MS_PER_HOUR;
           const nearestBg = findNearestPoint(bgData, hoursFromStart);
           const nearestData = findNearestPoint(data, hoursFromStart);
           context.tooltip?.show(e, { time, bgPoint: nearestBg, dataPoint: nearestData } satisfies ActogramTooltipData<T>);
