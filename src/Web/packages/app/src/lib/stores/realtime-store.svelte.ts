@@ -253,6 +253,9 @@ export class RealtimeStore {
   private decompositionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly DECOMPOSITION_REFRESH_MS = 3_000;
 
+  /** Whether the socket connected once already, so a connect is a reconnection. */
+  private connectedBefore = false;
+
   /** Pending refetch of the legacy fallbacks after device events arrived. */
   private legacyFallbacksRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -468,6 +471,7 @@ export class RealtimeStore {
           // Always backfill on return — timers are unreliable in hidden tabs
           // so we can't trust lastEventReceived to be meaningful
           this.performBackfillIfNeeded(true);
+          void this.refreshTrackers();
         } else {
           this.clearDisconnectNotice();
           console.log('[RealtimeStore] Page hidden, starting background polling...');
@@ -602,6 +606,9 @@ export class RealtimeStore {
       // Always force backfill on reconnection — any disconnection may have
       // caused missed data, even if the gap was under 5 minutes.
       this.performBackfillIfNeeded(true);
+      // The first connect follows the starting reads; a later one may have missed tracker events.
+      if (this.connectedBefore) void this.refreshTrackers();
+      this.connectedBefore = true;
     });
 
     this.websocketClient.on("disconnect", () => {
@@ -865,30 +872,51 @@ export class RealtimeStore {
     toast.success("Glucose alarm cleared");
   }
 
-  private trackersRead = 0;
+  private trackersStarted = 0;
+  private trackersApplied = 0;
+  /** Bumped by every realtime tracker event, so a read in flight knows it may be behind. */
+  private trackerMutations = 0;
   private legacyFallbacksStarted = 0;
   private legacyFallbacksApplied = 0;
 
   /** Re-reads the tenant's tracker definitions and running instances together after a definition
    *  was created, changed or deleted: an instance carries its definition's name, icon and schedule,
-   *  and a deleted definition takes its instances with it. Only the latest read is kept. The legacy
-   *  fallbacks, which a new definition can cover, are re-read beside them under their own guard. */
+   *  and a deleted definition takes its instances with it. The legacy fallbacks, which a new
+   *  definition can cover, are re-read beside them under their own guard. */
   async refreshTrackers(): Promise<void> {
-    const read = ++this.trackersRead;
     const fallbacks = this.readLegacyFallbacks();
+    await this.readTrackers();
+    await fallbacks;
+  }
+
+  /**
+   * Reads the definitions and running instances and applies them unless a read started later was
+   * applied first. A failed read applies nothing and holds back no other read. A realtime tracker
+   * event that lands while the read is in flight may be missing from it, so that read is dropped
+   * and one fresh read takes its place. Never rejects.
+   */
+  private async readTrackers(retry = true): Promise<void> {
+    const read = ++this.trackersStarted;
+    const mutations = this.trackerMutations;
+    let definitions: TrackerDefinitionDto[];
+    let instances: TrackerInstanceDto[];
     try {
-      const [definitions, instances] = await Promise.all([
+      [definitions, instances] = await Promise.all([
         trackersClient().getDefinitions(),
         trackersClient().getActiveInstances(),
       ]);
-      if (read === this.trackersRead) {
-        this.trackerDefinitions = definitions;
-        this.trackerInstances = instances;
-      }
     } catch (error) {
       console.error("Failed to refresh trackers:", error);
+      return;
     }
-    await fallbacks;
+    if (read <= this.trackersApplied) return;
+    if (mutations !== this.trackerMutations) {
+      if (retry) await this.readTrackers(false);
+      return;
+    }
+    this.trackersApplied = read;
+    this.trackerDefinitions = definitions;
+    this.trackerInstances = instances;
   }
 
   /**
@@ -922,6 +950,7 @@ export class RealtimeStore {
   /** Handle tracker updates from SignalR */
   private handleTrackerUpdate(event: TrackerUpdateEvent): void {
     const { action, instance } = event;
+    this.trackerMutations++;
 
     switch (action) {
       case TrackerRealtimeAction.Create:
@@ -930,9 +959,13 @@ export class RealtimeStore {
           this.trackerInstances = [instance, ...this.trackerInstances];
           toast.info(`Tracker started: ${instance.definitionName}`);
         }
-        // A conversion's run can arrive before its definition update; the fallback it replaces
-        // should not wait for that.
-        void this.readLegacyFallbacks();
+        // A run of a definition this store does not hold yet (a conversion, or a tracker created
+        // and started at once) can arrive before the definition update, and its fallback should
+        // not wait for that. A run of a known definition changes no coverage; a device event that
+        // restarted it re-reads the fallbacks on its own.
+        if (!this.trackerDefinitions.some((d) => d.id === instance.definitionId)) {
+          void this.readLegacyFallbacks();
+        }
         break;
 
       case TrackerRealtimeAction.Reopen:
@@ -1297,7 +1330,6 @@ export class RealtimeStore {
     try {
       // Fetch all data types since last received using existing API methods
       const reservoirRefresh = this.refreshCurrentTherapyState();
-      const trackersRefresh = this.refreshTrackers();
       const [entries, deviceStatuses, boluses, carbIntakes, bgChecks, notes, devEvents, newApsSnapshots] = await Promise.all([
         sensorGlucoseClient().getAll(backfillFromDate, nowDate, 1000).then((r) => (r.data ?? []).map(sensorGlucoseToEntry)).catch((): Entry[] => []),
         Promise.resolve<DeviceStatus[]>([]),
@@ -1309,7 +1341,6 @@ export class RealtimeStore {
         apsSnapshotClient().getAll(backfillFromDate, nowDate, 20).then((r) => r.data ?? []).catch(() => []),
       ]);
       await reservoirRefresh;
-      await trackersRefresh;
 
       let backfilledCount = 0;
 

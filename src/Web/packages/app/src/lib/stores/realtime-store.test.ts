@@ -117,6 +117,7 @@ type TestStore = StoreInternals &
     | "isReady"
     | "currentReadingLoaded"
     | "destroy"
+    | "refreshTrackers"
     | "initialize"
   >;
 
@@ -1161,6 +1162,75 @@ describe("RealtimeStore tracker definition updates", () => {
     store.destroy();
   });
 
+  it("applies an earlier read when a later one fails", async () => {
+    const store = makeStore();
+    let resolveFirst: (value: TrackerDefinitionDto[]) => void = () => {};
+    api.getTrackerDefinitions
+      .mockReturnValueOnce(new Promise<TrackerDefinitionDto[]>((resolve) => (resolveFirst = resolve)))
+      .mockRejectedValueOnce(new Error("offline"));
+    api.getActiveTrackerInstances.mockResolvedValue([]);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    emit(store, "site");
+    emit(store, "sensor");
+    await settled();
+    resolveFirst([definition("site")]);
+    await settled();
+
+    expect(store.trackerDefinitions.map((d) => d.id)).toEqual(["site"]);
+
+    store.destroy();
+  });
+
+  it("reads again when a run completes while a read is in flight", async () => {
+    const store = makeStore();
+    store.trackerDefinitions = [definition("site")];
+    store.trackerInstances = [instance("run", "site")];
+    let resolveStale: (value: TrackerInstanceDto[]) => void = () => {};
+    api.getTrackerDefinitions.mockResolvedValue([definition("site")]);
+    api.getActiveTrackerInstances
+      .mockReturnValueOnce(new Promise<TrackerInstanceDto[]>((resolve) => (resolveStale = resolve)))
+      .mockResolvedValueOnce([]);
+
+    const refreshing = store.refreshTrackers();
+    await settled();
+    store.websocketClient.eventHandlers.trackerUpdate?.({
+      action: TrackerRealtimeAction.Complete,
+      instance: instance("run", "site"),
+    });
+    resolveStale([instance("run", "site")]);
+    await refreshing;
+
+    expect(store.trackerInstances).toEqual([]);
+    expect(api.getActiveTrackerInstances).toHaveBeenCalledTimes(2);
+
+    store.destroy();
+  });
+
+  it("reads again when a run starts while a read is in flight", async () => {
+    const store = makeStore();
+    store.trackerDefinitions = [definition("site")];
+    let resolveStale: (value: TrackerInstanceDto[]) => void = () => {};
+    api.getTrackerDefinitions.mockResolvedValue([definition("site")]);
+    api.getActiveTrackerInstances
+      .mockReturnValueOnce(new Promise<TrackerInstanceDto[]>((resolve) => (resolveStale = resolve)))
+      .mockResolvedValueOnce([instance("run", "site")]);
+
+    const refreshing = store.refreshTrackers();
+    await settled();
+    store.websocketClient.eventHandlers.trackerUpdate?.({
+      action: TrackerRealtimeAction.Create,
+      instance: instance("run", "site"),
+    });
+    resolveStale([]);
+    await refreshing;
+
+    expect(store.trackerInstances.map((i) => i.id)).toEqual(["run"]);
+    expect(api.getActiveTrackerInstances).toHaveBeenCalledTimes(2);
+
+    store.destroy();
+  });
+
   it("swaps a converted fallback for the tracker it became", async () => {
     const store = makeStore();
     store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 50)];
@@ -1292,7 +1362,7 @@ describe("RealtimeStore legacy fallbacks", () => {
     expect(api.getLegacyFallbacks).not.toHaveBeenCalled();
   });
 
-  it("re-reads the fallbacks at once when a tracker run starts", async () => {
+  it("re-reads the fallbacks at once when a run of a new definition starts", async () => {
     const store = makeStore();
     store.legacyFallbacks = [fallback(LegacyConsumableKind.Site, 70)];
     api.getLegacyFallbacks.mockResolvedValue(read([]));
@@ -1308,19 +1378,53 @@ describe("RealtimeStore legacy fallbacks", () => {
     store.destroy();
   });
 
-  it("re-reads the trackers and fallbacks when it backfills", async () => {
+  it("leaves a restarted run of a known definition to the device event's re-read", async () => {
+    const store = makeStore();
+    store.trackerDefinitions = [{ id: "site", name: "Infusion Site" }];
+
+    store.websocketClient.eventHandlers.trackerUpdate?.({
+      action: TrackerRealtimeAction.Create,
+      instance: { id: "run", definitionId: "site", definitionName: "Infusion Site" },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(api.getLegacyFallbacks).not.toHaveBeenCalled();
+
+    store.destroy();
+  });
+
+  it("re-reads the trackers and fallbacks on a reconnection, not on the first connect", async () => {
     const store = makeStore();
     api.emptyPage.mockResolvedValue({ data: [] });
     api.getCurrentTherapyState.mockResolvedValue({ reservoir: null });
     api.apsGetAll.mockResolvedValue({ data: [] });
-    api.getTrackerDefinitions.mockResolvedValue([{ id: "site", name: "Site" }]);
-    api.getActiveTrackerInstances.mockResolvedValue([]);
-    api.getLegacyFallbacks.mockResolvedValue(read([fallback(LegacyConsumableKind.Sensor, 3)]));
+    const info: ConnectionInfo = { clientId: "socket", serverTime: "", version: "" };
 
-    await store.performBackfillIfNeeded(true);
+    store.websocketClient.eventHandlers.connect?.(info);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getTrackerDefinitions).not.toHaveBeenCalled();
+
+    api.getTrackerDefinitions.mockResolvedValue([{ id: "site", name: "Site" }]);
+    api.getLegacyFallbacks.mockResolvedValue(read([fallback(LegacyConsumableKind.Sensor, 3)]));
+    store.websocketClient.eventHandlers.connect?.(info);
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(store.trackerDefinitions.map((d) => d.id)).toEqual(["site"]);
     expect(store.legacyFallbacks.map((f) => f.kind)).toEqual([LegacyConsumableKind.Sensor]);
+
+    store.destroy();
+  });
+
+  it("does not re-read the trackers on a backfill alone", async () => {
+    const store = makeStore();
+    api.emptyPage.mockResolvedValue({ data: [] });
+    api.getCurrentTherapyState.mockResolvedValue({ reservoir: null });
+    api.apsGetAll.mockResolvedValue({ data: [] });
+
+    await store.performBackfillIfNeeded(true);
+
+    expect(api.getTrackerDefinitions).not.toHaveBeenCalled();
+    expect(api.getLegacyFallbacks).not.toHaveBeenCalled();
 
     store.destroy();
   });
