@@ -10,7 +10,7 @@
   const visible = $derived(visibleLegacyFallbacks(fallbacks, hiddenLegacyFallbacks.current));
 </script>
 
-<div data-pill-rail tabindex="-1" data-testid="rail">
+<div data-pill-rail role="group" aria-label="Status pills" data-testid="rail">
   {#each visible as fallback (fallback.kind)}
     <LegacyAgePill {fallback} {now} />
   {/each}

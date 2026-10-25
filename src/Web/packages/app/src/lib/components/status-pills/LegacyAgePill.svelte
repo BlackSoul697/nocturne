@@ -72,6 +72,14 @@
     return (index >= 0 ? (pills[index + 1] ?? pills[index - 1]) : undefined) ?? rail;
   }
 
+  /** The rail takes focus only from here, so a click on its empty space does not move focus. */
+  function focusTarget(target: HTMLElement) {
+    if (!target.hasAttribute("data-pill-rail")) return target.focus();
+    target.tabIndex = -1;
+    target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
+    target.focus();
+  }
+
   async function hide() {
     const kind = fallback.kind;
     if (!kind) return;
@@ -81,7 +89,7 @@
       hiddenLegacyFallbacks.current = [...hiddenLegacyFallbacks.current, kind];
     }
     await tick();
-    next?.focus();
+    if (next) focusTarget(next);
   }
 </script>
 

@@ -27,7 +27,7 @@
   import Pill from "@lucide/svelte/icons/pill";
   import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
   import { DragReorder, moveItem } from "./drag-reorder.svelte";
-  import { legacyKindLabel } from "$lib/components/trackers/legacy-kind-label.svelte";
+  import { legacyKindLabelWithNightscoutName } from "$lib/components/trackers/legacy-kind-label.svelte";
 
   interface Props {
     /** The user's arrangement of the rail; an empty object is the default. */
@@ -199,11 +199,11 @@
         <ul class="space-y-2">
           {#each hiddenLegacyFallbacks as kind (kind)}
             <li class="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
-              <span class="text-sm text-muted-foreground">{legacyKindLabel(kind)}</span>
+              <span class="text-sm text-muted-foreground">{legacyKindLabelWithNightscoutName(kind)}</span>
               <Button
                 variant="outline"
                 size="sm"
-                aria-label={`Show ${legacyKindLabel(kind)}`}
+                aria-label={`Show ${legacyKindLabelWithNightscoutName(kind)}`}
                 onclick={() => showLegacyFallback(kind)}
               >
                 <Eye class="h-4 w-4" />

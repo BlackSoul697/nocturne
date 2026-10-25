@@ -137,4 +137,15 @@ describe("LegacyAgePill", () => {
 
     await expect.element(page.getByTestId("rail")).toHaveFocus();
   });
+
+  it("gives the rail focus only for the hide, not for a later click on it", async () => {
+    render(LegacyAgePillRail, { fallbacks: [SITE], now });
+
+    await pill().click();
+    await hideButton().click();
+    await expect.element(page.getByTestId("rail")).toHaveFocus();
+    (document.activeElement as HTMLElement).blur();
+
+    expect(page.getByTestId("rail").element().hasAttribute("tabindex")).toBe(false);
+  });
 });

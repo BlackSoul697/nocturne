@@ -143,8 +143,9 @@
   >
     <div
       bind:this={pillsEl}
-      class="flex flex-wrap items-center gap-x-2 gap-y-1 outline-none"
-      tabindex="-1"
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md outline-none focus:ring-2 focus:ring-ring"
+      role="group"
+      aria-label="Status pills"
       data-pill-rail
     >
       {@render leading?.()}
