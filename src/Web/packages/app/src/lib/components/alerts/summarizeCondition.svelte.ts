@@ -2,6 +2,7 @@ import type { ConditionNode } from "./types";
 import { AlertWeekday, PumpModeState, StateSpanCategory } from "$api-clients";
 import { bg, bgLabel, formatLocale, weekdayLabel } from "$lib/utils/formatting";
 import { plural } from "$lib/utils/plural";
+import { glucoseBucketLabel } from "./alert-labels.svelte";
 
 /**
  * Optional context for summarisation. The <c>resolveAlertName</c> hook lets the
@@ -172,7 +173,7 @@ export function summarizeCondition(
 		case "glucose_bucket": {
 			const p = node.glucose_bucket;
 			if (!p || !p.buckets || p.buckets.length === 0) return "";
-			return `Glucose range: ${listFormat().format(p.buckets.map(bucketLabel))}`;
+			return `Glucose range: ${listFormat().format(p.buckets.map(glucoseBucketLabel))}`;
 		}
 		case "time_since_last_carb": {
 			const p = node.time_since_last_carb;
@@ -215,18 +216,6 @@ export function summarizeCondition(
 
 function withDuration(chip: string, minutes: number | undefined): string {
 	return minutes ? `${chip} for ${formatMinutes(minutes)}` : chip;
-}
-
-function bucketLabel(bucket: string): string {
-	switch (bucket) {
-		case "very_low": return "Very low";
-		case "low": return "Low";
-		case "tight_range": return "Tight range";
-		case "in_range": return "In range";
-		case "high": return "High";
-		case "very_high": return "Very high";
-		default: return bucket;
-	}
 }
 
 function listFormat(): Intl.ListFormat {
@@ -285,6 +274,8 @@ function stateSpanChip(category: StateSpanCategory | undefined, isActive: boolea
 			return isActive ? "Data exclusion active" : "Data exclusion not active";
 		case StateSpanCategory.TemporaryTarget:
 			return isActive ? "Temporary target active" : "Temporary target not active";
+		case StateSpanCategory.Motion:
+			return isActive ? "Motion active" : "Motion not active";
 		default:
 			return isActive ? "State active" : "State not active";
 	}
