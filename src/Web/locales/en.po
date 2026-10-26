@@ -2497,6 +2497,7 @@ msgstr "<0/> Downloading..."
 #: src/lib/components/dashboard/glucose-chart/dialogs/InspectionFooter.svelte
 #: src/lib/components/members/MemberCard.svelte
 #: src/lib/components/members/RolesSection.svelte
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/lib/components/ui/danger-zone-dialog/danger-zone-dialog.svelte
@@ -37753,3 +37754,110 @@ msgstr "Failed to dismiss the link. Try again."
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Failed to revoke the link. Try again."
 msgstr "Failed to revoke the link. Try again."
+
+#: src/lib/components/layout/NotificationItem.svelte
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "Version"
+msgstr "Version"
+
+#. 0: releaseVersion
+#. 0: version
+#: src/lib/components/layout/NotificationItem.svelte
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "Nocturne {0} is available"
+msgstr "Nocturne {0} is available"
+
+#. 0: releaseVersion
+#. 0: version
+#: src/lib/components/layout/NotificationItem.svelte
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "Nocturne is now on version {0}"
+msgstr "Nocturne is now on version {0}"
+
+#: src/lib/components/layout/NotificationItem.svelte
+msgid "AutoUpdateMode"
+msgstr "AutoUpdateMode"
+
+#: src/lib/components/layout/NotificationItem.svelte
+msgid "NextCheckAt"
+msgstr "NextCheckAt"
+
+#: src/lib/components/layout/NotificationItem.svelte
+msgid "CheckIntervalSeconds"
+msgstr "CheckIntervalSeconds"
+
+#: src/lib/components/layout/NotificationItem.svelte
+msgid "See what changed in this version."
+msgstr "See what changed in this version."
+
+#. 0: formatLongDate(release.publishedAt)
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "Released on {0}."
+msgstr "Released on {0}."
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "This update is installed."
+msgstr "This update is installed."
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "To install it, run this command in the folder that holds your compose file:"
+msgstr "To install it, run this command in the folder that holds your compose file:"
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "<0/> Loading the release notes"
+msgstr "<0/> Loading the release notes"
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "Could not load the release notes. Try again later."
+msgstr "Could not load the release notes. Try again later."
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "The release notes for this version are not available."
+msgstr "The release notes for this version are not available."
+
+#: src/lib/components/notifications/ReleaseNotesDialog.svelte
+msgid "<0/> Open on GitHub"
+msgstr "<0/> Open on GitHub"
+
+#. 0: formatDayTime(upcoming)
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower installs it automatically at about {0}."
+msgstr "Watchtower installs it automatically at about {0}."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower installs it automatically in the next hour."
+msgstr "Watchtower installs it automatically in the next hour."
+
+#. 0: hours
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower installs it automatically in the next {0} hours."
+msgstr "Watchtower installs it automatically in the next {0} hours."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower installs it automatically."
+msgstr "Watchtower installs it automatically."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower is running. If it installs updates, it installs this one in the next hour."
+msgstr "Watchtower is running. If it installs updates, it installs this one in the next hour."
+
+#. 0: hours
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower is running. If it installs updates, it installs this one in the next {0} hours."
+msgstr "Watchtower is running. If it installs updates, it installs this one in the next {0} hours."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower is running. If it installs updates, it installs this one automatically."
+msgstr "Watchtower is running. If it installs updates, it installs this one automatically."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Watchtower only reports updates. Install this update manually."
+msgstr "Watchtower only reports updates. Install this update manually."
+
+#: src/lib/components/notifications/InstallTiming.svelte
+msgid "Install this update manually."
+msgstr "Install this update manually."
+
+#: ../portal/src/routes/docs/installation/docker-compose/+page.svelte
+msgid "When a new release is available, each tenant owner gets a notification with the release notes. To show the time that Watchtower installs the release, set <0/> in your <1/> file to a value from the generator. Then run <2/>. This setting is optional. If you installed before this setting was added, download the new bundle first."
+msgstr "When a new release is available, each tenant owner gets a notification with the release notes. To show the time that Watchtower installs the release, set <0/> in your <1/> file to a value from the generator. Then run <2/>. This setting is optional. If you installed before this setting was added, download the new bundle first."
