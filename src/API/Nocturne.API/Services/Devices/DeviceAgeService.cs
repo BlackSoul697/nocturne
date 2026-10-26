@@ -1,3 +1,4 @@
+using Nocturne.API.Services.Monitoring;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -16,10 +17,19 @@ public class DeviceAgeService : IDeviceAgeService
     private readonly IDeviceEventRepository _repository;
     private readonly ILogger<DeviceAgeService> _logger;
 
-    private static readonly DeviceEventType[] CannulaEventTypes = [DeviceEventType.SiteChange, DeviceEventType.CannulaChange];
+    // NIGHTSCOUT-COMPAT: upstream CAGE reads Site Change alone. A pod change, however it is reported,
+    // is a new site, so a pod user's CAGE follows it.
+    private static readonly DeviceEventType[] CannulaEventTypes = [.. ConsumableTrackerSpecs.EventTypes(LegacyConsumableKind.Site)];
     private static readonly DeviceEventType[] SensorStartEventTypes = [DeviceEventType.SensorStart];
     private static readonly DeviceEventType[] SensorChangeEventTypes = [DeviceEventType.SensorChange];
-    private static readonly DeviceEventType[] InsulinEventTypes = [DeviceEventType.InsulinChange, DeviceEventType.ReservoirChange];
+    // NIGHTSCOUT-COMPAT: upstream IAGE reads Insulin Change alone. A pod holds the insulin, so a new
+    // pod is a new reservoir and a pod user's IAGE follows it.
+    private static readonly DeviceEventType[] InsulinEventTypes =
+    [
+        .. ConsumableTrackerSpecs.EventTypes(LegacyConsumableKind.Reservoir),
+        DeviceEventType.PodChange,
+        DeviceEventType.PodActivated,
+    ];
     private static readonly DeviceEventType[] BatteryEventTypes = [DeviceEventType.PumpBatteryChange];
 
     // Default thresholds matching legacy Nightscout values

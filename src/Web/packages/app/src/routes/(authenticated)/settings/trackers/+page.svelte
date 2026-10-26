@@ -48,6 +48,7 @@
     DashboardVisibility,
     TrackerMode,
     ReservoirReportKind,
+    PumpCapability,
     type TrackerDefinitionDto,
     type TrackerInstanceDto,
     type TrackerPresetDto,
@@ -124,6 +125,8 @@
   let formStartEventType = $state<string | undefined>(undefined);
   let formCompletionEventType = $state<string | undefined>(undefined);
   let formTriggerEventTypes = $state<string[]>([]);
+  let formEndEventTypes = $state<string[]>([]);
+  let formCovers = $state<PumpCapability[]>([]);
   let formTriggerNotesContains = $state("");
 
   // Helper to convert API format to notifications array
@@ -194,6 +197,7 @@
     [TrackerCategory.Sensor]: "Sensor",
     [TrackerCategory.Cannula]: "Cannula",
     [TrackerCategory.Battery]: "Battery",
+    [TrackerCategory.Pod]: "Pod",
   };
 
   // Completion reason labels
@@ -222,6 +226,7 @@
     [TrackerCategory.Sensor]: "text-cyan-500",
     [TrackerCategory.Cannula]: "text-pink-500",
     [TrackerCategory.Battery]: "text-yellow-500",
+    [TrackerCategory.Pod]: "text-rose-500",
   };
 
   // Format date
@@ -288,6 +293,8 @@
     formStartEventType = undefined;
     formCompletionEventType = undefined;
     formTriggerEventTypes = [];
+    formEndEventTypes = [];
+    formCovers = [];
     formTriggerNotesContains = "";
     isDefinitionDialogOpen = true;
   }
@@ -313,6 +320,8 @@
     formStartEventType = def.startEventType ?? undefined;
     formCompletionEventType = def.completionEventType ?? undefined;
     formTriggerEventTypes = [...(def.triggerEventTypes ?? [])];
+    formEndEventTypes = [...(def.endEventTypes ?? [])];
+    formCovers = [...(def.covers ?? [])];
     formTriggerNotesContains = def.triggerNotesContains ?? "";
     isDefinitionDialogOpen = true;
   }
@@ -562,6 +571,8 @@
   bind:formStartEventType
   bind:formCompletionEventType
   bind:formTriggerEventTypes
+  bind:formEndEventTypes
+  bind:formCovers
   bind:formTriggerNotesContains
   {categoryLabels}
   {loadData}
