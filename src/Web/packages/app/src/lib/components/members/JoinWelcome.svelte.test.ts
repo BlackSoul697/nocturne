@@ -48,7 +48,7 @@ describe("JoinWelcome", () => {
     render(JoinWelcome);
 
     await expect
-      .element(page.getByText("You're now viewing Sam's data."))
+      .element(page.getByText("You are now viewing Sam's data."))
       .toBeVisible();
     expect(state.replaceState).toHaveBeenCalledOnce();
     expect(String(state.replaceState.mock.calls[0][0])).toBe(
@@ -63,7 +63,7 @@ describe("JoinWelcome", () => {
     render(JoinWelcome);
 
     await expect
-      .element(page.getByText("You're now viewing the data shared with you."))
+      .element(page.getByText("You are now viewing the data shared with you."))
       .toBeVisible();
   });
 
