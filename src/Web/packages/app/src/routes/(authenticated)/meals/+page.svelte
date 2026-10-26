@@ -13,7 +13,7 @@
   import { getMeals, addCarbIntakeFood, deleteCarbIntakeFood } from "$api/generated/nutritions.generated.remote";
   import { getSuggestions as getMealMatchingSuggestions, acceptMatch, dismissMatch } from "$api/generated/mealMatchings.generated.remote";
   import { toast } from "svelte-sonner";
-  import { useToastSubmission } from "$lib/forms";
+  import { toastSaved, useToastSubmission } from "$lib/forms";
   import {
     TreatmentFoodSelectorDialog,
     TreatmentFoodEntryEditDialog,
@@ -291,7 +291,7 @@
         id: carbIntakeId,
         request,
       });
-      toast.success("Food added");
+      toastSaved("Food added");
       showAddFoodDialog = false;
       addFoodMeal = null;
       mealsQuery?.refresh();
@@ -305,6 +305,18 @@
     showReviewDialog = true;
   }
 
+  /** The meal a match was last accepted into; its row paints the link. */
+  let matched = $state({ carbIntakeId: "", count: 0 });
+
+  /**
+   * Under the unattributed filter the accepted meal leaves the list on the
+   * next refresh, taking its row's moment with it, so the toast confirms instead.
+   */
+  function markMatched(carbIntakeId: string) {
+    if (filterMode === "unattributed") toast.success("Meal match accepted");
+    else matched = { carbIntakeId, count: matched.count + 1 };
+  }
+
   async function handleQuickAccept(match: SuggestedMealMatch) {
     try {
       // Awaited so the row's pending state covers the refresh too, not just the
@@ -315,7 +327,7 @@
         carbs: match.carbs ?? 0,
         timeOffsetMinutes: 0,
       }).updates(getMealMatchingSuggestions, getMeals);
-      toast.success("Meal match accepted");
+      markMatched(match.carbIntakeId!);
     } catch (err) {
       console.error("Failed to accept match:", err);
       toast.error(describeSubmitError(err, "Failed to accept match"));
@@ -396,6 +408,7 @@
       onUnlinkFood={confirmUnlinkFood}
       onEditInsulin={openBolusDialog}
       onAcceptSuggestion={handleQuickAccept}
+      {matched}
       onDismissSuggestion={handleDismiss}
       onReviewSuggestion={openReviewDialog}
     />
@@ -452,6 +465,7 @@
   }}
   match={reviewMatch}
   onComplete={handleReviewComplete}
+  onAccepted={markMatched}
 />
 
 <ConfirmDialog

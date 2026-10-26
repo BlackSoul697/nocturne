@@ -65,14 +65,6 @@
         >
           <KeyRound class="h-6 w-6 text-primary" />
         </div>
-      {:else}
-        <Artwork
-          artwork="crescent-moon"
-          palette="moonlight"
-          motion="auto"
-          autoplay="once"
-          class="mx-auto mb-4 size-48"
-        />
       {/if}
       {#if showGuestCode}
         <Card.Title class="text-2xl font-bold">Enter your guest code</Card.Title>
