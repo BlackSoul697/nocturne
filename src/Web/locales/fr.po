@@ -37748,3 +37748,11 @@ msgstr ""
 #: src/routes/(unauthenticated)/setup/(guided)/devices/DeviceSetupItem.svelte
 msgid "Your devices do not report this change. Start the tracker in tracker settings when you replace the part."
 msgstr ""
+
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Failed to dismiss the link. Try again."
+msgstr ""
+
+#: src/lib/components/members/GuestLinksSection.svelte
+msgid "Failed to revoke the link. Try again."
+msgstr ""
