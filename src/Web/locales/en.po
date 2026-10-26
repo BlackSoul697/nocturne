@@ -5057,6 +5057,7 @@ msgstr "<0/> Add"
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
+#: src/lib/components/ui/tooltip-background/TooltipHarness.test.svelte
 msgid "Value"
 msgstr "Value"
 
@@ -10004,6 +10005,7 @@ msgstr "Only share data from the last 24 hours"
 #~ msgid "Status Code"
 #~ msgstr "Status Code"
 
+#: src/lib/components/ui/tooltip-background/TooltipHarness.test.svelte
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
 msgid "Header"
 msgstr "Header"
