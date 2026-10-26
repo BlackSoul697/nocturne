@@ -4,6 +4,7 @@
 # its test pass. See tests/README.md.
 #
 # <FullyQualifiedName (no theory arguments)> | <bug>
+Nocturne.API.Tests.Integration.Parity.V2.DDataParityTests.GetDDataAt_IsoDateString_ReturnsSameShape | Nightscout still serves the site change a previous test seeded and the cleanup deleted, because it answers before it reloads (#2808)
 Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Empty_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop/bwp (including the bwp "Data isn't current" error) and differ on dbsize and runtimestate; the with-data cases also compare Nightscout before it reloads
 Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Pretty_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop/bwp (including the bwp "Data isn't current" error) and differ on dbsize and runtimestate; the with-data cases also compare Nightscout before it reloads
 Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_WithData_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop/bwp (including the bwp "Data isn't current" error) and differ on dbsize and runtimestate; the with-data cases also compare Nightscout before it reloads
