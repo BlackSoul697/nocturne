@@ -123,14 +123,14 @@ describe("CurrentGlucoseWidget", () => {
 
     await expect.element(tile()).toHaveTextContent(/^123\s*stable\s*mg\/dL$/);
     await expect.element(page.getByText("+4", { exact: true })).toBeVisible();
-    await expect.element(page.getByText(/2 min/)).toBeVisible();
+    await expect.element(page.getByText(/2\s?m(in\.?)? ago/)).toBeVisible();
   });
 
   it("drops the trend and change of a stale reading but keeps its age", async () => {
     store.lastUpdated = now - 30 * 60_000;
     render(CurrentGlucoseWidget);
 
-    await expect.element(page.getByText(/30 min/)).toBeVisible();
+    await expect.element(page.getByText(/30\s?m(in\.?)? ago/)).toBeVisible();
     await expect.element(tile()).toHaveTextContent(/^123\s*mg\/dL$/);
     await expect.element(page.getByText("+4", { exact: true })).not.toBeInTheDocument();
   });
@@ -175,7 +175,7 @@ describe("CurrentGlucoseWidget", () => {
   it("drops the row under the tile when a stale reading has no battery to show", async () => {
     store.lastUpdated = now - 30 * 60_000;
     render(CurrentGlucoseWidget);
-    await expect.element(page.getByText(/30 min/)).toBeVisible();
+    await expect.element(page.getByText(/30\s?m(in\.?)? ago/)).toBeVisible();
 
     await expect.element(tile()).toBeVisible();
     const tileBottom = tile().element().getBoundingClientRect().bottom;
