@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { Artwork, ConfirmationBackground, type IconArtworkSource } from "@nocturne/watercolour";
+  import { Artwork, ConfirmationBackground, type IconArtworkSource } from "water-ui";
   import { cn } from "$lib/utils";
 
   /**

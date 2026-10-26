@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { bloomScene, mountPlayer, type PlayerState } from "@nocturne/watercolour";
+  import { bloomScene, mountPlayer, type PlayerState } from "water-ui";
 
   /** One bloom per reading: `seed`, `delta` and `token` are read once, when the canvas mounts. */
   interface Props {

@@ -35,7 +35,7 @@
   import { WELCOME_PARAM } from "$lib/components/members/welcome";
   import { page } from "$app/state";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
-  import { getEngineHost } from "@nocturne/watercolour";
+  import { getEngineHost } from "water-ui";
   import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
   import { CoachMarkProvider } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";

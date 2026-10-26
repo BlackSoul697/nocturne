@@ -1,2 +1,2 @@
 // Imported dynamically; see ./artwork.ts.
-export { AvatarWash as default } from "@nocturne/watercolour";
+export { AvatarWash as default } from "water-ui";

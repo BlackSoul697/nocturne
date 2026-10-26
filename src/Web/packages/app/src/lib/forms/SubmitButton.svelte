@@ -8,7 +8,7 @@
     prefersReducedMotion,
     watchSurface,
     type Surface,
-  } from "@nocturne/watercolour";
+  } from "water-ui";
   import { buttonVariants, type ButtonVariant } from "$lib/components/ui/button";
   import { cn } from "$lib/utils";
 

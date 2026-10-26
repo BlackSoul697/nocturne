@@ -27,7 +27,7 @@ const engineHost = vi.hoisted(() => {
 	return host;
 });
 
-vi.mock("@nocturne/watercolour", () => ({ getEngineHost: () => engineHost }));
+vi.mock("water-ui", () => ({ getEngineHost: () => engineHost }));
 
 function make_settings(overrides: Partial<TitleFaviconSettings> = {}): TitleFaviconSettings {
 	return {

@@ -8,10 +8,10 @@ import GlucoseTileWashHarness from "./GlucoseTileWashHarness.test.svelte";
 
 vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
 
-vi.mock("@nocturne/watercolour", async (importOriginal) => {
+vi.mock("water-ui", async (importOriginal) => {
   const fake = await import("$lib/test-stubs/Watercolour.test-stub.svelte");
   return {
-    ...(await importOriginal<typeof import("@nocturne/watercolour")>()),
+    ...(await importOriginal<typeof import("water-ui")>()),
     Artwork: fake.default,
     mountPlayer: fake.mountPlayer,
     bloomScene: fake.bloomScene,

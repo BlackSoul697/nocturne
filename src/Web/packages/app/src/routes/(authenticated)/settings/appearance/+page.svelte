@@ -91,7 +91,7 @@
   import Eye from "@lucide/svelte/icons/eye";
   import Paintbrush from "@lucide/svelte/icons/paintbrush";
   import { illustrations } from "$lib/stores/illustrations.svelte";
-  import { PRESENTATIONS } from "@nocturne/watercolour";
+  import { PRESENTATIONS } from "water-ui";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
   import { browser } from "$app/environment";
   import { resolve } from "$app/paths";

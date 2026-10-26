@@ -1,2 +1,2 @@
 // Imported dynamically; see ./artwork.ts.
-export { ReportHeaderWash as default } from "@nocturne/watercolour";
+export { ReportHeaderWash as default } from "water-ui";

@@ -44,7 +44,7 @@ import type { ShellSession } from "$lib/utils/shell-session";
 import { AuthStore } from "$lib/stores/auth-store.svelte";
 import { RealtimeStore } from "$lib/stores/realtime-store.svelte";
 import ToolsLayout from "./tools/+layout.svelte";
-import { EngineHost } from "@nocturne/watercolour";
+import { EngineHost } from "water-ui";
 import { illustrations } from "$lib/stores/illustrations.svelte";
 import * as appState from "$app/state";
 import { SHELL_DATA_KEY, SHELL_REVALIDATE_INTERVAL_MS } from "$lib/constants/shell-data";

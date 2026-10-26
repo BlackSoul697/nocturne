@@ -23,7 +23,7 @@
   import PermissionCategorySelector from "$lib/components/rbac/PermissionCategorySelector.svelte";
   import CopyInvitationMessageButton from "$lib/components/members/CopyInvitationMessageButton.svelte";
   import CopyButton from "$lib/components/members/CopyButton.svelte";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { createInvite } from "$api/generated/memberInvites.generated.remote";
   import type { TenantRoleDto } from "$lib/api/generated/nocturne-api-client";
   import { describeSubmitError } from "$lib/forms";

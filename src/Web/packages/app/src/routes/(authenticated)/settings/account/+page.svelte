@@ -1,6 +1,6 @@
 <script lang="ts">
   import SuccessBanner from "$lib/forms/SuccessBanner.svelte";
-  import type { IconArtworkSource } from "@nocturne/watercolour";
+  import type { IconArtworkSource } from "water-ui";
   import { fingerprintArtwork } from "$lib/watercolour-icons";
   import * as Card from "$lib/components/ui/card";
   import * as Dialog from "$lib/components/ui/dialog";

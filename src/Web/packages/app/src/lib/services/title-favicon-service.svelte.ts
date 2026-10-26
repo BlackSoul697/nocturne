@@ -13,7 +13,7 @@ import { directionGlyph, type GlucoseTileVariant } from "@nocturne/ui/glucose";
 import { renderGlucoseIcon } from "@nocturne/ui/glucose-icon";
 import type { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
 import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
-import { getEngineHost } from "@nocturne/watercolour";
+import { getEngineHost } from "water-ui";
 
 /** Resolve CSS variable to its computed value */
 function resolveCssVar(name: string): string {

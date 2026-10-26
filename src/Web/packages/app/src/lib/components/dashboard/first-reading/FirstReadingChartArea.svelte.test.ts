@@ -13,8 +13,8 @@ const state = vi.hoisted(() => {
   return { connectors, reducedMotion: false };
 });
 
-vi.mock("@nocturne/watercolour", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@nocturne/watercolour")>()),
+vi.mock("water-ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("water-ui")>()),
   prefersReducedMotion: () => state.reducedMotion,
 }));
 

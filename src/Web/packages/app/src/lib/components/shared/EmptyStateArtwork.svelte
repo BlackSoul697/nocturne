@@ -5,7 +5,7 @@
     type ArtworkId,
     type IconArtworkSource,
     type PaletteId,
-  } from "@nocturne/watercolour";
+  } from "water-ui";
 
   interface Props {
     art: ArtworkId | IconArtworkSource;

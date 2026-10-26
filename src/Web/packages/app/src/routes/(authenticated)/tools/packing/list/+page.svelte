@@ -18,7 +18,7 @@
   import X from "@lucide/svelte/icons/x";
   import { EmptyState } from "$lib/components/shared";
   import PackingSuitcase from "$lib/components/tools/packing/packing-suitcase.svelte";
-  import type { PlayerState } from "@nocturne/watercolour";
+  import type { PlayerState } from "water-ui";
   import { decodeBase64Utf8, encodeBase64Utf8 } from "$lib/utils";
 
   interface PackingItem {

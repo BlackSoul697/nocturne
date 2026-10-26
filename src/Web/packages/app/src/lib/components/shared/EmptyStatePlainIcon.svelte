@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import type { ArtworkId } from "@nocturne/watercolour";
+  import type { ArtworkId } from "water-ui";
   import FileText from "@lucide/svelte/icons/file-text";
   import Clock from "@lucide/svelte/icons/clock";
   import Plug from "@lucide/svelte/icons/plug";
@@ -52,7 +52,7 @@
 </script>
 
 <script lang="ts">
-  import type { IconArtworkSource } from "@nocturne/watercolour";
+  import type { IconArtworkSource } from "water-ui";
 
   interface Props {
     art: ArtworkId | IconArtworkSource;

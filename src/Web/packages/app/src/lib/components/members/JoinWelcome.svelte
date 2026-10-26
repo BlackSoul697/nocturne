@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { afterNavigate, replaceState } from "$app/navigation";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import X from "@lucide/svelte/icons/x";

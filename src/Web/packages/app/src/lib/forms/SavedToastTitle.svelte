@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ConfirmationBackground } from "@nocturne/watercolour";
+  import { ConfirmationBackground } from "water-ui";
 
   let { message }: { message: string } = $props();
 </script>

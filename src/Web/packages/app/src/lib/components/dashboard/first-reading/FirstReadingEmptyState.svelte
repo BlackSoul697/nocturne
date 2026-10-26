@@ -7,7 +7,7 @@
   import KeyRound from "@lucide/svelte/icons/key-round";
   import Download from "@lucide/svelte/icons/download";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
-  import { DropGroup, DropSurface } from "@nocturne/watercolour";
+  import { DropGroup, DropSurface } from "water-ui";
   import { resolve } from "$app/paths";
   import type { ConnectorStatusDto } from "$lib/api/generated/nocturne-api-client";
 

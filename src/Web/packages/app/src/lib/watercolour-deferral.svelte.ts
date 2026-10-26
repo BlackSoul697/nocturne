@@ -1,5 +1,5 @@
 import { browser } from "$app/environment";
-import { WARM_IDLE_TIMEOUT_MS } from "@nocturne/watercolour";
+import { WARM_IDLE_TIMEOUT_MS } from "water-ui";
 import { watercolourDue } from "$lib/stores/illustrations.svelte";
 import { lazyComponent, type AnyComponent } from "$lib/utils/lazy-component.svelte";
 import { whenIdle } from "$lib/utils/when-idle";

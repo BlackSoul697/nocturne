@@ -54,7 +54,7 @@
 
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
-  import type { ArtworkId, IconArtworkSource, PaletteId } from "@nocturne/watercolour";
+  import type { ArtworkId, IconArtworkSource, PaletteId } from "water-ui";
   import { stillArtwork } from "$lib/watercolour-deferral.svelte";
   import { watercolourWanted } from "$lib/stores/illustrations.svelte";
   import EmptyStatePlainIcon, { hasPlainGlyph } from "./EmptyStatePlainIcon.svelte";

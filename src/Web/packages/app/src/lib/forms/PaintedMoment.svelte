@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
-  import { Artwork, type ArtworkId, type IconArtworkSource } from "@nocturne/watercolour";
+  import { Artwork, type ArtworkId, type IconArtworkSource } from "water-ui";
   import { cn } from "$lib/utils";
 
   /**

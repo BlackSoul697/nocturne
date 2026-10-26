@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Artwork, type ArtworkPlayer } from "@nocturne/watercolour";
+  import { Artwork, type ArtworkPlayer } from "water-ui";
   import { databaseArtwork } from "$lib/watercolour-icons";
 
   let stored = $state(false);

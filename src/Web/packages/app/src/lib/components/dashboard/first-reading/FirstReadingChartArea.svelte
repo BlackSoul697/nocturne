@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { fade } from "svelte/transition";
-  import { prefersReducedMotion } from "@nocturne/watercolour";
+  import { prefersReducedMotion } from "water-ui";
   import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
   import FirstReadingEmptyStateLoader from "./FirstReadingEmptyStateLoader.svelte";
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ComponentProps } from "svelte";
   import { TabsTrigger } from "@nocturne/ui/ui/tabs";
-  import { PaintedUnderline } from "@nocturne/watercolour";
+  import { PaintedUnderline } from "water-ui";
 
   let { ref = $bindable(null), ...restProps }: Omit<ComponentProps<typeof TabsTrigger>, "indicator"> = $props();
 </script>

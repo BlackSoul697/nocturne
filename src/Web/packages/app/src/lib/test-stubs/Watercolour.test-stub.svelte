@@ -11,7 +11,7 @@
     PlayerState,
     PlayerStateCallback,
     WasmModule,
-  } from "@nocturne/watercolour";
+  } from "water-ui";
 
   export interface FakePainting {
     /** `artwork` for an `Artwork`, `scene` for a scene-built player. */

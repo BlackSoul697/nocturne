@@ -12,7 +12,7 @@
     type PackingSuitcase,
     type PlayerState,
     type TimedOp,
-  } from "@nocturne/watercolour";
+  } from "water-ui";
 
   /**
    * The suitcase painted one band per packed item. The page reports each pack

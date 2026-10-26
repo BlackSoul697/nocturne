@@ -1,6 +1,6 @@
 <script module lang="ts">
   import { vi } from "vitest";
-  import type { ArtworkPlayer, PlayerState, PlayerStateCallback } from "@nocturne/watercolour";
+  import type { ArtworkPlayer, PlayerState, PlayerStateCallback } from "water-ui";
 
   export const spyPlayer = {
     seekTo: vi.fn<(progress: number) => void>(),
@@ -17,7 +17,7 @@
 </script>
 
 <script lang="ts">
-  import type { PlayerReadyCallback } from "@nocturne/watercolour";
+  import type { PlayerReadyCallback } from "water-ui";
 
   let {
     onready,

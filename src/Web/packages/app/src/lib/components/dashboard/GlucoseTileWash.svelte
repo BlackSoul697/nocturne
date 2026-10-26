@@ -3,10 +3,10 @@
   import { unwashed, washSeeds, type PriorFill } from "./glucose-tile-wash-state.svelte";
   import { washInterior } from '$lib/watercolour-wash';
   import { prefersReducedMotion } from "svelte/motion";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { illustrations } from "$lib/stores/illustrations.svelte";
   import GlucoseTileBloom from "./GlucoseTileBloom.svelte";
-  import type { PlayerState } from "@nocturne/watercolour";
+  import type { PlayerState } from "water-ui";
   import { untrack } from "svelte";
   import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
 

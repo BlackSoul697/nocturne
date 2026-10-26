@@ -4,7 +4,7 @@
   import { cn } from "$lib/utils";
   import { BarChart } from "layerchart";
   import { untrack } from "svelte";
-  import { Artwork, seedFromName } from "@nocturne/watercolour";
+  import { Artwork, seedFromName } from "water-ui";
 
   interface Props {
     /** Total carbs in the treatment */

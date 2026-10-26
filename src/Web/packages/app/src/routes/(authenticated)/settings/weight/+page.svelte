@@ -9,7 +9,7 @@
   import Plus from "@lucide/svelte/icons/plus";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Loader2 from "@lucide/svelte/icons/loader-circle";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { weightScaleArtwork } from "$lib/watercolour-icons";
   import { EmptyState } from "$lib/components/shared";
   import * as bw from "$api/generated/bodyWeights.generated.remote";

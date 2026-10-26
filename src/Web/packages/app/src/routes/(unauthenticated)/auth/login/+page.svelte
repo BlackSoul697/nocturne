@@ -3,7 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import KeyRound from "@lucide/svelte/icons/key-round";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { fingerprintArtwork } from "$lib/watercolour-icons";
   import { getAuthState } from "../auth.remote";
   import { getAuthStatus } from "$lib/api/generated";

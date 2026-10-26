@@ -3,7 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
 import { encodeBase64Utf8 } from "$lib/utils";
-import type { LiveClock, MountOptions, PlayerState, TimedOp, WasmModule } from "@nocturne/watercolour";
+import type { LiveClock, MountOptions, PlayerState, TimedOp, WasmModule } from "water-ui";
 
 const reducedMotion = vi.hoisted(() => ({ current: false }));
 
@@ -42,8 +42,8 @@ vi.mock("svelte/motion", async (importOriginal) => ({
   prefersReducedMotion: reducedMotion,
 }));
 
-vi.mock("@nocturne/watercolour", async (importOriginal) => {
-  const watercolour = await importOriginal<typeof import("@nocturne/watercolour")>();
+vi.mock("water-ui", async (importOriginal) => {
+  const watercolour = await importOriginal<typeof import("water-ui")>();
   const donor = JSON.stringify({
     version: 1,
     palette: {

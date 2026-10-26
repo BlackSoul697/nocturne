@@ -17,7 +17,7 @@
   import { slide } from "svelte/transition";
   import { flip } from "svelte/animate";
   import CopyButton from "$lib/components/members/CopyButton.svelte";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import Clock from "@lucide/svelte/icons/clock";
   import X from "@lucide/svelte/icons/x";
   import Loader2 from "@lucide/svelte/icons/loader-circle";

@@ -3,7 +3,7 @@ import { page } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRawSnippet } from "svelte";
 import { Clock } from "lucide";
-import { resetCapabilitiesCache, type IconArtworkSource } from "@nocturne/watercolour";
+import { resetCapabilitiesCache, type IconArtworkSource } from "water-ui";
 import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 import { illustrations } from "$lib/stores/illustrations.svelte";
 import EmptyState from "./EmptyState.svelte";

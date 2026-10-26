@@ -1,4 +1,4 @@
-import type { CropWindow } from '@nocturne/watercolour';
+import type { CropWindow } from 'water-ui';
 
 // The wash's size and the host's offset into it, in multiples of the host's own width and height,
 // chosen so the wash's dried perimeter stays outside glucose tiles and carb bars.

@@ -3,7 +3,7 @@
   import Fingerprint from "@lucide/svelte/icons/fingerprint-pattern";
   import Loader2 from "@lucide/svelte/icons/loader-circle";
   import UserPlus from "@lucide/svelte/icons/user-plus";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { fingerprintArtwork } from "$lib/watercolour-icons";
   import {
     startRegistration,

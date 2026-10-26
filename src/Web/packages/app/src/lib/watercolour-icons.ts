@@ -1,5 +1,5 @@
 import { Battery, BookOpen, Database, Fingerprint, Flag, FlaskConical, Scale, Sprout, Syringe, Volume2 } from 'lucide';
-import type { IconArtworkSource } from '@nocturne/watercolour';
+import type { IconArtworkSource } from 'water-ui';
 
 export const batteryArtwork = { icon: Battery, name: 'battery' } satisfies IconArtworkSource;
 export const bookArtwork = { icon: BookOpen, name: 'book-open' } satisfies IconArtworkSource;

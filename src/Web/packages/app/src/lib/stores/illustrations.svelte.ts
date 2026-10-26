@@ -3,7 +3,7 @@ import {
   PRESENTATIONS,
   setPresentation,
   type Presentation,
-} from "@nocturne/watercolour";
+} from "water-ui";
 
 const STORAGE_KEY = "nocturne-illustrations";
 
