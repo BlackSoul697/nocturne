@@ -495,21 +495,110 @@ public class PropertiesServiceTests
         // after a site change, so they must be projected as dictionaries to reach clients.
         _mockDeviceAgeService
             .Setup(x => x.GetCannulaAgeAsync(It.IsAny<DeviceAgePreferences>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DeviceAgeInfo { Found = false, Age = 0, Days = 0, Hours = 0, Level = 0 });
+            .ReturnsAsync(new DeviceAgeInfo { Found = true, Age = 0, Days = 0, Hours = 0, TreatmentDate = 1000 });
         _mockDDataService
             .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateTestDData());
 
         var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
 
-        var json = JsonSerializer.Serialize(result, NightscoutJsonOptions.Create());
-        using var doc = JsonDocument.Parse(json);
-        var cage = doc.RootElement.GetProperty("cage");
+        var cage = SerializeProperty(result, "cage");
 
-        Assert.False(cage.GetProperty("found").GetBoolean());
+        Assert.True(cage.GetProperty("found").GetBoolean());
         Assert.Equal(0, cage.GetProperty("age").GetInt32());
         Assert.Equal(0, cage.GetProperty("days").GetInt32());
-        Assert.Equal(0, cage.GetProperty("level").GetInt32());
+        Assert.Equal(DeviceAgeLevel.None, cage.GetProperty("level").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_CageWithNoSiteChange_HasNightscoutShape()
+    {
+        _mockDeviceAgeService
+            .Setup(x => x.GetCannulaAgeAsync(It.IsAny<DeviceAgePreferences>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeviceAgeInfo());
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var cage = SerializeProperty(result, "cage");
+
+        Assert.False(cage.GetProperty("found").GetBoolean());
+        Assert.Equal(-3, cage.GetProperty("level").GetInt32());
+        Assert.Equal("n/a ", cage.GetProperty("display").GetString());
+        Assert.Equal(JsonValueKind.Null, cage.GetProperty("treatmentDate").ValueKind);
+        Assert.False(cage.TryGetProperty("days", out _));
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_SageWithNoSensorEvents_HasNightscoutShape()
+    {
+        _mockDeviceAgeService
+            .Setup(x => x.GetSensorAgeAsync(It.IsAny<DeviceAgePreferences>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SensorAgeInfo());
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var sage = SerializeProperty(result, "sage");
+        var start = sage.GetProperty("Sensor Start");
+        var change = sage.GetProperty("Sensor Change");
+
+        Assert.Equal("Sensor Start", sage.GetProperty("min").GetString());
+        Assert.False(start.GetProperty("found").GetBoolean());
+        Assert.Equal(-3, start.GetProperty("level").GetInt32());
+        Assert.False(change.GetProperty("found").GetBoolean());
+        Assert.False(change.TryGetProperty("level", out _));
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_SageWithSensorStart_SetsLevelOnlyOnMin()
+    {
+        _mockDeviceAgeService
+            .Setup(x => x.GetSensorAgeAsync(It.IsAny<DeviceAgePreferences>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SensorAgeInfo
+            {
+                SensorStart = new DeviceAgeInfo { Found = true, Age = 120, Days = 5, Hours = 0, TreatmentDate = 1000, Display = "5d0h" },
+            });
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var sage = SerializeProperty(result, "sage");
+        var start = sage.GetProperty("Sensor Start");
+
+        Assert.True(start.GetProperty("found").GetBoolean());
+        Assert.Equal(-3, start.GetProperty("level").GetInt32());
+        Assert.Equal("5 days 0 hours", start.GetProperty("displayLong").GetString());
+        Assert.False(sage.GetProperty("Sensor Change").TryGetProperty("level", out _));
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_AsksForSageWithDaysDisplay()
+    {
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        _mockDeviceAgeService.Verify(
+            x => x.GetSensorAgeAsync(
+                It.Is<DeviceAgePreferences>(p => p.Display == "days"),
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    private static JsonElement SerializeProperty(Dictionary<string, object> properties, string name)
+    {
+        var json = JsonSerializer.Serialize(properties, NightscoutJsonOptions.Create());
+        return JsonDocument.Parse(json).RootElement.GetProperty(name).Clone();
     }
 
     [Fact]
