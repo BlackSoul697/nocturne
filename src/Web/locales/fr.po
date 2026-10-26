@@ -27942,7 +27942,6 @@ msgstr ""
 msgid "A higher ISF means that each unit decreases glucose more, so less insulin is necessary for the same correction."
 msgstr ""
 
-#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/reports/ScheduleFooter.svelte
 #: src/lib/components/reports/loop-analysis/SettingsEvidenceBody.svelte
 msgid "Carb ratio"
@@ -37676,4 +37675,21 @@ msgstr ""
 
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 msgid "Could not load the details of this app."
+msgstr ""
+
+#: src/lib/components/settings/CarbRatioFormatSelect.svelte
+msgid "Insulin-to-carb ratio (ICR)"
+msgstr ""
+
+#: src/lib/components/settings/CarbRatioFormatSelect.svelte
+msgid "How carb ratios are written in reports and bolus details. Each option shows the same ratio: 10 g of carbs per unit of insulin."
+msgstr ""
+
+#. 0: formatInsulinToCarbRatio(insulinStats.icRatio); 1: unitsPerTenGrams(insulinStats.icRatio).toFixed(2)
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "<0>ICR check:</0> Your insulin-to-carb ratio of {0} means you use about {1} units of insulin for every 10 grams of carbs."
+msgstr ""
+
+#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
+msgid "ICR"
 msgstr ""
