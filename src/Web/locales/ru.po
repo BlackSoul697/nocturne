@@ -3144,15 +3144,11 @@ msgstr ""
 msgid "This application is requesting permission to:"
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
-#: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
+#: src/lib/components/auth/DeletionDisclosure.svelte
 msgid "This app is requesting full access, including the ability to delete data."
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
-#: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
+#: src/lib/components/auth/DeletionDisclosure.svelte
 msgid "This app cannot delete your data."
 msgstr ""
 
@@ -37669,4 +37665,12 @@ msgstr ""
 #. 0: item.l
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 msgid "Packed: {0}"
+msgstr ""
+
+#: src/lib/components/auth/DeletionDisclosure.svelte
+msgid "This app can change and delete the data in the categories above."
+msgstr ""
+
+#: src/routes/(authenticated)/oauth/consent/+page.svelte
+msgid "Could not load the details of this app."
 msgstr ""

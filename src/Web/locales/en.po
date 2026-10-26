@@ -3144,15 +3144,11 @@ msgstr "<0/> wants to access your Nocturne data."
 msgid "This application is requesting permission to:"
 msgstr "This application is requesting permission to:"
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
-#: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
+#: src/lib/components/auth/DeletionDisclosure.svelte
 msgid "This app is requesting full access, including the ability to delete data."
 msgstr "This app is requesting full access, including the ability to delete data."
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
-#: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
+#: src/lib/components/auth/DeletionDisclosure.svelte
 msgid "This app cannot delete your data."
 msgstr "This app cannot delete your data."
 
@@ -37670,3 +37666,11 @@ msgstr "No items in this list"
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 msgid "Packed: {0}"
 msgstr "Packed: {0}"
+
+#: src/lib/components/auth/DeletionDisclosure.svelte
+msgid "This app can change and delete the data in the categories above."
+msgstr "This app can change and delete the data in the categories above."
+
+#: src/routes/(authenticated)/oauth/consent/+page.svelte
+msgid "Could not load the details of this app."
+msgstr "Could not load the details of this app."
