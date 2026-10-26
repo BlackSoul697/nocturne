@@ -613,11 +613,178 @@ public class PropertiesServiceTests
         var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
 
         var upbat = Assert.IsType<Dictionary<string, object>>(result["upbat"]);
-        Assert.Equal(72, upbat["level"]);
+        Assert.Equal(75, upbat["level"]);
+        Assert.Equal("72%", upbat["display"]);
 
         var devices = Assert.IsType<List<Dictionary<string, object?>>>(upbat["devices"]);
         Assert.Single(devices);
         Assert.Equal("phone-a", devices[0]["device"]);
+    }
+
+    [Theory]
+    [InlineData(95, 100)]
+    [InlineData(94, 75)]
+    [InlineData(80, 75)]
+    [InlineData(55, 75)]
+    [InlineData(54, 50)]
+    [InlineData(30, 50)]
+    [InlineData(29, 25)]
+    public async Task GetAllPropertiesAsync_UpbatLevel_IsBucketedLikeNightscout(int battery, int expectedLevel)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus = new List<DeviceStatus>
+        {
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 60_000,
+                Uploader = new UploaderStatus { Battery = battery },
+            },
+        };
+
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var upbat = Assert.IsType<Dictionary<string, object>>(result["upbat"]);
+        Assert.Equal(expectedLevel, upbat["level"]);
+        Assert.Equal($"{battery}%", upbat["display"]);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_UpbatLevel_IsWeakestRecentUploaderNotNewest()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus = new List<DeviceStatus>
+        {
+            new DeviceStatus
+            {
+                Device = "openaps://TestPump",
+                Mills = now - 5 * 60_000,
+                Uploader = new UploaderStatus { Battery = 80 },
+            },
+            new DeviceStatus
+            {
+                Device = "loop://TestLoop",
+                Mills = now - 10 * 60_000,
+                Uploader = new UploaderStatus { Battery = 40 },
+            },
+        };
+
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var upbat = Assert.IsType<Dictionary<string, object>>(result["upbat"]);
+        Assert.Equal(50, upbat["level"]);
+        Assert.Equal("40%", upbat["display"]);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_UpbatLevel_IgnoresDeviceReadingsOlderThanTenMinutesBeforeItsNewest()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus = new List<DeviceStatus>
+        {
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 25 * 60_000,
+                Uploader = new UploaderStatus { Battery = 20 },
+            },
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 60_000,
+                Uploader = new UploaderStatus { Battery = 90 },
+            },
+        };
+
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var upbat = Assert.IsType<Dictionary<string, object>>(result["upbat"]);
+        Assert.Equal(75, upbat["level"]);
+        Assert.Equal("90%", upbat["display"]);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_UpbatLevel_IsWeakestOfEachDevicesRecentLowest()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus = new List<DeviceStatus>
+        {
+            // phone-a recovered: its 10% reading is stale relative to its own newest.
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 20 * 60_000,
+                Uploader = new UploaderStatus { Battery = 10 },
+            },
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 60_000,
+                Uploader = new UploaderStatus { Battery = 85 },
+            },
+            new DeviceStatus
+            {
+                Device = "phone-b",
+                Mills = now - 2 * 60_000,
+                Uploader = new UploaderStatus { Battery = 60 },
+            },
+            new DeviceStatus
+            {
+                Device = "phone-b",
+                Mills = now - 4 * 60_000,
+                Uploader = new UploaderStatus { Battery = 45 },
+            },
+        };
+
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var upbat = Assert.IsType<Dictionary<string, object>>(result["upbat"]);
+        Assert.Equal(50, upbat["level"]);
+        Assert.Equal("45%", upbat["display"]);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_OmitsUpbat_WhenNoUploaderStatusWithinThirtyMinutes()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus = new List<DeviceStatus>
+        {
+            new DeviceStatus
+            {
+                Device = "phone-a",
+                Mills = now - 31 * 60_000,
+                Uploader = new UploaderStatus { Battery = 80 },
+            },
+        };
+
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        Assert.False(result.ContainsKey("upbat"));
     }
 
     [Fact]
