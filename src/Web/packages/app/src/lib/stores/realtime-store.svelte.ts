@@ -1,6 +1,6 @@
 // Real-time data store using Svelte 5 Runes and WebSocket integration
 import { WebSocketClient } from "$lib/websocket/websocket-client.svelte";
-import { entryIdentity, isSameEntry, unseenEntries } from "./entry-identity";
+import { entryIdentity, namedEntry, unseenEntries } from "./entry-identity";
 import { markedRead } from "./notification-read";
 import { untilNow } from "$lib/utils/now";
 import {
@@ -789,7 +789,7 @@ export class RealtimeStore {
     if (colName === "treatments") this.treatmentRevision++;
 
     if (colName === "entries" && this.isEntry(doc)) {
-      const index = this.entries.findIndex((entry) => isSameEntry(entry, doc));
+      const index = this.entries.findIndex(namedEntry(this.entries, doc));
       if (index !== -1) {
         this.entries = [
           ...this.entries.slice(0, index),
@@ -815,7 +815,8 @@ export class RealtimeStore {
 
     if (colName === "entries" && isEntryDocument(doc)) {
       this.pendingEntryCreates.delete(entryIdentity(doc));
-      this.entries = this.entries.filter((entry) => !isSameEntry(entry, doc));
+      const named = namedEntry(this.entries, doc);
+      this.entries = this.entries.filter((entry) => !named(entry));
     }
   }
 
