@@ -805,6 +805,7 @@ msgstr ""
 #: src/lib/components/members/RolesSection.svelte
 #: src/lib/components/members/RolesSection.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
+#: src/lib/forms/FormGuard.test-harness.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Name"
@@ -868,6 +869,7 @@ msgstr ""
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/forms/FormActions.svelte
+#: src/lib/forms/FormGuard.test-harness.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/food/Composer.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
@@ -11312,6 +11314,7 @@ msgstr ""
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/PlaybackStrip.svelte
 #: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/forms/FormGuard.test-harness.svelte
 #: src/routes/(authenticated)/reports/week-to-week/+page.svelte
 msgid "Reset"
 msgstr ""
@@ -37863,4 +37866,16 @@ msgstr ""
 
 #: ../portal/src/routes/docs/installation/docker-compose/+page.svelte
 msgid "When a new release is available, each tenant owner gets a notification with the release notes. To show the time that Watchtower installs the release, set <0/> in your <1/> file to a value from the generator. Then run <2/>. This setting is optional. If you installed before this setting was added, download the new bundle first."
+msgstr ""
+
+#: src/lib/forms/FormGuard.test-harness.svelte
+msgid "Name is too short"
+msgstr ""
+
+#: src/lib/forms/FormGuard.test-harness.svelte
+msgid "City is required"
+msgstr ""
+
+#: src/lib/forms/FormGuard.test-harness.svelte
+msgid "City"
 msgstr ""
