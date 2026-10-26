@@ -11342,7 +11342,11 @@ msgstr "Suchen"
 msgid "Report generated from {0} records between {1} and {2}"
 msgstr "Bericht erstellt aus {0} Datensätzen zwischen {1} und {2}"
 
+#. 0: def.name
+#. 0: preset.name
 #. 0: getRowLabel(rowToDelete)
+#: src/lib/components/trackers/TrackerDefinitionsTab.svelte
+#: src/lib/components/trackers/TrackerPresetsTab.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "Delete {0}"
 msgstr "{0} löschen"
