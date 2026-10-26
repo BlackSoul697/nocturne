@@ -56,9 +56,9 @@
           <p class="font-medium">Welcome</p>
           <p class="text-sm text-muted-foreground">
             {#if name}
-              You're now viewing {name}'s data.
+              You are now viewing {name}'s data.
             {:else}
-              You're now viewing the data shared with you.
+              You are now viewing the data shared with you.
             {/if}
           </p>
         </div>
