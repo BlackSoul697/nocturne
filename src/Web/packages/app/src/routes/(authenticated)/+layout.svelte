@@ -32,7 +32,11 @@
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
+  import { WELCOME_PARAM } from "$lib/components/members/welcome";
+  import { page } from "$app/state";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
+  import { getEngineHost } from "water-ui";
+  import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
   import { CoachMarkProvider } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";
   import "../../styles/coach-theme-overrides.css";
@@ -107,6 +111,11 @@
   const commandPalette = lazyComponent(
     () => import("$lib/components/command-palette/CommandPalette.svelte"),
   );
+  // Kept once loaded: the greeting strips the marker it was loaded for.
+  const joinWelcome = lazyComponent(() => import("$lib/components/members/JoinWelcome.svelte"));
+  $effect(() => {
+    if (!tenantless && page.url.searchParams.has(WELCOME_PARAM)) joinWelcome.open = true;
+  });
   let bannerStripHeight = $state(0);
 
   const coachMarkAdapter = createCoachMarkAdapter(tenantless);
@@ -182,6 +191,25 @@
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("keydown", handleCommandPaletteKeydown);
     }
+  });
+
+  /**
+   * The first engine acquire blocks the main thread for a few hundred ms while the wasm loads.
+   * Paid on a pointer-enter it freezes the transition that pointer started, and a paint drop's
+   * backend is settled within 90 ms of the hover or it falls back to a still. It waits for the
+   * current reading as well as {@link deferredWatercolour}, then for idle.
+   *
+   * Resolves false where there is no GPU, which needs no handling: that is the case the baked
+   * and static paths exist for. Artwork that needs the engine sooner boots it on demand; the
+   * unauthenticated pages render theirs on mount, so a warm-up there would gain nothing.
+   */
+  const engineWarmDeferral = deferredWatercolour();
+  let engineWarmScheduled = false;
+  $effect(() => {
+    if (engineWarmScheduled || !engineWarmDeferral.due) return;
+    if (data.canViewRealtimeData && !realtimeStore.currentReadingLoaded) return;
+    engineWarmScheduled = true;
+    void getEngineHost().warmWhenIdle();
   });
 
   // Track current time for stale calculation - use shared store
@@ -286,6 +314,9 @@
         {/if}
       {/if}
       <main class="@container/main flex-1 overflow-x-clip">
+        {#if joinWelcome.component}
+          <joinWelcome.component />
+        {/if}
         <svelte:boundary>
           {@render children()}
 

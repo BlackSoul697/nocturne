@@ -10,7 +10,7 @@
   import Loader2 from "@lucide/svelte/icons/loader-circle";
   import * as migrationRemote from "$api/generated/migrations.generated.remote";
   import { MigrationJobState } from "$api";
-  import { Artwork } from "@nocturne/watercolour";
+  import { Artwork } from "water-ui";
   import { databaseArtwork } from "$lib/watercolour-icons";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { findSessionJob } from "../migration-session";

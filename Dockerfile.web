@@ -19,6 +19,8 @@ RUN pnpm fetch
 COPY src/Web/supportedLocales.json src/Web/wuchale.shared.js ./
 COPY src/Web/locales ./locales
 COPY src/Web/packages ./packages
+# The water-ui submodule, with its wasm built in CI before the image build.
+COPY src/Web/vendor/water-ui/packages/water-ui ./vendor/water-ui/packages/water-ui
 
 RUN pnpm install --frozen-lockfile --offline
 
