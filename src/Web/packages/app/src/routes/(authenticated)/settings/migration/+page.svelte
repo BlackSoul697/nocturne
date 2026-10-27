@@ -29,12 +29,14 @@
   import Server from "@lucide/svelte/icons/server";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Info from "@lucide/svelte/icons/info";
+  import ArrowRightLeft from "@lucide/svelte/icons/arrow-right-left";
   import { EmptyState } from "#lib/components/shared/index.js";
   import { databaseArtwork } from "#lib/watercolour-icons.js";
   import * as migrationRemote from "#lib/api/generated/migrations.generated.remote.js";
   import { describeSubmitError } from "#lib/forms/submit-error.js";
   import { remoteErrorMessage } from "#lib/api/remote-error.js";
   import MigrationCompleteMoment from "./MigrationCompleteMoment.svelte";
+  import NightscoutTransitionStatus from "./NightscoutTransitionStatus.svelte";
   import { completedCleanly } from "./migration-outcome";
   import {
     type MigrationJobInfo,
@@ -232,7 +234,7 @@
 </script>
 
 <svelte:head>
-  <title>Data migration - Settings - Nocturne</title>
+  <title>Move from Nightscout - Settings - Nocturne</title>
 </svelte:head>
 
 <div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6">
@@ -242,9 +244,9 @@
       <Import class="h-6 w-6 text-primary" />
     </div>
     <div>
-      <h1 class="text-2xl font-bold tracking-tight">Data migration</h1>
+      <h1 class="text-2xl font-bold tracking-tight">Move from Nightscout</h1>
       <p class="text-muted-foreground">
-        Import your data from Nightscout or MongoDB
+        Import your data from Nightscout or MongoDB. Then see when it is safe to stop using Nightscout.
       </p>
     </div>
   </div>
@@ -298,6 +300,10 @@
           {#if history.length > 0}
             <Badge variant="secondary" class="ml-1">{history.length}</Badge>
           {/if}
+        </Tabs.Trigger>
+        <Tabs.Trigger value="status">
+          <ArrowRightLeft class="h-4 w-4" />
+          Status
         </Tabs.Trigger>
       </Tabs.List>
 
@@ -723,6 +729,10 @@
             </CardContent>
           </Card>
         {/if}
+      </Tabs.Content>
+
+      <Tabs.Content value="status">
+        <NightscoutTransitionStatus />
       </Tabs.Content>
     </Tabs.Root>
   {/if}

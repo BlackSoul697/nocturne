@@ -39,6 +39,7 @@
     removeCredential as totpRemoveCredential,
   } from "#lib/api/generated/totps.generated.remote.js";
   import LinkedOidcIdentities from "#lib/components/settings/LinkedOidcIdentities.svelte";
+  import ActiveSessions from "#lib/components/settings/ActiveSessions.svelte";
   import UserProfileCard from "#lib/components/account/UserProfileCard.svelte";
   import SecurityCredentialCard from "#lib/components/account/SecurityCredentialCard.svelte";
   import TotpSetupDialog from "#lib/components/account/TotpSetupDialog.svelte";
@@ -502,6 +503,11 @@
           </Button>
         </Card.Content>
       </Card.Root>
+
+      <!-- A tenantless host admits the account page but not the sessions endpoint. -->
+      {#if page.data.tenantless !== true}
+        <ActiveSessions />
+      {/if}
 
       <!-- Section 4: Recovery Mode Info -->
       <Card.Root>

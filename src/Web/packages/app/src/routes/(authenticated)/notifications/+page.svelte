@@ -206,23 +206,27 @@
             <CardDescription>
               Consumable and reminder notifications
             </CardDescription>
-        </div>
-        <div class="flex items-center gap-2">
-          {#if urgentCount > 0}
-            <Badge variant="severity-urgent">{urgentCount} urgent</Badge>
-          {/if}
-          {#if hazardCount > 0}
-            <Badge variant="severity-hazard">{hazardCount} hazard</Badge>
-          {/if}
-          {#if warnCount > 0}
-            <Badge variant="severity-warn">{warnCount} warning</Badge>
-          {/if}
-
-          <a href={resolve('settings/trackers')}><Button variant="outline" size="sm"><Settings2 class="h-4 w-4 mr-2" />Manage</Button></a>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {#if trackerNotifications.length === 0}
+          </div>
+          <div class="flex items-center gap-2">
+            {#if urgentCount > 0}
+              <Badge variant="severity-urgent">{urgentCount} urgent</Badge>
+            {/if}
+            {#if hazardCount > 0}
+              <Badge variant="severity-hazard">{hazardCount} hazard</Badge>
+            {/if}
+            {#if warnCount > 0}
+              <Badge variant="severity-warn">{warnCount} warning</Badge>
+            {/if}
+            <a href={resolve("trackers")}>
+              <Button variant="outline" size="sm">
+                <Settings2 class="h-4 w-4 mr-2" />
+                Manage
+              </Button>
+            </a>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {#if trackerNotifications.length === 0}
             <EmptyState art="confirmation-mark" title="No active tracker alerts" />
         {:else}
           <div class="space-y-3">

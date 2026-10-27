@@ -1124,16 +1124,14 @@
             />
           </div>
 
-          <p class="text-xs text-muted-foreground">
-            Each tracker's dashboard visibility is configured in 
-
-            <a
-              href={resolve('settings/trackers')}
-              class="text-primary hover:underline"
-            >Settings → Trackers</a>
-          </p>
-        </CardContent>
-      </Card>
+        <p class="text-xs text-muted-foreground">
+          Each tracker's dashboard visibility is configured in
+          <a href={resolve("trackers")} class="text-primary hover:underline">
+            Trackers
+          </a>
+        </p>
+      </CardContent>
+    </Card>
     {/if}
 
     <!-- Browser Tab Settings (Favicon) -->

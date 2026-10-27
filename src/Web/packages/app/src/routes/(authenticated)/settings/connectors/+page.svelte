@@ -57,7 +57,21 @@
   import { createTerminalRunTracker } from "./terminal-run-tracker";
   import { canManageConnectors } from "#lib/authorization/connector-management.js";
   import { page } from "$app/state";
+  import { satisfiesScope } from "#lib/authorization/scopes.js";
+  import SettingsLinkCard from "#lib/components/settings/SettingsLinkCard.svelte";
+  import type { SettingsLink } from "#lib/navigation/settings-navigation.svelte.js";
   import { fresh } from "#lib/api/fresh-query.js";
+
+  // The migration endpoints are RequireSuperuser, which resolves to the wildcard.
+  const canMoveFromNightscout = $derived(
+    satisfiesScope(page.data.effectivePermissions ?? [], "*")
+  );
+  const moveFromNightscoutLink: SettingsLink = {
+    title: "Move from Nightscout",
+    description: "Import your Nightscout data and check when you can turn Nightscout off.",
+    href: "/settings/migration",
+    icon: Database,
+  };
 
   // Queries — fire on the server during SSR; results land in cache for hydration.
   const servicesOverviewQuery = getServicesOverview();
@@ -549,6 +563,10 @@
         prefillScopes={apiTokenPrefillScopes}
       />
     </div>
+
+    {#if canMoveFromNightscout}
+      <SettingsLinkCard link={moveFromNightscoutLink} />
+    {/if}
   {/if}
 </div>
 

@@ -8,6 +8,7 @@
   import Shield from "@lucide/svelte/icons/shield";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import UserPlus from "@lucide/svelte/icons/user-plus";
+  import { helpLinks } from "#lib/navigation/settings-navigation.svelte.js";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import type { AuthUser } from "#lib/stores/auth-store.svelte.js";
@@ -109,6 +110,16 @@
             {#if isPlatformAdmin}
               <DropdownMenu.Item onSelect={() => goto(resolve('settings/admin'))}><Shield class="mr-2 h-4 w-4" /><span>Admin</span></DropdownMenu.Item>
             {/if}
+          </DropdownMenu.Group>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Group>
+            {#each helpLinks() as link (link.href)}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- link.href is a literal in-app path from settings-navigation -->
+              <DropdownMenu.Item onSelect={() => goto(link.href)}>
+                <link.icon class="mr-2 h-4 w-4" />
+                <span>{link.title}</span>
+              </DropdownMenu.Item>
+            {/each}
           </DropdownMenu.Group>
         {/if}
       {:else}
