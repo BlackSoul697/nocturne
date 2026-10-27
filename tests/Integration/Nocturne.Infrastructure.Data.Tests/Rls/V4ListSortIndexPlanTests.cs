@@ -80,8 +80,8 @@ public class V4ListSortIndexPlanTests(RlsCompletenessFixture fx)
         await read(new TestNocturneDbContextFactory(ctx), DateTime.UtcNow.AddMinutes(1));
 
         var plan = await PlanTestSupport.ExplainAsync(conn, capture.Command!);
-        PlanTestSupport.Descendants(plan, "Index Name").Should().Contain(index, plan.ToString());
-        PlanTestSupport.Descendants(plan, "Node Type").Should().NotContain(
+        plan.Descendants("Index Name").Should().Contain(index, plan.ToString());
+        plan.Descendants("Node Type").Should().NotContain(
             ["Seq Scan", "Sort", "Incremental Sort"], plan.ToString());
     }
 }
