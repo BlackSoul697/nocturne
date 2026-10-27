@@ -57,6 +57,7 @@ const overrideReleases = new WeakSet<() => void>();
 
 class QueryResource<T> implements RemoteQueryStub<T> {
   #run: () => Promise<T>;
+  #source: (() => T) | null;
   #read: (() => T) | null = null;
   #promise: Promise<void> | null = null;
   #loading = false;
@@ -70,8 +71,9 @@ class QueryResource<T> implements RemoteQueryStub<T> {
     };
   });
 
-  constructor(run: () => Promise<T>) {
+  constructor(run: () => Promise<T>, source: (() => T) | null = null) {
     this.#run = run;
+    this.#source = source;
   }
 
   #start(): Promise<void> {
@@ -81,7 +83,7 @@ class QueryResource<T> implements RemoteQueryStub<T> {
 
     const promise = (async () => this.#run())().then(
       (value) => {
-        this.#read = () => value;
+        this.#read = this.#source ?? (() => value);
         this.#loading = false;
         this.#error = undefined;
       },
@@ -210,7 +212,7 @@ export function createQueryResource<T>(
  * component sees between renders.
  */
 export function remoteQuery<T>(read: () => T): RemoteQueryStub<T> {
-  const resource = new QueryResource<T>(async () => read());
+  const resource = new QueryResource<T>(async () => read(), read);
   resource.settle(read);
   return resource;
 }

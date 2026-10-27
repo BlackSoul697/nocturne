@@ -28,7 +28,8 @@ const otherSuggestion = {
   id: "33333333-3333-3333-3333-333333333333",
   nightOf: "2026-03-04",
 };
-const suggestionsQuery = remoteQuery(() => [suggestion]);
+let suggestions = [suggestion];
+const suggestionsQuery = remoteQuery(() => suggestions);
 
 let reviewImpl: (arg: unknown) => Promise<unknown>;
 
@@ -52,7 +53,7 @@ const deleteButton = () => page.getByRole("button", { name: "Delete" });
 describe("compression-lows page", () => {
   beforeEach(() => {
     reviewImpl = () => Promise.resolve();
-    suggestionsQuery.set([suggestion]);
+    suggestions = [suggestion];
     toastError.mockClear();
     pageState.data = {};
   });
@@ -129,7 +130,7 @@ describe("compression-lows page", () => {
 
   it("sends the selected suggestions and the action in one command", async () => {
     pageState.data = { effectivePermissions: ["glucose.readwrite"] };
-    suggestionsQuery.set([suggestion, otherSuggestion]);
+    suggestions = [suggestion, otherSuggestion];
     const sent = vi.fn(() => Promise.resolve());
     reviewImpl = sent;
 
