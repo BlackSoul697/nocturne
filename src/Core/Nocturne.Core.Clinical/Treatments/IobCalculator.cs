@@ -28,9 +28,7 @@ public class IobCalculator(
 ) : IIobCalculator
 {
     // Constants from legacy implementation (identical to IobService)
-    private const double DEFAULT_DIA = 3.0;
     private const double SCALE_FACTOR_BASE = 3.0;
-    private const double PEAK_MINUTES = 75.0;
     private const double MAX_IOB_MINUTES = 180.0;
     private const long NET_BASAL_CHUNK_MS = 5 * 60 * 1000;
 
@@ -96,7 +94,7 @@ public class IobCalculator(
         var dia = bolus.InsulinContext?.Dia
             ?? therapySettings.GetDIAAsync(currentTime, null).GetAwaiter().GetResult();
         var peak = bolus.InsulinContext?.Peak
-            ?? PEAK_MINUTES;
+            ?? TherapySnapshot.DefaultPeakMinutes;
         var sens = sensitivity.GetSensitivityAsync(currentTime, null).GetAwaiter().GetResult();
 
         return CalcInsulinCore(bolus.Insulin, bolus.Mills, dia, peak, sens, currentTime);
@@ -110,9 +108,9 @@ public class IobCalculator(
             return new IobContribution { IobContrib = 0, ActivityContrib = 0 };
         }
 
-        // Same precedence as the async path: per-bolus insulin context wins, else the snapshot.
+        // Same precedence as the async path: per-bolus insulin context wins, else the snapshot DIA and the default peak.
         var dia = bolus.InsulinContext?.Dia ?? snapshot.Dia;
-        var peak = bolus.InsulinContext?.Peak ?? snapshot.PeakMinutes;
+        var peak = bolus.InsulinContext?.Peak ?? TherapySnapshot.DefaultPeakMinutes;
         var sens = snapshot.SensitivityAt(time);
 
         return CalcInsulinCore(bolus.Insulin, bolus.Mills, dia, peak, sens, time);
@@ -188,7 +186,7 @@ public class IobCalculator(
                 bolus.Insulin,
                 bolus.Mills,
                 bolus.InsulinContext?.Dia ?? profileDia.Value,
-                bolus.InsulinContext?.Peak ?? PEAK_MINUTES,
+                bolus.InsulinContext?.Peak ?? TherapySnapshot.DefaultPeakMinutes,
                 sens.Value,
                 currentTime));
     }
@@ -254,7 +252,7 @@ public class IobCalculator(
             time,
             Math.Min(deliveredUntil, time),
             snapshot.Dia,
-            snapshot.PeakMinutes,
+            TherapySnapshot.DefaultPeakMinutes,
             snapshot.SensitivityAt(time),
             scheduledUnder);
     }
@@ -272,7 +270,7 @@ public class IobCalculator(
         var dia = await therapySettings.GetDIAAsync(time, null, ct);
         var sens = await sensitivity.GetSensitivityAsync(time, null, ct);
 
-        return FromTempBasalsCore(pieces, time, cutoff, dia, PEAK_MINUTES, sens, scheduled.Under);
+        return FromTempBasalsCore(pieces, time, cutoff, dia, TherapySnapshot.DefaultPeakMinutes, sens, scheduled.Under);
     }
 
     private async Task<ScheduledBasal> ScheduledAsync(long from, long to, CancellationToken ct)

@@ -148,7 +148,6 @@ public class IobCalculatorTests
     // numerically identical results to the legacy async-resolver path.
     private static TherapySnapshot MatchingSnapshot() => new(
         dia: DefaultDIA,
-        peakMinutes: 75,
         carbsPerHour: 30.0,
         timezone: null,
         ccpPercentage: null,
