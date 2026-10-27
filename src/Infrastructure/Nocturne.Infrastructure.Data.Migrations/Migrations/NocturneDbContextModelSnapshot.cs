@@ -1666,6 +1666,18 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("last_reconciled_link_id");
 
+                    b.Property<DateTime?>("PruneCursorCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("prune_cursor_created_at");
+
+                    b.Property<Guid?>("PruneCursorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("prune_cursor_id");
+
+                    b.Property<DateTime?>("PruneCursorResetAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("prune_cursor_reset_at");
+
                     b.HasKey("TenantId");
 
                     b.ToTable("dedup_reconcile_state");
