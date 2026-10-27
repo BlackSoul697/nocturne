@@ -19,7 +19,7 @@ export const getIdpData = query(DateRangeSchema.optional(), async (input) => {
   // total stand in for them. Every read is independent of the others.
   const [readings, bolusResult, insulinDeliveryStats, activeSchedules, rangeAnalytics, aidSystemMetrics] =
     await Promise.all([
-      apiClient.sensorGlucose.getAll(startDate, endDate, 1, 0),
+      apiClient.sensorGlucose.getAll(startDate, endDate, 1, 0, undefined, undefined, undefined, true),
       apiClient.bolus.getAll(startDate, endDate, 10000),
       apiClient.statistics.getInsulinDeliveryStatistics(startDate, endDate),
       // Therapy settings need therapy.read; without it the report renders

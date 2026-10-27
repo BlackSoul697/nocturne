@@ -106,7 +106,7 @@ export const getReportsData = query(
     // The pages show how many readings the window holds, not the readings: one row and the
     // total rather than every reading of the window.
     const [readings, { analysis, averagedStats, personalRange, timeZoneUnavailableReason }] = await Promise.all([
-      apiClient.sensorGlucose.getAll(startDate, endDate, 1, 0),
+      apiClient.sensorGlucose.getAll(startDate, endDate, 1, 0, undefined, undefined, undefined, true),
       apiClient.statistics.getRangeAnalytics(startDate, endDate),
     ]);
 
