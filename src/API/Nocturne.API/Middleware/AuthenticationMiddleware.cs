@@ -1,6 +1,4 @@
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Nocturne.API.Authorization;
 using Nocturne.API.Middleware.Handlers;
@@ -195,7 +193,7 @@ public class AuthenticationMiddleware
                 SetUnauthenticated(context);
             }
         }
-        catch (Exception ex) when (IsCredentialFailure(ex))
+        catch (Exception ex) when (CredentialFailure.Is(ex))
         {
             _logger.LogError(ex, "Error during authentication");
             SetUnauthenticated(context);
@@ -289,18 +287,6 @@ public class AuthenticationMiddleware
     }
 
     /// <summary>
-    /// Whether <paramref name="ex"/> is a verdict on the credential, so the request may go on as
-    /// unauthenticated.
-    /// </summary>
-    /// <remarks>
-    /// A database that cannot be read, or a request cancelled while it was being read, says nothing
-    /// about the credential. Those propagate as a server error: a client that sees 401 may discard a
-    /// token that is still valid.
-    /// </remarks>
-    private static bool IsCredentialFailure(Exception ex) =>
-        ex is not (DbException or RetryLimitExceededException or OperationCanceledException);
-
-    /// <summary>
     /// The tenant whose membership <paramref name="authContext"/> is held to, or null when it is held
     /// to none.
     /// </summary>
@@ -366,7 +352,7 @@ public class AuthenticationMiddleware
 
                 // Handler skipped - try next handler
             }
-            catch (Exception ex) when (IsCredentialFailure(ex))
+            catch (Exception ex) when (CredentialFailure.Is(ex))
             {
                 _logger.LogWarning(ex, "Handler {Handler} threw an exception", handler.Name);
                 // Continue to next handler
