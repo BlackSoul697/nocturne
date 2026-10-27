@@ -45,6 +45,8 @@ public class ProfileHistoryTests
         _basalRepo.Serve(_basals);
         _therapyRepo.Setup(r => r.GetDocumentRowsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
+        _therapyRepo.Setup(r => r.GetStoreIndexAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         _sut = new ProfileProjectionService(
             _therapyRepo.Object,

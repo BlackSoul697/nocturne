@@ -47,6 +47,9 @@ public class SummaryServiceTests
         _mockTherapySettings
             .Setup(x => x.GetDefaultsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
+        _mockTherapySettings
+            .Setup(x => x.GetStoreIndexAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         _mockLogger = new Mock<ILogger<SummaryService>>();
         Reading(NoInputs(), new IobResult(), new CobResult());
         _mockPropertiesService
