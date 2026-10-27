@@ -64,11 +64,11 @@
   ]);
 
   const scopes = $derived(
-    deviceInfo ? deviceInfo.scopes.filter(Boolean) : []
+    deviceInfo ? (deviceInfo.scopes ?? []).filter(Boolean) : []
   );
   const appName = $derived(
     deviceInfo
-      ? deviceInfo.displayName ?? deviceInfo.clientId
+      ? deviceInfo.clientDisplayName ?? deviceInfo.clientId ?? ""
       : ""
   );
 </script>
@@ -196,7 +196,7 @@
             })}
             class="flex-1"
           >
-            <input {...denyDeviceForm.fields.user_code.as("hidden", deviceInfo.userCode)} />
+            <input {...denyDeviceForm.fields.user_code.as("hidden", deviceInfo.userCode ?? "")} />
             <Button
               type="submit"
               variant="outline"
@@ -215,7 +215,7 @@
             })}
             class="flex-1"
           >
-            <input {...approveDeviceForm.fields.user_code.as("hidden", deviceInfo.userCode)} />
+            <input {...approveDeviceForm.fields.user_code.as("hidden", deviceInfo.userCode ?? "")} />
             <Button
               type="submit"
               class="w-full"
