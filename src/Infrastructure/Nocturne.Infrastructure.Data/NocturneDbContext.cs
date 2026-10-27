@@ -1364,8 +1364,9 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(s => s.Source)
             .HasDatabaseName("ix_state_spans_source");
 
-        // Connector resume watermark: MAX(start_timestamp) over the activity categories for one
-        // data source. Tenant leads because a source id is the same string installation-wide, so
+        // Connector resume watermarks: the latest start of one data source, activity and non-activity,
+        // each probing this index once per category (see StateSpanRepository.GetLatestStartAsync).
+        // Tenant leads because a source id is the same string installation-wide, so
         // ix_state_spans_source would walk every tenant's spans for that source.
         modelBuilder
             .Entity<StateSpanEntity>()
