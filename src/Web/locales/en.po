@@ -38327,3 +38327,19 @@ msgstr "Get help, report problems, and share feedback"
 #: src/routes/(authenticated)/community/translations/[locale]/+page.svelte
 msgid "Translate {0} - Community - Nocturne"
 msgstr "Translate {0} - Community - Nocturne"
+
+#: src/lib/forms/submit-messages.svelte.ts
+msgid "We could not save your changes. Try again."
+msgstr "We could not save your changes. Try again."
+
+#: src/lib/forms/submit-messages.svelte.ts
+msgid "Your changes were saved, but the step after saving did not finish. Try again."
+msgstr "Your changes were saved, but the step after saving did not finish. Try again."
+
+#: src/lib/forms/submit-messages.svelte.ts
+msgid "Too many attempts. Wait a few minutes and try again."
+msgstr "Too many attempts. Wait a few minutes and try again."
+
+#: src/lib/forms/submit-messages.svelte.ts
+msgid "That item no longer exists. Refresh the page to see what's there now."
+msgstr "That item no longer exists. Refresh the page to see what's there now."
