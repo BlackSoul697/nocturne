@@ -847,7 +847,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         {
             var governing = await db.StateSpans.IgnoreQueryFilters().AsNoTracking()
                 .Where(s => s.TenantId == db.TenantId && s.OriginalId == originalId)
-                .WhereBlocksRecreation()
+                .WhereBlocksSpanRecreation()
                 .Select(s => s.DeletedAt == null)
                 .ToListAsync(ct);
             if (governing.Count > 0 && !governing.Contains(true))
@@ -2149,7 +2149,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         db.StateSpans.IgnoreQueryFilters()
             .Where(s => s.TenantId == db.TenantId && s.Source == source
                      && s.OriginalId != null && originalIds.Contains(s.OriginalId))
-            .WhereBlocksRecreation();
+            .WhereBlocksSpanRecreation();
 
     /// <inheritdoc />
     /// <remarks>
@@ -2260,7 +2260,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         var ids = legacyIds.ToArray();
         rows.AddRange((await db.StateSpans.IgnoreQueryFilters().AsNoTracking()
                 .Where(s => s.TenantId == db.TenantId && s.OriginalId != null && ids.Contains(s.OriginalId))
-                .WhereBlocksRecreation()
+                .WhereBlocksSpanRecreation()
                 .Select(s => new { Key = s.OriginalId!, Live = s.DeletedAt == null })
                 .ToListAsync(ct))
             .Select(s => (s.Key, s.Live)));
