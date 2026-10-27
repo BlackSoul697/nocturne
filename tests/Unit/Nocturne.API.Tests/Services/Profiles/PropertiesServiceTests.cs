@@ -488,6 +488,26 @@ public class PropertiesServiceTests
     }
 
     [Fact]
+    public async Task GetAllPropertiesAsync_RequestsInsulinAgeInDaysDisplay()
+    {
+        DeviceAgePreferences? insulinPreferences = null;
+        _mockDeviceAgeService
+            .Setup(x => x.GetInsulinAgeAsync(It.IsAny<DeviceAgePreferences>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Callback<DeviceAgePreferences, Guid?, CancellationToken>((prefs, _, _) => insulinPreferences = prefs)
+            .ReturnsAsync(new DeviceAgeInfo { Found = true, Age = 50, Days = 2, Hours = 2, Display = "2d2h" });
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        Assert.NotNull(insulinPreferences);
+        Assert.Equal("days", insulinPreferences.Display);
+        var iage = Assert.IsType<Dictionary<string, object?>>(result["iage"]);
+        Assert.Equal("2d2h", iage["display"]);
+    }
+
+    [Fact]
     public async Task GetAllPropertiesAsync_DeviceAgeFields_SurviveNightscoutSerialization()
     {
         // The Nightscout response filter serializes with WhenWritingDefault, which strips

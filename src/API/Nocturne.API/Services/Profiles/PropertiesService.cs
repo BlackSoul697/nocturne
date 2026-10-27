@@ -582,6 +582,7 @@ public class PropertiesService : IPropertiesService
             // Thresholds/display are per-plugin settings in legacy Nightscout; the
             // properties endpoint reports the service defaults.
             var prefs = new DeviceAgePreferences();
+            var insulinPrefs = new DeviceAgePreferences { Display = "days" };
 
             // The sage plugin always shows days and hours.
             var sensor = await _deviceAgeService.GetSensorAgeAsync(
@@ -597,7 +598,7 @@ public class PropertiesService : IPropertiesService
                 ["min"] = sensor.Min,
             };
             properties["iage"] = ToAgeDictionary(
-                await _deviceAgeService.GetInsulinAgeAsync(prefs, ct: cancellationToken));
+                await _deviceAgeService.GetInsulinAgeAsync(insulinPrefs, ct: cancellationToken));
             properties["bage"] = ToAgeDictionary(
                 await _deviceAgeService.GetBatteryAgeAsync(prefs, ct: cancellationToken));
         }
