@@ -1888,7 +1888,6 @@ msgstr "Tracker auswählen"
 #: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
-#: src/routes/(unauthenticated)/clock/[id]/+page@.svelte
 #: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "<0/> Back"
 msgstr "<0/> Zurück"
@@ -8120,9 +8119,8 @@ msgstr "{0} Gefahr"
 msgid "{0} warning"
 msgstr "{0} Warnung"
 
-#: src/routes/(authenticated)/notifications/+page.svelte
-msgid "<0/> Manage"
-msgstr "<0/> Verwalten"
+#~ msgid "<0/> Manage"
+#~ msgstr "<0/> Verwalten"
 
 #~ msgid "All caught up! No active tracker alerts."
 #~ msgstr "Alles erledigt! Keine aktiven Tracker-Alarme."
@@ -9068,7 +9066,7 @@ msgstr "Schritt {0} von {1}"
 #~ msgid "Save & exit"
 #~ msgstr "Speichern & beenden"
 
-#. 0: String(activeIndex + 1).padStart(2, "0"); 1: String( activeSteps.length ).padStart(2, "0")
+#. 0: String(activeIndex + 1).padStart(2, "0"); 1: String(activeSteps.length).padStart(2, "0")
 #: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Step {0} / {1}"
 msgstr "Schritt {0} / {1}"
@@ -16542,9 +16540,8 @@ msgstr ""
 msgid "Optionally create treatment events when this tracker starts or completes. This maintains compatibility with existing CAGE/SAGE pills."
 msgstr ""
 
-#: src/routes/(authenticated)/alerts/dnd/+page.svelte
-msgid "Scheduled windows are interpreted in your timezone, set on your <0>patient record</0>."
-msgstr ""
+#~ msgid "Scheduled windows are interpreted in your timezone, set on your <0>patient record</0>."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/alerts/history/+page.svelte
 msgid "Recent fires"
@@ -20882,9 +20879,8 @@ msgstr ""
 msgid "No CGM data overlapped this session"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
-msgid "Discord accounts linked to <0>this Nocturne account</0>. Each one can be queried from Discord with <1/>."
-msgstr ""
+#~ msgid "Discord accounts linked to <0>this Nocturne account</0>. Each one can be queried from Discord with <1/>."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 msgid "<0/> without a label goes to <1/> on another Nocturne account."
@@ -21088,9 +21084,8 @@ msgstr ""
 msgid "Start tour"
 msgstr ""
 
-#: src/lib/api/fake-remote-query.svelte.ts
-msgid "This query was not created in a reactive context and cannot be awaited. Use `.run()` to execute the query instead."
-msgstr ""
+#~ msgid "This query was not created in a reactive context and cannot be awaited. Use `.run()` to execute the query instead."
+#~ msgstr ""
 
 #: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
 #: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
@@ -21801,9 +21796,8 @@ msgstr ""
 #~ msgid "Draft save failed — edits retry on next change"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
-msgid "<0/> Clear drafts"
-msgstr ""
+#~ msgid "<0/> Clear drafts"
+#~ msgstr ""
 
 #. 0: drafts.size || ""; 1: drafts.size === 1 ? "" \\: "s"
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
@@ -31080,10 +31074,8 @@ msgstr ""
 msgid "{0} - Setup - Nocturne"
 msgstr ""
 
-#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
-#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
-msgid "<0/> Back to setup"
-msgstr ""
+#~ msgid "<0/> Back to setup"
+#~ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubItemRow.svelte
@@ -32773,9 +32765,8 @@ msgstr ""
 msgid "4. Your data and privacy"
 msgstr ""
 
-#: src/routes/(legal)/terms/+page.svelte
-msgid "For more details, see our <0>privacy policy</0>."
-msgstr ""
+#~ msgid "For more details, see our <0>privacy policy</0>."
+#~ msgstr ""
 
 #: src/routes/(legal)/terms/+page.svelte
 msgid "If you host Nocturne for others (family, friends, community), you are responsible for acceptable use by those users."
@@ -34048,9 +34039,8 @@ msgstr ""
 msgid "Remove demo data"
 msgstr ""
 
-#: src/lib/components/settings/DataMaintenanceCard.svelte
-msgid "<0/> Remove demo data"
-msgstr ""
+#~ msgid "<0/> Remove demo data"
+#~ msgstr ""
 
 #: src/lib/components/settings/DataMaintenanceCard.svelte
 #: src/routes/(authenticated)/settings/admin/connector-cursors/+page.svelte
@@ -36318,9 +36308,8 @@ msgstr ""
 msgid "Discord integration"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
-msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Settings > Admin > Integrations. The administrator can also set <0/> and <1/>. Or run <2/> directly from Discord."
-msgstr ""
+#~ msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Settings > Admin > Integrations. The administrator can also set <0/> and <1/>. Or run <2/> directly from Discord."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/clock/config/[id]/+page.svelte
 #: src/routes/(authenticated)/clock/config/[id]/+page.svelte
@@ -38009,4 +37998,41 @@ msgstr ""
 
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
 msgid "This page made the file below in your browser, with a new random value for each key and password. The values do not leave your browser. Enter your domain, then download a copy of the file. Both options below use these values."
+msgstr ""
+
+#: src/routes/(authenticated)/notifications/+page.svelte
+msgid "<0/>Manage"
+msgstr ""
+
+#: src/routes/(legal)/terms/+page.svelte
+msgid "For more details, see our <0>privacy policy</0> ."
+msgstr ""
+
+#: src/lib/components/settings/DataMaintenanceCard.svelte
+msgid "<0/>Remove demo data"
+msgstr ""
+
+#: src/routes/(authenticated)/alerts/dnd/+page.svelte
+msgid "Scheduled windows are interpreted in your timezone, set on your <0>patient record</0> ."
+msgstr ""
+
+#: src/routes/(unauthenticated)/clock/[id]/+page@.svelte
+msgid "<0/>Back"
+msgstr ""
+
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+#: src/routes/(unauthenticated)/setup/(guided)/+layout@.svelte
+msgid "<0/>Back to setup"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
+msgid "Discord accounts linked to <0>this Nocturne account</0> . Each one can be queried from Discord with <1/> ."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
+msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Settings > Admin > Integrations. The administrator can also set <0/> and <1/> . Or run <2/> directly from Discord."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/>Clear drafts"
 msgstr ""
