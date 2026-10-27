@@ -102,16 +102,17 @@ public class ModelConventionTests
     /// cannot serve them.
     /// </summary>
     [Fact]
-    public void EverySnapshotTable_HasTheTenantLeadingTimestampIndex() =>
+    public void EverySortedListTable_HasTheTenantLeadingSortIndex() =>
         AssertFamily(
-            NocturneDbContext.V4SnapshotEntities,
-            "_tenant_timestamp",
+            NocturneDbContext.V4SortedListEntities,
+            "_tenant_timestamp_id",
             i => Columns(i).SequenceEqual([
                     nameof(ITenantScoped.TenantId),
-                    nameof(IV4TimeSeriesEntity.Timestamp)])
+                    nameof(IV4TimeSeriesEntity.Timestamp),
+                    nameof(IIdentified.Id)])
                 && !i.IsUnique
                 && i.IsDescending is not null
-                && i.IsDescending.SequenceEqual([false, true])
+                && i.IsDescending.SequenceEqual([false, true, true])
                 && i.GetFilter() == "deleted_at IS NULL");
 
     [Fact]
