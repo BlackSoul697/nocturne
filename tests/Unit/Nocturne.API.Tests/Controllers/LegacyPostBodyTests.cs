@@ -281,7 +281,7 @@ public class LegacyPostBodyTests
             .Setup(s => s.CheckForDuplicateEntriesAsync(
                 It.IsAny<IReadOnlyList<EntryDuplicateProbe>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<EntryDuplicateProbe> probes, CancellationToken _) =>
-                probes.Select(_ => (Entry?)null).ToArray());
+                probes.Select(_ => (StoredEntryMatch?)null).ToArray());
         service
             .Setup(s => s.CreateEntriesAsync(
                 It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
