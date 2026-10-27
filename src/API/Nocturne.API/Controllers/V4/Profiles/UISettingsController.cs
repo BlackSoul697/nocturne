@@ -39,18 +39,9 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     /// </summary>
     public string WriteScope => Scope.AlertsReadWrite;
 
-    /// <summary>
-    /// Deadline for the demo service's ui-settings read. The demo service is co-deployed and answers
-    /// this route from memory, so anything slower than a few seconds is a hang, and the demo tenant
-    /// has fixtures to fall back on. The unnamed <see cref="IHttpClientFactory"/> client carries no
-    /// resilience handler, so without a deadline a hung demo service would hold the request open for
-    /// <see cref="HttpClient"/>'s 100-second default.
-    /// </summary>
-    internal static readonly TimeSpan DemoServiceProxyTimeout = TimeSpan.FromSeconds(3);
-
     private readonly ILogger<UISettingsController> _logger;
     private readonly IDemoModeService _demoMode;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly DemoUISettingsProxy _demoSettings;
     private readonly IUISettingsService _settingsService;
 
     /// <summary>
@@ -58,18 +49,18 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     /// </summary>
     /// <param name="logger">Logger instance.</param>
     /// <param name="demoMode">Owner of whether this deployment is a demo, and of the demo service URL.</param>
-    /// <param name="httpClientFactory">Factory for creating HTTP clients to proxy demo service calls.</param>
+    /// <param name="demoSettings">The demo service's ui-settings, served in demo mode.</param>
     /// <param name="settingsService">Service for persisting and retrieving UI settings.</param>
     public UISettingsController(
         ILogger<UISettingsController> logger,
         IDemoModeService demoMode,
-        IHttpClientFactory httpClientFactory,
+        DemoUISettingsProxy demoSettings,
         IUISettingsService settingsService
     )
     {
         _logger = logger;
         _demoMode = demoMode;
-        _httpClientFactory = httpClientFactory;
+        _demoSettings = demoSettings;
         _settingsService = settingsService;
     }
 
@@ -116,39 +107,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
         try
         {
             if (_demoMode.IsEnabled)
-            {
-                if (_demoMode.IsConfigured)
-                {
-                    try
-                    {
-                        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(
-                            cancellationToken
-                        );
-                        deadline.CancelAfter(DemoServiceProxyTimeout);
-
-                        var httpClient = _httpClientFactory.CreateClient();
-                        var response = await httpClient.GetFromJsonAsync<UISettingsConfiguration>(
-                            $"{_demoMode.ServiceUrl?.TrimEnd('/')}/ui-settings",
-                            deadline.Token
-                        );
-
-                        if (response != null)
-                        {
-                            _logger.LogDebug("Successfully fetched UI settings from demo service");
-                            return Ok(response);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(
-                            ex,
-                            "Failed to fetch UI settings from demo service, falling back to defaults"
-                        );
-                    }
-                }
-
-                return Ok(GenerateDemoSettings());
-            }
+                return Ok(await _demoSettings.GetAsync(cancellationToken) ?? GenerateDemoSettings());
 
             // Read what was persisted by SaveUISettings; the service falls back to
             // defaults when the tenant has never saved. Returning freshly generated

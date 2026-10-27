@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Controllers.V4.Profiles;
+using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.Profiles;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Tests.Shared.Infrastructure;
@@ -125,7 +126,7 @@ public class UISettingsControllerDemoModeTests
     {
         var demoService = StubDemoService.Hanging();
 
-        var settings = await ProxiedGet(demoService).WaitAsync(UISettingsController.DemoServiceProxyTimeout * 10);
+        var settings = await ProxiedGet(demoService).WaitAsync(DemoUISettingsProxy.ProxyTimeout * 10);
 
         settings.Devices.ConnectedDevices.Should().NotBeEmpty();
         demoService.Cancelled.Should().BeTrue();

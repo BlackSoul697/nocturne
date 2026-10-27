@@ -707,6 +707,7 @@ public static class ServiceRegistrationExtensions
     {
         // Demo mode
         services.AddSingleton<IDemoModeService, DemoModeService>();
+        services.AddSingleton<DemoUISettingsProxy>();
 
         services.AddSingleton<CacheFlights>();
         services.AddScoped<ITenantCache, TenantCache>();
