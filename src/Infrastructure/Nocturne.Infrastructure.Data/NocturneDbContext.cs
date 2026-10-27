@@ -421,6 +421,8 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<TenantAuditConfigEntity> TenantAuditConfig { get; set; }
 
+    public DbSet<BackfillCompletionEntity> BackfillCompletions { get; set; }
+
     public DbSet<TenantDataRetentionConfigEntity> TenantDataRetentionConfig { get; set; }
 
     public DbSet<TenantDemoConfigEntity> TenantDemoConfigs => Set<TenantDemoConfigEntity>();
@@ -1536,6 +1538,17 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .Entity<ConnectorResetJobEntity>()
             .HasIndex(j => j.State)
             .HasDatabaseName("ix_connector_reset_jobs_state");
+
+        modelBuilder
+            .Entity<BackfillCompletionEntity>()
+            .HasKey(c => new { c.Backfill, c.TenantId });
+
+        modelBuilder
+            .Entity<BackfillCompletionEntity>()
+            .HasOne<TenantEntity>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder
             .Entity<PendingTenantJobEntity>()
