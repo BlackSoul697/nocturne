@@ -6234,6 +6234,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_aps_snapshots_tenant_timestamp")
                         .HasFilter("deleted_at IS NULL");
 
+                    b.HasIndex("TenantId", "AidAlgorithm", "Timestamp")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_aps_snapshots_tenant_algorithm_timestamp")
+                        .HasFilter("deleted_at IS NULL");
+
                     b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
                         .IsUnique()
                         .HasDatabaseName("ix_aps_snapshots_tenant_source_sync_id")

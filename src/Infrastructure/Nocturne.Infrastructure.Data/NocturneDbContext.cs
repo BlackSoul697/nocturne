@@ -769,6 +769,15 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 .HasFilter("deleted_at IS NULL");
         }
 
+        // The closed-loop stamp bounds its range by the newest snapshot of one algorithm for one
+        // tenant; see ApsSnapshotRepository.StampLoopClosedLoopAsync. Without aps_system in an
+        // index, that max() reads every snapshot the tenant has.
+        modelBuilder.Entity<ApsSnapshotEntity>()
+            .HasIndex(e => new { e.TenantId, e.AidAlgorithm, e.Timestamp })
+            .HasDatabaseName("ix_aps_snapshots_tenant_algorithm_timestamp")
+            .IsDescending(false, false, true)
+            .HasFilter("deleted_at IS NULL");
+
         // The device status list walks extras newest-first beside the snapshots; see
         // DeviceStatusGroupRepository.GetAsync.
         modelBuilder.Entity<DeviceStatusExtrasEntity>()
