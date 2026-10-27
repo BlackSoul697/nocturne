@@ -1238,13 +1238,11 @@ msgstr "Custom"
 #~ msgid "Ascending Volume"
 #~ msgstr "Ascending Volume"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Telegram"
-msgstr "Telegram"
+#~ msgid "Telegram"
+#~ msgstr "Telegram"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "WhatsApp"
-msgstr "WhatsApp"
+#~ msgid "WhatsApp"
+#~ msgstr "WhatsApp"
 
 #~ msgid "No notification channels are currently available."
 #~ msgstr "No notification channels are currently available."
@@ -12054,7 +12052,6 @@ msgstr "<0/> Integrations"
 #~ msgstr "Connect Nocturne to chat platforms and other external services"
 
 #: ../portal/src/lib/components/SiteFooter.svelte
-#: src/lib/components/admin/IntegrationsTabContent.svelte
 #: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
 msgid "Discord"
@@ -14574,6 +14571,7 @@ msgid "Alarms"
 msgstr "Alarms"
 
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
 msgid "Connectors"
 msgstr "Connectors"
 
@@ -15422,9 +15420,8 @@ msgstr "Select a tracker"
 msgid "h (negative = before a scheduled event)"
 msgstr "h (negative = before a scheduled event)"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Slack"
-msgstr "Slack"
+#~ msgid "Slack"
+#~ msgstr "Slack"
 
 #~ msgid "Resend (Email)"
 #~ msgstr "Resend (Email)"
@@ -32790,9 +32787,8 @@ msgstr "Identity providers"
 msgid "<0/> Add provider"
 msgstr "<0/> Add provider"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Resend (email)"
-msgstr "Resend (email)"
+#~ msgid "Resend (email)"
+#~ msgstr "Resend (email)"
 
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 msgid "Telegram webhook calls are refused until one is set. Choose a random value of letters, digits, <0/> or <1/> (for example from <2/>). Save it here with the bot enabled. Then register the webhook again with the same value:"
@@ -38321,3 +38317,31 @@ msgstr "Device authorized successfully."
 #: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "You can return to your device."
 msgstr "You can return to your device."
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "AlertChannels"
+msgstr "AlertChannels"
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "PlatformSettings"
+msgstr "PlatformSettings"
+
+#. 0: formatList( platforms )
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "The instance key changed. Nocturne cannot read the saved credentials for {0}. Enter them again in the platform settings."
+msgstr "The instance key changed. Nocturne cannot read the saved credentials for {0}. Enter them again in the platform settings."
+
+#. 0: formatList(connectors)
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "Connectors: {0}"
+msgstr "Connectors: {0}"
+
+#. 0: formatList(alertChannels)
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "Alert webhooks: {0}"
+msgstr "Alert webhooks: {0}"
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "The instance key changed. Nocturne cannot read the saved secrets for these items. Enter each secret again."
+msgstr "The instance key changed. Nocturne cannot read the saved secrets for these items. Enter each secret again."

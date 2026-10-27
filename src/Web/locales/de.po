@@ -1238,13 +1238,11 @@ msgstr "Benutzerdefiniert"
 #~ msgid "Ascending Volume"
 #~ msgstr "Ansteigende Lautstärke"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Telegram"
-msgstr "Telegram"
+#~ msgid "Telegram"
+#~ msgstr "Telegram"
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "WhatsApp"
-msgstr "WhatsApp"
+#~ msgid "WhatsApp"
+#~ msgstr "WhatsApp"
 
 #~ msgid "No notification channels are currently available."
 #~ msgstr ""
@@ -12054,7 +12052,6 @@ msgstr "<0/> Integrationen"
 #~ msgstr ""
 
 #: ../portal/src/lib/components/SiteFooter.svelte
-#: src/lib/components/admin/IntegrationsTabContent.svelte
 #: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
 msgid "Discord"
@@ -14574,6 +14571,7 @@ msgid "Alarms"
 msgstr ""
 
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
 msgid "Connectors"
 msgstr "Konnektoren"
 
@@ -15422,9 +15420,8 @@ msgstr ""
 msgid "h (negative = before a scheduled event)"
 msgstr ""
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Slack"
-msgstr ""
+#~ msgid "Slack"
+#~ msgstr ""
 
 #~ msgid "Resend (Email)"
 #~ msgstr ""
@@ -32790,9 +32787,8 @@ msgstr ""
 msgid "<0/> Add provider"
 msgstr ""
 
-#: src/lib/components/admin/IntegrationsTabContent.svelte
-msgid "Resend (email)"
-msgstr ""
+#~ msgid "Resend (email)"
+#~ msgstr ""
 
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 msgid "Telegram webhook calls are refused until one is set. Choose a random value of letters, digits, <0/> or <1/> (for example from <2/>). Save it here with the bot enabled. Then register the webhook again with the same value:"
@@ -38320,4 +38316,32 @@ msgstr ""
 
 #: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "You can return to your device."
+msgstr ""
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "AlertChannels"
+msgstr ""
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "PlatformSettings"
+msgstr ""
+
+#. 0: formatList( platforms )
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "The instance key changed. Nocturne cannot read the saved credentials for {0}. Enter them again in the platform settings."
+msgstr ""
+
+#. 0: formatList(connectors)
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "Connectors: {0}"
+msgstr ""
+
+#. 0: formatList(alertChannels)
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "Alert webhooks: {0}"
+msgstr ""
+
+#: src/lib/components/notifications/InstanceKeyChanged.svelte
+msgid "The instance key changed. Nocturne cannot read the saved secrets for these items. Enter each secret again."
 msgstr ""
