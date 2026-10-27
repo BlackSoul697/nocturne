@@ -68,7 +68,6 @@ msgstr ""
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
 #: src/routes/(authenticated)/compatibility/test/+page.svelte
 #: src/routes/(authenticated)/compatibility/test/+page.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Error"
 msgstr ""
@@ -89,7 +88,7 @@ msgstr ""
 #: src/lib/components/settings/DataSourceRow.svelte
 #: src/routes/(authenticated)/settings/admin/connector-cursors/+page.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/GoogleHealthSyncProgress.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Never"
 msgstr ""
 
@@ -100,7 +99,7 @@ msgstr ""
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
 #: src/routes/(authenticated)/settings/admin/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Retry"
 msgstr ""
 
@@ -260,7 +259,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 #: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "Low"
 msgstr ""
@@ -279,7 +278,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 #: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "High"
 msgstr ""
@@ -302,7 +301,7 @@ msgstr ""
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/lib/stores/auth-store.svelte.ts
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Expired"
 msgstr ""
 
@@ -465,8 +464,7 @@ msgstr ""
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Unknown"
 msgstr ""
 
@@ -581,9 +579,9 @@ msgstr ""
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Cancel"
 msgstr ""
@@ -750,10 +748,10 @@ msgstr ""
 #: src/routes/(authenticated)/reports/ehba1c/+page.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 #: src/routes/(authenticated)/settings/timezone/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/settings/weight/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Delete"
 msgstr ""
 
@@ -853,7 +851,7 @@ msgstr ""
 #: src/lib/components/entries/EntryEditDialog.svelte
 #: src/lib/components/food/AddFoodDialog.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Create"
 msgstr ""
 
@@ -872,7 +870,7 @@ msgstr ""
 #: src/lib/forms/FormGuard.test-harness.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/food/Composer.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 #: src/routes/(unauthenticated)/setup/hub/HubBasics.svelte
 msgid "Save"
 msgstr ""
@@ -1243,9 +1241,9 @@ msgstr ""
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Custom"
 msgstr ""
 
@@ -1304,6 +1302,7 @@ msgstr ""
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
+#: src/routes/(authenticated)/settings/site/+page.svelte
 msgid "<0/> Save"
 msgstr ""
 
@@ -1471,7 +1470,6 @@ msgstr ""
 #: src/lib/components/status-pills/COBPill.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/connectors/google-health/GoogleHealthCategoryTable.svelte
 msgid "Status"
 msgstr ""
@@ -1806,7 +1804,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "No data"
 msgstr ""
 
@@ -1842,7 +1840,7 @@ msgstr ""
 #: src/lib/components/calendar/TrackerPopoverContent.svelte
 #: src/lib/components/trackers/ActiveTrackersTab.svelte
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> Complete"
 msgstr ""
 
@@ -2115,7 +2113,7 @@ msgstr ""
 #: src/lib/components/clock-builder/TextStyleControls.svelte
 #: src/lib/components/food/GiLabel.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Medium"
 msgstr ""
 
@@ -2344,7 +2342,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> Healthy"
 msgstr ""
 
@@ -2867,7 +2865,7 @@ msgstr ""
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Completed"
 msgstr ""
 
@@ -2875,8 +2873,8 @@ msgstr ""
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Failed"
 msgstr ""
 
@@ -3034,7 +3032,7 @@ msgstr ""
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Other"
 msgstr ""
 
@@ -3551,7 +3549,7 @@ msgstr ""
 #: src/lib/components/entries/BGCheckSection.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/legacy-kind-label.svelte.ts
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Sensor"
 msgstr ""
 
@@ -3989,7 +3987,7 @@ msgstr ""
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/navigation/report-navigation.svelte.ts
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Battery"
 msgstr ""
 
@@ -4140,12 +4138,11 @@ msgstr ""
 
 #: src/lib/components/layout/UserMenu.svelte
 #: src/lib/components/support/IssueCreatorDialog.svelte
-#: src/lib/navigation/app-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/+page.svelte
 msgid "Settings"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Setup"
 msgstr ""
@@ -4153,7 +4150,7 @@ msgstr ""
 #: src/lib/components/layout/UserMenu.svelte
 #: src/lib/components/rbac/permission-categories.svelte.ts
 #: src/lib/components/settings/TokenScopeSelector.svelte
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(unauthenticated)/setup/SetupWizard.svelte
 msgid "Account"
@@ -4162,12 +4159,12 @@ msgstr ""
 #~ msgid "Patient Record"
 #~ msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Appearance"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 msgid "Therapy"
 msgstr ""
 
@@ -5121,6 +5118,7 @@ msgid "Identity"
 msgstr ""
 
 #: src/lib/components/rbac/permission-categories.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/admin/+page.svelte
 msgid "Administration"
 msgstr ""
@@ -6547,6 +6545,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/settings/TokenScopeSelector.svelte
+#: src/lib/navigation/settings-navigation.svelte.ts
 msgid "Platform"
 msgstr ""
 
@@ -6924,7 +6923,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Cannula"
 msgstr ""
 
@@ -6934,22 +6933,22 @@ msgstr ""
 #: src/lib/components/status-pills/ReservoirPill.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/legacy-kind-label.svelte.ts
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Reservoir"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Appointment"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Reminder"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Consumable"
 msgstr ""
 
@@ -7123,35 +7122,35 @@ msgstr ""
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Empty"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Refilled"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Attended"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Rescheduled"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Missed"
 msgstr ""
 
@@ -8119,8 +8118,9 @@ msgstr ""
 msgid "{0} warning"
 msgstr ""
 
-#~ msgid "<0/> Manage"
-#~ msgstr ""
+#: src/routes/(authenticated)/notifications/+page.svelte
+msgid "<0/> Manage"
+msgstr ""
 
 #~ msgid "All caught up! No active tracker alerts."
 #~ msgstr ""
@@ -8171,7 +8171,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/settings/site/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Slug"
@@ -9267,6 +9267,8 @@ msgstr ""
 
 #: src/lib/components/dashboard/widgets/TrackersWidget.svelte
 #: src/lib/components/settings/DashboardRailConfigurator.svelte
+#: src/lib/navigation/app-navigation.svelte.ts
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Trackers"
 msgstr ""
 
@@ -10127,7 +10129,7 @@ msgid "Minor"
 msgstr ""
 
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Discrepancies"
 msgstr ""
 
@@ -11850,9 +11852,8 @@ msgstr ""
 #~ msgid "Display active tracker ages (sensor, pump site, etc.) on homepage"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-msgid "Each tracker's dashboard visibility is configured in <0>Settings → Trackers</0>"
-msgstr ""
+#~ msgid "Each tracker's dashboard visibility is configured in <0>Settings → Trackers</0>"
+#~ msgstr ""
 
 #~ msgid "<0/> Units & Formats"
 #~ msgstr ""
@@ -12071,6 +12072,7 @@ msgstr ""
 
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: src/lib/components/admin/IntegrationsTabContent.svelte
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/alerts/+page.svelte
 msgid "Discord"
 msgstr ""
@@ -12109,9 +12111,8 @@ msgstr ""
 #~ msgid "Access Denied"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Failed to load Nightscout transition status"
-msgstr ""
+#~ msgid "Failed to load Nightscout transition status"
+#~ msgstr ""
 
 #~ msgid "Safe to Disconnect"
 #~ msgstr ""
@@ -12131,13 +12132,11 @@ msgstr ""
 #~ msgid "Nightscout Transition"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Monitor your migration from Nightscout and check disconnect readiness"
-msgstr ""
+#~ msgid "Monitor your migration from Nightscout and check disconnect readiness"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Failed to load transition status"
-msgstr ""
+#~ msgid "Failed to load transition status"
+#~ msgstr ""
 
 #~ msgid "<0/> Migration Status"
 #~ msgstr ""
@@ -12145,9 +12144,8 @@ msgstr ""
 #~ msgid "<0/> In Progress"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Record counts by data type from your Nightscout instance"
-msgstr ""
+#~ msgid "Record counts by data type from your Nightscout instance"
+#~ msgstr ""
 
 #~ msgid "No migration data available yet."
 #~ msgstr ""
@@ -12155,7 +12153,7 @@ msgstr ""
 #. 0: connector.stateMessage
 #. 0: formatTimestamp(status.migration?.lastSyncTime)
 #: src/lib/components/dashboard/first-reading/FirstReadingEmptyState.svelte
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Last sync: {0}"
 msgstr ""
 
@@ -12165,51 +12163,48 @@ msgstr ""
 #~ msgid "<0/> Circuit Open"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Status of write-back operations to your Nightscout instance"
-msgstr ""
+#~ msgid "Status of write-back operations to your Nightscout instance"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Requests"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Succeeded"
 msgstr ""
 
 #. 0: formatTimestamp(status.writeBack?.lastSuccessTime)
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Last successful write-back: {0}"
 msgstr ""
 
 #~ msgid "<0/> API Compatibility"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Background comparison of Nocturne responses against your Nightscout instance"
-msgstr ""
+#~ msgid "Background comparison of Nocturne responses against your Nightscout instance"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Score"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Comparisons"
 msgstr ""
 
 #~ msgid "<0/> Safe to Disconnect"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Recommendation on whether it is safe to stop using your Nightscout instance"
-msgstr ""
+#~ msgid "Recommendation on whether it is safe to stop using your Nightscout instance"
+#~ msgstr ""
 
-#. 0: status.recommendation.stabilityDaysRemaining; 1: status.recommendation.stabilityDaysRemaining === 1 ? 'day' \\: 'days'
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#. 0: status.recommendation.stabilityDaysRemaining; 1: status.recommendation.stabilityDaysRemaining === 1 ? "day" \\: "days"
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "{0} stability {1} remaining"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Blockers"
 msgstr ""
 
@@ -12244,9 +12239,8 @@ msgstr ""
 #~ msgid "Data Migration"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-msgid "Import your data from Nightscout or MongoDB"
-msgstr ""
+#~ msgid "Import your data from Nightscout or MongoDB"
+#~ msgstr ""
 
 #~ msgid "Migration Configuration Detected"
 #~ msgstr ""
@@ -12791,30 +12785,30 @@ msgstr ""
 #~ msgid "<0/> Generate Packing List"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Failed to load tracker data"
 msgstr ""
 
 #~ msgid "Notifications & Trackers - Settings - Nocturne"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Track consumables, appointments, and reminders"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "<0/> Active <1/>"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "<0/> History"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "<0/> Definitions"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "<0/> Presets"
 msgstr ""
 
@@ -12839,14 +12833,14 @@ msgstr ""
 #~ msgid "Tracker Definition"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Select a definition"
 msgstr ""
 
 #~ msgid "Default Start Notes (optional)"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "These notes will be pre-filled when applying this preset."
 msgstr ""
 
@@ -13640,29 +13634,25 @@ msgstr ""
 msgid "Select a compression low to view details"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Could not determine the current tenant."
-msgstr ""
+#~ msgid "Could not determine the current tenant."
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Failed to load tenant details."
-msgstr ""
+#~ msgid "Failed to load tenant details."
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Manage the current tenant's details and members"
-msgstr ""
+#~ msgid "Manage the current tenant's details and members"
+#~ msgstr ""
 
 #: src/lib/components/trackers/CreateTrackersFromLegacyDialog.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/settings/site/+page.svelte
 msgid "Created"
 msgstr ""
 
 #~ msgid "Edit Tenant"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Update the tenant's display name and active status"
-msgstr ""
+#~ msgid "Update the tenant's display name and active status"
+#~ msgstr ""
 
 #. 0: connectorName
 #: src/routes/(authenticated)/settings/connectors/[connector]/+page.svelte
@@ -15286,8 +15276,9 @@ msgstr ""
 #~ msgid "Theme, units, and display preferences."
 #~ msgstr ""
 
-#~ msgid "Targets, basal rates, ratios, and treatment profiles."
-#~ msgstr ""
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Targets, basal rates, ratios, and treatment profiles."
+msgstr ""
 
 #~ msgid "Data validation and cleanup settings."
 #~ msgstr ""
@@ -15304,11 +15295,13 @@ msgstr ""
 #~ msgid "Connect data sources and authorized devices."
 #~ msgstr ""
 
-#~ msgid "Members, invitations, and public sharing."
-#~ msgstr ""
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Members, invitations, and public sharing."
+msgstr ""
 
-#~ msgid "Get help and connect with the community."
-#~ msgstr ""
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Get help and connect with the community."
+msgstr ""
 
 #~ msgid "Identity providers and integrations."
 #~ msgstr ""
@@ -15319,16 +15312,14 @@ msgstr ""
 #~ msgid "Re-run the guided onboarding checklist."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Manage your account, data, and how Nocturne works for you."
-msgstr ""
+#~ msgid "Manage your account, data, and how Nocturne works for you."
+#~ msgstr ""
 
 #~ msgid "Platform Administration"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Onboarding"
-msgstr ""
+#~ msgid "Onboarding"
+#~ msgstr ""
 
 #~ msgid "HTTPS Required"
 #~ msgstr ""
@@ -16870,9 +16861,8 @@ msgstr ""
 #~ msgid "Reset Connector Cursors"
 #~ msgstr ""
 
-#: src/lib/components/settings/DataMaintenanceCard.svelte
-msgid "Re-sync a connector from a chosen point."
-msgstr ""
+#~ msgid "Re-sync a connector from a chosen point."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Choose a color theme and light/dark mode"
@@ -17002,7 +16992,7 @@ msgstr ""
 #~ msgid "Weight History"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/data-quality/+page.svelte
+#: src/routes/(authenticated)/settings/patient/+page.svelte
 msgid "Your recorded weights over time."
 msgstr ""
 
@@ -17085,7 +17075,7 @@ msgstr ""
 msgid "Re-import failed."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/data-quality/+page.svelte
+#: src/routes/(authenticated)/settings/patient/+page.svelte
 #: src/routes/(authenticated)/settings/timezone/+page.svelte
 msgid "Timezone history"
 msgstr ""
@@ -17191,7 +17181,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-copy.svelte.ts
-#: src/routes/(authenticated)/settings/data-quality/+page.svelte
+#: src/routes/(authenticated)/settings/patient/+page.svelte
 #: src/routes/(authenticated)/settings/weight/+page.svelte
 msgid "Weight history"
 msgstr ""
@@ -17239,11 +17229,11 @@ msgstr ""
 #~ msgid "Are you sure you want to delete this tracker definition? This action cannot be undone. Any active instances using this definition will remain, but you won't be able to start new ones."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Are you sure you want to delete this tracker instance? This action cannot be undone."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Are you sure you want to delete this preset? This action cannot be undone."
 msgstr ""
 
@@ -17471,13 +17461,11 @@ msgstr ""
 #~ msgid "<0/> Platform Administrators"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Platform admins can manage every tenant on this instance. Grant or revoke it for members of this tenant."
-msgstr ""
+#~ msgid "Platform admins can manage every tenant on this instance. Grant or revoke it for members of this tenant."
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "No members to manage."
-msgstr ""
+#~ msgid "No members to manage."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Unnamed user"
@@ -21349,17 +21337,14 @@ msgstr ""
 msgid "Delete the {0} lab result from {1}."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "The browsers signed in to this account, and where to find everything else that can reach your data."
-msgstr ""
+#~ msgid "The browsers signed in to this account, and where to find everything else that can reach your data."
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "What else can reach your data"
-msgstr ""
+#~ msgid "What else can reach your data"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "Each of these is granted, and taken away again, on its own page."
-msgstr ""
+#~ msgid "Each of these is granted, and taken away again, on its own page."
+#~ msgstr ""
 
 #~ msgid "Docs Scroll"
 #~ msgstr ""
@@ -22506,9 +22491,8 @@ msgstr ""
 msgid "Last updated {0}"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Platform administration"
-msgstr ""
+#~ msgid "Platform administration"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/features/FeaturePillars.svelte
 msgid "Four things Nocturne is good at"
@@ -23646,7 +23630,7 @@ msgstr ""
 msgid "Tenants"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 msgid "Translations"
 msgstr ""
 
@@ -23660,7 +23644,9 @@ msgid "Bolus insulin: {0}U"
 msgstr ""
 
 #. 0: def.name
+#. 0: row.displayName
 #: src/lib/components/trackers/TrackerDefinitionsTab.svelte
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Edit {0}"
 msgstr ""
 
@@ -25982,9 +25968,8 @@ msgstr ""
 msgid "Customisable widgets"
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "Reorder or swap these in Settings → Appearance to show the stats you care about."
-msgstr ""
+#~ msgid "Reorder or swap these in Settings → Appearance to show the stats you care about."
+#~ msgstr ""
 
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "Interactive chart"
@@ -28896,7 +28881,7 @@ msgstr ""
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Canceled"
 msgstr ""
 
@@ -29561,7 +29546,7 @@ msgstr ""
 msgid "Display active tracker ages (such as sensor and pump site) on homepage"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/data-quality/+page.svelte
+#: src/routes/(authenticated)/settings/patient/+page.svelte
 msgid "Where you lived and traveled, for correct timestamps."
 msgstr ""
 
@@ -29597,7 +29582,7 @@ msgstr ""
 #~ msgid "Your weight over time. Each entry is dated when it was recorded. When you edit your current weight on the Patient Record page, a new entry is added here. The last entry is not overwritten."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Are you sure you want to delete this tracker definition? This action cannot be undone. Any active instances using this definition will remain, but you will not be able to start new ones."
 msgstr ""
 
@@ -30080,8 +30065,8 @@ msgstr ""
 msgid "Insulin and carbs"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
 #: src/lib/navigation/report-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/reports/comparison/ComparisonReport.svelte
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 msgid "Data quality"
@@ -32295,6 +32280,7 @@ msgid "Manage members"
 msgstr ""
 
 #: src/lib/constants/scope-labels.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 msgid "Site settings"
 msgstr ""
 
@@ -32373,40 +32359,34 @@ msgid "Test endpoint compatibility"
 msgstr ""
 
 #: src/lib/components/rbac/permission-categories.svelte.ts
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/patient/+page.svelte
 msgid "Patient record"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
-msgid "Notifications & trackers"
-msgstr ""
+#~ msgid "Notifications & trackers"
+#~ msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "Active access"
-msgstr ""
+#~ msgid "Active access"
+#~ msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Connectors & apps"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/members/+page.svelte
 msgid "Sharing & privacy"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/support/+page.svelte
 msgid "Support & community"
 msgstr ""
 
-#: src/lib/navigation/app-navigation.svelte.ts
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Tenant management"
-msgstr ""
+#~ msgid "Tenant management"
+#~ msgstr ""
 
 #: src/lib/navigation/report-navigation.svelte.ts
 msgid "The big picture"
@@ -32649,14 +32629,14 @@ msgstr ""
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Fell off"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
 #: src/lib/components/trackers/TrackerStartDialog.svelte
 #: src/routes/(authenticated)/notifications/+page.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Replaced early"
 msgstr ""
 
@@ -34042,7 +34022,6 @@ msgstr ""
 #~ msgid "<0/> Remove demo data"
 #~ msgstr ""
 
-#: src/lib/components/settings/DataMaintenanceCard.svelte
 #: src/routes/(authenticated)/settings/admin/connector-cursors/+page.svelte
 msgid "Reset connector cursors"
 msgstr ""
@@ -35114,9 +35093,8 @@ msgstr ""
 msgid "Configure data sources"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "Active access - Nocturne"
-msgstr ""
+#~ msgid "Active access - Nocturne"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 #: src/routes/(authenticated)/settings/members/+page.svelte
@@ -35132,6 +35110,7 @@ msgstr ""
 msgid "Access requests - Settings - Nocturne"
 msgstr ""
 
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 msgid "Access requests"
 msgstr ""
@@ -35313,6 +35292,7 @@ msgstr ""
 msgid "Failed to revoke invite. Try again."
 msgstr ""
 
+#: src/lib/navigation/settings-navigation.svelte.ts
 #: src/routes/(authenticated)/settings/audit/+page.svelte
 #: src/routes/(authenticated)/settings/members/+page.svelte
 msgid "Audit log"
@@ -35330,61 +35310,56 @@ msgstr ""
 msgid "<0/> Compression low detection"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Safe to disconnect"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Almost ready"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Not ready"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Nightscout transition - Settings - Nocturne"
-msgstr ""
+#~ msgid "Nightscout transition - Settings - Nocturne"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "Nightscout transition"
-msgstr ""
+#~ msgid "Nightscout transition"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> In progress"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> Migration status"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "<0/> Circuit open"
-msgstr ""
+#~ msgid "<0/> Circuit open"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> Write-back health (last 24 hours)"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> API compatibility"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "<0/> Safe to disconnect"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
 msgid "Go to connector settings <0/>"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-msgid "Data migration - Settings - Nocturne"
-msgstr ""
+#~ msgid "Data migration - Settings - Nocturne"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/migration/+page.svelte
-msgid "Data migration"
-msgstr ""
+#~ msgid "Data migration"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Migration configuration detected"
@@ -35558,43 +35533,42 @@ msgstr ""
 msgid "API compatibility"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
-msgid "Notifications & trackers - Settings - Nocturne"
-msgstr ""
+#~ msgid "Notifications & trackers - Settings - Nocturne"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Delete tracker definition"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Delete tracker instance"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "New preset"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Edit preset"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Create a quick preset for one-step tracker activation."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Preset name"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Tracker definition"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Default start notes (optional)"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Delete preset"
 msgstr ""
 
@@ -36904,17 +36878,15 @@ msgstr ""
 msgid "Tracker pill"
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance."
-msgstr ""
+#~ msgid "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to Settings > Appearance."
+#~ msgstr ""
 
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "Record a change"
 msgstr ""
 
-#: src/lib/coach-marks/copy.svelte.ts
-msgid "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers."
-msgstr ""
+#~ msgid "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to Settings > Notifications & trackers."
+#~ msgstr ""
 
 #: src/lib/coach-marks/copy.svelte.ts
 msgid "Lifespan and thresholds"
@@ -37585,9 +37557,8 @@ msgstr ""
 msgid "Your data is now in Nocturne. The History tab lists what came across."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
-msgid "No migration data available yet"
-msgstr ""
+#~ msgid "No migration data available yet"
+#~ msgstr ""
 
 #. 0: selectedProfileName
 #: src/routes/(authenticated)/settings/profile/+page.svelte
@@ -37686,7 +37657,7 @@ msgid "ICR"
 msgstr ""
 
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/trackers/+page.svelte
 msgid "Pod"
 msgstr ""
 
@@ -38000,9 +37971,8 @@ msgstr ""
 msgid "This page made the file below in your browser, with a new random value for each key and password. The values do not leave your browser. Enter your domain, then download a copy of the file. Both options below use these values."
 msgstr ""
 
-#: src/routes/(authenticated)/notifications/+page.svelte
-msgid "<0/>Manage"
-msgstr ""
+#~ msgid "<0/>Manage"
+#~ msgstr ""
 
 #: src/routes/(legal)/terms/+page.svelte
 msgid "For more details, see our <0>privacy policy</0> ."
@@ -38029,10 +37999,292 @@ msgstr ""
 msgid "Discord accounts linked to <0>this Nocturne account</0> . Each one can be queried from Discord with <1/> ."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
-msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Settings > Admin > Integrations. The administrator can also set <0/> and <1/> . Or run <2/> directly from Discord."
-msgstr ""
+#~ msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Settings > Admin > Integrations. The administrator can also set <0/> and <1/> . Or run <2/> directly from Discord."
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "<0/>Clear drafts"
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "Reorder or swap these in My settings → Appearance to show the stats you care about."
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "The pill shows the time since the last change. Its color changes when the tracker reaches a notification threshold. To change the order of the pills, go to My settings > Appearance."
+msgstr ""
+
+#: src/lib/coach-marks/copy.svelte.ts
+msgid "When you change the item, select its pill. Then select Complete tracker. To start a new tracker from the change, select the Start another option in the Complete dialog. To change the lifespan and the alerts, go to the Trackers page."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "My settings"
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Your sign-in, your display, and your linked chat accounts."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Profile, passkeys, authenticator apps, recovery codes, and sessions."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Theme, units, language, and display preferences."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Link your Discord account to get alerts and data in chat."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Settings for this site and the person it monitors."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Do the guided setup checklist again."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Site details"
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "The name and address of this site."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Details, weight, and timezone history of the person monitored."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Sleep schedule, compression low detection, and data cleanup."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Data sources, your connected apps and API keys, and the move from Nightscout."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Who read and changed the data on this site."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Settings for every site on this Nocturne server."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Identity providers and chat platform settings."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "All tenants"
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "All sites on this server, and platform administrators."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "People who ask to join this server."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Connector cursors"
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Sync a connector again from a time you select."
+msgstr ""
+
+#: src/lib/navigation/settings-navigation.svelte.ts
+msgid "Help translate Nocturne into your language."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/+page.svelte
+msgid "Manage your account, this site, and how Nocturne works for you."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/+page.svelte
+msgid "Help"
+msgstr ""
+
+#: src/routes/(authenticated)/trackers/+page.svelte
+msgid "Trackers - Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Each tracker's dashboard visibility is configured in <0>Trackers</0>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/routes/(authenticated)/settings/migration/+page.svelte
+msgid "Move from Nightscout"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/connectors/+page.svelte
+msgid "Import your Nightscout data and check when you can turn Nightscout off."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/+page.svelte
+msgid "Move from Nightscout - Settings - Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/+page.svelte
+msgid "Import your data from Nightscout or MongoDB. Then see when it is safe to stop using Nightscout."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/+page.svelte
+msgid "<0/> Status"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "Could not load the Nightscout status"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Reload the page to try again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "The number of records from Nightscout, by data type."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "No migration data yet"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "<0/> Paused"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "The writes that Nocturne sends back to your Nightscout site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "Nocturne compares its API responses with the responses from your Nightscout site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/migration/NightscoutTransitionStatus.svelte
+msgid "Shows if you can safely stop using your Nightscout site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Could not save the site name. Try again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Site details - Settings - Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "The name and address of this Nocturne site"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "You cannot see the site details"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Only a site owner or administrator can see and change the site details."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Could not load the site details"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Site name"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "The name that Nocturne shows for this site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "You cannot change the name of the demo site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Enter a site name."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Site name saved."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "Address"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/site/+page.svelte
+msgid "You cannot change the address of a site."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Could not save the tenant. Try again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Could not find the tenant that you are viewing."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Could not load the members of this tenant."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "All tenants - Platform - Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "All tenants on this Nocturne instance"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Change the name or the status of a tenant. An inactive tenant refuses all requests."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Could not load the tenants."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "No tenants."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Viewing"
+msgstr ""
+
+#. 0: row.sysCreatedAt ? formatNumericDate(new Date(row.sysCreatedAt)) \\: "---"
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "<0/> <1/> Created {0}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "A platform administrator can manage all tenants on this instance. This list shows the members of the tenant that you are viewing. To see the members of a different tenant, switch to that tenant."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Members of <0/> (<1/>)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "This tenant has no members."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+msgid "Change the display name and the status of <0/>."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
+msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to add the Application ID and Client Secret under Platform > Administration > Integrations. The administrator can also set <0/> and <1/>. Or run <2/> directly from Discord."
 msgstr ""
