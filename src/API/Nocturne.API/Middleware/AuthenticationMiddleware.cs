@@ -1,4 +1,6 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Nocturne.API.Authorization;
 using Nocturne.API.Middleware.Handlers;
@@ -114,8 +116,22 @@ public class AuthenticationMiddleware
             // Load platform admin flag from subject before building claims,
             // so [Authorize(Roles = "platform_admin")] works correctly. Only for a credential that
             // speaks for the subject rather than for something they delegated; see
-            // <see cref="PlatformAdminCredentials"/>.
-            if (authContext is { IsAuthenticated: true, SubjectId: not null }
+            // <see cref="PlatformAdminCredentials"/>. A request held to a membership reads the flag in
+            // the same statement as the membership.
+            if (authContext is { IsAuthenticated: true, SubjectId: { } subjectId }
+                && HeldToMembership(authContext) is { } tenantId)
+            {
+                var carriesPlatformAdmin = PlatformAdminCredentials.Carries(authContext.AuthType);
+                if (carriesPlatformAdmin || RequestMembership.Of(context, subjectId, tenantId) is null)
+                {
+                    var (membership, isPlatformAdmin) = await RequestMembership.ReadAsync(
+                        context.RequestServices.GetRequiredService<Nocturne.Infrastructure.Data.Services.INocturneDbContextFactory>(),
+                        subjectId, tenantId, context.RequestAborted);
+                    membership.StoreOn(context);
+                    authContext.IsPlatformAdmin = carriesPlatformAdmin && isPlatformAdmin;
+                }
+            }
+            else if (authContext is { IsAuthenticated: true, SubjectId: not null }
                 && PlatformAdminCredentials.Carries(authContext.AuthType))
             {
                 using var scope = _scopeFactory.CreateScope();
@@ -179,7 +195,7 @@ public class AuthenticationMiddleware
                 SetUnauthenticated(context);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsCredentialFailure(ex))
         {
             _logger.LogError(ex, "Error during authentication");
             SetUnauthenticated(context);
@@ -187,33 +203,20 @@ public class AuthenticationMiddleware
 
         // Verify authenticated subject is a member of the resolved tenant
         var resolvedAuth = context.GetAuthContext();
-        if (resolvedAuth is { IsAuthenticated: true, SubjectId: not null, TenantId: not null })
+        if (resolvedAuth is { IsAuthenticated: true, SubjectId: { } memberSubjectId }
+            && HeldToMembership(resolvedAuth) is { } memberTenantId
+            && RequestMembership.Of(context, memberSubjectId, memberTenantId)?.Membership is null)
         {
-            // InstanceKey is infrastructure auth with no membership behind it, and a PlatformAccess
-            // grant was already proven platform-access-marked and pinned to this tenant by
-            // PlatformAccessCookieHandler. An api-secret is another presentation of a direct grant,
-            // so it is held to its subject's membership exactly as the bearer form is.
-            if (resolvedAuth.AuthType is not (AuthType.InstanceKey or AuthType.PlatformAccess))
+            // An invite-token-authorized endpoint is how a non-member joins, so reducing
+            // the request to anonymous there leaves the accept path reachable only by
+            // people who are already members. Identity only, and only when the route's
+            // token is a live invite of this tenant.
+            if (!await TryKeepIdentityForInviteAsync(context, resolvedAuth))
             {
-                var tenantMemberService = context.RequestServices.GetRequiredService<ITenantMemberService>();
-                var isMember = await tenantMemberService.IsMemberAsync(
-                    resolvedAuth.SubjectId!.Value,
-                    resolvedAuth.TenantId!.Value);
-
-                if (!isMember)
-                {
-                    // An invite-token-authorized endpoint is how a non-member joins, so reducing
-                    // the request to anonymous there leaves the accept path reachable only by
-                    // people who are already members. Identity only, and only when the route's
-                    // token is a live invite of this tenant.
-                    if (!await TryKeepIdentityForInviteAsync(context, resolvedAuth))
-                    {
-                        _logger.LogWarning(
-                            "Subject {SubjectId} is not a member of tenant {TenantId}",
-                            resolvedAuth.SubjectId, resolvedAuth.TenantId);
-                        SetUnauthenticated(context);
-                    }
-                }
+                _logger.LogWarning(
+                    "Subject {SubjectId} is not a member of tenant {TenantId}",
+                    resolvedAuth.SubjectId, resolvedAuth.TenantId);
+                SetUnauthenticated(context);
             }
         }
 
@@ -286,6 +289,33 @@ public class AuthenticationMiddleware
     }
 
     /// <summary>
+    /// Whether <paramref name="ex"/> is a verdict on the credential, so the request may go on as
+    /// unauthenticated.
+    /// </summary>
+    /// <remarks>
+    /// A database that cannot be read, or a request cancelled while it was being read, says nothing
+    /// about the credential. Those propagate as a server error: a client that sees 401 may discard a
+    /// token that is still valid.
+    /// </remarks>
+    private static bool IsCredentialFailure(Exception ex) =>
+        ex is not (DbException or RetryLimitExceededException or OperationCanceledException);
+
+    /// <summary>
+    /// The tenant whose membership <paramref name="authContext"/> is held to, or null when it is held
+    /// to none.
+    /// </summary>
+    /// <remarks>
+    /// InstanceKey is infrastructure auth with no membership behind it, and a PlatformAccess grant was
+    /// already proven platform-access-marked and pinned to this tenant by
+    /// <see cref="PlatformAccessCookieHandler"/>. An api-secret is another presentation of a direct
+    /// grant, so it is held to its subject's membership exactly as the bearer form is.
+    /// </remarks>
+    private static Guid? HeldToMembership(AuthContext authContext) =>
+        authContext.AuthType is AuthType.InstanceKey or AuthType.PlatformAccess
+            ? null
+            : authContext.TenantId;
+
+    /// <summary>
     /// The scopes a credential carries of its own, before <see cref="MemberScopeMiddleware"/>
     /// intersects them with a membership: its OAuth scopes, else its legacy permissions translated.
     /// </summary>
@@ -336,7 +366,7 @@ public class AuthenticationMiddleware
 
                 // Handler skipped - try next handler
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsCredentialFailure(ex))
             {
                 _logger.LogWarning(ex, "Handler {Handler} threw an exception", handler.Name);
                 // Continue to next handler
