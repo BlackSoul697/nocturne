@@ -459,8 +459,111 @@ public class PropertiesServiceTests
 
         var cob = Assert.IsType<Dictionary<string, object?>>(result["cob"]);
         Assert.Equal(0d, cob["cob"]);
-        Assert.Equal("0", cob["display"]);
+        Assert.Equal(0d, cob["display"]);
         Assert.Equal("COB: 0g", cob["displayLine"]);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_LastBolus_IsTheLegacyTreatmentChartedOnTheReadingsAroundIt()
+    {
+        var bolus = new Nocturne.Core.Models.V4.Bolus { Id = Guid.NewGuid(), Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1_000_000).UtcDateTime, Insulin = 2 };
+        var ddata = new DData
+        {
+            Treatments = [new Treatment { Id = "other", EventType = "Correction Bolus", Mills = 2_000_000, Insulin = 1, Notes = "other" },
+                new Treatment { Id = bolus.Id.ToString(), EventType = "Correction Bolus", Mills = bolus.Mills, Insulin = 2, Notes = "bolus" }],
+            Sgvs = [new Entry { Mills = 700_000, Mgdl = 100 }, new Entry { Mills = 1_300_000, Mgdl = 111 }],
+        };
+
+        var iob = await PropertyReadingAsync("iob", new IobResult { Iob = 1, LastBolus = bolus }, new CobResult(), ddata);
+
+        var lastBolus = iob.GetProperty("lastBolus");
+        lastBolus.GetProperty("notes").GetString().Should().Be("bolus");
+        lastBolus.GetProperty("mgdl").GetDouble().Should().Be(106);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_LastBolus_WithNoReadings_IsChartedAt180()
+    {
+        var bolus = new Nocturne.Core.Models.V4.Bolus { Id = Guid.NewGuid(), Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1_000_000).UtcDateTime, Insulin = 2 };
+        var ddata = new DData
+        {
+            Treatments = [new Treatment { Id = "legacy", EventType = "Correction Bolus", Mills = bolus.Mills, Insulin = 2, Notes = "bolus" }],
+        };
+
+        var iob = await PropertyReadingAsync("iob", new IobResult { Iob = 1, LastBolus = bolus }, new CobResult(), ddata);
+
+        iob.GetProperty("lastBolus").GetProperty("notes").GetString().Should().Be("bolus");
+        iob.GetProperty("lastBolus").GetProperty("mgdl").GetDouble().Should().Be(180);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_Cob_CarriesTheDecayFieldsAndTheTreatmentCob()
+    {
+        var decay = new CobResult { Cob = 12.34, DecayedBy = 0, IsDecaying = 0, CarbsHr = 20, RawCarbImpact = 0 };
+        var cobResult = new CobResult
+        {
+            Cob = 12.34, DecayedBy = 0, IsDecaying = 0, CarbsHr = 20, RawCarbImpact = 0, TreatmentCOB = decay,
+        };
+
+        var cob = await PropertyReadingAsync("cob", new IobResult(), cobResult, new DData());
+
+        cob.GetProperty("display").GetDouble().Should().Be(12.3);
+        cob.GetProperty("displayLine").GetString().Should().Be("COB: 12.3g");
+        cob.GetProperty("carbs_hr").GetDouble().Should().Be(20);
+        cob.GetProperty("decayedBy").GetInt64().Should().Be(0);
+        cob.GetProperty("isDecaying").GetDouble().Should().Be(0);
+        cob.GetProperty("rawCarbImpact").GetDouble().Should().Be(0);
+        cob.GetProperty("lastCarbs").ValueKind.Should().Be(JsonValueKind.Null);
+        cob.GetProperty("treatmentCOB").GetProperty("cob").GetDouble().Should().Be(12.34);
+        cob.GetProperty("treatmentCOB").GetProperty("carbs_hr").GetDouble().Should().Be(20);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_CobWithNoCarbs_ShowsTheProfileAbsorptionRate()
+    {
+        _therapySettings
+            .Setup(x => x.GetCarbAbsorptionRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(25);
+        var noCarbs = new CobResult { DecayedBy = 0, IsDecaying = 0, RawCarbImpact = 0 };
+
+        var cob = await PropertyReadingAsync(
+            "cob", new IobResult(), new CobResult { DecayedBy = 0, IsDecaying = 0, RawCarbImpact = 0, TreatmentCOB = noCarbs }, new DData());
+
+        cob.GetProperty("carbs_hr").GetDouble().Should().Be(25);
+        cob.GetProperty("treatmentCOB").GetProperty("carbs_hr").GetDouble().Should().Be(25);
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_DeviceCob_HasNoDecayFields()
+    {
+        var cob = await PropertyReadingAsync(
+            "cob", new IobResult(), new CobResult { Cob = 5, ReportedByDevice = true }, new DData());
+
+        cob.TryGetProperty("carbs_hr", out _).Should().BeFalse();
+        cob.TryGetProperty("treatmentCOB", out _).Should().BeFalse();
+    }
+
+    private async Task<JsonElement> PropertyReadingAsync(string name, IobResult iob, CobResult cob, DData ddata)
+    {
+        var reader = new Mock<IIobCobReader>();
+        reader
+            .Setup(r => r.ReadTotalAsync(It.IsAny<long>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IobCobReading(iob, cob, new IobCobInputs([], [], [])));
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+        var service = new PropertiesService(
+            _mockDDataService.Object,
+            _mockLogger.Object,
+            reader.Object,
+            Mock.Of<IAr2Service>(),
+            _mockDeviceAgeService.Object,
+            _therapySettings.Object,
+            TimeProvider.System,
+            Options.Create(new DbSizeOptions())
+        );
+
+        return SerializeProperty(await service.GetPropertiesAsync([name], CancellationToken.None), name);
     }
 
     [Fact]
@@ -1351,6 +1454,21 @@ public class PropertiesServiceTests
         var current = basal["current"] as Dictionary<string, object>;
         Assert.NotNull(current);
         Assert.Null(current["treatment"]); // Should not have treatment for expired temp basal
+    }
+
+    [Fact]
+    public async Task GetAllPropertiesAsync_WithNoTempBasal_TempBasalIsTheScheduledRate()
+    {
+        var rate = 9.0;
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDDataWithBasalProfile([new() { Time = "00:00", Value = rate }]));
+
+        var result = await _service.GetAllPropertiesAsync(CancellationToken.None);
+
+        var current = (Dictionary<string, object>)((Dictionary<string, object>)result["basal"])["current"];
+        Convert.ToDouble(current["tempbasal"]).Should().Be(rate);
+        Convert.ToDouble(current["combobolusbasal"]).Should().Be(0);
     }
 
     private DData CreateTestDData()
