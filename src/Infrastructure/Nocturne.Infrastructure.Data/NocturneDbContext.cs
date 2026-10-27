@@ -871,6 +871,22 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 .IsUnique()
                 .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
         }
+
+        // The sync-key lookups also want the user tombstones the unique index above leaves out, for
+        // the same reason as the legacy-id companion above: the planner BitmapOrs the two. Named, as there.
+        foreach (var entity in SyncDedupedEntities.Select(t => modelBuilder.Entity(t)))
+        {
+            var name = $"ix_{entity.Metadata.GetTableName()}_tenant_source_sync_id_user_deleted";
+            entity.HasIndex(
+                    [
+                        nameof(ITenantScoped.TenantId),
+                        nameof(ISyncDedupable.DataSource),
+                        nameof(ISyncDedupable.SyncIdentifier),
+                    ],
+                    name)
+                .HasDatabaseName(name)
+                .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+        }
     }
 
     private static void ConfigureIndexes(ModelBuilder modelBuilder)

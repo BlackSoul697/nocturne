@@ -65,6 +65,18 @@ public class ModelConventionTests
                 && !i.IsUnique
                 && i.GetFilter() == "legacy_id IS NOT NULL AND deleted_by_user");
 
+    [Fact]
+    public void EverySyncDedupedTable_HasTheUserTombstoneSyncKeyIndex() =>
+        AssertFamily(
+            NocturneDbContext.SyncDedupedEntities,
+            "_tenant_source_sync_id_user_deleted",
+            i => Columns(i).SequenceEqual([
+                    nameof(ITenantScoped.TenantId),
+                    nameof(ISyncDedupable.DataSource),
+                    nameof(ISyncDedupable.SyncIdentifier)])
+                && !i.IsUnique
+                && i.GetFilter() == "sync_identifier IS NOT NULL AND deleted_by_user");
+
     /// <summary>
     /// <see cref="Nocturne.Infrastructure.Data.Repositories.V4.V4RepositoryBase{TModel,TEntity}"/>
     /// watermarks each connector sync on the newest timestamp for one tenant and data source. The
