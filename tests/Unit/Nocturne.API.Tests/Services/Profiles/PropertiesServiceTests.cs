@@ -30,6 +30,8 @@ public class PropertiesServiceTests
     private readonly Mock<ILogger<PropertiesService>> _mockLogger;
     private readonly Mock<IDeviceAgeService> _mockDeviceAgeService;
     private readonly Mock<ITherapySettingsResolver> _therapySettings = new();
+    private readonly Mock<ISensitivityResolver> _sensitivity = new();
+    private readonly Mock<ITargetRangeResolver> _targetRange = new();
     private readonly PropertiesService _service;
 
     public PropertiesServiceTests()
@@ -59,6 +61,9 @@ public class PropertiesServiceTests
             mockAr2Service.Object,
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -131,6 +136,9 @@ public class PropertiesServiceTests
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
             TimeProvider.System,
             Options.Create(budget)
         );
@@ -385,6 +393,9 @@ public class PropertiesServiceTests
             ar2Service.Object,
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -559,6 +570,9 @@ public class PropertiesServiceTests
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -716,6 +730,189 @@ public class PropertiesServiceTests
                 It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Bwp_WithAStaleReading_ReportsDataIsNotCurrentAndNoDisplay()
+    {
+        var bwp = await BwpAsync(readingAgeMinutes: 16, iob: 0, hasProfile: true);
+
+        bwp.GetProperty("errors").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("Data isn't current");
+        bwp.GetProperty("scaledSGV").GetDouble().Should().Be(120);
+        bwp.GetProperty("bolusEstimate").GetDouble().Should().Be(0);
+        bwp.TryGetProperty("displayLine", out _).Should().BeFalse(
+            "Nightscout's calc returns before the display fields when there is an error");
+        bwp.TryGetProperty("iob", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Bwp_WithAReadingFifteenMinutesOld_IsStillCurrent()
+    {
+        var bwp = await BwpAsync(readingAgeMinutes: 15, iob: 0, hasProfile: true);
+
+        bwp.TryGetProperty("errors", out _).Should().BeFalse();
+        bwp.GetProperty("displayLine").GetString().Should().Be("BWP: 0U");
+    }
+
+    [Fact]
+    public async Task Bwp_WithoutAProfile_ReportsTheMissingProfile()
+    {
+        var bwp = await BwpAsync(readingAgeMinutes: 0, iob: 0, hasProfile: false);
+
+        bwp.GetProperty("errors").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("Missing need a treatment profile");
+    }
+
+    [Fact]
+    public async Task Bwp_WithNoReading_LeavesOutTheScaledReading()
+    {
+        var bwp = await BwpAsync(readingAgeMinutes: null, iob: 0, hasProfile: true);
+
+        bwp.TryGetProperty("scaledSGV", out _).Should().BeFalse();
+        bwp.GetProperty("errors").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("Data isn't current");
+    }
+
+    [Fact]
+    public async Task Bwp_InRange_MatchesNightscoutsShape()
+    {
+        var bwp = await BwpAsync(readingAgeMinutes: 0, iob: 0, hasProfile: true);
+
+        bwp.GetProperty("effect").GetDouble().Should().Be(0);
+        bwp.GetProperty("outcome").GetDouble().Should().Be(120);
+        bwp.GetProperty("bolusEstimate").GetDouble().Should().Be(0);
+        bwp.GetProperty("iob").GetDouble().Should().Be(0);
+        bwp.GetProperty("belowLowTarget").GetBoolean().Should().BeFalse();
+        bwp.GetProperty("bolusEstimateDisplay").GetString().Should().Be("0");
+        bwp.GetProperty("outcomeDisplay").ValueKind.Should().Be(JsonValueKind.Number);
+        bwp.GetProperty("outcomeDisplay").GetDouble().Should().Be(120);
+        bwp.GetProperty("displayIOB").GetString().Should().Be("0");
+        bwp.GetProperty("effectDisplay").GetDouble().Should().Be(0);
+        bwp.TryGetProperty("aimTarget", out _).Should().BeFalse();
+        bwp.TryGetProperty("tempBasalAdjustment", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Bwp_WithIobBelowTheLowTarget_SuggestsLessInsulinAgainstTheTotalBasal()
+    {
+        // 120 - 3.9 * 100 = -270, which is 370 below the low target of 100.
+        var bwp = await BwpAsync(readingAgeMinutes: 0, iob: 3.9, hasProfile: true);
+
+        bwp.GetProperty("effect").GetDouble().Should().BeApproximately(390, 1e-9);
+        bwp.GetProperty("outcome").GetDouble().Should().BeApproximately(-270, 1e-9);
+        bwp.GetProperty("bolusEstimate").GetDouble().Should().BeApproximately(-3.7, 1e-9);
+        bwp.GetProperty("aimTarget").GetDouble().Should().Be(100);
+        bwp.GetProperty("aimTargetString").GetString().Should().Be("below low");
+        bwp.GetProperty("bolusEstimateDisplay").GetString().Should().Be("-3.70");
+        bwp.GetProperty("displayLine").GetString().Should().Be("BWP: -3.70U");
+        bwp.GetProperty("displayIOB").GetString().Should().Be("3.90");
+        bwp.GetProperty("outcomeDisplay").GetDouble().Should().Be(-270);
+        var adjustment = bwp.GetProperty("tempBasalAdjustment");
+        adjustment.GetProperty("thirtymin").GetInt32().Should().Be(-640, "the profile's total basal is 1 U/h");
+        adjustment.GetProperty("1hour").GetInt32().Should().Be(-270);
+    }
+
+    [Fact]
+    public async Task Bwp_FloorsTheInsulinDisplayToTheHundredth()
+    {
+        // 100 - 0.0611 * 100 = 93.89, which is 6.11 below the low target: an estimate of -0.0611.
+        var bwp = await BwpAsync(readingAgeMinutes: 0, iob: 0.0611, hasProfile: true, mgdl: 100);
+
+        bwp.GetProperty("bolusEstimateDisplay").GetString().Should().Be("-0.07");
+        bwp.GetProperty("displayIOB").GetString().Should().Be("0.06");
+    }
+
+    [Fact]
+    public async Task Bwp_IsNotBuiltForOtherProperties()
+    {
+        _therapySettings.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestDData());
+
+        await _service.GetPropertiesAsync(["iob"], CancellationToken.None);
+
+        _therapySettings.Verify(t => t.HasDataAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task Bwp_WhenTheProfileDoesNotGiveSensitivityOrTargets_ReportsTheMissingFieldsAndNoEstimate(
+        bool hasSensitivity, bool hasTargets)
+    {
+        var bwp = await BwpAsync(
+            readingAgeMinutes: 0, iob: 3.9, hasProfile: true,
+            sensitivity: hasSensitivity ? 100 : null,
+            hasTargets: hasTargets);
+
+        bwp.GetProperty("errors").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("Missing sens, target_high, or target_low treatment profile fields");
+        bwp.GetProperty("bolusEstimate").GetDouble().Should().Be(0);
+        bwp.TryGetProperty("displayLine", out _).Should().BeFalse();
+        bwp.TryGetProperty("tempBasalAdjustment", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Bwp_WhenTheProfileGivesSensitivityAndTargets_EstimatesFromThem()
+    {
+        // 200 - 0.5 * 40 = 180, which is 30 above the high target of 150, so 30 / 40 = 0.75U.
+        var bwp = await BwpAsync(
+            readingAgeMinutes: 0, iob: 0.5, hasProfile: true, mgdl: 200,
+            sensitivity: 40, lowTarget: 90, highTarget: 150);
+
+        bwp.TryGetProperty("errors", out _).Should().BeFalse();
+        bwp.GetProperty("bolusEstimate").GetDouble().Should().Be(0.75);
+        bwp.GetProperty("aimTarget").GetDouble().Should().Be(150);
+        bwp.GetProperty("displayLine").GetString().Should().Be("BWP: 0.75U");
+    }
+
+    private async Task<JsonElement> BwpAsync(
+        int? readingAgeMinutes,
+        double iob,
+        bool hasProfile,
+        double mgdl = 120,
+        double? sensitivity = 100,
+        bool hasTargets = true,
+        double lowTarget = 100,
+        double highTarget = 180)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ddata = CreateTestDData();
+        ddata.Sgvs = readingAgeMinutes is { } age
+            ? [new Entry { Type = "sgv", Mgdl = mgdl, Mills = now.AddMinutes(-age).ToUnixTimeMilliseconds() }]
+            : [];
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+        _therapySettings.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(hasProfile);
+        _sensitivity
+            .Setup(r => r.FindSensitivityAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sensitivity);
+        _targetRange
+            .Setup(r => r.FindBGTargetRangeAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hasTargets ? (lowTarget, highTarget) : null);
+        var reader = new Mock<IIobCobReader>();
+        reader
+            .Setup(r => r.ReadTotalAsync(It.IsAny<long>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IobCobReading(new IobResult { Iob = iob }, new CobResult(), new IobCobInputs([], [], [])));
+        var service = new PropertiesService(
+            _mockDDataService.Object,
+            _mockLogger.Object,
+            reader.Object,
+            Mock.Of<IAr2Service>(),
+            _mockDeviceAgeService.Object,
+            _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
+            new FakeTimeProvider(now),
+            Options.Create(new DbSizeOptions())
+        );
+
+        return SerializeProperty(await service.GetPropertiesAsync(["bwp"], CancellationToken.None), "bwp");
     }
 
     private static JsonElement SerializeProperty(Dictionary<string, object> properties, string name)
@@ -1217,6 +1414,9 @@ public class PropertiesServiceTests
             Mock.Of<IAr2Service>(),
             _mockDeviceAgeService.Object,
             _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
             new FakeTimeProvider(now),
             Options.Create(new DbSizeOptions())
         );

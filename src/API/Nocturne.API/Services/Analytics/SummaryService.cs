@@ -339,7 +339,7 @@ public class SummaryService : ISummaryService
                     && double.TryParse(bwpValue?.ToString(), out var bwp)
                 )
                 {
-                    state.Bwp = Math.Round(bwp * 100) / 100;
+                    state.Bwp = Math.Floor(bwp * 100 + 0.5) / 100;
                 }
             }
 
