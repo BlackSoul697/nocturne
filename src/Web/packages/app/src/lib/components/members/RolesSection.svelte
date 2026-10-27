@@ -67,13 +67,11 @@
 
   // Messages
   let dialogError = $state<string | null>(null);
-  let errorMessage = $state<string | null>(null);
   let successMessage = $state<{ text: string; wash: boolean } | null>(null);
 
   function clearMessages() {
     setTimeout(() => {
       successMessage = null;
-      errorMessage = null;
     }, 3000);
   }
 
@@ -107,6 +105,7 @@
     deleteId = role.id ?? "";
     deleteName = role.name ?? "";
     deleteMemberCount = role.memberCount ?? 0;
+    dialogError = null;
     isDeleteOpen = true;
   }
 
@@ -153,15 +152,14 @@
 
   async function handleDelete() {
     isDeleting = true;
-    errorMessage = null;
+    dialogError = null;
     try {
       await deleteRole(deleteId);
       successMessage = { text: "Role deleted successfully.", wash: false };
       isDeleteOpen = false;
       clearMessages();
     } catch (err) {
-      errorMessage = describeSubmitError(err, "Failed to delete role. Try again.");
-      clearMessages();
+      dialogError = describeSubmitError(err, "Failed to delete role. Try again.");
     } finally {
       isDeleting = false;
     }
@@ -179,8 +177,6 @@
       Create role
     </Button>
   </div>
-
-  <FormError issues={errorMessage} focusOnShow />
 
   {#if successMessage}
     <SuccessBanner wash={successMessage.wash}>{successMessage.text}</SuccessBanner>
@@ -231,6 +227,7 @@
               <Button
                 variant="outline-destructive"
                 size="sm"
+                aria-label="Delete role"
                 onclick={() => openDeleteDialog(role)}
               >
                 <Trash2 class="h-3.5 w-3.5" />
@@ -345,6 +342,7 @@
 <!-- Delete Role Confirmation -->
 <ConfirmDialog
   bind:open={isDeleteOpen}
+  destructive
   title="Delete role"
   confirmLabel="Delete"
   busy={isDeleting}
@@ -357,4 +355,5 @@
       They will lose any permissions granted by this role.
     {/if}
   {/snippet}
+  <FormError issues={dialogError} focusOnShow />
 </ConfirmDialog>
