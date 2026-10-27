@@ -47,17 +47,15 @@ public class ActivityWatermarkSourceScopeTests(ActivityWatermarkSourceScopeTests
     : IAsyncLifetime, IClassFixture<ActivityWatermarkSourceScopeTests.Databases>
 {
     /// <summary>
-    /// Hands each test its own migrated database. Heart-rate and step-count ids are tenant-free
-    /// hashes on a global primary key, so two tests' tenants in one database collide on the same
-    /// client ids and the later publish is dropped. One database per test keeps every assertion
-    /// about its own tenant; the shared container is the fixture.
+    /// One migrated database for the class. Every test publishes the same client ids under its own
+    /// tenant (<c>NocturneDbContext.ScopeKeyToTenant</c>).
     /// </summary>
     public sealed class Databases : IAsyncLifetime
     {
-        public Task<TestDatabase> CreateAsync() =>
-            SharedPostgres.CreateMigratedDatabaseAsync("activity_watermark");
+        public TestDatabase Database { get; private set; } = null!;
 
-        public Task InitializeAsync() => Task.CompletedTask;
+        public async Task InitializeAsync() =>
+            Database = await SharedPostgres.CreateMigratedDatabaseAsync("activity_watermark");
 
         public Task DisposeAsync() => Task.CompletedTask;
     }
@@ -76,7 +74,7 @@ public class ActivityWatermarkSourceScopeTests(ActivityWatermarkSourceScopeTests
 
     public async Task InitializeAsync()
     {
-        var database = await databases.CreateAsync();
+        var database = databases.Database;
         var tenant = Guid.NewGuid();
         await using (var conn = new NpgsqlConnection(database.MigratorConnectionString))
         {
