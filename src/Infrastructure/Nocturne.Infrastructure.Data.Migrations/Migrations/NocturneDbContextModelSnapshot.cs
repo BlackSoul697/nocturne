@@ -904,6 +904,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_body_weights_tenant_source_sync_id")
                         .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_body_weights_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_body_weights_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("body_weights");
                 });
 
@@ -2258,6 +2262,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("TenantId", "DataSource", "Timestamp")
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_heart_rates_tenant_source_timestamp");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_heart_rates_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_heart_rates_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("heart_rates");
                 });
@@ -4695,6 +4703,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_step_counts_tenant_source_timestamp");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_step_counts_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_step_counts_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("step_counts");
                 });
 
@@ -6251,6 +6263,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_aps_snapshots_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_aps_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_aps_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("aps_snapshots");
                 });
 
@@ -6377,6 +6393,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_bg_checks_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_bg_checks_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_bg_checks_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("bg_checks");
                 });
 
@@ -6502,6 +6522,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_basal_injections_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_basal_injections_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_basal_injections_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_basal_injections_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("basal_injections");
                 });
@@ -6972,6 +6996,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_boluses_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_boluses_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_boluses_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("boluses");
                 });
 
@@ -7217,6 +7245,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_carb_intakes_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_carb_intakes_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_carb_intakes_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_carb_intakes_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("carb_intakes");
                 });
@@ -7533,6 +7565,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_device_events_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_device_events_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_device_events_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("device_events");
                 });
 
@@ -7832,6 +7868,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_notes_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_notes_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_notes_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_notes_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("notes");
                 });
@@ -8309,6 +8349,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_profile_activations_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
 
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_profile_activations_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_profile_activations_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
+
                     b.ToTable("profile_activations");
                 });
 
@@ -8495,6 +8539,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_pump_snapshots_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_pump_snapshots_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_pump_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_pump_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("pump_snapshots");
                 });
@@ -8777,6 +8825,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_sensor_glucose_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_sensor_glucose_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_sensor_glucose_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_sensor_glucose_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("sensor_glucose");
                 });
@@ -9068,6 +9120,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_temp_basals_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_temp_basals_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_temp_basals_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_temp_basals_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("temp_basals");
                 });
@@ -9406,6 +9462,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "TenantId", "LegacyId" }, "ix_uploader_snapshots_tenant_legacy_id_user_deleted")
                         .HasDatabaseName("ix_uploader_snapshots_tenant_legacy_id_user_deleted")
                         .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
+
+                    b.HasIndex(new[] { "TenantId", "DataSource", "SyncIdentifier" }, "ix_uploader_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasDatabaseName("ix_uploader_snapshots_tenant_source_sync_id_user_deleted")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_by_user");
 
                     b.ToTable("uploader_snapshots");
                 });
