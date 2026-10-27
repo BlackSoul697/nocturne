@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Nocturne.Core.Contracts.Audit;
@@ -2110,8 +2111,30 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
         });
     }
 
+    /// <summary>
+    /// Keys <paramref name="entity"/> on <c>(TenantId, Id)</c>. The writer derives these ids from the
+    /// client's record id, and two tenants fed from one upstream send the same one. Every lookup by id
+    /// is tenant-filtered, so a global key would reject the second tenant's row without either tenant
+    /// seeing why. EF generates no value for a member of a composite key by convention, so <c>Id</c>
+    /// is marked generated to keep the UUID v7 backstop in <see cref="OnModelCreating"/>, and
+    /// <c>TenantId</c> takes <see cref="ResolvedTenantValueGenerator"/>.
+    /// </summary>
+    private static void ScopeKeyToTenant<TEntity>(EntityTypeBuilder<TEntity> entity)
+        where TEntity : class, ITenantScoped
+    {
+        entity.HasKey(nameof(ITenantScoped.TenantId), "Id");
+        entity.Property<Guid>(nameof(ITenantScoped.TenantId)).HasValueGenerator<ResolvedTenantValueGenerator>();
+        entity.Property<Guid>("Id").ValueGeneratedOnAdd();
+    }
+
     private static void ConfigureEntities(ModelBuilder modelBuilder)
     {
+        ScopeKeyToTenant(modelBuilder.Entity<SettingsEntity>());
+        ScopeKeyToTenant(modelBuilder.Entity<StepCountEntity>());
+        ScopeKeyToTenant(modelBuilder.Entity<HeartRateEntity>());
+        ScopeKeyToTenant(modelBuilder.Entity<BodyWeightEntity>());
+        ScopeKeyToTenant(modelBuilder.Entity<SystemEventEntity>());
+
         modelBuilder
             .Entity<ConnectorFoodEntryEntity>()
             .HasOne(e => e.Food)

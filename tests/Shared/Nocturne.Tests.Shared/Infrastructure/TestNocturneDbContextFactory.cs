@@ -10,9 +10,10 @@ namespace Nocturne.Tests.Shared.Infrastructure;
 /// <see cref="NocturneDbContext"/> instances per call, sharing the same underlying
 /// data store (EF InMemory database name or SQLite connection), tenant and read context
 /// as the seed context, read when each context is created.
-/// Each instance returned from <see cref="CreateAsync"/> suppresses disposal so that
-/// repository <c>await using</c> scopes do not close the shared connection or drop
-/// the in-memory database. The test fixture owns the context lifetime.
+/// A repository's <c>await using</c> disposes what it is handed, which leaves the store alone: EF
+/// closes no connection it did not open, and an InMemory database outlives its contexts. The
+/// contexts are plain <see cref="NocturneDbContext"/>s, since a subclass would get a model of its
+/// own and the InMemory store refuses an entity of another model on a composite-key table.
 /// As an <see cref="IDbContextFactory{TContext}"/> it serves a repository, which pins its own
 /// tenant, over the same store.
 /// </summary>
@@ -63,7 +64,7 @@ public sealed class TestNocturneDbContextFactory : INocturneDbContextFactory, ID
     /// <inheritdoc />
     public ValueTask<NocturneDbContext> CreateForSubjectAsync(Guid subjectId, CancellationToken ct = default)
     {
-        var ctx = new NonDisposingNocturneDbContext(_options)
+        var ctx = new NocturneDbContext(_options)
         {
             ReadContext = _source.ReadContext, TenantId = Guid.Empty, SubjectId = subjectId,
         };
@@ -83,7 +84,7 @@ public sealed class TestNocturneDbContextFactory : INocturneDbContextFactory, ID
     public Action<NocturneDbContext>? Prepare { get; init; }
 
     private ValueTask<NocturneDbContext> Create(Guid tenantId) =>
-        ValueTask.FromResult(Prepared(new NonDisposingNocturneDbContext(_options)
+        ValueTask.FromResult(Prepared(new NocturneDbContext(_options)
         {
             ReadContext = _source.ReadContext, TenantId = tenantId,
         }));
@@ -108,18 +109,6 @@ public sealed class TestNocturneDbContextFactory : INocturneDbContextFactory, ID
     private static readonly FieldInfo DisposedField =
         typeof(DbContext).GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new MissingFieldException("DbContext", "_disposed");
-
-    /// <summary>
-    /// A <see cref="NocturneDbContext"/> subclass that overrides both the synchronous and
-    /// asynchronous <c>Dispose</c> methods to be no-ops. This allows test fixtures to
-    /// control the context lifetime independently of repository <c>await using</c> scopes.
-    /// </summary>
-    private sealed class NonDisposingNocturneDbContext(DbContextOptions<NocturneDbContext> options)
-        : NocturneDbContext(options)
-    {
-        public override void Dispose() { /* suppress — test fixture owns the lifetime */ }
-        public override ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
 }
 
 /// <summary>Wraps a test's context as the factory a per-operation service takes.</summary>
