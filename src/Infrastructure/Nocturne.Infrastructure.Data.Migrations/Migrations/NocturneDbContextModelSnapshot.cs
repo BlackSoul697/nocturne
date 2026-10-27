@@ -804,6 +804,27 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("auth_audit_log");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.BackfillCompletionEntity", b =>
+                {
+                    b.Property<string>("Backfill")
+                        .HasColumnType("text")
+                        .HasColumnName("backfill");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.HasKey("Backfill", "TenantId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("backfill_completions");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.BodyWeightEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9671,6 +9692,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("RefreshToken");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.BackfillCompletionEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.BodyWeightEntity", b =>
