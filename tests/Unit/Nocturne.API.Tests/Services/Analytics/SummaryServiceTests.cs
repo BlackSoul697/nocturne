@@ -539,6 +539,24 @@ public class SummaryServiceTests
         result.Battery.Should().Be(85);
     }
 
+    [Theory]
+    [InlineData(0.125, 0.13)]
+    [InlineData(-0.125, -0.12)]
+    [InlineData(-3.7067, -3.71)]
+    public async Task ConstructStateAsync_RoundsBwpAsJavaScriptMathRound(double bolusEstimate, double expected)
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object>
+            {
+                ["bwp"] = new Dictionary<string, object> { ["bolusEstimate"] = bolusEstimate },
+            });
+
+        var result = await _service.ConstructStateAsync(CancellationToken.None);
+
+        result.Bwp.Should().Be(expected, "Nightscout's summary is Math.round(bolusEstimate * 100) / 100, which rounds a half up");
+    }
+
     [Fact]
     public async Task ConstructStateAsync_WithNoIobCobData_WritesNullIobNullCobAndZeroBwp()
     {

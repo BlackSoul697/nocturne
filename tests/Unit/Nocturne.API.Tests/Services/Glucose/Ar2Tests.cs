@@ -138,6 +138,9 @@ public class Ar2Tests
             _ar2Service,
             Mock.Of<IDeviceAgeService>(),
             Mock.Of<ITherapySettingsResolver>(),
+            Mock.Of<ISensitivityResolver>(),
+            Mock.Of<ITargetRangeResolver>(),
+            new BolusWizardService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );

@@ -35,6 +35,9 @@ public class PropertiesService : IPropertiesService
     private readonly IAr2Service _ar2Service;
     private readonly IDeviceAgeService _deviceAgeService;
     private readonly ITherapySettingsResolver _therapySettings;
+    private readonly ISensitivityResolver _sensitivity;
+    private readonly ITargetRangeResolver _targetRange;
+    private readonly IBolusWizardService _bolusWizard;
     private readonly TimeProvider _time;
     private readonly DbSizeOptions _dbSize;
 
@@ -61,6 +64,9 @@ public class PropertiesService : IPropertiesService
         IAr2Service ar2Service,
         IDeviceAgeService deviceAgeService,
         ITherapySettingsResolver therapySettings,
+        ISensitivityResolver sensitivity,
+        ITargetRangeResolver targetRange,
+        IBolusWizardService bolusWizard,
         TimeProvider time,
         IOptions<DbSizeOptions> dbSize
     )
@@ -71,6 +77,9 @@ public class PropertiesService : IPropertiesService
         _ar2Service = ar2Service;
         _deviceAgeService = deviceAgeService;
         _therapySettings = therapySettings;
+        _sensitivity = sensitivity;
+        _targetRange = targetRange;
+        _bolusWizard = bolusWizard;
         _time = time;
         _dbSize = dbSize.Value;
     }
@@ -221,11 +230,17 @@ public class PropertiesService : IPropertiesService
             // Profile properties
             SetProfileProperties(properties, ddata);
 
-            // Basal properties
-            if (requested == null || requested.Contains("basal"))
-            {
-                await SetBasalPropertiesAsync(properties, ddata, cancellationToken);
-            }
+            var wantsBasal = requested == null || requested.Contains("basal");
+            var wantsBwp = requested == null || requested.Contains("bwp");
+            var tempBasal = wantsBasal || wantsBwp
+                ? await CurrentTempBasalAsync(ddata, now, cancellationToken)
+                : null;
+
+            if (wantsBasal && tempBasal is not null)
+                SetBasalProperties(properties, tempBasal);
+
+            if (wantsBwp)
+                await SetBwpPropertiesAsync(properties, ddata, iobCob, tempBasal, now, cancellationToken);
 
             // DB Size properties
             SetDbSizeProperties(properties, ddata);
@@ -785,73 +800,142 @@ public class PropertiesService : IPropertiesService
     }
 
     /// <summary>
+    /// Nightscout's <c>profile.getTempBasal</c> now, from the newest profile's default store; null
+    /// when it has no basal schedule.
+    /// </summary>
+    private async Task<TempBasalResult?> CurrentTempBasalAsync(
+        DData ddata, long now, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var profile = ddata.Profiles?.OrderByDescending(p => p.Mills).FirstOrDefault();
+            if (profile?.Store == null
+                || !profile.Store.TryGetValue(profile.DefaultProfile ?? "Default", out var profileData)
+                || profileData?.Basal == null)
+                return null;
+
+            var zone = TimeZoneHelper.GetTimeZoneInfoFromId(
+                await _therapySettings.GetTimezoneAsync(ct: cancellationToken));
+            return CalculateTempBasal(now, profileData, ddata.Treatments ?? new List<Treatment>(), zone);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Error calculating the current temp basal");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Set basal properties - exact 1:1 match with legacy basalprofile.js
     /// Provides current basal rate information including temp basal and combo bolus treatments
     /// </summary>
-    private async Task SetBasalPropertiesAsync(
+    private static void SetBasalProperties(Dictionary<string, object> properties, TempBasalResult tempBasalResult)
+    {
+        // Build temp markers like legacy: T for temp basal, C for combo bolus
+        var tempMark = "";
+        tempMark += tempBasalResult.Treatment != null ? "T" : "";
+        tempMark += tempBasalResult.ComboBolusTreatment != null ? "C" : "";
+        tempMark += !string.IsNullOrEmpty(tempMark) ? ": " : "";
+
+        properties["basal"] = new Dictionary<string, object>
+        {
+            ["display"] = $"{tempMark}{tempBasalResult.TotalBasal:F3}U",
+            ["current"] = new Dictionary<string, object>
+            {
+                ["basal"] = tempBasalResult.Basal,
+                ["treatment"] = tempBasalResult.Treatment ?? (object)null!,
+                ["combobolustreatment"] = tempBasalResult.ComboBolusTreatment ?? (object)null!,
+                ["tempbasal"] = tempBasalResult.TempBasal,
+                ["combobolusbasal"] = tempBasalResult.ComboBolusBasal,
+                ["totalbasal"] = tempBasalResult.TotalBasal,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Sets <c>bwp</c> as <c>boluswizardpreview.js</c> does. With an error its <c>calc</c> returns
+    /// before any display field, so only the totals, the reading and the errors are sent.
+    /// </summary>
+    /// <remarks>
+    /// NIGHTSCOUT-COMPAT: the glucose fields (<c>scaledSGV</c>, <c>effect</c>, <c>outcome</c>, their
+    /// displays and <c>aimTarget</c>) are always mg/dl, where Nightscout gives them in the display
+    /// units. The insulin fields do not depend on units. A sensitivity or target the profile does
+    /// not give is sent as 0, Nightscout's falsy value, so the wizard reports the missing fields
+    /// rather than estimate a bolus from the resolvers' defaults.
+    /// </remarks>
+    private async Task SetBwpPropertiesAsync(
         Dictionary<string, object> properties,
         DData ddata,
+        IobCobReading? iobCob,
+        TempBasalResult? tempBasal,
+        long now,
         CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogDebug("SetBasalProperties: Starting");
-            var profile = ddata.Profiles?.OrderByDescending(p => p.Mills).FirstOrDefault();
-            _logger.LogDebug("SetBasalProperties: Profile found: {ProfileFound}", profile != null);
-            if (profile?.Store == null)
+            BwpProfile? profile = null;
+            if (await _therapySettings.HasDataAsync(cancellationToken))
             {
-                _logger.LogDebug("SetBasalProperties: No profile or store, returning");
-                return;
+                var targets = await _targetRange.FindBGTargetRangeAsync(now, ct: cancellationToken);
+                profile = new BwpProfile(
+                    await _sensitivity.FindSensitivityAsync(now, ct: cancellationToken) ?? 0,
+                    targets?.Low ?? 0,
+                    targets?.High ?? 0,
+                    tempBasal?.TotalBasal ?? 0);
             }
+            var sandbox = new BwpSandbox(
+                now,
+                ddata.Sgvs?.MaxBy(s => s.Mills),
+                iobCob?.Iob,
+                iobCob?.Inputs.CarbIntakes ?? [],
+                profile);
 
-            var defaultProfile = profile.DefaultProfile ?? "Default";
-            _logger.LogDebug("SetBasalProperties: Default profile: {DefaultProfile}", defaultProfile);
-            if (
-                !profile.Store.TryGetValue(defaultProfile, out var profileData)
-                || profileData?.Basal == null
-            )
+            var result = _bolusWizard.Calculate(sandbox);
+            var bwp = new Dictionary<string, object>
             {
-                _logger.LogDebug("SetBasalProperties: No profile data or basal, returning");
-                return;
-            }
-
-            var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
-            var treatments = ddata.Treatments ?? new List<Treatment>();
-            _logger.LogDebug("SetBasalProperties: Now: {Now}, Treatments count: {TreatmentCount}", now, treatments.Count);
-
-            var zone = TimeZoneHelper.GetTimeZoneInfoFromId(
-                await _therapySettings.GetTimezoneAsync(ct: cancellationToken));
-            var tempBasalResult = CalculateTempBasal(now, profileData, treatments, zone);
-            _logger.LogDebug("SetBasalProperties: TempBasal result: Basal={Basal}, TotalBasal={TotalBasal}", tempBasalResult.Basal, tempBasalResult.TotalBasal);
-
-            // Build temp markers like legacy: T for temp basal, C for combo bolus
-            var tempMark = "";
-            tempMark += tempBasalResult.Treatment != null ? "T" : "";
-            tempMark += tempBasalResult.ComboBolusTreatment != null ? "C" : "";
-            tempMark += !string.IsNullOrEmpty(tempMark) ? ": " : "";
-
-            var displayValue = $"{tempMark}{tempBasalResult.TotalBasal:F3}U";
-            _logger.LogDebug("SetBasalProperties: Display value: {DisplayValue}", displayValue);
-
-            properties["basal"] = new Dictionary<string, object>
-            {
-                ["display"] = displayValue,
-                ["current"] = new Dictionary<string, object>
-                {
-                    ["basal"] = tempBasalResult.Basal,
-                    ["treatment"] = tempBasalResult.Treatment ?? (object)null!,
-                    ["combobolustreatment"] = tempBasalResult.ComboBolusTreatment ?? (object)null!,
-                    ["tempbasal"] = tempBasalResult.TempBasal,
-                    ["combobolusbasal"] = tempBasalResult.ComboBolusBasal,
-                    ["totalbasal"] = tempBasalResult.TotalBasal,
-                },
+                ["effect"] = result.Effect,
+                ["outcome"] = result.Outcome,
+                ["bolusEstimate"] = result.BolusEstimate,
             };
-            _logger.LogDebug("SetBasalProperties: Basal property set successfully");
+            if (result.ScaledSGV is { } scaled)
+                bwp["scaledSGV"] = scaled;
+
+            if (result.Errors is { Count: > 0 } errors)
+            {
+                bwp["errors"] = errors;
+                properties["bwp"] = bwp;
+                return;
+            }
+
+            bwp["iob"] = result.Iob;
+            bwp["belowLowTarget"] = result.BelowLowTarget;
+            bwp["bolusEstimateDisplay"] = result.BolusEstimateDisplay;
+            bwp["outcomeDisplay"] = result.OutcomeDisplay;
+            bwp["displayIOB"] = result.DisplayIOB;
+            bwp["effectDisplay"] = result.EffectDisplay;
+            bwp["displayLine"] = result.DisplayLine;
+            if (result.AimTarget is { } aimTarget)
+            {
+                bwp["aimTarget"] = aimTarget;
+                bwp["aimTargetString"] = result.AimTargetString!;
+            }
+            if (result.RecentCarbs is { } carbs
+                && ChartedTreatment(ddata, carbs, t => t.Mills == carbs.Mills && t.Carbs == carbs.Carbs) is { } treatment)
+                bwp["recentCarbs"] = treatment;
+            if (result.TempBasalAdjustment is { } adjustment)
+            {
+                bwp["tempBasalAdjustment"] = new Dictionary<string, object>
+                {
+                    ["thirtymin"] = adjustment.ThirtyMin,
+                    ["1hour"] = adjustment.OneHour,
+                };
+            }
+
+            properties["bwp"] = bwp;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "SetBasalProperties failed");
-            // Don't throw, just skip setting basal properties
+            _logger.LogError(ex, "Error setting bwp properties");
         }
     }
 
