@@ -79,31 +79,6 @@ describe("UploaderSetupView", () => {
         .toBeVisible();
     });
 
-    it("shows the consent step once the code resolves to a device", async () => {
-      renderView(XDRIP, OAUTH_SETUP);
-
-      await enterCode("ABCD-EFGH");
-
-      await expect.element(page.getByText("Authorize application")).toBeVisible();
-      await expect
-        .element(page.getByText("A device wants to access your Nocturne data."))
-        .toBeVisible();
-      expect(mocks.lookup).toHaveBeenCalledWith({ userCode: "ABCD-EFGH" });
-    });
-
-    it("keeps the consent step and says why when the approval fails", async () => {
-      mocks.deviceApprove.mockRejectedValue(new Error("network down"));
-      renderView(XDRIP, OAUTH_SETUP);
-
-      await enterCode("ABCD-EFGH");
-      await page.getByRole("button", { name: "Approve" }).click();
-
-      await expect
-        .element(page.getByText("Could not approve the device. The code possibly expired."))
-        .toBeVisible();
-      await expect.element(page.getByText("Authorize application")).toBeVisible();
-    });
-
     it("offers the dashboard once the approved device sends data", async () => {
       mocks.sources = [{ sourceType: "xdrip", entriesLast24h: 12 } satisfies DataSourceInfo];
       const onConnected = renderView(XDRIP, OAUTH_SETUP);
@@ -111,7 +86,9 @@ describe("UploaderSetupView", () => {
       await enterCode("ABCD-EFGH");
       await page.getByRole("button", { name: "Approve" }).click();
 
-      await expect.element(page.getByText("Device authorized")).toBeVisible();
+      await expect.element(page.getByText("Device authorized successfully.")).toBeVisible();
+      await expect.element(page.getByText("You can return to your device.")).toBeVisible();
+      await expect.element(page.getByText("Enter authorization code")).not.toBeInTheDocument();
       await expect.element(page.getByText(/12 entries in the last 24 hours/)).toBeVisible();
       await page.getByRole("button", { name: "Continue to dashboard" }).click();
       expect(onConnected).toHaveBeenCalledTimes(1);

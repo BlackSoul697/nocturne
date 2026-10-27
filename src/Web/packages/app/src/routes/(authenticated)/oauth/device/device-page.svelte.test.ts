@@ -21,7 +21,6 @@ vi.mock("../oauth.remote", async () => {
         clientId: "0192f0e4-0000-7000-8000-000000000001",
         clientDisplayName: "Trio",
         scopes: ["glucose.read", "treatments.readwrite"],
-        isExpired: false,
         deletionAccess: "ReadWrite",
       },
     }),

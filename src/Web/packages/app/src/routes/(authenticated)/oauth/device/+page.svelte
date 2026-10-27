@@ -7,7 +7,6 @@
   import { Input } from "#lib/components/ui/input/index.js";
   import { Separator } from "#lib/components/ui/separator/index.js";
   import Shield from "@lucide/svelte/icons/shield";
-  import ShieldAlert from "@lucide/svelte/icons/shield-alert";
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import Check from "@lucide/svelte/icons/check";
   import X from "@lucide/svelte/icons/x";
@@ -18,11 +17,8 @@
     approveDeviceForm,
     denyDeviceForm,
   } from "../oauth.remote";
-  import {
-    getOAuthScopeDescription,
-    isSensitiveDeviceScope,
-  } from "#lib/constants/oauth-scopes.js";
   import DeviceAppClaimNotice from "#lib/components/auth/DeviceAppClaimNotice.svelte";
+  import DeviceScopeList from "#lib/components/oauth/DeviceScopeList.svelte";
   import DeletionDisclosure from "#lib/components/auth/DeletionDisclosure.svelte";
 
   // Auth guard: redirect to login if not authenticated
@@ -109,26 +105,6 @@
           The device will not be granted access.
         </Card.Description>
       </Card.Header>
-    {:else if deviceInfo?.isExpired}
-      <!-- State 2a: Looked up, but the code is past its expiry -->
-      <Card.Header class="space-y-1 text-center">
-        <div
-          class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted"
-        >
-          <AlertTriangle class="h-6 w-6 text-muted-foreground" />
-        </div>
-        <Card.Title class="text-2xl font-bold">Code expired</Card.Title>
-        <Card.Description>
-          This code is no longer valid. Start the sign-in again on your device to
-          get a new one.
-        </Card.Description>
-      </Card.Header>
-
-      <Card.Content>
-        <Button href="/oauth/device" data-sveltekit-reload class="w-full">
-          Enter a different code
-        </Button>
-      </Card.Content>
     {:else if deviceInfo}
       <!-- State 2: Consent / Approval -->
       <Card.Header class="space-y-1 text-center">
@@ -154,26 +130,7 @@
           <p class="mb-3 text-sm font-medium text-foreground">
             This application is requesting permission to:
           </p>
-          <ul class="space-y-2">
-            {#each scopes as scope, i (i)}
-              {@const sensitive = isSensitiveDeviceScope(scope)}
-              <li class="flex items-start gap-3 text-sm">
-                {#if sensitive}
-                  <ShieldAlert
-                    class="mt-0.5 h-4 w-4 shrink-0 text-destructive"
-                  />
-                  <span class="font-medium text-destructive">
-                    {getOAuthScopeDescription(scope)}
-                  </span>
-                {:else}
-                  <Check class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span class="text-muted-foreground">
-                    {getOAuthScopeDescription(scope)}
-                  </span>
-                {/if}
-              </li>
-            {/each}
-          </ul>
+          <DeviceScopeList {scopes} />
         </div>
 
         <DeletionDisclosure access={deviceInfo.deletionAccess} />
