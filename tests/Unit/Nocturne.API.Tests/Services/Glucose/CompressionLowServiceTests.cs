@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.BackgroundServices;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Profiles;
 using Nocturne.Infrastructure.Data;
@@ -15,6 +16,7 @@ using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Npgsql;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Glucose;
@@ -383,6 +385,68 @@ public class CompressionLowServiceTests
         _stateSpanService.Verify(s => s.DeleteStateSpanAsync(spanId.ToString(), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(r => r.DeleteAsync(accepted.Id, It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(r => r.DeleteAsync(gone.Id, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyBatchAsync_Delete_WhenTheSpanDeleteFails_KeepsTheSuggestionAndThrows()
+    {
+        var accepted = StoredSuggestion(CompressionLowStatus.Accepted, stateSpanId: Guid.NewGuid());
+        _stateSpanService
+            .Setup(s => s.DeleteStateSpanAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException());
+
+        await _sut.Invoking(s => s.ApplyBatchAsync(CompressionLowBatchAction.Delete, [Item(accepted)]))
+            .Should()
+            .ThrowAsync<TimeoutException>();
+
+        _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [MemberData(nameof(ArchiveDatabaseFailures))]
+    public async Task DismissSuggestionAsync_WhenArchivingTheNotificationFailsInTheDatabase_StillCompletes(
+        Exception failure)
+    {
+        var suggestion = PendingSuggestion(stillPendingAfterReview: 0);
+        _notificationService
+            .Setup(n => n.ArchiveBySourceAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<NotificationArchiveReason>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+
+        await _sut.DismissSuggestionAsync(suggestion.Id);
+
+        suggestion.Status.Should().Be(CompressionLowStatus.Dismissed);
+        _repository.Verify(r => r.UpdateAsync(suggestion, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    public static TheoryData<Exception> ArchiveDatabaseFailures() =>
+        new()
+        {
+            new DbUpdateException("write failed"),
+            new NpgsqlException("connection lost"),
+            new RetryLimitExceededException("retries exhausted"),
+        };
+
+    [Fact]
+    public async Task DismissSuggestionAsync_WhenArchivingTheNotificationIsCancelled_Propagates()
+    {
+        var suggestion = PendingSuggestion(stillPendingAfterReview: 0);
+        _notificationService
+            .Setup(n => n.ArchiveBySourceAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<NotificationArchiveReason>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        await _sut.Invoking(s => s.DismissSuggestionAsync(suggestion.Id))
+            .Should()
+            .ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
