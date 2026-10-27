@@ -71,7 +71,6 @@ using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Legacy;
-using Nocturne.Core.Contracts.Monitoring;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Notifications;
 using Nocturne.Core.Contracts.Platform;
@@ -1059,7 +1058,6 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IConfigureOptions<LoopConfiguration>, LoopLegacyEnvironmentConfiguration>();
         services.AddScoped<ILoopService, LoopService>();
         services.AddScoped<IOpenApsService, OpenApsService>();
-        services.AddScoped<IPumpAlertService, PumpAlertService>();
 
         // In-app notifications
         services.AddScoped<IInAppNotificationRepository, InAppNotificationRepository>();

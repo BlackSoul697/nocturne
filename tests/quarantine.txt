@@ -4,10 +4,10 @@
 # its test pass. See tests/README.md.
 #
 # <FullyQualifiedName (no theory arguments)> | <bug>
-Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Empty_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop and differ on dbsize and runtimestate (#1919)
-Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Pretty_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop and differ on dbsize and runtimestate (#1919)
-Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_WithData_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop and differ on dbsize and runtimestate (#1919)
-Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetSpecificProperty_EmptyPath_ReturnsSameShape | v2 properties omit buckets/upbat/pump/openaps/loop and differ on dbsize and runtimestate (#1919)
+Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Empty_ReturnsSameShape | v2 properties omit buckets and the empty bgnow, upbat and ar2 Nightscout sends with no data, and differ on dbsize and runtimestate (#1919)
+Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_Pretty_ReturnsSameShape | v2 properties omit buckets, the empty upbat and direction.display, send scaled as null in readings and ar2 points, and differ on ar2 avgLoss in the last digit, dbsize and runtimestate (#1919)
+Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetAllProperties_WithData_ReturnsSameShape | v2 properties omit buckets, the empty upbat and direction.display, send scaled as null in readings and ar2 points, and differ on ar2 avgLoss in the last digit, dbsize and runtimestate (#1919)
+Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetSpecificProperty_EmptyPath_ReturnsSameShape | v2 properties omit buckets and the empty bgnow, upbat and ar2 Nightscout sends with no data, and differ on dbsize and runtimestate (#1919)
 Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetMultipleProperties_CommaSeparated_ReturnsSameShape | iob.display can differ by 0.01 (about 1 run in 10): the two sides compute IOB at slightly different instants (#2771)
 Nocturne.API.Tests.Integration.Parity.V2.PropertiesParityTests.GetSpecificProperty_Iob_ReturnsSameShape | iob.display can differ by 0.01 (about 1 run in 10): the two sides compute IOB at slightly different instants (#2771)
 Nocturne.API.Tests.Integration.Parity.V2.SummaryParityTests.GetSummary_ComprehensiveData_ReturnsSameShape | state.iob, and state.bwp with it, can drift from Nightscout by 0.01 with the clock (#2771)

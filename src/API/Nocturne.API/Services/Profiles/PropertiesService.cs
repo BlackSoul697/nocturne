@@ -38,6 +38,7 @@ public class PropertiesService : IPropertiesService
     private readonly ISensitivityResolver _sensitivity;
     private readonly ITargetRangeResolver _targetRange;
     private readonly IBolusWizardService _bolusWizard;
+    private readonly IOpenApsService _openAps;
     private readonly TimeProvider _time;
     private readonly DbSizeOptions _dbSize;
 
@@ -67,6 +68,7 @@ public class PropertiesService : IPropertiesService
         ISensitivityResolver sensitivity,
         ITargetRangeResolver targetRange,
         IBolusWizardService bolusWizard,
+        IOpenApsService openAps,
         TimeProvider time,
         IOptions<DbSizeOptions> dbSize
     )
@@ -80,6 +82,7 @@ public class PropertiesService : IPropertiesService
         _sensitivity = sensitivity;
         _targetRange = targetRange;
         _bolusWizard = bolusWizard;
+        _openAps = openAps;
         _time = time;
         _dbSize = dbSize.Value;
     }
@@ -241,6 +244,8 @@ public class PropertiesService : IPropertiesService
 
             if (wantsBwp)
                 await SetBwpPropertiesAsync(properties, ddata, iobCob, tempBasal, now, cancellationToken);
+
+            SetDeviceStatusPluginProperties(properties, ddata, now, requested);
 
             // DB Size properties
             SetDbSizeProperties(properties, ddata);
@@ -500,6 +505,42 @@ public class PropertiesService : IPropertiesService
         };
     }
 
+    private static readonly string[] DeviceStatusPluginProperties = ["pump", "loop", "openaps"];
+
+    /// <summary>
+    /// Sets <c>pump</c>, <c>loop</c> and <c>openaps</c>. Nightscout offers all three on every
+    /// request, and the pump status carries the stamps the other two leave, so all three are
+    /// built whenever one is asked for.
+    /// </summary>
+    private void SetDeviceStatusPluginProperties(
+        Dictionary<string, object> properties, DData ddata, long now, IReadOnlyCollection<string>? requested)
+    {
+        var wanted = DeviceStatusPluginProperties
+            .Where(name => requested == null || requested.Contains(name))
+            .ToList();
+        if (wanted.Count == 0)
+            return;
+
+        try
+        {
+            var offline = _openAps.FindOfflineMarker(
+                ddata.Treatments ?? [], DateTimeOffset.FromUnixTimeMilliseconds(now).UtcDateTime) is not null;
+            var built = DeviceStatusProperties.Build(ddata.DeviceStatus ?? [], now, new PumpPreferences(), offline);
+            var byName = new Dictionary<string, object>
+            {
+                ["pump"] = built.Pump,
+                ["loop"] = built.Loop,
+                ["openaps"] = built.OpenAps,
+            };
+            foreach (var name in wanted)
+                properties[name] = byName[name];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting pump, loop and openaps properties");
+        }
+    }
+
     /// <summary>
     /// Set AR2 prediction properties with full 1:1 legacy compatibility
     /// </summary>
@@ -644,12 +685,12 @@ public class PropertiesService : IPropertiesService
     }
 
     // Nightscout sets nothing for 0% without a voltage, and falls through to 25 for 0% with one.
-    private static int? UpbatLevel(BatteryReading reading) =>
+    internal static int? UpbatLevel(BatteryReading reading) =>
         reading.Battery != 0 ? reading.Level
         : reading.Voltage is > 0 ? 25
         : null;
 
-    private static string UpbatDisplay(BatteryReading reading) =>
+    internal static string UpbatDisplay(BatteryReading reading) =>
         reading.Battery == 0 && reading.Voltage is > 0
             ? BatteryReading.FormatVoltage(reading.Voltage.Value)
             : $"{reading.Battery}%";
@@ -657,7 +698,7 @@ public class PropertiesService : IPropertiesService
     private static string DeviceKey(DeviceStatus status) =>
         string.IsNullOrEmpty(status.Device) ? "unknown" : status.Device;
 
-    private static BatteryReading ToBatteryReading(DeviceStatus status) =>
+    internal static BatteryReading ToBatteryReading(DeviceStatus status) =>
         new()
         {
             Device = DeviceKey(status),
