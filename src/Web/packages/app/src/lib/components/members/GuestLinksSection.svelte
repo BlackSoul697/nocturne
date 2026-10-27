@@ -387,13 +387,7 @@
                 </div>
               {/if}
 
-              {#if createError}
-                <div
-                  class="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3"
-                >
-                  <p class="text-sm text-destructive">{createError}</p>
-                </div>
-              {/if}
+              <FormError issues={createError} focusOnShow />
 
               <div class="flex gap-3">
                 <Button

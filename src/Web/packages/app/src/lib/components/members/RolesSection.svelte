@@ -20,7 +20,6 @@
   import Loader2 from "@lucide/svelte/icons/loader-circle";
   import Users from "@lucide/svelte/icons/users";
   import Lock from "@lucide/svelte/icons/lock";
-  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import {
     getRoles,
     createRole,
@@ -181,12 +180,7 @@
     </Button>
   </div>
 
-  {#if errorMessage}
-    <div class="flex items-start gap-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
-      <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-      <p class="text-sm text-destructive">{errorMessage}</p>
-    </div>
-  {/if}
+  <FormError issues={errorMessage} focusOnShow />
 
   {#if successMessage}
     <SuccessBanner wash={successMessage.wash}>{successMessage.text}</SuccessBanner>
