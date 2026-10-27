@@ -537,6 +537,23 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     ];
 
     /// <summary>
+    /// V4 record tables whose lists read one tenant newest-first by timestamp, then id on the tables
+    /// that tie-break on it.
+    /// </summary>
+    internal static readonly Type[] V4SortedListEntities =
+    [
+        typeof(SensorGlucoseEntity),
+        typeof(MeterGlucoseEntity),
+        typeof(CalibrationEntity),
+        typeof(BolusEntity),
+        typeof(CarbIntakeEntity),
+        typeof(BGCheckEntity),
+        typeof(NoteEntity),
+        typeof(DeviceEventEntity),
+        .. V4SnapshotEntities,
+    ];
+
+    /// <summary>
     /// V4 record tables whose legacy id is an insert-only dedup key, adding the span-shaped
     /// <see cref="TempBasalEntity"/>. The snapshots belong here too: their sync-identifier
     /// uniqueness is filtered on a non-null identifier, which a legacy import never carries.
@@ -760,16 +777,19 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 .HasFilter("deleted_at IS NULL");
         }
 
-        // GetLatestAsync and GetLatestBeforeAsync read a snapshot table newest-first for one
-        // tenant, with no data source to pin, so the watermark index above cannot serve them.
-        // ix_<table>_timestamp answers them today at 2,452 to 20,368 index tuples read per scan.
-        foreach (var entity in V4SnapshotEntities.Select(t => modelBuilder.Entity(t)))
+        // A V4 list reads one tenant newest-first by timestamp, then id on the tables that tie-break
+        // on it. With no index leading (tenant_id, timestamp), a LIMIT read reads every live row and
+        // sorts; the three tables that keep such an index for the dedup read still gain the id
+        // tie-break and the live-rows predicate here. GetLatestAsync and GetLatestBeforeAsync on a
+        // snapshot table walk the same index.
+        foreach (var entity in V4SortedListEntities.Select(t => modelBuilder.Entity(t)))
         {
             entity.HasIndex(
                     nameof(ITenantScoped.TenantId),
-                    nameof(IV4TimeSeriesEntity.Timestamp))
-                .HasDatabaseName($"ix_{entity.Metadata.GetTableName()}_tenant_timestamp")
-                .IsDescending(false, true)
+                    nameof(IV4TimeSeriesEntity.Timestamp),
+                    nameof(IIdentified.Id))
+                .HasDatabaseName($"ix_{entity.Metadata.GetTableName()}_tenant_timestamp_id")
+                .IsDescending(false, true, true)
                 .HasFilter("deleted_at IS NULL");
         }
 
@@ -780,6 +800,12 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(e => new { e.TenantId, e.AidAlgorithm, e.Timestamp })
             .HasDatabaseName("ix_aps_snapshots_tenant_algorithm_timestamp")
             .IsDescending(false, false, true)
+            .HasFilter("deleted_at IS NULL");
+
+        modelBuilder.Entity<StateSpanEntity>()
+            .HasIndex(nameof(ITenantScoped.TenantId), nameof(StateSpanEntity.StartTimestamp), nameof(IIdentified.Id))
+            .HasDatabaseName("ix_state_spans_tenant_start_id")
+            .IsDescending(false, true, true)
             .HasFilter("deleted_at IS NULL");
 
         // The device status list walks extras newest-first beside the snapshots; see
@@ -1832,6 +1858,8 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasDatabaseName("ix_sensor_glucose_patient_device_id")
             .HasFilter("patient_device_id IS NOT NULL");
 
+        // These also serve the dedup unlinked read in DeduplicationService, which ranges on timestamp
+        // over soft-deleted rows too and so cannot use the partial list indexes.
         modelBuilder
             .Entity<SensorGlucoseEntity>()
             .HasIndex(e => new { e.TenantId, e.Timestamp })
@@ -1842,6 +1870,12 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .Entity<BolusEntity>()
             .HasIndex(e => new { e.TenantId, e.Timestamp })
             .HasDatabaseName("ix_boluses_tenant_timestamp")
+            .IsDescending(false, true);
+
+        modelBuilder
+            .Entity<CarbIntakeEntity>()
+            .HasIndex(e => new { e.TenantId, e.Timestamp })
+            .HasDatabaseName("ix_carb_intakes_tenant_timestamp")
             .IsDescending(false, true);
 
         // TimezoneTimeline: one zone-change boundary per tenant per instant (the ordered list is
@@ -1865,12 +1899,6 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(e => new { e.TenantId, e.Connector, e.Source, e.ObservedAt })
             .HasDatabaseName("ix_device_clock_observations_tenant_connector_source_observed")
             .IsUnique();
-
-        modelBuilder
-            .Entity<CarbIntakeEntity>()
-            .HasIndex(e => new { e.TenantId, e.Timestamp })
-            .HasDatabaseName("ix_carb_intakes_tenant_timestamp")
-            .IsDescending(false, true);
 
         // Latest-of-a-kind lookups (device age, alert enrichment) filter on tenant + event type
         // and take the newest row. Without the event_type column the plan walks the whole
