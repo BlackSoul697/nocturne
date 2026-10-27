@@ -12427,6 +12427,7 @@ msgid "Update the role name, description, and permissions."
 msgstr "Update the role name, description, and permissions."
 
 #: src/lib/components/members/RolesSection.svelte
+#: src/lib/components/members/RolesSection.svelte
 msgid "Delete role"
 msgstr "Delete role"
 
