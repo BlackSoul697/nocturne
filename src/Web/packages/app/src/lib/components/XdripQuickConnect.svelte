@@ -3,7 +3,7 @@
   import { browser } from "$app/env";
   import QRCode from "qrcode";
   import { getActiveDataSources } from "#lib/api/generated/services.generated.remote.js";
-  import type { DataSourceInfo } from "#lib/api/generated/nocturne-api-client.js";
+  import type { DataSourceInfo, DeviceCodeInfo } from "#lib/api/generated/nocturne-api-client.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Separator } from "#lib/components/ui/separator/index.js";
@@ -49,18 +49,13 @@
   let deviceCodeInput = $state("");
   let deviceLookupLoading = $state(false);
   let deviceLookupError = $state<string | null>(null);
-  let deviceInfo = $state<{
-    userCode: string;
-    clientId: string;
-    displayName: string | null;
-    scopes: string[];
-  } | null>(null);
+  let deviceInfo = $state<DeviceCodeInfo | null>(null);
   let deviceApproveLoading = $state(false);
   let deviceApproved = $state(false);
   let deviceDenied = $state(false);
 
   const deviceAppName = $derived(
-    deviceInfo ? (deviceInfo.displayName ?? deviceInfo.clientId) : "",
+    deviceInfo ? (deviceInfo.clientDisplayName ?? deviceInfo.clientId ?? "") : "",
   );
 
   onMount(async () => {
@@ -139,12 +134,7 @@
         deviceLookupError = "Invalid or expired device code.";
         return;
       }
-      deviceInfo = {
-        userCode: info.userCode ?? code,
-        clientId: info.clientId ?? "",
-        displayName: info.clientDisplayName ?? null,
-        scopes: (info.scopes ?? []).filter(Boolean),
-      };
+      deviceInfo = info;
     } catch (err) {
       deviceLookupError = describeSubmitError(
         err,
@@ -159,7 +149,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await deviceApprove({ user_code: deviceInfo.userCode, approved: true });
+      await deviceApprove({ user_code: deviceInfo.userCode ?? deviceCodeInput.trim(), approved: true });
       deviceApproved = true;
       startPolling();
     } catch (err) {
@@ -173,7 +163,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await deviceApprove({ user_code: deviceInfo.userCode, approved: false });
+      await deviceApprove({ user_code: deviceInfo.userCode ?? deviceCodeInput.trim(), approved: false });
       deviceDenied = true;
     } catch (err) {
       deviceLookupError = describeSubmitError(err, "Failed to deny the request.");
@@ -288,7 +278,7 @@
         <div>
           <p class="text-muted-foreground mb-2 text-xs font-medium">Requested permissions:</p>
           <ul class="space-y-1">
-            {#each deviceInfo.scopes as scope (scope)}
+            {#each (deviceInfo.scopes ?? []).filter(Boolean) as scope (scope)}
               <li class="flex items-start gap-2 text-sm">
                 <Check class="mt-0.5 h-3 w-3 shrink-0 text-primary" />
                 <span class="text-muted-foreground">

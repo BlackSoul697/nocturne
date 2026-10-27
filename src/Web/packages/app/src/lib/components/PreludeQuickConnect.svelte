@@ -14,6 +14,7 @@
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import X from "@lucide/svelte/icons/x";
   import { buildPreludeDeepLink, buildConnectPageUrl } from "#lib/utils/prelude-links.js";
+  import type { DeviceCodeInfo } from "#lib/api/generated/nocturne-api-client.js";
   import { getDeviceInfo } from "#routes/(authenticated)/oauth/oauth.remote.js";
   import { deviceApprove } from "#lib/api/generated/oAuths.generated.remote.js";
   import { getOAuthScopeDescription } from "#lib/constants/oauth-scopes.js";
@@ -37,18 +38,13 @@
   let deviceCodeInput = $state("");
   let deviceLookupLoading = $state(false);
   let deviceLookupError = $state<string | null>(null);
-  let deviceInfo = $state<{
-    userCode: string;
-    clientId: string;
-    displayName: string | null;
-    scopes: string[];
-  } | null>(null);
+  let deviceInfo = $state<DeviceCodeInfo | null>(null);
   let deviceApproveLoading = $state(false);
   let deviceApproved = $state(false);
   let deviceDenied = $state(false);
 
   const deviceAppName = $derived(
-    deviceInfo ? (deviceInfo.displayName ?? deviceInfo.clientId) : "",
+    deviceInfo ? (deviceInfo.clientDisplayName ?? deviceInfo.clientId ?? "") : "",
   );
 
   onMount(async () => {
@@ -79,12 +75,7 @@
         deviceLookupError = "Invalid or expired device code.";
         return;
       }
-      deviceInfo = {
-        userCode: info.userCode ?? code,
-        clientId: info.clientId ?? "",
-        displayName: info.clientDisplayName ?? null,
-        scopes: (info.scopes ?? []).filter(Boolean),
-      };
+      deviceInfo = info;
     } catch (err) {
       deviceLookupError = describeSubmitError(
         err,
@@ -99,7 +90,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await deviceApprove({ user_code: deviceInfo.userCode, approved: true });
+      await deviceApprove({ user_code: deviceInfo.userCode ?? deviceCodeInput.trim(), approved: true });
       deviceApproved = true;
     } catch (err) {
       deviceLookupError = describeSubmitError(err, "Could not approve the device. The code possibly expired.");
@@ -112,7 +103,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await deviceApprove({ user_code: deviceInfo.userCode, approved: false });
+      await deviceApprove({ user_code: deviceInfo.userCode ?? deviceCodeInput.trim(), approved: false });
       deviceDenied = true;
     } catch (err) {
       deviceLookupError = describeSubmitError(err, "Failed to deny the request.");
@@ -217,7 +208,7 @@
         <div>
           <p class="text-muted-foreground mb-2 text-xs font-medium">Requested permissions:</p>
           <ul class="space-y-1">
-            {#each deviceInfo.scopes as scope (scope)}
+            {#each (deviceInfo.scopes ?? []).filter(Boolean) as scope (scope)}
               <li class="flex items-start gap-2 text-sm">
                 <Check class="mt-0.5 h-3 w-3 shrink-0 text-primary" />
                 <span class="text-muted-foreground">
