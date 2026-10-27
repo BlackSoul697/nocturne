@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Configuration;
+using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Profiles;
 using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Devices;
@@ -64,6 +65,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -139,6 +141,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             TimeProvider.System,
             Options.Create(budget)
         );
@@ -396,6 +399,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -573,6 +577,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
@@ -836,6 +841,48 @@ public class PropertiesServiceTests
         _therapySettings.Verify(t => t.HasDataAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task PumpLoopAndOpenaps_AreNotBuiltForOtherProperties()
+    {
+        var ddata = CreateTestDData();
+        ddata.DeviceStatus =
+        [
+            new DeviceStatus
+            {
+                Device = "openaps://rig",
+                Mills = DateTimeOffset.UtcNow.AddMinutes(-2).ToUnixTimeMilliseconds(),
+                Pump = new PumpStatus { Reservoir = 100 },
+            },
+        ];
+        _mockDDataService
+            .Setup(x => x.GetDDataAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ddata);
+        var openAps = new Mock<IOpenApsService>();
+        var service = new PropertiesService(
+            _mockDDataService.Object,
+            _mockLogger.Object,
+            TestIobCobReader.Empty(),
+            Mock.Of<IAr2Service>(),
+            _mockDeviceAgeService.Object,
+            _therapySettings.Object,
+            _sensitivity.Object,
+            _targetRange.Object,
+            new BolusWizardService(),
+            openAps.Object,
+            TimeProvider.System,
+            Options.Create(new DbSizeOptions())
+        );
+
+        var others = await service.GetPropertiesAsync(["iob", "cob"], CancellationToken.None);
+        var pump = await service.GetPropertiesAsync(["pump"], CancellationToken.None);
+
+        others.Keys.Should().NotContain(["pump", "loop", "openaps"]);
+        openAps.Verify(
+            o => o.FindOfflineMarker(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<DateTime>()),
+            Times.Once);
+        pump.Keys.Should().Equal("pump");
+    }
+
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -908,6 +955,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             new FakeTimeProvider(now),
             Options.Create(new DbSizeOptions())
         );
@@ -1417,6 +1465,7 @@ public class PropertiesServiceTests
             _sensitivity.Object,
             _targetRange.Object,
             new BolusWizardService(),
+            new OpenApsService(),
             new FakeTimeProvider(now),
             Options.Create(new DbSizeOptions())
         );

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Configuration;
+using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Profiles;
 using Nocturne.API.Services.Treatments;
@@ -141,6 +142,7 @@ public class Ar2Tests
             Mock.Of<ISensitivityResolver>(),
             Mock.Of<ITargetRangeResolver>(),
             new BolusWizardService(),
+            new OpenApsService(),
             TimeProvider.System,
             Options.Create(new DbSizeOptions())
         );
