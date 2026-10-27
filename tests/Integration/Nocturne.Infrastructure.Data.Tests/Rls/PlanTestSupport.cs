@@ -29,7 +29,7 @@ internal static class PlanTestSupport
         return JsonDocument.Parse(json).RootElement.Clone();
     }
 
-    internal static IEnumerable<string> Descendants(JsonElement element, string property)
+    internal static IEnumerable<string> Descendants(this JsonElement element, string property)
     {
         if (element.ValueKind == JsonValueKind.Object)
         {
@@ -37,14 +37,14 @@ internal static class PlanTestSupport
             {
                 if (p.Name == property && p.Value.ValueKind == JsonValueKind.String)
                     yield return p.Value.GetString()!;
-                foreach (var d in Descendants(p.Value, property))
+                foreach (var d in p.Value.Descendants(property))
                     yield return d;
             }
         }
         else if (element.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in element.EnumerateArray())
-            foreach (var d in Descendants(item, property))
+            foreach (var d in item.Descendants(property))
                 yield return d;
         }
     }

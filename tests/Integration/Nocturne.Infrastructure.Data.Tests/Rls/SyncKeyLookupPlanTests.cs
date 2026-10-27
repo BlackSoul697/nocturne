@@ -76,8 +76,8 @@ public class SyncKeyLookupPlanTests(RlsCompletenessFixture fx)
         (await lookup(new TestNocturneDbContextFactory(ctx), "sync-7777")).Should().NotBeNull();
 
         var plan = await PlanTestSupport.ExplainAsync(conn, capture.Command!);
-        PlanTestSupport.Descendants(plan, "Node Type").Should().NotContain("Seq Scan", plan.ToString());
-        PlanTestSupport.Descendants(plan, "Index Name").Should().Equal(
+        plan.Descendants("Node Type").Should().NotContain("Seq Scan", plan.ToString());
+        plan.Descendants("Index Name").Should().Equal(
             [$"ix_{table}_tenant_source_sync_id"], $"the sync key has a partial unique index to probe; plan: {plan}");
     }
 }
