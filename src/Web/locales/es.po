@@ -118,11 +118,8 @@ msgstr "Reconexiones:"
 #~ msgid "Connection Error:"
 #~ msgstr "Error de conexión:"
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
-msgid "Invalid or expired device code."
-msgstr "Código de dispositivo no válido o caducado."
+#~ msgid "Invalid or expired device code."
+#~ msgstr "Código de dispositivo no válido o caducado."
 
 #~ msgid "Invalid or expired device code. Please check and try again."
 #~ msgstr "Código de dispositivo no válido o caducado. Compruébalo e inténtalo de nuevo."
@@ -130,9 +127,7 @@ msgstr "Código de dispositivo no válido o caducado."
 #~ msgid "Failed to approve. The code may have expired."
 #~ msgstr "No se pudo aprobar. Es posible que el código haya caducado."
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "Failed to deny the request."
 msgstr "No se pudo denegar la solicitud."
 
@@ -173,45 +168,36 @@ msgstr "O abre este enlace en tu teléfono"
 msgid "If xDrip+ shows an authorization code, enter it here."
 msgstr "Si xDrip+ muestra un código de autorización, introdúcelo aquí."
 
-#: src/lib/components/XdripQuickConnect.svelte
-msgid "<0/> Device authorized successfully. Waiting for data..."
-msgstr "<0/> Dispositivo autorizado correctamente. Esperando datos..."
+#~ msgid "<0/> Device authorized successfully. Waiting for data..."
+#~ msgstr "<0/> Dispositivo autorizado correctamente. Esperando datos..."
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "<0/> Authorization denied. The device will not be granted access."
 msgstr "<0/> Autorización denegada. El dispositivo no tendrá acceso."
 
 #~ msgid "<0/> wants access"
 #~ msgstr "<0/> solicita acceso"
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-msgid "Requested permissions:"
-msgstr "Permisos solicitados:"
+#~ msgid "Requested permissions:"
+#~ msgstr "Permisos solicitados:"
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/members/PendingRequestsList.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 msgid "<0/> Deny"
 msgstr "<0/> Denegar"
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/members/PendingRequestsList.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 msgid "<0/> Approve"
 msgstr "<0/> Aprobar"
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
@@ -1844,7 +1830,6 @@ msgid "<0/> Complete"
 msgstr "<0/> Completar"
 
 #: src/lib/components/auth/RecoveryCodes.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Continue"
 msgstr "Continuar"
 
@@ -3092,10 +3077,8 @@ msgstr "<0/> Volver a fuentes de datos"
 #~ msgid "Device Authorized"
 #~ msgstr "Dispositivo autorizado"
 
-#. 0: app ? getUploaderName(app) \\: ''
-#: src/lib/components/connectors/UploaderSetupView.svelte
-msgid "{0} is now connected. You can return to your device."
-msgstr "{0} ya está conectado. Puedes volver a tu dispositivo."
+#~ msgid "{0} is now connected. You can return to your device."
+#~ msgstr "{0} ya está conectado. Puedes volver a tu dispositivo."
 
 #~ msgid "Receiving Data"
 #~ msgstr "Recibiendo datos"
@@ -3122,7 +3105,6 @@ msgstr "La primera lectura de glucosa puede tardar unos minutos en llegar. Esta 
 #~ msgid "Authorization Denied"
 #~ msgstr "Autorización denegada"
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "The device will not be granted access."
 msgstr "El dispositivo no tendrá acceso."
@@ -3137,7 +3119,7 @@ msgstr "<0/> quiere acceder a tus datos de Nocturne."
 #~ msgid "This application is not in the Nocturne known app directory. Only approve if you trust it."
 #~ msgstr "Esta aplicación no figura en el directorio de aplicaciones conocidas de Nocturne. Apruébala solo si confías en ella."
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "This application is requesting permission to:"
@@ -15199,9 +15181,8 @@ msgstr "<0/> Abrir en Prelude"
 msgid "Prelude displays a short code after it scans. Enter it here to approve."
 msgstr "Prelude muestra un código corto después de escanear. Introdúcelo aquí para aprobarlo."
 
-#: src/lib/components/PreludeQuickConnect.svelte
-msgid "<0/> Device authorized successfully. Prelude is now connected."
-msgstr "<0/> Dispositivo autorizado correctamente. Prelude ya está conectado."
+#~ msgid "<0/> Device authorized successfully. Prelude is now connected."
+#~ msgstr "<0/> Dispositivo autorizado correctamente. Prelude ya está conectado."
 
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 msgid "This application is not in the Nocturne known app directory. Only approve if you trust this application."
@@ -20175,13 +20156,11 @@ msgstr "<0/> Canales"
 #~ msgid "Code Expired"
 #~ msgstr "Código caducado"
 
-#: src/routes/(authenticated)/oauth/device/+page.svelte
-msgid "This code is no longer valid. Start the sign-in again on your device to get a new one."
-msgstr "Este código ya no es válido. Inicia de nuevo el acceso en tu dispositivo para obtener otro."
+#~ msgid "This code is no longer valid. Start the sign-in again on your device to get a new one."
+#~ msgstr "Este código ya no es válido. Inicia de nuevo el acceso en tu dispositivo para obtener otro."
 
-#: src/routes/(authenticated)/oauth/device/+page.svelte
-msgid "Enter a different code"
-msgstr "Introduce otro código"
+#~ msgid "Enter a different code"
+#~ msgstr "Introduce otro código"
 
 #~ msgid "<0>Green zone</0> ({0}) is the consensus target range. The consensus target is at least 70% of time in this zone."
 #~ msgstr ""
@@ -25401,8 +25380,7 @@ msgstr ""
 msgid "Remove the {0} rejected uploads on this page? Export them first to keep a copy. They are not in your data and cannot be recovered once cleared. Uploads not on this page are kept."
 msgstr ""
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "A device wants access"
 msgstr ""
 
@@ -25421,7 +25399,6 @@ msgstr ""
 msgid "Enter the current code from your authenticator app to finish signing in."
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "A device wants to access your Nocturne data."
 msgstr ""
@@ -32305,15 +32282,12 @@ msgstr ""
 msgid "Connection error:"
 msgstr ""
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "Invalid or expired device code. Check the code and try again."
 msgstr ""
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-#: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
 msgid "Could not approve the device. The code possibly expired."
 msgstr ""
 
@@ -33246,7 +33220,6 @@ msgstr ""
 msgid "<0/> Add an uploader"
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "Device authorized"
 msgstr ""
@@ -33261,12 +33234,10 @@ msgstr ""
 msgid "Continue to dashboard"
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "Authorization denied"
 msgstr ""
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "Authorize application"
@@ -34555,9 +34526,8 @@ msgstr ""
 msgid "Link a device"
 msgstr ""
 
-#: src/routes/(authenticated)/oauth/device/+page.svelte
-msgid "Code expired"
-msgstr ""
+#~ msgid "Code expired"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 msgid "Error loading AGP report"
@@ -38342,4 +38312,12 @@ msgstr ""
 
 #: src/lib/forms/submit-messages.svelte.ts
 msgid "That item no longer exists. Refresh the page to see what's there now."
+msgstr ""
+
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
+msgid "Device authorized successfully."
+msgstr ""
+
+#: src/lib/components/oauth/DeviceCodeApproval.svelte
+msgid "You can return to your device."
 msgstr ""
