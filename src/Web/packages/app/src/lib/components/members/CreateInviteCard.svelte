@@ -26,7 +26,7 @@
   import { Artwork } from "water-ui";
   import { createInvite } from "#lib/api/generated/memberInvites.generated.remote.js";
   import type { TenantRoleDto } from "#lib/api/generated/nocturne-api-client.js";
-  import { describeSubmitError } from "#lib/forms/index.js";
+  import { describeSubmitError, FormError } from "#lib/forms/index.js";
 
   interface Props {
     roles: TenantRoleDto[];
@@ -326,13 +326,7 @@
           </div>
         </div>
 
-        {#if errorMessage}
-          <div
-            class="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3"
-          >
-            <p class="text-sm text-destructive">{errorMessage}</p>
-          </div>
-        {/if}
+        <FormError issues={errorMessage} focusOnShow />
 
         <div class="flex gap-3">
           <Button

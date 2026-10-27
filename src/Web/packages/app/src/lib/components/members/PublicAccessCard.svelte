@@ -29,6 +29,7 @@
   import { categoriesIn, formatList } from "./data-categories";
   import { retainQuery } from "#lib/api/retain-query.svelte.js";
   import { describeSubmitError } from "#lib/forms/submit-error.js";
+  import { FormError } from "#lib/forms/index.js";
 
   let { onEnabled }: { onEnabled?: () => void } = $props();
 
@@ -231,11 +232,7 @@
       />
     </div>
 
-    {#if errorMessage}
-      <div class="mx-5 mb-2 rounded-md border border-destructive/20 bg-destructive/5 p-3 @md:mx-6">
-        <p class="text-sm text-destructive">{errorMessage}</p>
-      </div>
-    {/if}
+    <FormError issues={errorMessage} focusOnShow class="mx-5 mb-2 @md:mx-6" />
 
     {#if enabled}
       <div class="space-y-6 border-t border-border px-5 py-5 @md:px-6">
