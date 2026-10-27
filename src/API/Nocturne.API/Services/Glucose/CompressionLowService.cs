@@ -1,3 +1,6 @@
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.Core.Contracts.Identity;
@@ -183,21 +186,12 @@ public class CompressionLowService : ICompressionLowService
         // If accepted, delete the associated state span
         if (suggestion.Status == CompressionLowStatus.Accepted && suggestion.StateSpanId.HasValue)
         {
-            try
-            {
-                await _stateSpanService.DeleteStateSpanAsync(
-                    suggestion.StateSpanId.Value.ToString(),
-                    cancellationToken);
-                _logger.LogInformation(
-                    "Deleted StateSpan {StateSpanId} for suggestion {SuggestionId}",
-                    suggestion.StateSpanId, id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to delete StateSpan {StateSpanId} for suggestion {SuggestionId}",
-                    suggestion.StateSpanId, id);
-            }
+            await _stateSpanService.DeleteStateSpanAsync(
+                suggestion.StateSpanId.Value.ToString(),
+                cancellationToken);
+            _logger.LogInformation(
+                "Deleted StateSpan {StateSpanId} for suggestion {SuggestionId}",
+                suggestion.StateSpanId, id);
         }
 
         await _repository.DeleteAsync(id, cancellationToken);
@@ -295,9 +289,20 @@ public class CompressionLowService : ICompressionLowService
                 reason: NotificationArchiveReason.Completed,
                 cancellationToken: cancellationToken);
         }
-        catch (Exception ex)
+        catch (DbUpdateException ex)
         {
-            _logger.LogWarning(ex, "Failed to archive compression low notification for {NightOf}", nightOf);
+            LogArchiveFailure(ex, nightOf);
+        }
+        catch (DbException ex)
+        {
+            LogArchiveFailure(ex, nightOf);
+        }
+        catch (RetryLimitExceededException ex)
+        {
+            LogArchiveFailure(ex, nightOf);
         }
     }
+
+    private void LogArchiveFailure(Exception ex, DateOnly nightOf) =>
+        _logger.LogWarning(ex, "Failed to archive compression low notification for {NightOf}", nightOf);
 }
