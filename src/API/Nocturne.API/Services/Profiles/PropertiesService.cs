@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using Nocturne.API.Configuration;
 using Nocturne.Core.Clinical.Schedules;
@@ -191,9 +193,9 @@ public class PropertiesService : IPropertiesService
             var iobCob = await ReadIobCobAsync(now);
             if (iobCob is not null)
             {
-                SetIobProperties(properties, iobCob.Iob, now);
+                SetIobProperties(properties, iobCob.Iob, ddata, now);
                 if (iobCob.Cob is not null)
-                    SetCobProperties(properties, iobCob.Cob, now);
+                    SetCobProperties(properties, iobCob.Cob, await CarbsPerHourAsync(iobCob.Cob, now, cancellationToken), ddata, now);
             }
 
             // Device status properties
@@ -345,23 +347,25 @@ public class PropertiesService : IPropertiesService
     /// Set IOB (Insulin on Board) properties. Emitted even with no insulin on board: legacy
     /// clients treat a missing <c>iob</c> as "server doesn't support it" rather than "zero".
     /// </summary>
-    private static void SetIobProperties(Dictionary<string, object> properties, IobResult iobResult, long now)
+    private static void SetIobProperties(
+        Dictionary<string, object> properties, IobResult iobResult, DData ddata, long now)
     {
-        var iob = Math.Round(iobResult.Iob, 2);
-        var display = IobResult.FormatDisplay(iob);
+        var lastBolus = iobResult.LastBolus;
 
         // NIGHTSCOUT-COMPAT: Nightscout derives iob and activity from boluses alone. Here both
         // include the net basal IOB of temp basals, as the chart does, so they can go negative.
         properties["iob"] = new Dictionary<string, object?>
         {
-            ["iob"] = iob,
-            ["display"] = display,
-            ["displayLine"] = iobResult.DisplayLine ?? $"IOB: {display}U",
+            ["iob"] = iobResult.Iob,
+            ["display"] = iobResult.Display,
+            ["displayLine"] = iobResult.DisplayLine,
             ["timestamp"] = now,
             ["source"] = iobResult.Source ?? "Care Portal",
             // Legacy calcTotal reports zeros rather than nulls for the numeric parts.
             ["activity"] = iobResult.Activity ?? 0,
-            ["lastBolus"] = iobResult.LastBolus?.Mills,
+            ["lastBolus"] = lastBolus is null
+                ? null
+                : ChartedTreatment(ddata, lastBolus, t => t.Mills == lastBolus.Mills && t.Insulin == lastBolus.Insulin),
             ["basalIob"] = iobResult.BasalIob ?? 0,
             ["treatmentIob"] = iobResult.TreatmentIob ?? 0,
         };
@@ -370,20 +374,95 @@ public class PropertiesService : IPropertiesService
     /// <summary>
     /// Set COB (Carbs on Board) properties, emitted even with no carbs on board, as IOB is.
     /// </summary>
-    private static void SetCobProperties(Dictionary<string, object> properties, CobResult cobResult, long now)
+    private static void SetCobProperties(
+        Dictionary<string, object> properties, CobResult cobResult, double? carbsHr, DData ddata, long now)
     {
-        var cob = Math.Round(cobResult.Cob);
-        var display = cobResult.Display ?? cob.ToString(CultureInfo.InvariantCulture);
-
-        properties["cob"] = new Dictionary<string, object?>
+        var cob = CobDetail(cobResult, carbsHr, ddata);
+        cob["cob"] = cobResult.Cob;
+        cob["display"] = cobResult.Display;
+        cob["displayLine"] = cobResult.DisplayLine;
+        cob["timestamp"] = now;
+        cob["source"] = cobResult.Source ?? "Care Portal";
+        cob["activity"] = cobResult.Activity ?? 0;
+        if (cobResult.TreatmentCOB is { } treatmentCob)
         {
-            ["cob"] = cob,
-            ["display"] = display,
-            ["displayLine"] = cobResult.DisplayLine ?? $"COB: {display}g",
-            ["timestamp"] = now,
-            ["source"] = cobResult.Source ?? "Care Portal",
-            ["activity"] = cobResult.Activity ?? 0,
-        };
+            var detail = CobDetail(treatmentCob, carbsHr, ddata);
+            detail["cob"] = treatmentCob.Cob;
+            cob["treatmentCOB"] = detail;
+        }
+
+        properties["cob"] = cob;
+    }
+
+    /// <summary>
+    /// The absorption rate Nightscout's <c>carbs_hr</c> shows beside a COB with no carbs, which the
+    /// calculator leaves unread; null for a device-reported COB, which has no decay fields.
+    /// </summary>
+    private async Task<double?> CarbsPerHourAsync(CobResult cob, long now, CancellationToken ct)
+    {
+        if (cob.IsDecaying is null)
+            return null;
+        if (cob.CarbsHr is { } carbsHr)
+            return carbsHr;
+        return await _therapySettings.GetCarbAbsorptionRateAsync(now, null, ct);
+    }
+
+    /// <summary>
+    /// The decay fields of Nightscout's <c>cob.fromTreatments</c>, none of which a device-reported
+    /// COB has.
+    /// </summary>
+    private static Dictionary<string, object?> CobDetail(CobResult cobResult, double? carbsHr, DData ddata)
+    {
+        var detail = new Dictionary<string, object?>();
+        if (cobResult.IsDecaying is not { } isDecaying)
+            return detail;
+
+        var decayedBy = cobResult.DecayedBy ?? 0;
+        detail["decayedBy"] = decayedBy > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(decayedBy).ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture)
+            : 0;
+        detail["isDecaying"] = isDecaying;
+        detail["carbs_hr"] = cobResult.CarbsHr ?? carbsHr;
+        detail["rawCarbImpact"] = cobResult.RawCarbImpact ?? 0;
+        var lastCarbs = cobResult.LastCarbs;
+        detail["lastCarbs"] = lastCarbs is null
+            ? null
+            : ChartedTreatment(ddata, lastCarbs, t => t.Mills == lastCarbs.Mills && t.Carbs == lastCarbs.Carbs);
+
+        return detail;
+    }
+
+    private static readonly JsonSerializerOptions ChartedTreatmentJson = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    /// <summary>
+    /// The legacy treatment behind <paramref name="record"/>, carrying the <c>mgdl</c> Nightscout's
+    /// data loader gives a treatment without a glucose: the mean of the readings either side of it,
+    /// or 180 with none.
+    /// </summary>
+    private static JsonObject? ChartedTreatment(
+        DData ddata, IV4Record record, Func<Treatment, bool> sameRecord)
+    {
+        var treatment =
+            ddata.Treatments.FirstOrDefault(t =>
+                t.Id == record.Id.ToString() || (record.LegacyId is not null && t.Id == record.LegacyId))
+            ?? ddata.Treatments.FirstOrDefault(sameRecord);
+        if (treatment is null)
+            return null;
+
+        var node = JsonSerializer.SerializeToNode(treatment, ChartedTreatmentJson)!.AsObject();
+        if (treatment.Glucose is null)
+        {
+            var readings = ddata.Sgvs.Where(e => e.GlucoseMgdl() > 39).ToList();
+            var before = readings.Where(e => e.Mills <= treatment.Mills).MaxBy(e => e.Mills)?.GlucoseMgdl();
+            var after = readings.Where(e => e.Mills >= treatment.Mills).MinBy(e => e.Mills)?.GlucoseMgdl();
+            var mgdl = before is { } b && after is { } a ? (b + a) / 2 : before ?? after ?? 0;
+            node["mgdl"] = mgdl > 0 ? Math.Floor(mgdl + 0.5) : 180;
+        }
+
+        return node;
     }
 
     /// <summary>
@@ -762,6 +841,8 @@ public class PropertiesService : IPropertiesService
                     ["basal"] = tempBasalResult.Basal,
                     ["treatment"] = tempBasalResult.Treatment ?? (object)null!,
                     ["combobolustreatment"] = tempBasalResult.ComboBolusTreatment ?? (object)null!,
+                    ["tempbasal"] = tempBasalResult.TempBasal,
+                    ["combobolusbasal"] = tempBasalResult.ComboBolusBasal,
                     ["totalbasal"] = tempBasalResult.TotalBasal,
                 },
             };
@@ -788,6 +869,7 @@ public class PropertiesService : IPropertiesService
 
         // Get base basal rate from profile for the current time
         result.Basal = GetBasalRateAtTime(time, profileData.Basal, zone);
+        result.TempBasal = result.Basal;
         result.TotalBasal = result.Basal;
 
         // Find active temp basal treatment - exact legacy search logic
@@ -812,8 +894,6 @@ public class PropertiesService : IPropertiesService
                 result.TempBasal = absolute;
             else if (tempBasalTreatment.Percent is { } percent and not 0)
                 result.TempBasal = Nocturne.Core.Models.V4.TempBasal.RateRelativeTo(result.Basal, percent);
-            else
-                result.TempBasal = result.Basal;
 
             result.TotalBasal = result.TempBasal;
         }

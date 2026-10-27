@@ -25,13 +25,16 @@ public class PropertiesParityTests : ParityTestBase
 
     protected override ComparisonOptions GetComparisonOptions()
     {
-        // Properties responses contain dynamic computed values
+        // Properties responses contain dynamic computed values. Nocturne computes iob activity
+        // from the resolved sensitivity, a default one with no profile, where Nightscout reports 0,
+        // and no client shows it. The three-decimal iob and the unrounded cob move between the two
+        // requests, so only their displays are compared.
         return ComparisonOptions.Default.WithIgnoredFields(
             "serverTime",
             "serverTimeEpoch",
             "uptime",
             "lastUpdated"
-        );
+        ).WithPresenceOnlyFields("activity", "iob", "cob");
     }
 
     #region Helper Methods
@@ -132,6 +135,23 @@ public class PropertiesParityTests : ParityTestBase
         await SeedTreatmentsAsync(treatments);
 
         await WaitForNightscoutReloadAsync("/api/v2/summary", sgvs: 0, treatments: 2);
+        await AssertGetParityAsync("/api/v2/properties/cob");
+    }
+
+    [Fact]
+    public async Task GetSpecificProperty_Cob_WithCarbsOnBoard_ReturnsSameShape()
+    {
+        await SeedProfileForTestAsync();
+        var carbs = TestDataFactory.CreateTreatment(
+            eventType: "Carb Correction",
+            timestamp: TestTimeProvider.GetTestTime().AddMinutes(-30));
+        carbs.Insulin = null;
+        carbs.Carbs = 30;
+        await SeedTreatmentsAsync(carbs);
+
+        await WaitForNightscoutBodyAsync(
+            "/api/v2/properties/cob",
+            body => body?["cob"]?["isDecaying"]?.GetValue<double>() == 1);
         await AssertGetParityAsync("/api/v2/properties/cob");
     }
 

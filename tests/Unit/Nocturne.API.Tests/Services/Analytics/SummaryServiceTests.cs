@@ -605,6 +605,36 @@ public class SummaryServiceTests
     }
 
     [Fact]
+    public async Task ConstructStateAsync_WithAProfileAndInsulinButNoCarbs_WritesZeroCob()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object> { ["profile"] = new Dictionary<string, object?>() });
+        Reading(
+            new IobCobInputs([new Bolus { Timestamp = DateTime.UtcNow, Insulin = 1 }], [], []),
+            new IobResult { Iob = 1 },
+            new CobResult()
+        );
+
+        var json = await StateJsonAsync();
+
+        json["cob"]!.GetValue<int>().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ConstructStateAsync_WithAProfileAndNoTreatments_WritesNullCob()
+    {
+        _mockPropertiesService
+            .Setup(x => x.GetAllPropertiesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object> { ["profile"] = new Dictionary<string, object?>() });
+        Reading(NoInputs(), new IobResult(), new CobResult());
+
+        var json = await StateJsonAsync();
+
+        json["cob"].Should().BeNull();
+    }
+
+    [Fact]
     public async Task ConstructStateAsync_WithAFailedCobCalculation_WritesNullCob()
     {
         Reading(
@@ -623,8 +653,9 @@ public class SummaryServiceTests
     [InlineData(2.3456, 24.6, 2.35, 25)]
     [InlineData(0.125, 24.5, 0.13, 25)]
     [InlineData(-0.125, 0.5, -0.12, 1)]
+    [InlineData(0.015, 0.4, 0.02, 0)]
     [InlineData(2.344, 24.4, 2.34, 24)]
-    public async Task ConstructStateAsync_RoundsIobAndCobHalfUpAsJavaScriptDoes(
+    public async Task ConstructStateAsync_RoundsIobAndCobHalfUp_AsJavaScriptsMathRound(
         double iob,
         double cob,
         double expectedIob,
