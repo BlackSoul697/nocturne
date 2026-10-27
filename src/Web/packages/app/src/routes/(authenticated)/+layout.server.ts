@@ -132,7 +132,8 @@ export const load: LayoutServerLoad = async ({ locals, cookies, url, untrack, pa
   //
   // Where auto-login applies (a demo tenant, or dev auto-login) the visitor goes straight to its
   // endpoint: the status in hand already decides it, and the login page would only fetch it again
-  // to redirect onward, costing every first visit a round-trip.
+  // to redirect onward, costing every first visit a round-trip. A demo visitor reaches this when
+  // no session was minted in hooks (mintDemoSession).
   if (!locals.isAuthenticated || !locals.user) {
     if (!publicViewAllowed) {
       const returnUrl = pathname + search;

@@ -12,6 +12,7 @@ import {
 import { isApiOutage } from "#lib/server/api-outage.js";
 import { forgetSession, getCachedSession, sessionCacheKey } from "#lib/server/session-cache.js";
 import { authenticateGuestSession } from "#lib/server/guest-session-auth.js";
+import { mintDemoSession } from "#lib/server/demo-session.js";
 import { sequence, type Handle, type HandleServerError } from "@sveltejs/kit/hooks";
 import type { AuthUser } from "./app.d";
 import { AUTH_COOKIE_NAMES } from "#lib/config/auth-cookies.js";
@@ -83,11 +84,19 @@ const authHandle: Handle = async ({ event, resolve }) => {
 
   // Check for auth cookie
   const authCookie = event.cookies.get("IsAuthenticated");
-  const accessToken = event.cookies.get(AUTH_COOKIE_NAMES.accessToken);
+  let accessToken = event.cookies.get(AUTH_COOKIE_NAMES.accessToken);
+  let refreshToken = event.cookies.get(AUTH_COOKIE_NAMES.refreshToken);
 
   if (!authCookie && !accessToken) {
-    await authenticateGuestSession(event, apiBaseUrl, fetch);
-    return resolve(event);
+    const minted = event.cookies.get(AUTH_COOKIE_NAMES.guestSession)
+      ? null
+      : await mintDemoSession(event, apiBaseUrl, fetch);
+    if (!minted) {
+      await authenticateGuestSession(event, apiBaseUrl, fetch);
+      return resolve(event);
+    }
+    event.locals.mintedSession = minted;
+    ({ accessToken, refreshToken } = minted);
   }
 
   const mayWrite = event.request.method !== "GET" && event.request.method !== "HEAD";
@@ -97,7 +106,6 @@ const authHandle: Handle = async ({ event, resolve }) => {
     // `responseCookies` lets the client forward any auth-cookie rotations
     // performed by the API (via SessionCookieHandler auto-refresh) back to
     // the browser, so rotated refresh tokens don't silently disappear.
-    const refreshToken = event.cookies.get(AUTH_COOKIE_NAMES.refreshToken);
     const platformAccessToken = event.cookies.get(AUTH_COOKIE_NAMES.platformAccess);
     const forwardedHost = getEffectiveHost(event.request, event.cookies);
     const authExtraHeaders: Record<string, string> = { "X-Forwarded-Proto": getOriginalProto(event.request) };
@@ -363,8 +371,13 @@ const apiClientHandle: Handle = async ({ event, resolve }) => {
   // authHandle), which also keeps a token rotation from being triggered by a page that is meant
   // to be credential-free.
   const onShareHost = event.locals.isShareHost;
-  const accessToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.accessToken);
-  const refreshToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.refreshToken);
+  const minted = event.locals.mintedSession;
+  const accessToken = onShareHost
+    ? undefined
+    : (minted?.accessToken ?? event.cookies.get(AUTH_COOKIE_NAMES.accessToken));
+  const refreshToken = onShareHost
+    ? undefined
+    : (minted?.refreshToken ?? event.cookies.get(AUTH_COOKIE_NAMES.refreshToken));
   const guestSessionToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.guestSession);
   const platformAccessToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.platformAccess);
   const recoverySessionToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.recoverySession);
