@@ -9,7 +9,7 @@ import {
   type TrackerDefinitionDto,
   type TrackerInstanceDto,
   type TrackerPresetDto,
-} from "$api";
+} from "#lib/api/index.js";
 
 const data = vi.hoisted(() => ({
   definitions: [] as unknown[],
@@ -19,10 +19,11 @@ const data = vi.hoisted(() => ({
   triggerEventTypes: [] as string[],
 }));
 
-vi.mock("$api/generated/trackers.generated.remote", () => {
+vi.mock("#lib/api/generated/trackers.generated.remote.js", async () => {
+  const { remoteFormFields } = await import("#lib/test-stubs/remote-resource.js");
   const query = (read: () => unknown) => () => ({ current: read(), refresh: async () => {} });
   const form = () => {
-    const instance = { result: undefined, pending: 0, enhance: () => ({}) };
+    const instance = { result: undefined, pending: 0, enhance: () => ({}), fields: remoteFormFields() };
     return { for: () => instance, ...instance };
   };
   return {
@@ -36,14 +37,15 @@ vi.mock("$api/generated/trackers.generated.remote", () => {
     updateDefinition: form(),
   };
 });
-vi.mock("$api/generated/deviceEvents.generated.remote", () => ({
-  create: { for: () => ({ result: undefined, enhance: () => ({}) }) },
-}));
-vi.mock("$api/generated/reservoirReports.generated.remote", () => ({ create: vi.fn() }));
+vi.mock("#lib/api/generated/deviceEvents.generated.remote.js", async () => {
+  const { remoteFormFields } = await import("#lib/test-stubs/remote-resource.js");
+  return { create: { for: () => ({ result: undefined, enhance: () => ({}), fields: remoteFormFields() }) } };
+});
+vi.mock("#lib/api/generated/reservoirReports.generated.remote.js", () => ({ create: vi.fn() }));
 vi.mock("@nocturne/coach", () => ({ coachmark: () => () => {} }));
 
 import TrackersPage from "./+page.svelte";
-import WithTooltipProvider from "$lib/test-stubs/WithTooltipProvider.test-stub.svelte";
+import WithTooltipProvider from "#lib/test-stubs/WithTooltipProvider.test-stub.svelte";
 
 const PHONE = 360;
 const hour = 60 * 60 * 1000;

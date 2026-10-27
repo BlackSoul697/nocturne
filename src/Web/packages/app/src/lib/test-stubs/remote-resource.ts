@@ -5,8 +5,8 @@
  * ones, so there is one description of the shape rather than one per test.
  *
  * Mirrored: the surface a component touches. A query is a thenable carrying
- * `current`, `error`, `loading` and `ready` alongside `run`, `set`, `refresh`
- * and `withOverride`, and reading any of those getters starts the work, as the
+ * `current`, `error`, `loading` and `ready` alongside `set`, `refresh` and
+ * `withOverride`, and reading any of those getters starts the work, as the
  * framework's does. A command call is a promise carrying `updates()`, behind a
  * wrapper counting `pending` and recording the queries each `updates()` named;
  * an override handed to `updates()` is released once the call settles, so a
@@ -23,11 +23,6 @@
  * screen builds the resource with `remoteQuery`, which is settled before the
  * first read and re-reads its source on every access, keeping whatever
  * reactivity that source has.
- *
- * Deliberately more permissive than production: the framework refuses `run()`
- * inside an effect and refuses to be awaited outside a tracking context, and
- * these resources allow both. Code that only a test exercises can rely on
- * either and still fail in the browser.
  */
 import { createSubscriber } from "svelte/reactivity";
 
@@ -36,7 +31,6 @@ export interface RemoteQueryStub<T> extends PromiseLike<T> {
   readonly error: unknown;
   readonly loading: boolean;
   readonly ready: boolean;
-  run(): Promise<T>;
   set(value: T): void;
   refresh(): Promise<void>;
   withOverride(update: (current: T) => T): () => void;
@@ -157,7 +151,7 @@ class QueryResource<T> implements RemoteQueryStub<T> {
       | null
       | undefined
   ): Promise<TResult1 | TResult2> {
-    return this.run().then(onfulfilled, onrejected);
+    return this.#value().then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
@@ -166,14 +160,14 @@ class QueryResource<T> implements RemoteQueryStub<T> {
       | null
       | undefined
   ): Promise<T | TResult> {
-    return this.run().catch(onrejected);
+    return this.#value().catch(onrejected);
   }
 
   finally(onfinally?: (() => void) | null | undefined): Promise<T> {
-    return this.run().finally(onfinally);
+    return this.#value().finally(onfinally);
   }
 
-  run(): Promise<T> {
+  #value(): Promise<T> {
     return this.#start().then(() => {
       if (!this.#read) throw new Error("the resource settled without a value");
       return this.#overridden(this.#read);
@@ -278,8 +272,38 @@ export function remoteCommand<T>(
  * nothing to report. An unrecognised property nests, so a path of any depth
  * answers.
  */
+/** The props kit's `as()` gives a control, without the form id it suffixes onto the name. */
+function fieldProps(name: string, type: string, value: unknown): Record<string, unknown> {
+  const prefix =
+    type === "number" || type === "range"
+      ? "n:"
+      : type === "checkbox" && typeof value !== "string"
+        ? "b:"
+        : (type === "hidden" || type === "submit") && typeof value === "number"
+          ? "n:"
+          : (type === "hidden" || type === "submit") && typeof value === "boolean"
+            ? "b:"
+            : "";
+  const props: Record<string, unknown> = { name: prefix + name, type };
+  if (type === "hidden" || type === "submit") {
+    props.value = typeof value === "boolean" ? (value ? "on" : "off") : value;
+  }
+  return props;
+}
+
+/**
+ * A remote form's `fields`, for a test that builds its own form stand-in: any path, each with
+ * `issues`, `allIssues`, `value`, `set` and `as`, the last answering the name kit would give it.
+ */
+export function remoteFormFields(): unknown {
+  return fieldProxy();
+}
+
 function fieldProxy(path: string[] = []): unknown {
-  const name = path.join(".");
+  // As kit builds it: an index is `[n]`, a key is `.key`.
+  const name = path
+    .map((key, i) => (/^\d+$/.test(key) ? `[${key}]` : i === 0 ? key : `.${key}`))
+    .join("");
 
   return new Proxy(() => undefined, {
     get(target, prop) {
@@ -287,7 +311,7 @@ function fieldProxy(path: string[] = []): unknown {
       if (prop === "issues" || prop === "allIssues") return () => undefined;
       if (prop === "value") return () => undefined;
       if (prop === "set") return (value: unknown) => value;
-      if (prop === "as") return (type: string) => ({ name, type });
+      if (prop === "as") return (type: string, value?: unknown) => fieldProps(name, type, value);
       return fieldProxy([...path, prop]);
     },
   });
