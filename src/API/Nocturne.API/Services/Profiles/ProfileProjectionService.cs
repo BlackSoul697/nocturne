@@ -1,3 +1,4 @@
+using Nocturne.API.Services.Profiles.Resolvers;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -238,10 +239,11 @@ public class ProfileProjectionService : IProfileProjectionService
     /// reading each schedule kind for every row at once (<see cref="SchedulesForAsync{TRecord}"/>).
     /// </summary>
     /// <remarks>
-    /// A document names the tenant's <see cref="TherapySettings.IsDefault"/> row's store when it holds
-    /// that row, as <see cref="Resolvers.ProfileStoreTimeline"/> reads it; else its recorded
-    /// <see cref="TherapySettings.DocumentDefaultProfile"/>; else, for a row decomposed before that was
-    /// recorded, its newest store. It reads its document-level fields off its first store's row. Its
+    /// A document names the store <see cref="Resolvers.ProfileStoreTimeline"/> reads as its default, so
+    /// v1 and v3 agree with every therapy resolver. A document that does not hold that store (a row
+    /// written on its own through the V4 API, which keeps the default of the document before it) or
+    /// that is not in the tenant's timeline (a deleted one) names the default it reads on its own. It
+    /// reads its document-level fields off its first store's row. Its
     /// <c>startDate</c> is the stored one only where its versions start there (a row decomposed before
     /// <c>startDate</c> led may record another), so a client that saves it back does not move them.
     /// </remarks>
@@ -253,14 +255,17 @@ public class ProfileProjectionService : IProfileProjectionService
         var carbRatio = SchedulesForAsync(_carbRatioRepo, rows, ct);
         var sensitivity = SchedulesForAsync(_sensitivityRepo, rows, ct);
         var targetRange = SchedulesForAsync(_targetRangeRepo, rows, ct);
+        var storeIndex = _therapyRepo.GetStoreIndexAsync(ct);
 
-        await Task.WhenAll(basal, carbRatio, sensitivity, targetRange);
+        await Task.WhenAll(basal, carbRatio, sensitivity, targetRange, storeIndex);
 
         var schedules = new PageSchedules(basal.Result, carbRatio.Result, sensitivity.Result, targetRange.Result);
-        return documents.Select(d => AssembleDocument(d, schedules)).ToList();
+        var timeline = ProfileStoreTimeline.From(storeIndex.Result);
+        return documents.Select(d => AssembleDocument(d, schedules, timeline)).ToList();
     }
 
-    private static Profile AssembleDocument(IReadOnlyList<TherapySettings> rows, PageSchedules schedules)
+    private static Profile AssembleDocument(
+        IReadOnlyList<TherapySettings> rows, PageSchedules schedules, ProfileStoreTimeline timeline)
     {
         var ordered = rows
             .OrderByDescending(r => r.IsDefault)
@@ -278,12 +283,15 @@ public class ProfileProjectionService : IProfileProjectionService
             srvModified = Math.Max(srvModified, modified);
         }
 
+        var id = TherapySettings.DocumentIdOf(head);
+        var defaultProfile = timeline.DocumentDefaultOf(id) is { } inForce && store.ContainsKey(inForce)
+            ? inForce
+            : ProfileStoreTimeline.From(rows.Select(StoreRow).ToList()).DocumentDefaultOf(id)!;
+
         return new Profile
         {
-            Id = TherapySettings.DocumentIdOf(head),
-            DefaultProfile = head.IsDefault
-                ? head.ProfileName
-                : rows.Select(r => r.DocumentDefaultProfile).FirstOrDefault(d => d is not null) ?? head.ProfileName,
+            Id = id,
+            DefaultProfile = defaultProfile,
             StartDate = UploaderTimestamp.ParseUtcDateTime(head.StartDate) == head.Timestamp
                 ? head.StartDate
                 : head.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -298,6 +306,11 @@ public class ProfileProjectionService : IProfileProjectionService
             Store = store,
         };
     }
+
+    private static ProfileStoreRow StoreRow(TherapySettings settings) =>
+        new(
+            TherapySettings.DocumentIdOf(settings), settings.LegacyId is not null, settings.ProfileName,
+            settings.Timestamp, settings.IsDefault, settings.DocumentDefaultProfile);
 
     /// <summary>
     /// The store <paramref name="settings"/> and its schedule siblings make, and the newest write

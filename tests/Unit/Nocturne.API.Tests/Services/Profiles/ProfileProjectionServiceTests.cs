@@ -27,6 +27,8 @@ public class ProfileProjectionServiceTests
         _carbRatioRepo.Serve(_carbRatios);
         _sensitivityRepo.Serve(_sensitivities);
         _targetRangeRepo.Serve(_targetRanges);
+        _therapyRepo.Setup(r => r.GetStoreIndexAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         _sut = new ProfileProjectionService(
             _therapyRepo.Object,
