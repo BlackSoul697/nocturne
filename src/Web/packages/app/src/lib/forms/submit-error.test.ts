@@ -8,11 +8,13 @@ import {
   describeSubmitError,
   errorIssues,
   errorMessage,
-  GENERIC_SUBMIT_ERROR,
-  MISSING_ITEM_ERROR,
   PERMISSION_GATED_MUTATION,
-  RATE_LIMITED_ERROR,
 } from "./submit-error";
+import {
+  genericSubmitError,
+  missingItemError,
+  rateLimitedError,
+} from "./submit-messages.svelte";
 import { remoteErrorMessage } from "#lib/api/remote-error.js";
 
 /**
@@ -139,28 +141,28 @@ describe("describeSubmitError", () => {
 
   it("hides 5xx detail behind the generic message", () => {
     const err = { status: 500, body: { message: "NullReferenceException" } };
-    expect(describeSubmitError(err)).toBe(GENERIC_SUBMIT_ERROR);
+    expect(describeSubmitError(err)).toBe(genericSubmitError());
   });
 
   it("falls back for a plain thrown Error", () => {
     expect(describeSubmitError(new Error("fetch failed"))).toBe(
-      GENERIC_SUBMIT_ERROR
+      genericSubmitError()
     );
   });
 
   it("falls back when the 4xx body has no message", () => {
     expect(describeSubmitError({ status: 409, body: {} })).toBe(
-      GENERIC_SUBMIT_ERROR
+      genericSubmitError()
     );
     expect(describeSubmitError({ status: 409, body: { message: "  " } })).toBe(
-      GENERIC_SUBMIT_ERROR
+      genericSubmitError()
     );
   });
 
   it("reports a throttled attempt as throttled, not as the caller's fallback", () => {
     expect(
       describeSubmitError({ status: 429 }, "This invite link is invalid.")
-    ).toBe(RATE_LIMITED_ERROR);
+    ).toBe(rateLimitedError());
   });
 
   it("uses the caller's fallback", () => {
@@ -232,8 +234,8 @@ describe("describeSubmitError", () => {
   });
 
   it("tolerates null and non-objects", () => {
-    expect(describeSubmitError(null)).toBe(GENERIC_SUBMIT_ERROR);
-    expect(describeSubmitError("string throw")).toBe(GENERIC_SUBMIT_ERROR);
+    expect(describeSubmitError(null)).toBe(genericSubmitError());
+    expect(describeSubmitError("string throw")).toBe(genericSubmitError());
   });
 });
 
@@ -269,7 +271,7 @@ describe("the two halves of RemoteErrorPolicy", () => {
       WRITE_FALLBACK
     );
     expect(remoteErrorMessage({ status: 404 }, READ_FALLBACK)).toBe(
-      MISSING_ITEM_ERROR
+      missingItemError()
     );
   });
 
@@ -351,10 +353,10 @@ describe("the two halves of RemoteErrorPolicy", () => {
 
   it("agrees on a throttled attempt and on a 4xx the server worded", () => {
     expect(describeSubmitError({ status: 429 }, WRITE_FALLBACK)).toBe(
-      RATE_LIMITED_ERROR
+      rateLimitedError()
     );
     expect(remoteErrorMessage({ status: 429 }, READ_FALLBACK)).toBe(
-      RATE_LIMITED_ERROR
+      rateLimitedError()
     );
 
     const rejected = { status: 409, body: { message: "Already redeemed." } };
@@ -375,7 +377,7 @@ describe("a mutation whose fallback names the permission its page is gated on", 
 
   it("says the rule is gone rather than that the permission is missing", () => {
     expect(describe_({ status: 404, body: { message: "Not found" } })).toBe(
-      MISSING_ITEM_ERROR
+      missingItemError()
     );
   });
 
@@ -385,7 +387,7 @@ describe("a mutation whose fallback names the permission its page is gated on", 
       body: { message: "npgsql: connection reset" },
     });
 
-    expect(answer).toBe(GENERIC_SUBMIT_ERROR);
+    expect(answer).toBe(genericSubmitError());
     expect(answer).not.toBe(NEEDS_ALERTS);
   });
 
@@ -396,7 +398,7 @@ describe("a mutation whose fallback names the permission its page is gated on", 
   });
 
   it("does not blame the permission for a request that never got an answer", () => {
-    expect(describe_(new Error("fetch failed"))).toBe(GENERIC_SUBMIT_ERROR);
+    expect(describe_(new Error("fetch failed"))).toBe(genericSubmitError());
   });
 
   it("names the permission for the refusal the scope attribute produces", () => {

@@ -8,7 +8,7 @@ import { beforeNavigate, type BeforeNavigate } from "$app/navigation";
 import { z } from "zod";
 import type { Mock } from "vitest";
 import { FormGuard, type GuardedForm } from "./form-guard.svelte";
-import { FOLLOW_UP_ERROR, GENERIC_SUBMIT_ERROR } from "./submit-error";
+import { followUpError, genericSubmitError } from "./submit-messages.svelte";
 
 const schema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -483,7 +483,7 @@ describe("FormGuard", () => {
       guard.enhance();
       await form._triggerEnhance();
 
-      expect(guard.submitError).toBe(GENERIC_SUBMIT_ERROR);
+      expect(guard.submitError).toBe(genericSubmitError());
     });
 
     it("uses the configured fallback message", async () => {
@@ -580,7 +580,7 @@ describe("FormGuard", () => {
       });
       await form._triggerEnhance();
 
-      expect(guard.submitError).toBe(FOLLOW_UP_ERROR);
+      expect(guard.submitError).toBe(followUpError());
       expect(guard.submitted).toBe(false);
       expect(guard.saved).toBe(0);
     });

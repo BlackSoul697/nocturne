@@ -1,22 +1,11 @@
 import type { RustValidationIssue } from "#lib/api/generated/nocturne-api-client.js";
 import { parseIssues } from "#lib/api/error-body.js";
 import { recordApiFailure } from "#lib/support/api-failure-log.js";
-
-/** Fallback shown when a submission fails for a reason we can't safely surface. */
-export const GENERIC_SUBMIT_ERROR =
-  "We couldn't save your changes. Please try again.";
-
-/** For a form whose follow-up step, after the record itself saved, threw. */
-export const FOLLOW_UP_ERROR =
-  "Your changes were saved, but the step after saving didn't finish. Please try again.";
-
-/** Shown when a rate limiter turned the attempt away, so the credential is unspent. */
-export const RATE_LIMITED_ERROR =
-  "Too many attempts. Please wait a few minutes and try again.";
-
-/** Shown when the thing an action referred to is no longer on the server. */
-export const MISSING_ITEM_ERROR =
-  "That item no longer exists. Refresh the page to see what's there now.";
+import {
+  genericSubmitError,
+  missingItemError,
+  rateLimitedError,
+} from "./submit-messages.svelte";
 
 /** The HTTP status carried by a thrown value, if it has one. */
 export function errorStatus(err: unknown): number | undefined {
@@ -149,7 +138,7 @@ function serverWrittenReason(err: unknown): string | undefined {
  *   the data would have been, and a permission sentence there would tell
  *   someone who holds the permission that they lack it the moment they act on
  *   an id someone else deleted, so the reader answers with
- *   {@link MISSING_ITEM_ERROR} instead. A caller that can say something better
+ *   {@link missingItemError} instead. A caller that can say something better
  *   ("already removed") reads the status itself.
  * - `forbiddenReason` (403). A writer's fallback ("You don't have permission to
  *   save this") beats the client's own boilerplate but loses to a refusal the
@@ -169,20 +158,20 @@ function serverWrittenReason(err: unknown): string | undefined {
  *   `missing`, on the other axis: a writer's fallback names the action, which
  *   is what failed, so it wins; a permission sentence would tell someone who
  *   holds the permission that they lack it because the database hiccupped, so a
- *   caller passing one answers with {@link GENERIC_SUBMIT_ERROR} instead.
+ *   caller passing one answers with {@link genericSubmitError} instead.
  *
  * `missing` and `fault` are therefore the two axes the fallback sentence rather
  * than the operation decides, and the two {@link PERMISSION_GATED_MUTATION}
  * sets.
  *
- * A 429 answers with {@link RATE_LIMITED_ERROR} ahead of all of them, because
+ * A 429 answers with {@link rateLimitedError} ahead of all of them, because
  * the rate limiter's body carries no `message` and a caller's fallback
  * describes what it asked for — "this invite link is invalid" for a request the
  * limiter never let reach the invite.
  */
 export interface RemoteErrorPolicy {
   /** Answer for a 404, or the caller's fallback when absent. */
-  readonly missing?: string;
+  readonly missing?: () => string;
   /** Whether a 403 the server worded itself outranks the caller's fallback. */
   readonly forbiddenReason: boolean;
   /**
@@ -195,7 +184,7 @@ export interface RemoteErrorPolicy {
    * Answer once a body that did not come with a 4xx is suppressed, or the
    * caller's fallback when absent. Read only when `serverError` is false.
    */
-  readonly fault?: string;
+  readonly fault?: () => string;
 }
 
 const WRITE_SURFACE: RemoteErrorPolicy = {
@@ -213,10 +202,10 @@ const WRITE_SURFACE: RemoteErrorPolicy = {
  * mutation whose fallback names the action.
  */
 export const PERMISSION_GATED_MUTATION: RemoteErrorPolicy = {
-  missing: MISSING_ITEM_ERROR,
+  missing: missingItemError,
   forbiddenReason: true,
   serverError: false,
-  fault: GENERIC_SUBMIT_ERROR,
+  fault: genericSubmitError,
 };
 
 /**
@@ -230,7 +219,7 @@ export const permissionGatedMutationError = (
 
 /** @see RemoteErrorPolicy */
 export const READ_SURFACE: RemoteErrorPolicy = {
-  missing: MISSING_ITEM_ERROR,
+  missing: missingItemError,
   forbiddenReason: false,
   serverError: true,
 };
@@ -258,8 +247,8 @@ function describe(
   policy: RemoteErrorPolicy,
   status: number | undefined
 ): string {
-  if (status === 429) return RATE_LIMITED_ERROR;
-  if (status === 404) return policy.missing ?? fallback;
+  if (status === 429) return rateLimitedError();
+  if (status === 404) return policy.missing?.() ?? fallback;
   if (status === 403) {
     return (
       (policy.forbiddenReason ? serverWrittenReason(err) : undefined) ??
@@ -270,7 +259,7 @@ function describe(
   const is4xx = status !== undefined && status >= 400 && status < 500;
   if (is4xx || policy.serverError) return serverWrittenReason(err) ?? fallback;
 
-  return policy.fault ?? fallback;
+  return policy.fault?.() ?? fallback;
 }
 
 /**
@@ -279,7 +268,7 @@ function describe(
  */
 export function describeSubmitError(
   err: unknown,
-  fallback = GENERIC_SUBMIT_ERROR
+  fallback = genericSubmitError()
 ): string {
   return describeRemoteError(err, fallback, WRITE_SURFACE);
 }

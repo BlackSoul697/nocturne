@@ -3,7 +3,7 @@ import { flushSync } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import type { z, ZodIssue } from "zod";
 import { deepEqual } from "./deep-equal";
-import { FOLLOW_UP_ERROR, GENERIC_SUBMIT_ERROR } from "./submit-error";
+import { followUpError, genericSubmitError } from "./submit-messages.svelte";
 import { useSubmission, type Submission } from "./submission.svelte";
 
 /** The part of SvelteKit's `RemoteForm` the guard drives. */
@@ -42,8 +42,8 @@ export class FormGuard<T extends Record<string, unknown>> {
   constructor(options: FormGuardOptions<T>) {
     this.#options = options;
     this.#submission = useSubmission({
-      fallback: options.submitErrorMessage ?? GENERIC_SUBMIT_ERROR,
-      followUpFallback: FOLLOW_UP_ERROR,
+      fallback: options.submitErrorMessage ?? genericSubmitError(),
+      followUpFallback: followUpError(),
     });
 
     // Snapshot from initial when truthy
