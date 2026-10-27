@@ -83,6 +83,17 @@ public sealed class TestNocturneDbContextFactory : INocturneDbContextFactory, ID
     /// </summary>
     public Action<NocturneDbContext>? Prepare { get; init; }
 
+    /// <summary>
+    /// A context that ignores disposal, for a test that holds its connection or transaction open
+    /// across a repository's <c>await using</c> and closes it itself. Its type has a model of its own,
+    /// so it cannot share an InMemory store with plain contexts on a composite-key table.
+    /// </summary>
+    public NocturneDbContext CreateUndisposed() =>
+        Prepared(new UndisposedNocturneDbContext(_options)
+        {
+            ReadContext = _source.ReadContext, TenantId = _source.TenantId,
+        });
+
     private ValueTask<NocturneDbContext> Create(Guid tenantId) =>
         ValueTask.FromResult(Prepared(new NocturneDbContext(_options)
         {
@@ -109,6 +120,13 @@ public sealed class TestNocturneDbContextFactory : INocturneDbContextFactory, ID
     private static readonly FieldInfo DisposedField =
         typeof(DbContext).GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new MissingFieldException("DbContext", "_disposed");
+
+    private sealed class UndisposedNocturneDbContext(DbContextOptions<NocturneDbContext> options)
+        : NocturneDbContext(options)
+    {
+        public override void Dispose() { }
+        public override ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
 
 /// <summary>Wraps a test's context as the factory a per-operation service takes.</summary>
