@@ -8,6 +8,7 @@ using Moq;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Migration;
 using Nocturne.Core.Contracts.Audit;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
@@ -17,9 +18,9 @@ using Nocturne.Infrastructure.Data;
 namespace Nocturne.API.Tests.Migration;
 
 /// <summary>
-/// Runs a real <see cref="MigrationJob"/> in API mode against a stubbed Nightscout, with every
-/// decomposer mocked out — what the source answers is the input under test, not what the
-/// decomposers do with it.
+/// Runs a real <see cref="MigrationJob"/> in API mode against a stubbed Nightscout, with the entry
+/// import and every decomposer mocked out — what the source answers is the input under test, not
+/// what the writers do with it.
 /// </summary>
 internal static class MigrationJobHarness
 {
@@ -39,7 +40,7 @@ internal static class MigrationJobHarness
         public void SetTenant(TenantContext? tenant) => Context = tenant;
     }
 
-    /// <param name="entryOutcome">What the entry decomposer reports for each page; empty when omitted.</param>
+    /// <param name="entryOutcome">What the entry import reports for each page; empty when omitted.</param>
     /// <param name="treatmentOutcome">What the treatment decomposer reports for each page; empty when omitted.</param>
     /// <param name="profileOutcome">What the profile decomposer reports for each profile; empty when omitted.</param>
     /// <param name="interceptor">Attached to every <see cref="NocturneDbContext"/> the provider creates.</param>
@@ -52,10 +53,10 @@ internal static class MigrationJobHarness
     {
         var database = $"migration-{Guid.NewGuid():N}";
 
-        var entries = new Mock<IEntryDecomposer>();
+        var entries = new Mock<IEntryService>();
         entries
-            .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<Entry> page, WriteOrigin _, CancellationToken _) =>
+            .Setup(s => s.ImportEntriesAsync(It.IsAny<IReadOnlyList<Entry>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<Entry> page, CancellationToken _) =>
                 entryOutcome?.Invoke(page) ?? new DecompositionResult());
 
         var treatments = new Mock<ITreatmentDecomposer>();

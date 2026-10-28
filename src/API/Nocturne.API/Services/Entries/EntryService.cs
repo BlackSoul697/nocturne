@@ -1,13 +1,13 @@
 using System.Text.Json;
 using Nocturne.API.Helpers;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Queries;
+using Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Services.Glucose;
+namespace Nocturne.API.Services.Entries;
 
 /// <summary>
 /// Domain service implementation for <see cref="Entry"/> operations using Store/Cache ports.
@@ -18,7 +18,7 @@ namespace Nocturne.API.Services.Glucose;
 /// <seealso cref="IEntryStore"/>
 /// <seealso cref="IEntryDecomposer"/>
 /// <seealso cref="IEntryCache"/>
-public class EntryService : IEntryService
+internal class EntryService : IEntryService
 {
     private static readonly HashSet<string> ValidEntryTypes = new(
         LegacyEntryTypes.All,
@@ -140,6 +140,13 @@ public class EntryService : IEntryService
         await _store.QueryAsync(query, cancellationToken);
 
     /// <inheritdoc />
+    public Task<long> CountEntriesAsync(
+        string? find = null,
+        string? type = null,
+        CancellationToken cancellationToken = default) =>
+        _store.CountAsync(find, type, cancellationToken);
+
+    /// <inheritdoc />
     /// <remarks>
     /// Validates entry types, then decomposes the batch to V4 tables via
     /// <see cref="IEntryDecomposer.DecomposeBatchAsync"/>. The repository chokepoint fires the
@@ -162,6 +169,12 @@ public class EntryService : IEntryService
 
         return new BulkWrite<Entry>(validEntries, result.SkippedDeleted);
     }
+
+    /// <inheritdoc />
+    public Task<DecompositionResult> ImportEntriesAsync(
+        IReadOnlyList<Entry> entries,
+        CancellationToken cancellationToken = default) =>
+        _decomposer.DecomposeBatchAsync(entries, WriteOrigin.Backfill, cancellationToken);
 
     /// <inheritdoc />
     /// <returns>The updated <see cref="Entry"/>, or <see langword="null"/> if no entry with the given <paramref name="id"/> exists.</returns>

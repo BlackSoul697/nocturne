@@ -25,7 +25,7 @@ namespace Nocturne.API.Tests.Services.Legacy;
 [Parity("ddata.test.js")]
 public class DDataServiceTests
 {
-    private readonly Mock<IEntryStore> _mockEntryStore;
+    private readonly Mock<IEntryService> _mockEntryService;
     private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<IProfileProjectionService> _mockProfileProjectionService;
     private readonly Mock<IDeviceStatusGroupRepository> _mockGroupRepo;
@@ -37,7 +37,7 @@ public class DDataServiceTests
 
     public DDataServiceTests()
     {
-        _mockEntryStore = new Mock<IEntryStore>();
+        _mockEntryService = new Mock<IEntryService>();
         _mockTreatmentService = new Mock<ITreatmentService>();
         _mockProfileProjectionService = new Mock<IProfileProjectionService>();
         _mockFoodRepository = new Mock<IFoodRepository>();
@@ -64,7 +64,7 @@ public class DDataServiceTests
             new Mock<ILogger<DeviceStatusProjectionService>>().Object);
 
         _ddataService = new DDataService(
-            _mockEntryStore.Object,
+            _mockEntryService.Object,
             _mockTreatmentService.Object,
             _mockProfileProjectionService.Object,
             projectionService,
@@ -90,9 +90,9 @@ public class DDataServiceTests
     [Fact]
     public async Task GetCurrentDDataAsync_ShouldReturnDDataStructure()
     { // Arrange
-        _mockEntryStore
+        _mockEntryService
             .Setup(x =>
-                x.QueryAsync(
+                x.QueryEntriesAsync(
                     It.IsAny<EntryQuery>(),
                     It.IsAny<CancellationToken>()
                 )
@@ -158,8 +158,8 @@ public class DDataServiceTests
     [Fact]
     public async Task GetDDataFrameAsync_ServesSgvsOldestFirstWhereGetDDataAsyncKeepsTheStoreOrder()
     {
-        _mockEntryStore
-            .Setup(x => x.QueryAsync(It.Is<EntryQuery>(q => q.Type == "sgv"), It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(x => x.QueryEntriesAsync(It.Is<EntryQuery>(q => q.Type == "sgv"), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Entry>
             {
                 new() { Type = "sgv", Mills = 3000 },
@@ -206,8 +206,8 @@ public class DDataServiceTests
 
     private void SeedStores(string type, IReadOnlyList<long> mills)
     {
-        _mockEntryStore
-            .Setup(x => x.QueryAsync(It.Is<EntryQuery>(q => q.Type == type), It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(x => x.QueryEntriesAsync(It.Is<EntryQuery>(q => q.Type == type), It.IsAny<CancellationToken>()))
             .ReturnsAsync((EntryQuery q, CancellationToken _) => mills
                 .Where(m => m >= (q.FromMills ?? long.MinValue) && m <= (q.ToMills ?? long.MaxValue))
                 .OrderByDescending(m => m)

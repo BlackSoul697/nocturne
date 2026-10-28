@@ -11,7 +11,6 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Hubs;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Identity;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;
@@ -22,6 +21,7 @@ using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Services;
 using Xunit;
+using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.API.Tests.Hubs;
 

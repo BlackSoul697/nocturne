@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Controllers.V1;
 using Nocturne.API.Services.Entries;
-using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Alerts;
@@ -18,7 +17,6 @@ using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Infrastructure;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.V4;
@@ -32,7 +30,7 @@ using Npgsql;
 using Xunit;
 using V3EntriesController = Nocturne.API.Controllers.V3.EntriesController;
 
-namespace Nocturne.API.Tests.Services.Glucose;
+namespace Nocturne.API.Tests.Services.Entries;
 
 /// <summary>
 /// <see cref="EntryService.DeleteEntryAsync"/> on PostgreSQL under the runtime role and Row Level

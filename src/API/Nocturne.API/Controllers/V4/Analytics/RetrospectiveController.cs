@@ -12,7 +12,6 @@ using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Treatments;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Queries;

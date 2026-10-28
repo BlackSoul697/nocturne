@@ -5,7 +5,6 @@ using Nocturne.Core.Contracts.Entries;
 using Nocturne.API.Services.Platform;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.API.Services.Devices;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;

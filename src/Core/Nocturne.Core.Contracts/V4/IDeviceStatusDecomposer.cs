@@ -7,7 +7,6 @@ namespace Nocturne.Core.Contracts.V4;
 /// Decomposes a legacy DeviceStatus record into typed v4 snapshot tables.
 /// </summary>
 /// <seealso cref="IDecompositionPipeline"/>
-/// <seealso cref="IEntryDecomposer"/>
 public interface IDeviceStatusDecomposer
 {
     /// <summary>

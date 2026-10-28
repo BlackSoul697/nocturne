@@ -12,6 +12,7 @@ using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using DecompositionResult = Nocturne.Core.Models.V4.DecompositionResult;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Infrastructure.Data;
@@ -1362,8 +1363,8 @@ internal class MigrationJob
         "entries", "entries", s_dateCursor, OneRecordPerDocument: true,
         sp =>
         {
-            var decomposer = sp.GetRequiredService<IEntryDecomposer>();
-            return (page, ct) => decomposer.DecomposeBatchAsync(page, WriteOrigin.Backfill, ct);
+            var entries = sp.GetRequiredService<IEntryService>();
+            return (page, ct) => entries.ImportEntriesAsync(page, ct);
         });
 
     private static readonly PagedCollection<Treatment> s_treatmentsCollection = new(

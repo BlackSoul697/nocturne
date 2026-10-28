@@ -1,14 +1,13 @@
 using Microsoft.Extensions.Logging;
 using Moq;
-using Nocturne.API.Services.Glucose;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
+using Nocturne.API.Services.Entries;
 
-namespace Nocturne.API.Tests.Services.Glucose;
+namespace Nocturne.API.Tests.Services.Entries;
 
 /// <summary>
 /// Unit tests for EntryService using Store/Cache/EventSink ports
@@ -245,6 +244,26 @@ public class EntryServiceTests
                 It.IsAny<Func<Task<Entry?>>>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+        _store.Verify(x => x.GetCurrentAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Cache")]
+    public async Task GetCurrentEntryAsync_CacheMiss_FetchesFromStoreViaCacheCompute()
+    {
+        var stored = new Entry { Id = "db-1", Type = "sgv", Sgv = 120, Mills = 1234567890 };
+        _cache
+            .Setup(x => x.GetOrComputeCurrentAsync(
+                It.IsAny<Func<Task<Entry?>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<Task<Entry?>>, CancellationToken>((compute, _) => compute());
+        _store.Setup(x => x.GetCurrentAsync(It.IsAny<CancellationToken>())).ReturnsAsync(stored);
+
+        var result = await _sut.GetCurrentEntryAsync(CancellationToken.None);
+
+        result.Should().BeSameAs(stored);
+        _store.Verify(x => x.GetCurrentAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -304,6 +323,37 @@ public class EntryServiceTests
         // Assert
         Assert.Single(result);
         _cache.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task CountEntriesAsync_CountsInTheStore()
+    {
+        _store.Setup(x => x.CountAsync("{\"type\":\"sgv\"}", "sgv", It.IsAny<CancellationToken>())).ReturnsAsync(42L);
+
+        var count = await _sut.CountEntriesAsync("{\"type\":\"sgv\"}", "sgv");
+
+        count.Should().Be(42L);
+        _cache.VerifyNoOtherCalls();
+    }
+
+    #endregion
+
+    #region Import
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task ImportEntriesAsync_DecomposesThePageAsABackfill()
+    {
+        var page = new[] { new Entry { Id = "a", Type = "sgv", Mills = 1 }, new Entry { Id = "b", Type = "note", Mills = 2 } };
+        var decomposed = new DecompositionResult { SkippedUnsupported = 1 };
+        _decomposer
+            .Setup(x => x.DecomposeBatchAsync(page, WriteOrigin.Backfill, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(decomposed);
+
+        var result = await _sut.ImportEntriesAsync(page);
+
+        result.Should().BeSameAs(decomposed);
     }
 
     #endregion

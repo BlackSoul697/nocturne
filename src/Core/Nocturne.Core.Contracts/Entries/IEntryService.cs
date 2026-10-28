@@ -3,9 +3,9 @@ using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Queries;
-using Nocturne.Core.Contracts.Entries;
+using Nocturne.Core.Models.V4;
 
-namespace Nocturne.Core.Contracts.Glucose;
+namespace Nocturne.Core.Contracts.Entries;
 
 /// <summary>
 /// Domain service for <see cref="Entry"/> operations with WebSocket broadcasting.
@@ -48,9 +48,15 @@ public interface IEntryService
     Task<Entry?> GetEntryByIdAsync(string id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Find the stored entry an upload would duplicate, by the rule
-    /// <see cref="IEntryStore.CheckDuplicateAsync(string?, string, long, CancellationToken)"/> defines
+    /// Find the stored entry an upload would duplicate: one of the same type, from the same device,
+    /// at the same millisecond.
     /// </summary>
+    /// <remarks>
+    /// A duplicate has the same type, device and millisecond, whatever its value. Nightscout keys an
+    /// entry on its exact time and type, and uploaders post one reading at a time, so on a flat
+    /// trace consecutive readings carry the same value and any window would discard real ones.
+    /// </remarks>
+    /// <param name="device">Device identifier to match, or <c>null</c> to match any device.</param>
     /// <param name="type">Entry type (e.g., "sgv", "mbg", "cal")</param>
     /// <param name="mills">Timestamp in milliseconds since Unix epoch</param>
     /// <returns>Existing entry if duplicate found, null otherwise</returns>
@@ -91,6 +97,16 @@ public interface IEntryService
     Task<BulkWrite<Entry>> CreateEntriesAsync(
         IEnumerable<Entry> entries,
         WriteOrigin origin = WriteOrigin.Live,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Writes a page of entries imported from another Nightscout as a backfill, with no real-time
+    /// broadcast.
+    /// </summary>
+    /// <returns>What the page stored, and what it passed over as deleted or unsupported.</returns>
+    Task<DecompositionResult> ImportEntriesAsync(
+        IReadOnlyList<Entry> entries,
         CancellationToken cancellationToken = default
     );
 
@@ -143,7 +159,13 @@ public interface IEntryService
     /// <returns>Most recent entry if exists, null otherwise</returns>
     Task<Entry?> GetCurrentEntryAsync(CancellationToken cancellationToken = default);
 
-    /// <inheritdoc cref="IEntryStore.GetModifiedSinceAsync" />
+    /// <summary>
+    /// Entries whose <c>srvModified</c> falls after <paramref name="cursorMills"/>, oldest
+    /// modification first, for the v3 <c>history/{lastModified}</c> endpoint. Readings a regular
+    /// read hides (demo rows, losing canonical streams) are withheld but still advance the cursor.
+    /// </summary>
+    /// <param name="cursorMills">The client's cursor, in Unix milliseconds.</param>
+    /// <param name="limit">The page size; a page may exceed it to finish its last millisecond.</param>
     Task<ModifiedSincePage<Entry>> GetEntriesModifiedSinceAsync(
         long cursorMills,
         int limit,
@@ -152,4 +174,13 @@ public interface IEntryService
 
     /// <summary>Entries matching <paramref name="query"/>, in the order it asks for.</summary>
     Task<IEnumerable<Entry>> QueryEntriesAsync(EntryQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Counts entries matching the optional filter and type.</summary>
+    /// <param name="find">Optional MongoDB-style find query for time-range extraction.</param>
+    /// <param name="type">Optional entry type filter ("sgv", "mbg", "cal").</param>
+    Task<long> CountEntriesAsync(
+        string? find = null,
+        string? type = null,
+        CancellationToken cancellationToken = default
+    );
 }

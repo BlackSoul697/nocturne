@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.WebUtilities;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
 using Nocturne.Core.Contracts.Treatments;

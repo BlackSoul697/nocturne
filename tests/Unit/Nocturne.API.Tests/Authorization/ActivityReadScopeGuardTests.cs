@@ -168,7 +168,7 @@ public class ActivityReadScopeGuardTests
         httpContext.Items["GrantedScopes"] = Scope.Normalize(granted);
 
         var controller = new CountController(
-            Mock.Of<IEntryStore>(), Mock.Of<ITreatmentStore>(), CountControllerTests.DeviceStatusProjection(new Mock<IDeviceStatusGroupRepository>()),
+            Mock.Of<IEntryService>(), Mock.Of<ITreatmentStore>(), CountControllerTests.DeviceStatusProjection(new Mock<IDeviceStatusGroupRepository>()),
             Mock.Of<IProfileProjectionService>(), Mock.Of<IFoodRepository>(),
             activityService.Object, TimeProvider.System, NullLogger<CountController>.Instance)
         {

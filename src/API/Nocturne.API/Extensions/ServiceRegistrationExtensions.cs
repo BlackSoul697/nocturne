@@ -741,8 +741,8 @@ public static class ServiceRegistrationExtensions
         });
         services.AddScoped<IWriteSideEffects, WriteSideEffectsService>();
         services.AddScoped<IEntryService, EntryService>();
-        services.AddScoped<IEntryStore, Nocturne.API.Services.Entries.EntryReadService>();
-        services.AddScoped<IEntryCache, Nocturne.API.Services.Entries.EntryCacheAdapter>();
+        services.AddScoped<IEntryStore, EntryReadService>();
+        services.AddScoped<IEntryCache, EntryCacheAdapter>();
         services.AddScoped<SignalREntryEventSink>();
         services.AddScoped<IDataEventSink<Entry>>(sp =>
         {

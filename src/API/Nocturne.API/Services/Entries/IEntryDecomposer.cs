@@ -1,23 +1,23 @@
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
-namespace Nocturne.Core.Contracts.V4;
+namespace Nocturne.API.Services.Entries;
 
 /// <summary>
 /// Decomposes legacy Entry records into v4 granular models (SensorGlucose, MeterGlucose, Calibration).
 /// Handles idempotent create-or-update based on LegacyId matching.
 /// </summary>
 /// <seealso cref="IDecompositionPipeline"/>
-/// <seealso cref="ITreatmentDecomposer"/>
-/// <seealso cref="IProfileDecomposer"/>
-/// <seealso cref="IDeviceStatusDecomposer"/>
-public interface IEntryDecomposer
+internal interface IEntryDecomposer
 {
     /// <summary>
     /// Decomposes a single legacy Entry into the appropriate v4 record type
     /// based on <see cref="Entry.Type"/>.
     /// </summary>
     /// <param name="entry">The legacy Entry to decompose</param>
+    /// <param name="origin">Write classification of the written records.</param>
+    /// <param name="ct">Cancels the operation.</param>
     /// <returns>
     /// A <see cref="DecompositionResult"/> containing the created or updated v4 record.
     /// Returns an empty result if the entry type is unrecognized.
@@ -28,6 +28,8 @@ public interface IEntryDecomposer
     /// Deletes all v4 records that were decomposed from a legacy Entry with the given ID.
     /// </summary>
     /// <param name="legacyId">The legacy Entry ID</param>
+    /// <param name="origin">Write classification, as for <see cref="DecomposeAsync"/>.</param>
+    /// <param name="ct">Cancels the operation.</param>
     /// <returns>Total number of v4 records deleted across all tables</returns>
     Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
 
@@ -38,6 +40,7 @@ public interface IEntryDecomposer
     /// <param name="stored">A stored <see cref="SensorGlucose"/>, <see cref="MeterGlucose"/> or
     /// <see cref="Calibration"/>.</param>
     /// <param name="origin">Write classification, as for <see cref="DecomposeAsync"/>.</param>
+    /// <param name="ct">Cancels the operation.</param>
     /// <returns>Total number of v4 records deleted; 0 when none was still stored.</returns>
     Task<int> DeleteStoredAsync(IV4Record stored, WriteOrigin origin, CancellationToken ct = default);
 
@@ -46,6 +49,8 @@ public interface IEntryDecomposer
     /// Parses time bounds from the find JSON and deletes across all glucose repositories.
     /// </summary>
     /// <param name="find">Optional MongoDB-style find query for time-range extraction.</param>
+    /// <param name="origin">Write classification, as for <see cref="DecomposeAsync"/>.</param>
+    /// <param name="ct">Cancels the operation.</param>
     /// <returns>Total number of records deleted across all V4 tables.</returns>
     Task<long> BulkDeleteAsync(string? find, WriteOrigin origin, CancellationToken ct = default);
 
@@ -55,6 +60,8 @@ public interface IEntryDecomposer
     /// <see cref="DecompositionResult.CorrelationId"/>.
     /// </summary>
     /// <param name="entries">The legacy entries to decompose.</param>
+    /// <param name="origin">Write classification, as for <see cref="DecomposeAsync"/>.</param>
+    /// <param name="ct">Cancels the operation.</param>
     /// <returns>
     /// A <see cref="DecompositionResult"/> whose <see cref="DecompositionResult.CreatedRecords"/>
     /// contains all bulk-inserted v4 records. Entries with unrecognised types are skipped.

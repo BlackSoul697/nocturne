@@ -22,6 +22,7 @@ using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Services.Demo.Configuration;
 using Nocturne.Services.Demo.Services;
 using Nocturne.Infrastructure.Data.Services;
+using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.API.Services.Seeding;
 

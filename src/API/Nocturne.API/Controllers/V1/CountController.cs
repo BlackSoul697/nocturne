@@ -20,7 +20,7 @@ namespace Nocturne.API.Controllers.V1;
 /// Count controller that provides 1:1 compatibility with Nightscout count endpoints.
 /// Implements the /api/v1/count/* endpoints from the legacy JavaScript implementation.
 /// </summary>
-/// <seealso cref="IEntryStore"/>
+/// <seealso cref="IEntryService"/>
 /// <seealso cref="ITreatmentStore"/>
 /// <seealso cref="DeviceStatusProjectionService"/>
 /// <seealso cref="IProfileProjectionService"/>
@@ -41,7 +41,7 @@ public class CountController : ControllerBase
 
     private const string UnreadableFindMessage = "The find carries no condition the activity collection can read.";
 
-    private readonly IEntryStore _entryStore;
+    private readonly IEntryService _entryService;
     private readonly ITreatmentStore _treatmentStore;
     private readonly DeviceStatusProjectionService _deviceStatusProjection;
     private readonly IProfileProjectionService _profileProjectionService;
@@ -53,7 +53,7 @@ public class CountController : ControllerBase
     /// <summary>
     /// Initializes a new instance of <see cref="CountController"/>.
     /// </summary>
-    /// <param name="entryStore">Store for glucose entry records.</param>
+    /// <param name="entryService">Service for glucose entry records.</param>
     /// <param name="treatmentStore">Store for treatment records.</param>
     /// <param name="deviceStatusProjection">Projection of V4 snapshots into legacy device status.</param>
     /// <param name="profileProjectionService">Service for profile projection and counting.</param>
@@ -62,7 +62,7 @@ public class CountController : ControllerBase
     /// <param name="timeProvider">Clock for the legacy default treatment find window.</param>
     /// <param name="logger">Logger instance.</param>
     public CountController(
-        IEntryStore entryStore,
+        IEntryService entryService,
         ITreatmentStore treatmentStore,
         DeviceStatusProjectionService deviceStatusProjection,
         IProfileProjectionService profileProjectionService,
@@ -72,7 +72,7 @@ public class CountController : ControllerBase
         ILogger<CountController> logger
     )
     {
-        _entryStore = entryStore;
+        _entryService = entryService;
         _treatmentStore = treatmentStore;
         _deviceStatusProjection = deviceStatusProjection;
         _profileProjectionService = profileProjectionService;
@@ -110,7 +110,7 @@ public class CountController : ControllerBase
 
         try
         {
-            var count = await _entryStore.CountAsync(find, type, cancellationToken);
+            var count = await _entryService.CountEntriesAsync(find, type, cancellationToken);
 
             _logger.LogDebug("Found {Count} entries matching criteria", count);
             return LegacyCountResult.For(count);
@@ -345,7 +345,7 @@ public class CountController : ControllerBase
             switch (storage.ToLowerInvariant())
             {
                 case "entries":
-                    count = await _entryStore.CountAsync(
+                    count = await _entryService.CountEntriesAsync(
                         LegacyFindQueryString.Resolve(HttpContext?.Request, find),
                         type,
                         cancellationToken

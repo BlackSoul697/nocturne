@@ -18,7 +18,7 @@ namespace Nocturne.API.Services.Entries;
 /// Sgv reads serve the canonical glucose stream: legacy clients get one coherent series even
 /// when multiple CGMs report concurrently.
 /// </summary>
-public class EntryReadService : IEntryStore
+internal class EntryReadService : IEntryStore
 {
     /// <summary>
     /// Canonical selection drops losing-stream rows after the DB query, so limit-based sgv

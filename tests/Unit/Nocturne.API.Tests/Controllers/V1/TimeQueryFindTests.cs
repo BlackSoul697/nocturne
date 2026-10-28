@@ -9,7 +9,6 @@ using Nocturne.API.Controllers.V1;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Legacy;
 using Nocturne.API.Services.Platform;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;

@@ -8,7 +8,6 @@ using Nocturne.API.Controllers.V3;
 using Nocturne.API.Services.Devices;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Effects;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Legacy;
@@ -19,6 +18,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
+using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.API.Tests.Controllers.V3;
 

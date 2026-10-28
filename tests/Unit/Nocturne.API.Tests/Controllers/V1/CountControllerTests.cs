@@ -19,13 +19,10 @@ using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.API.Tests.Controllers.V1;
 
-/// <summary>
-/// Unit tests for CountController verifying IEntryStore integration.
-/// </summary>
 [Trait("Category", "Unit")]
 public class CountControllerTests
 {
-    private readonly Mock<IEntryStore> _mockEntryStore;
+    private readonly Mock<IEntryService> _mockEntryService;
     private readonly Mock<ITreatmentStore> _mockTreatmentStore;
     private readonly Mock<IDeviceStatusGroupRepository> _mockDeviceStatusGroupRepository;
     private readonly Mock<IProfileProjectionService> _mockProfileProjectionService;
@@ -36,7 +33,7 @@ public class CountControllerTests
 
     public CountControllerTests()
     {
-        _mockEntryStore = new Mock<IEntryStore>();
+        _mockEntryService = new Mock<IEntryService>();
         _mockTreatmentStore = new Mock<ITreatmentStore>();
         _mockDeviceStatusGroupRepository = new Mock<IDeviceStatusGroupRepository>();
         _mockProfileProjectionService = new Mock<IProfileProjectionService>();
@@ -45,7 +42,7 @@ public class CountControllerTests
         _mockLogger = new Mock<ILogger<CountController>>();
 
         _controller = new CountController(
-            _mockEntryStore.Object,
+            _mockEntryService.Object,
             _mockTreatmentStore.Object,
             DeviceStatusProjection(_mockDeviceStatusGroupRepository),
             _mockProfileProjectionService.Object,
@@ -85,13 +82,13 @@ public class CountControllerTests
     }
 
     [Fact]
-    public async Task CountEntries_DelegatesToEntryStore()
+    public async Task CountEntries_DelegatesToEntryService()
     {
         // Arrange
         var find = "{\"type\":\"sgv\"}";
         var type = "sgv";
-        _mockEntryStore
-            .Setup(s => s.CountAsync(find, type, It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(s => s.CountEntriesAsync(find, type, It.IsAny<CancellationToken>()))
             .ReturnsAsync(42L);
 
         // Act
@@ -100,20 +97,20 @@ public class CountControllerTests
         // Assert
         Rows(result).Should().ContainSingle().Which.Count.Should().Be(42L);
 
-        _mockEntryStore.Verify(
-            s => s.CountAsync(find, type, It.IsAny<CancellationToken>()),
+        _mockEntryService.Verify(
+            s => s.CountEntriesAsync(find, type, It.IsAny<CancellationToken>()),
             Times.Once
         );
     }
 
     [Fact]
-    public async Task CountGeneric_Entries_DelegatesToEntryStore()
+    public async Task CountGeneric_Entries_DelegatesToEntryService()
     {
         // Arrange
         var find = "{\"dateString\":{\"$gte\":\"2024-01-01\"}}";
         var type = "mbg";
-        _mockEntryStore
-            .Setup(s => s.CountAsync(find, type, It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(s => s.CountEntriesAsync(find, type, It.IsAny<CancellationToken>()))
             .ReturnsAsync(7L);
 
         // Act
@@ -122,8 +119,8 @@ public class CountControllerTests
         // Assert
         Rows(result).Should().ContainSingle().Which.Count.Should().Be(7L);
 
-        _mockEntryStore.Verify(
-            s => s.CountAsync(find, type, It.IsAny<CancellationToken>()),
+        _mockEntryService.Verify(
+            s => s.CountEntriesAsync(find, type, It.IsAny<CancellationToken>()),
             Times.Once
         );
     }
@@ -185,8 +182,8 @@ public class CountControllerTests
     {
         const string queryString = "find[type]=sgv&find[sgv][$gte]=100";
         _controller.ControllerContext.HttpContext.Request.QueryString = new QueryString("?" + queryString);
-        _mockEntryStore
-            .Setup(s => s.CountAsync(queryString, null, It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(s => s.CountEntriesAsync(queryString, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(2L);
 
         var result = await _controller.CountEntries(find: null);
@@ -199,8 +196,8 @@ public class CountControllerTests
     {
         const string queryString = "find%5Btype%5D=mbg";
         _controller.ControllerContext.HttpContext.Request.QueryString = new QueryString("?" + queryString);
-        _mockEntryStore
-            .Setup(s => s.CountAsync(queryString, null, It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(s => s.CountEntriesAsync(queryString, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1L);
 
         var result = await _controller.CountGeneric("entries", find: null);
@@ -282,8 +279,8 @@ public class CountControllerTests
     [Fact]
     public async Task CountEntries_StoreFailure_Answers500()
     {
-        _mockEntryStore
-            .Setup(s => s.CountAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        _mockEntryService
+            .Setup(s => s.CountEntriesAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("synthetic"));
 
         (await _controller.CountEntries()).Result.Should().BeOfType<ObjectResult>()

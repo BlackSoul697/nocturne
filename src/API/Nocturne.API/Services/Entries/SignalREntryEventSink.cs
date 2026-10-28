@@ -2,7 +2,6 @@ using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Models;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Caching;
-using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Realtime;
 
 namespace Nocturne.API.Services.Entries;
@@ -16,13 +15,13 @@ namespace Nocturne.API.Services.Entries;
 /// The only cache this clears is eHbA1c: the years a written reading reaches (<see cref="OnWrittenAsync"/>),
 /// or all of them after a bulk delete. The entry reads are cleared by
 /// <see cref="Nocturne.Core.Contracts.V4.ILegacyReadCacheInvalidation"/>. V4 decomposition is disabled
-/// here because <see cref="EntryService"/> writes directly to V4 tables via <see cref="Nocturne.Core.Contracts.V4.IEntryDecomposer"/> before side effects fire.
+/// here because <see cref="EntryService"/> writes directly to V4 tables via <see cref="IEntryDecomposer"/> before side effects fire.
 /// <c>dataUpdate</c> broadcasts are suppressed on single-record updates to avoid duplicate client refreshes.
 /// </remarks>
 /// <seealso cref="IDataEventSink{T}"/>
 /// <seealso cref="IWriteSideEffects"/>
 /// <seealso cref="EntryService"/>
-public class SignalREntryEventSink : IDataEventSink<Entry>
+internal class SignalREntryEventSink : IDataEventSink<Entry>
 {
     private readonly IWriteSideEffects _sideEffects;
     private readonly ILogger<SignalREntryEventSink> _logger;

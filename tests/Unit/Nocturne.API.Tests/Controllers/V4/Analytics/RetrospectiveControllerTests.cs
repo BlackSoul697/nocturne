@@ -10,7 +10,6 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Repositories;

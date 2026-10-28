@@ -10,7 +10,6 @@ using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Effects;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Repositories;

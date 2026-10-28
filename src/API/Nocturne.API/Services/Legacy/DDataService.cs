@@ -28,7 +28,7 @@ public class DDataService : IDDataService
     private const long FrameTreatmentsWindowMills = 5 * DayMills / 2;
     private const long LiveFrameWindowMills = 5L * 60 * 1000;
 
-    private readonly IEntryStore _store;
+    private readonly IEntryService _entries;
     private readonly ITreatmentService _treatments;
     private readonly IProfileProjectionService _profiles;
     private readonly DeviceStatusProjectionService _projectionService;
@@ -60,7 +60,7 @@ public class DDataService : IDDataService
     };
 
     public DDataService(
-        IEntryStore store,
+        IEntryService entries,
         ITreatmentService treatments,
         IProfileProjectionService profiles,
         DeviceStatusProjectionService projectionService,
@@ -71,7 +71,7 @@ public class DDataService : IDDataService
         ILogger<DDataService> logger)
     {
         _time = timeProvider;
-        _store = store;
+        _entries = entries;
         _treatments = treatments;
         _profiles = profiles;
         _projectionService = projectionService;
@@ -648,7 +648,7 @@ public class DDataService : IDDataService
         try
         {
             // Load SGV entries with type filter - reduced count to prevent memory issues
-            var sgvs = await _store.QueryAsync(
+            var sgvs = await _entries.QueryEntriesAsync(
                 FrameEntryQuery(ddata, "sgv", timestamp),
                 cancellationToken);
             ddata.Sgvs = sgvs.ToList();
@@ -727,7 +727,7 @@ public class DDataService : IDDataService
         try
         {
             // Load MBG entries with type filter - reduced count to prevent memory issues
-            var mbgs = await _store.QueryAsync(
+            var mbgs = await _entries.QueryEntriesAsync(
                 FrameEntryQuery(ddata, "mbg", timestamp),
                 cancellationToken);
             ddata.Mbgs = mbgs.ToList();
@@ -748,7 +748,7 @@ public class DDataService : IDDataService
         try
         {
             // Load calibration entries with type filter - reduced count to prevent memory issues
-            var cals = await _store.QueryAsync(
+            var cals = await _entries.QueryEntriesAsync(
                 FrameEntryQuery(ddata, "cal", timestamp),
                 cancellationToken);
             ddata.Cals = cals.ToList();

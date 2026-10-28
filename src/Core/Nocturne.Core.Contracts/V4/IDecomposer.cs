@@ -8,7 +8,6 @@ namespace Nocturne.Core.Contracts.V4;
 /// </summary>
 /// <typeparam name="T">The legacy domain model type (Entry, Treatment, DeviceStatus, Activity, Profile).</typeparam>
 /// <seealso cref="IDecompositionPipeline"/>
-/// <seealso cref="IEntryDecomposer"/>
 /// <seealso cref="ITreatmentDecomposer"/>
 /// <seealso cref="IDeviceStatusDecomposer"/>
 /// <seealso cref="IActivityDecomposer"/>

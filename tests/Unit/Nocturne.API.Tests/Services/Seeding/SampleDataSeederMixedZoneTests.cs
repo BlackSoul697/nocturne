@@ -5,6 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Seeding;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Multitenancy;

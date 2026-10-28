@@ -5,9 +5,9 @@ using Moq;
 using Npgsql;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.API.Services.ConnectorPublishing;
-using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
+using Nocturne.API.Tests.Services.Entries;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Audit;
@@ -195,18 +195,7 @@ public class PublishSkippedDeletedTests : IDisposable
         var meterGlucose = new MeterGlucoseRepository(ctxFactory, audit, NullLogger<MeterGlucoseRepository>.Instance);
         var calibration = new CalibrationRepository(ctxFactory, audit, NullLogger<CalibrationRepository>.Instance);
 
-        var config = new Mock<IGlucoseProcessingConfigProvider>();
-        config.Setup(c => c.GetSourceDefaultsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<GlucoseProcessingSourceDefault>());
-        config.Setup(c => c.GetPreferredProcessingAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GlucoseProcessing?)null);
-
-        var decomposer = new EntryDecomposer(
-            sensorGlucose, meterGlucose, calibration, new GlucoseProcessingResolver(config.Object),
-            Mock.Of<IPatientDeviceStamper>(), audit, NullLogger<EntryDecomposer>.Instance);
-        var entryService = new EntryService(
-            Mock.Of<IEntryStore>(), decomposer, Mock.Of<IEntryCache>(),
-            NullLogger<EntryService>.Instance);
+        var entryService = WritingEntryService.Over(sensorGlucose, meterGlucose, calibration, audit);
 
         return new GlucosePublisher(
             entryService, sensorGlucose, meterGlucose, calibration, Mock.Of<IPatientDeviceStamper>(),

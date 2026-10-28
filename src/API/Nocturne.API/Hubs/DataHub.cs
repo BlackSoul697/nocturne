@@ -4,10 +4,10 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Realtime;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Queries;
+using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.API.Hubs;
 

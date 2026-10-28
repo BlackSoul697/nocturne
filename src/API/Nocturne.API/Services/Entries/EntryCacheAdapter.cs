@@ -3,7 +3,6 @@ using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Entries;
 using Nocturne.Infrastructure.Cache.Constants;
-using Nocturne.API.Services.Glucose;
 
 namespace Nocturne.API.Services.Entries;
 
@@ -14,7 +13,7 @@ namespace Nocturne.API.Services.Entries;
 /// </summary>
 /// <seealso cref="IEntryCache"/>
 /// <seealso cref="EntryService"/>
-public class EntryCacheAdapter : IEntryCache
+internal class EntryCacheAdapter : IEntryCache
 {
     /// <summary>The <see cref="ITenantCache"/> key family every entry read is cached under.</summary>
     private const string CacheFamily = TenantCacheFamily.Entries;

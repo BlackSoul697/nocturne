@@ -10,6 +10,7 @@ using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities.V4;
+using Nocturne.API.Services.Entries;
 
 namespace Nocturne.API.Services.V4;
 
@@ -23,7 +24,7 @@ namespace Nocturne.API.Services.V4;
 /// </summary>
 /// <seealso cref="IEntryDecomposer"/>
 /// <seealso cref="IDecomposer{T}"/>
-public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Entry>
+internal class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Entry>
 {
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
     private readonly IMeterGlucoseRepository _meterGlucoseRepository;
