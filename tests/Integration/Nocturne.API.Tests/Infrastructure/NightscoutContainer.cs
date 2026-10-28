@@ -21,10 +21,14 @@ public class NightscoutContainer : IAsyncDisposable
     private const int NightscoutPort = 1337;
     private const string MongoNetworkAlias = "mongodb";
 
+    private static readonly string[] DataCollections =
+        ["entries", "treatments", "devicestatus", "food", "profile", "settings", "activity"];
+
     private INetwork? _network;
     private IContainer? _mongoContainer;
     private IContainer? _nightscoutContainer;
     private HttpClient? _httpClient;
+    private MongoClient? _mongoClient;
 
     public string BaseUrl { get; private set; } = string.Empty;
     public string MongoConnectionString { get; private set; } = string.Empty;
@@ -84,6 +88,7 @@ public class NightscoutContainer : IAsyncDisposable
         var mongoHost = _mongoContainer.Hostname;
         var mongoPort = _mongoContainer.GetMappedPublicPort(27017);
         MongoConnectionString = $"mongodb://{mongoHost}:{mongoPort}/nightscout";
+        _mongoClient = new MongoClient(MongoConnectionString);
 
         // Build internal MongoDB connection string for Nightscout container
         // Nightscout needs to connect via Docker network, not localhost
@@ -225,95 +230,56 @@ public class NightscoutContainer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Clears all data from Nightscout collections
+    /// Empties every collection a parity test writes and makes Nightscout drop its in-memory
+    /// copy of them, leaving it as it was before any test wrote.
     /// </summary>
+    /// <remarks>
+    /// Nightscout serves v1 entries, treatments and device statuses, and builds ddata, from a cache
+    /// of recent documents that every reload merges into what it reads from Mongo, so a document
+    /// deleted in Mongo alone stays in what it serves. A v1 delete whose query names no <c>_id</c>
+    /// clears that cache for all three collections and requests the reload that
+    /// <c>ParityTestBase.WaitForNightscoutEmptyAsync</c> waits for. So the collections are emptied
+    /// in Mongo, as v3 permanent deletes would, then, if that removed anything, such a delete, which
+    /// by then matches nothing, clears the cache. Every write a test makes through the API keeps the
+    /// cache in step with Mongo, so collections that were already empty leave nothing to clear. It
+    /// throws rather than let a test start on a document it left behind.
+    /// </remarks>
     public async Task CleanupDataAsync(CancellationToken cancellationToken = default)
     {
-        if (_httpClient == null) return;
+        if (_httpClient == null || _mongoClient == null) return;
 
-        // Create a JWT-authenticated client for V3 cleanup operations
-        using var v3Client = new HttpClient
-        {
-            BaseAddress = new Uri(BaseUrl!),
-            Timeout = TimeSpan.FromSeconds(30)
-        };
-        v3Client.DefaultRequestHeaders.Add("Accept", "application/json");
-        if (!string.IsNullOrEmpty(JwtToken))
-        {
-            v3Client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
-        }
+        var database = _mongoClient.GetDatabase("nightscout");
+        var deletes = await Task.WhenAll(DataCollections.Select(name => database.GetCollection<BsonDocument>(name)
+            .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken)));
 
-        // Use V3 API for cleanup - it supports deletion by identifier
-        // Include all collections that can have test data
-        var v3Collections = new[] { "entries", "treatments", "devicestatus", "food", "profile", "settings" };
-        foreach (var collection in v3Collections)
+        if (deletes.Any(d => d.DeletedCount > 0))
         {
-            try
+            using var flush = await _httpClient.DeleteAsync(
+                "/api/v1/treatments/?find[created_at][$gte]=1970-01-01T00:00:00.000Z", cancellationToken);
+            if (!flush.IsSuccessStatusCode)
             {
-                // Keep fetching and deleting until no more documents
-                int deleted;
-                int maxIterations = 10; // Prevent infinite loops
-                int iteration = 0;
-                do
-                {
-                    deleted = 0;
-                    iteration++;
-                    var getResponse = await v3Client.GetAsync(
-                        $"/api/v3/{collection}?limit=100",
-                        cancellationToken);
-
-                    if (!getResponse.IsSuccessStatusCode) break;
-
-                    var content = await getResponse.Content.ReadAsStringAsync(cancellationToken);
-                    using var doc = System.Text.Json.JsonDocument.Parse(content);
-
-                    if (doc.RootElement.TryGetProperty("result", out var results))
-                    {
-                        foreach (var item in results.EnumerateArray())
-                        {
-                            // Try both 'identifier' and '_id' field names
-                            string? identifier = null;
-                            if (item.TryGetProperty("identifier", out var idProp))
-                            {
-                                identifier = idProp.GetString();
-                            }
-                            else if (item.TryGetProperty("_id", out var mongoIdProp))
-                            {
-                                identifier = mongoIdProp.GetString();
-                            }
-
-                            if (!string.IsNullOrEmpty(identifier))
-                            {
-                                var deleteResponse = await v3Client.DeleteAsync(
-                                    $"/api/v3/{collection}/{identifier}?permanent=true",
-                                    cancellationToken);
-                                if (deleteResponse.IsSuccessStatusCode)
-                                    deleted++;
-                            }
-                        }
-                    }
-                } while (deleted > 0 && iteration < maxIterations);
-            }
-            catch
-            {
-                // Ignore cleanup errors
+                throw new InvalidOperationException(
+                    $"Nightscout answered {(int)flush.StatusCode} to the v1 treatments delete that clears its cache: "
+                    + await flush.Content.ReadAsStringAsync(cancellationToken));
             }
         }
 
-        // Activity has no v3 API, and v1 reads it straight from MongoDB with no cache in between,
-        // so it is emptied there.
-        var database = new MongoClient(MongoConnectionString).GetDatabase("nightscout");
-        await database.GetCollection<BsonDocument>("activity")
-            .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken);
-
-        // Small delay to ensure deletions are fully processed
-        await Task.Delay(50, cancellationToken);
+        var counts = await Task.WhenAll(DataCollections.Select(async name => (
+            Name: name,
+            Count: await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(
+                FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken))));
+        var left = counts.Where(c => c.Count > 0).Select(c => $"{c.Name} ({c.Count})").ToList();
+        if (left.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Nightscout cleanup left documents in: {string.Join(", ", left)}.");
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         _httpClient?.Dispose();
+        _mongoClient?.Dispose();
 
         if (_nightscoutContainer != null)
         {
