@@ -71,7 +71,7 @@ public class DDataServiceTests
             _mockFoodRepository.Object,
             _mockActivityService.Object,
             _mockStoreSize.Object,
-            _mockLogger.Object
+            TimeProvider.System, _mockLogger.Object
         );
     }
 
