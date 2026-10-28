@@ -320,6 +320,7 @@ public class LegacyPostBodyTests
             Mock.Of<IUploaderSnapshotRepository>(),
             Mock.Of<IStateSpanRepository>(),
             Mock.Of<IDeviceStatusExtrasRepository>(),
+            TimeProvider.System,
             NullLogger<DeviceStatusProjectionService>.Instance);
         var single = $$"""{"app":"AAPS","Device":"openaps://phone","Mills":{{Millis}}}""";
         var malformed = """{"app":"AAPS","Device":"openaps://phone","Mills":"abc"}""";

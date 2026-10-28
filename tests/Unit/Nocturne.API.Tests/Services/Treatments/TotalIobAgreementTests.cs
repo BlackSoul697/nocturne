@@ -572,6 +572,7 @@ public class TotalIobAgreementTests
             Mock.Of<IUploaderSnapshotRepository>(),
             MockStateSpans.Empty().Object,
             Mock.Of<IDeviceStatusExtrasRepository>(),
+            TimeProvider.System,
             NullLogger<DeviceStatusProjectionService>.Instance);
         var controller = new RetrospectiveController(
             _calculator, _cob.Object, entries.Object, Boluses(ReadingMills), _carbs.Object, TempBasals(ReadingMills),

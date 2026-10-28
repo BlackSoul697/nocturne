@@ -205,5 +205,5 @@ public class UnitsAndTimezoneServiceTests
     private NocturneDbContext Context() => new(_options) { TenantId = TenantId };
 
     private static UISettingsService UiSettings(NocturneDbContext db) =>
-        new(new TestNocturneDbContextFactory(db), NullLogger<UISettingsService>.Instance);
+        new(new TestNocturneDbContextFactory(db), TimeProvider.System, NullLogger<UISettingsService>.Instance);
 }

@@ -66,6 +66,7 @@ public class MealMatchingServiceTests
             _notificationService.Object,
             _notificationRepository.Object,
             _settingsService.Object,
+            TimeProvider.System,
             Mock.Of<ILogger<MealMatchingService>>());
 
     /// <summary>
@@ -93,6 +94,7 @@ public class MealMatchingServiceTests
             _notificationService.Object,
             _notificationRepository.Object,
             settings,
+            TimeProvider.System,
             Mock.Of<ILogger<MealMatchingService>>());
     }
 
