@@ -14432,18 +14432,15 @@ msgstr "Keine Blätter zum Auswerten."
 msgid "Resolved"
 msgstr "Behoben"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "Previous month"
 msgstr "Vorheriger Monat"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "loading…"
 msgstr "Wird geladen …"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "Next month"
 msgstr "Nächster Monat"
 
@@ -28572,8 +28569,7 @@ msgstr ""
 #~ msgid "Silence Alarms"
 #~ msgstr ""
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "This calendar cannot show each day's glucose trace."
 msgstr ""
 

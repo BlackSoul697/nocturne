@@ -14432,18 +14432,15 @@ msgstr "No leaves to evaluate."
 msgid "Resolved"
 msgstr "Resolved"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "Previous month"
 msgstr "Previous month"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "loading…"
 msgstr "loading…"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "Next month"
 msgstr "Next month"
 
@@ -28572,8 +28569,7 @@ msgstr "Silence an alarm for all members for a time"
 #~ msgid "Silence Alarms"
 #~ msgstr "Silence Alarms"
 
-#: src/lib/components/alerts/GlucoseCalendarPicker.svelte
-#: src/lib/components/alerts/GlucoseRangeCalendarPicker.svelte
+#: src/lib/components/alerts/GlucoseMonthGrid.svelte
 msgid "This calendar cannot show each day's glucose trace."
 msgstr "This calendar cannot show each day's glucose trace."
 
