@@ -49,7 +49,7 @@ public sealed class GoogleHealthConnectorService(
         ISyncProgressReporter? progressReporter = null) =>
         since is { } requestedFrom
             ? base.SyncDataAsync(new SyncRequest { From = requestedFrom }, config, cancellationToken, progressReporter)
-            : base.SyncDataAsync(config, cancellationToken, DateTime.UtcNow, progressReporter);
+            : base.SyncDataAsync(config, cancellationToken, Clock.GetUtcNow().UtcDateTime, progressReporter);
 
     // Google Health owns its health cursors; a base glucose watermark must not become a repair bound.
     protected override SyncRequest CreateBackgroundSyncRequest(DateTime? since) => new();
