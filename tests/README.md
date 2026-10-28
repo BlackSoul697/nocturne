@@ -142,8 +142,8 @@ migration chain themselves. A migration test that seeds part-way along the chain
 `CreateDatabaseAtMigrationAsync(migration, prefix)` for a database migrated up to that migration:
 it clones the nearest checkpoint at or below it and migrates the rest (at most 24 migrations). The
 checkpoints are template databases every 25 migrations, each built once per process on first use by
-cloning the one before it and migrating forward, so a process walks the chain once however many
-tests start part-way along it. A migration name not in the chain throws.
+cloning the one before it and migrating forward; the fully migrated template is built apart from
+them. A migration name not in the chain throws.
 
 **`ApiIntegrationTestFixture`** runs the API with `WebApplicationFactory` on a real Kestrel port
 (so HttpClient and SignalR connect over sockets) as Development, against its own `SharedPostgres`
