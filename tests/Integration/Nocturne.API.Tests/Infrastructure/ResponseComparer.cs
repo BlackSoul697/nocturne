@@ -302,7 +302,7 @@ public class ResponseComparer
         var actualJson = actual.ToJsonString();
 
         if (expectedJson != actualJson
-            && !(_options.IobTolerantPaths.Contains(path) && IsWithinIobTolerance(expectedJson, actualJson)))
+            && !(ReloadLagToleranceFor(path) is { } tolerance && IsWithinTolerance(expectedJson, actualJson, tolerance)))
         {
             result.AddDifference(path, expectedJson, actualJson);
         }
@@ -310,7 +310,21 @@ public class ResponseComparer
 
     private static readonly Regex NumberToken = new(@"-?\d+(?:\.\d+)?", RegexOptions.Compiled);
 
-    private static bool IsWithinIobTolerance(string expected, string actual)
+    private decimal? ReloadLagToleranceFor(string path)
+    {
+        var segments = path.Split('.');
+        foreach (var (pattern, tolerance) in _options.ReloadLagTolerances)
+        {
+            var patternSegments = pattern.Split('.');
+            if (patternSegments.Length == segments.Length
+                && patternSegments.Zip(segments).All(pair => pair.First == "*" || pair.First == pair.Second))
+                return tolerance;
+        }
+
+        return null;
+    }
+
+    private static bool IsWithinTolerance(string expected, string actual, decimal tolerance)
     {
         var expectedNumbers = NumberToken.Matches(expected);
         var actualNumbers = NumberToken.Matches(actual);
@@ -326,7 +340,7 @@ public class ResponseComparer
 
         var difference = decimal.Parse(expectedNumbers[0].Value, CultureInfo.InvariantCulture)
             - decimal.Parse(actualNumbers[0].Value, CultureInfo.InvariantCulture);
-        return Math.Abs(difference) <= ComparisonOptions.IobTolerance;
+        return Math.Abs(difference) <= tolerance;
     }
 
     private static int FractionDigits(string number)
@@ -448,28 +462,30 @@ public class ComparisonOptions
     public IReadOnlyList<ValueNormaliser> ValueNormalisers { get; init; } = [];
 
     /// <summary>
-    /// The most an IOB-derived value may differ by. Nightscout serves the properties it computed
-    /// at its last data tick, up to a few seconds before the request, where Nocturne computes at
-    /// the request, so an IOB near a rounding boundary lands a hundredth apart.
+    /// The body paths whose number may differ by the paired amount, a <c>*</c> segment standing for
+    /// any one key. Nightscout serves the properties it computed at its last data reload, up to a
+    /// few seconds before the request, where Nocturne computes at the request. A value derived from
+    /// now therefore lands one tick apart: an IOB near a rounding boundary a hundredth, and the
+    /// minutes within the hour of a device age one minute, whenever a minute ticks in that lag.
+    /// The age, days and hours of a device change only at an hour boundary, which that lag crosses
+    /// about once in 1,200 minute ticks, so they compare exactly. Every other path compares exactly.
     /// </summary>
-    public const decimal IobTolerance = 0.01m;
+    public static readonly IReadOnlyList<(string Path, decimal Tolerance)> ReloadLagToleranceTable =
+    [
+        ("Body.state.iob", 0.01m),
+        ("Body.state.bwp", 0.01m),
+        ("Body.iob.display", 0.01m),
+        ("Body.iob.displayLine", 0.01m),
+        ("Body.cage.minFractions", 1m),
+        ("Body.iage.minFractions", 1m),
+        ("Body.bage.minFractions", 1m),
+        ("Body.sage.*.minFractions", 1m)
+    ];
 
     /// <summary>
-    /// The body paths whose number may differ by <see cref="IobTolerance"/>: the IOB, the bolus
-    /// estimate and the IOB displays, which all follow the IOB. Every other path compares exactly.
+    /// Body paths compared with a tolerance, empty unless <see cref="WithReloadLagTolerance"/>
     /// </summary>
-    public static readonly IReadOnlySet<string> IobDerivedPaths = new HashSet<string>
-    {
-        "Body.state.iob",
-        "Body.state.bwp",
-        "Body.iob.display",
-        "Body.iob.displayLine"
-    };
-
-    /// <summary>
-    /// Body paths compared with <see cref="IobTolerance"/>, empty unless <see cref="WithIobTolerance"/>
-    /// </summary>
-    public IReadOnlySet<string> IobTolerantPaths { get; init; } = new HashSet<string>();
+    public IReadOnlyList<(string Path, decimal Tolerance)> ReloadLagTolerances { get; init; } = [];
 
     /// <summary>
     /// HTTP headers to compare
@@ -522,7 +538,7 @@ public class ComparisonOptions
         TimestampFields = new HashSet<string>(source.TimestampFields);
         HeadersToCompare = new HashSet<string>(source.HeadersToCompare);
         ValueNormalisers = source.ValueNormalisers;
-        IobTolerantPaths = source.IobTolerantPaths;
+        ReloadLagTolerances = source.ReloadLagTolerances;
         AllowExtraActualFields = source.AllowExtraActualFields;
         StatusCodeOnlyForErrors = source.StatusCodeOnlyForErrors;
     }
@@ -538,9 +554,9 @@ public class ComparisonOptions
     }
 
     /// <summary>
-    /// Create options that compare <see cref="IobDerivedPaths"/> to within <see cref="IobTolerance"/>
+    /// Create options that compare the paths of <see cref="ReloadLagToleranceTable"/> to within their tolerance
     /// </summary>
-    public ComparisonOptions WithIobTolerance() => new(this) { IobTolerantPaths = IobDerivedPaths };
+    public ComparisonOptions WithReloadLagTolerance() => new(this) { ReloadLagTolerances = ReloadLagToleranceTable };
 
     /// <summary>
     /// Create options with additional fields to ignore
