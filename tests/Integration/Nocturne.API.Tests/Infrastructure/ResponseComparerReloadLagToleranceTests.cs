@@ -5,10 +5,10 @@ using Xunit;
 
 namespace Nocturne.API.Tests.Integration.Infrastructure;
 
-public class ResponseComparerIobToleranceTests
+public class ResponseComparerReloadLagToleranceTests
 {
     private static readonly ResponseComparer Tolerant =
-        new(ComparisonOptions.Default.WithIobTolerance());
+        new(ComparisonOptions.Default.WithReloadLagTolerance());
 
     private static HttpResponseMessage Json(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
@@ -67,19 +67,64 @@ public class ResponseComparerIobToleranceTests
             """{"iob":{"displayLine":"COB: 3.89g"}}""")).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("""{"cage":{"minFractions":4}}""", """{"cage":{"minFractions":5}}""")]
+    [InlineData("""{"iage":{"minFractions":0}}""", """{"iage":{"minFractions":1}}""")]
+    [InlineData("""{"bage":{"minFractions":59}}""", """{"bage":{"minFractions":58}}""")]
+    [InlineData("""{"sage":{"Sensor Start":{"minFractions":2}}}""", """{"sage":{"Sensor Start":{"minFractions":3}}}""")]
+    [InlineData("""{"sage":{"Sensor Change":{"minFractions":2}}}""", """{"sage":{"Sensor Change":{"minFractions":3}}}""")]
+    public async Task A_difference_of_one_minute_on_a_device_age_path_matches(string expected, string actual)
+    {
+        (await MatchesAsync(Tolerant, expected, actual)).Should().BeTrue();
+        (await MatchesAsync(Tolerant, actual, expected)).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("""{"cage":{"minFractions":4}}""", """{"cage":{"minFractions":6}}""")]
+    [InlineData("""{"iage":{"minFractions":0}}""", """{"iage":{"minFractions":2}}""")]
+    [InlineData("""{"bage":{"minFractions":59}}""", """{"bage":{"minFractions":57}}""")]
+    [InlineData("""{"sage":{"Sensor Start":{"minFractions":2}}}""", """{"sage":{"Sensor Start":{"minFractions":4}}}""")]
+    public async Task A_difference_above_one_minute_on_a_device_age_path_does_not_match(string expected, string actual)
+    {
+        (await MatchesAsync(Tolerant, expected, actual)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("""{"cage":{"age":47}}""", """{"cage":{"age":48}}""")]
+    [InlineData("""{"cage":{"hours":23}}""", """{"cage":{"hours":0}}""")]
+    [InlineData("""{"sage":{"Sensor Start":{"age":120}}}""", """{"sage":{"Sensor Start":{"age":121}}}""")]
+    [InlineData("""{"sage":{"Sensor Start":{"hours":0}}}""", """{"sage":{"Sensor Start":{"hours":1}}}""")]
+    [InlineData("""{"iage":{"days":1}}""", """{"iage":{"days":2}}""")]
+    [InlineData("""{"bage":{"display":"5d0h"}}""", """{"bage":{"display":"5d1h"}}""")]
+    [InlineData("""{"cage":{"details":{"minFractions":4}}}""", """{"cage":{"details":{"minFractions":5}}}""")]
+    public async Task A_difference_of_one_off_the_minute_paths_does_not_match(string expected, string actual)
+    {
+        (await MatchesAsync(Tolerant, expected, actual)).Should().BeFalse();
+    }
+
     [Fact]
-    public async Task Options_without_the_tolerance_compare_the_IOB_paths_exactly()
+    public async Task A_difference_of_one_minute_in_a_multi_property_body_matches()
+    {
+        (await MatchesAsync(
+            Tolerant,
+            """{"iob":{"display":"3.89"},"cage":{"minFractions":4},"sage":{"Sensor Start":{"minFractions":2}}}""",
+            """{"iob":{"display":"3.88"},"cage":{"minFractions":5},"sage":{"Sensor Start":{"minFractions":3}}}""")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Options_without_the_tolerance_compare_every_path_exactly()
     {
         var exact = new ResponseComparer(ComparisonOptions.Default);
 
         (await MatchesAsync(exact, """{"state":{"iob":3.89}}""", """{"state":{"iob":3.88}}""")).Should().BeFalse();
+        (await MatchesAsync(exact, """{"cage":{"minFractions":4}}""", """{"cage":{"minFractions":5}}""")).Should().BeFalse();
     }
 
     [Fact]
     public async Task The_tolerance_survives_the_options_copies_the_tests_chain()
     {
         var chained = new ResponseComparer(
-            ComparisonOptions.Default.WithIobTolerance().WithIgnoredFields("serverTime").WithPresenceOnlyFields("activity"));
+            ComparisonOptions.Default.WithReloadLagTolerance().WithIgnoredFields("serverTime").WithPresenceOnlyFields("activity"));
 
         (await MatchesAsync(chained, """{"state":{"iob":3.89}}""", """{"state":{"iob":3.88}}""")).Should().BeTrue();
     }
