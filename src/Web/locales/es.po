@@ -7255,28 +7255,22 @@ msgstr "{0} registro{1} seleccionado"
 #~ msgid "<0/> Delete Selected"
 #~ msgstr "<0/> Eliminar seleccionados"
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
 #: src/lib/components/treatments/edit-dialog/DeviceEventFormFields.svelte
 msgid "Select event type..."
 msgstr "Seleccionar tipo de evento..."
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "Search or enter event type..."
-msgstr "Busca o introduce un tipo de evento..."
+#~ msgid "Search or enter event type..."
+#~ msgstr "Busca o introduce un tipo de evento..."
 
-#. 0: searchValue.trim()
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "Use \"{0}\" as custom type"
-msgstr "Usar «{0}» como tipo personalizado"
+#~ msgid "Use \"{0}\" as custom type"
+#~ msgstr "Usar «{0}» como tipo personalizado"
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
 #: src/lib/components/treatments/edit-dialog/DeviceEventFormFields.svelte
 msgid "No event types found."
 msgstr "No se encontraron tipos de evento."
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "<0/> Create new event type..."
-msgstr "<0/> Crear nuevo tipo de evento..."
+#~ msgid "<0/> Create new event type..."
+#~ msgstr "<0/> Crear nuevo tipo de evento..."
 
 #~ msgid "<0/> None (don't create event)"
 #~ msgstr "<0/> Ninguno (no crear evento)"
@@ -7698,6 +7692,8 @@ msgid "{0} minor"
 msgstr "{0} menores"
 
 #: src/lib/components/reports/loop-analysis/LoopHealthBody.svelte
+#: src/lib/components/trackers/TrackerEditorDialog.svelte
+#: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
 msgid "None"
@@ -29397,18 +29393,15 @@ msgstr ""
 msgid "Off - Do not show on dashboard"
 msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "None - do not create event"
-msgstr ""
+#~ msgid "None - do not create event"
+#~ msgstr ""
 
 #: src/lib/components/trackers/tracker-notification-editor.svelte
 msgid "Each threshold is delivered through a managed alert rule. Use Channels to open that rule. A new threshold gets its rule after you save the tracker."
 msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "<0/> None (do not create event)"
-msgstr ""
+#~ msgid "<0/> None (do not create event)"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/docs/DocsFeedback.svelte
 msgid "Thank you. Consider <0>donating<0/></0> to support our work."

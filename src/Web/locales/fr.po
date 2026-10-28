@@ -7255,28 +7255,22 @@ msgstr ""
 #~ msgid "<0/> Delete Selected"
 #~ msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
 #: src/lib/components/treatments/edit-dialog/DeviceEventFormFields.svelte
 msgid "Select event type..."
 msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "Search or enter event type..."
-msgstr ""
+#~ msgid "Search or enter event type..."
+#~ msgstr ""
 
-#. 0: searchValue.trim()
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "Use \"{0}\" as custom type"
-msgstr ""
+#~ msgid "Use \"{0}\" as custom type"
+#~ msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
 #: src/lib/components/treatments/edit-dialog/DeviceEventFormFields.svelte
 msgid "No event types found."
 msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "<0/> Create new event type..."
-msgstr ""
+#~ msgid "<0/> Create new event type..."
+#~ msgstr ""
 
 #~ msgid "<0/> None (don't create event)"
 #~ msgstr ""
@@ -7698,6 +7692,8 @@ msgid "{0} minor"
 msgstr ""
 
 #: src/lib/components/reports/loop-analysis/LoopHealthBody.svelte
+#: src/lib/components/trackers/TrackerEditorDialog.svelte
+#: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
 msgid "None"
@@ -29400,18 +29396,15 @@ msgstr ""
 msgid "Off - Do not show on dashboard"
 msgstr ""
 
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/trackers/TrackerEditorDialog.svelte
-msgid "None - do not create event"
-msgstr ""
+#~ msgid "None - do not create event"
+#~ msgstr ""
 
 #: src/lib/components/trackers/tracker-notification-editor.svelte
 msgid "Each threshold is delivered through a managed alert rule. Use Channels to open that rule. A new threshold gets its rule after you save the tracker."
 msgstr ""
 
-#: src/lib/components/treatments/EventTypeCombobox.svelte
-msgid "<0/> None (do not create event)"
-msgstr ""
+#~ msgid "<0/> None (do not create event)"
+#~ msgstr ""
 
 #: ../portal/src/lib/components/docs/DocsFeedback.svelte
 msgid "Thank you. Consider <0>donating<0/></0> to support our work."
