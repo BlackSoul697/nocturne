@@ -85,8 +85,7 @@ public sealed class GoogleHealthConnectorConfiguration : BaseConnectorConfigurat
                  CultureInfo.InvariantCulture,
                  DateTimeStyles.RoundtripKind,
                  out var importFrom) ||
-             importFrom < new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero) ||
-             importFrom > DateTimeOffset.UtcNow.AddDays(1)))
+             importFrom < new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero)))
             throw new ArgumentException("Google Health ImportFrom is invalid.");
     }
 }
