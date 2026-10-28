@@ -86,30 +86,11 @@ public class TestNocturneDbContext : NocturneDbContext
         modelBuilder.Entity<TestNonAuditableEntity>(e => e.ClearQueryFilters());
     }
 
-    /// <summary>
-    /// Gives <paramref name="connection"/> this context's schema, copied from one built once per
-    /// test process: <c>EnsureCreated</c> runs the whole model's DDL, about half a second a call.
-    /// </summary>
-    public static void CreateSchema(SqliteConnection connection)
-    {
-        lock (TemplateLock)
-        {
-            Template.Value.BackupDatabase(connection);
-        }
-    }
+    private static readonly SqliteSchemaTemplate Schema = new(connection =>
+        new TestNocturneDbContext(new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options));
 
-    private static readonly Lazy<SqliteConnection> Template = new(() =>
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        using var context = new TestNocturneDbContext(
-            new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options);
-        context.Database.EnsureCreated();
-        return connection;
-    });
-
-    // One connection is not safe for concurrent use, and test classes run in parallel.
-    private static readonly Lock TemplateLock = new();
+    /// <summary>Gives <paramref name="connection"/> this context's schema, from <see cref="SqliteSchemaTemplate"/>.</summary>
+    public static void CreateSchema(SqliteConnection connection) => Schema.CopyInto(connection);
 }
 
 #endregion

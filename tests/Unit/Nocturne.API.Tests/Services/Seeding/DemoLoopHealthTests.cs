@@ -32,11 +32,11 @@ public class DemoLoopHealthTests
     internal static readonly DateTime End = new(2026, 10, 20, 20, 0, 0);
 
     internal sealed record Run(
-        List<DemoTimeStep> Steps,
-        List<Entry> Readings,
-        List<Aid.ApsSnapshot> Snapshots,
-        List<Aid.ApsLoopCycle> Cycles,
-        List<(Treatment Source, Aid.TempBasal Temp, Aid.TempBasalOrigin Default)> Temps,
+        IReadOnlyList<DemoTimeStep> Steps,
+        IReadOnlyList<Entry> Readings,
+        IReadOnlyList<Aid.ApsSnapshot> Snapshots,
+        IReadOnlyList<Aid.ApsLoopCycle> Cycles,
+        IReadOnlyList<(Treatment Source, Aid.TempBasal Temp, Aid.TempBasalOrigin Default)> Temps,
         LoopHealthRange Health);
 
     internal static Run Simulate() => Simulate(End);
