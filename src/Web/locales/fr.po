@@ -38348,3 +38348,7 @@ msgstr ""
 #: src/lib/components/notifications/InstanceKeyChanged.svelte
 msgid "The instance key changed. Nocturne cannot read the saved secrets for these items. Enter each secret again."
 msgstr ""
+
+#: src/lib/components/ui/duration-input/duration-input.svelte
+msgid "Use a whole number of hours."
+msgstr ""
