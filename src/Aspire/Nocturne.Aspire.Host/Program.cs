@@ -877,12 +877,12 @@ class Program
 
         if (builder.ExecutionContext.IsRunMode)
         {
-            // Explicit domain runs on 443, so URLs omit the port; the default
-            // local domain keeps the gateway port and must carry it in
-            // BASE_DOMAIN — consumers build URLs (and strip the port for the
-            // WebAuthn rp.id) from it.
+            // An explicit domain outside a worktree runs on 443, so URLs omit the
+            // port; otherwise the gateway port (1612, or dynamic in a worktree)
+            // must be carried in BASE_DOMAIN — consumers build URLs (and strip
+            // the port for the WebAuthn rp.id) from it.
             var gatewayEndpoint = gateway.GetEndpoint("https");
-            var baseDomainExpr = hasExplicitDomain
+            var baseDomainExpr = hasExplicitDomain && !isWorktree
                 ? ReferenceExpression.Create($"{customDomain}")
                 : ReferenceExpression.Create(
                     $"{customDomain}:{gatewayEndpoint.Property(EndpointProperty.Port)}"

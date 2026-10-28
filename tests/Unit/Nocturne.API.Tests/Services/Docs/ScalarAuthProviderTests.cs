@@ -33,14 +33,14 @@ public class ScalarAuthProviderTests : IDisposable
         var auth = Auth(context);
         auth.Should().NotBeNull();
         auth!.ClientId.Should().NotBeNullOrWhiteSpace();
-        auth.RedirectUri.Should().Be("https://demo.nocturne.run/scalar");
+        auth.RedirectUri.Should().Be("https://demo.nocturne.run/scalar/");
         auth.BearerToken.Should().Be("demo-access-token");
 
         await using var db = _fixture.Db();
         var client = await db.OAuthClients.IgnoreQueryFilters()
             .SingleAsync(c => c.TenantId == tenantId && c.SoftwareId == ScalarAuthProvider.ScalarSoftwareId);
         JsonSerializer.Deserialize<List<string>>(client.RedirectUris)
-            .Should().Equal("https://demo.nocturne.run/scalar");
+            .Should().Equal("https://demo.nocturne.run/scalar/");
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class ScalarAuthProviderTests : IDisposable
 
         var auth = Auth(context);
         auth.Should().NotBeNull();
-        auth!.RedirectUri.Should().Be("https://rhys.nocturne.run/scalar");
+        auth!.RedirectUri.Should().Be("https://rhys.nocturne.run/scalar/");
         auth.BearerToken.Should().BeNull("only a demo tenant's account may be handed out");
         _fixture.SessionService.Verify(
             s => s.IssueSessionAsync(It.IsAny<Guid>(), It.IsAny<SessionContext>(), It.IsAny<CancellationToken>()),
@@ -244,7 +244,7 @@ public class ScalarAuthProviderTests : IDisposable
         var client = await db.OAuthClients.IgnoreQueryFilters()
             .SingleAsync(c => c.TenantId == tenantId);
         JsonSerializer.Deserialize<List<string>>(client.RedirectUris)
-            .Should().Equal("https://demo.nocturne.run/scalar");
+            .Should().Equal("https://demo.nocturne.run/scalar/");
     }
 
     [Fact]
@@ -339,7 +339,7 @@ public class ScalarAuthProviderTests : IDisposable
 
         var auth = Auth(context);
         auth.Should().NotBeNull("a demo beside it does not end single-tenant mode");
-        auth!.RedirectUri.Should().Be($"https://{BaseDomain}/scalar");
+        auth!.RedirectUri.Should().Be($"https://{BaseDomain}/scalar/");
         auth.BearerToken.Should().BeNull("only the demo's own host may carry its token");
     }
 

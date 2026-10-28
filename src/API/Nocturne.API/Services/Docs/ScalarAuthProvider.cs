@@ -221,7 +221,9 @@ public sealed class ScalarAuthProvider
             ? resolved.CanonicalHost
             : $"{resolved.CanonicalHost}:{basePort}";
 
-        return $"{scheme}://{authority}/scalar";
+        // Trailing slash: Scalar answers /scalar with a redirect to scalar/ that drops the query,
+        // and with it the code and state its popup is waiting to read.
+        return $"{scheme}://{authority}/scalar/";
     }
 
     /// <summary>
