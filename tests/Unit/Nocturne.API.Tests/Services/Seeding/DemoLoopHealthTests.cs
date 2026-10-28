@@ -44,7 +44,7 @@ public class DemoLoopHealthTests
     {
         var config = SampleDataSeeder.ConfigurationFor(Days);
         var steps = new DemoDataGenerator(
-                Options.Create(config), NullLogger<DemoDataGenerator>.Instance, NullLoggerFactory.Instance)
+                Options.Create(config), DemoTestClock.Host, NullLogger<DemoDataGenerator>.Instance, NullLoggerFactory.Instance)
             .GenerateHistoricalTimeline(end)
             .ToList();
 
@@ -53,7 +53,7 @@ public class DemoLoopHealthTests
         foreach (var step in steps)
         {
             readings.AddRange(DemoCoverageSeeds.CgmReadings(step));
-            if (DemoDeviceStatusGenerator.ForStep(step, config.TargetGlucose, config.BasalRate) is not { } status)
+            if (DemoDeviceStatusGenerator.ForStep(step, DemoTestClock.Host, config.TargetGlucose, config.BasalRate) is not { } status)
                 continue;
             var snapshot = DeviceStatusDecomposer.MapToApsSnapshot(status, status.Mills.ToString("x24"), SampleDataSeeder.DevSampleDataSource, null)!;
             snapshot.Id = Guid.NewGuid();
@@ -191,7 +191,7 @@ public class DemoLoopHealthTests
         foreach (var (source, temp, _) in run.Temps)
         {
             var end = temp.EndTimestamp!.Value;
-            run.Steps.Where(s => s.Time.ToUniversalTime() >= temp.StartTimestamp && s.Time.ToUniversalTime() < end)
+            run.Steps.Where(s => s.Utc >= temp.StartTimestamp && s.Utc < end)
                 .Should().OnlyContain(s => s.Loop == DemoLoopState.Closed, $"the temp at {source.Created_at} ends by then");
         }
     }
