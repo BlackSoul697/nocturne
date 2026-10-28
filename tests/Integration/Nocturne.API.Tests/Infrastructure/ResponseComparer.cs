@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -300,10 +301,38 @@ public class ResponseComparer
         var expectedJson = expected.ToJsonString();
         var actualJson = actual.ToJsonString();
 
-        if (expectedJson != actualJson)
+        if (expectedJson != actualJson
+            && !(_options.IobTolerantPaths.Contains(path) && IsWithinIobTolerance(expectedJson, actualJson)))
         {
             result.AddDifference(path, expectedJson, actualJson);
         }
+    }
+
+    private static readonly Regex NumberToken = new(@"-?\d+(?:\.\d+)?", RegexOptions.Compiled);
+
+    private static bool IsWithinIobTolerance(string expected, string actual)
+    {
+        var expectedNumbers = NumberToken.Matches(expected);
+        var actualNumbers = NumberToken.Matches(actual);
+        if (expectedNumbers.Count != 1 || actualNumbers.Count != 1)
+            return false;
+
+        if (NumberToken.Replace(expected, "#") != NumberToken.Replace(actual, "#"))
+            return false;
+
+        // A display string is formatted text, so "0" against "0.00" is a difference in itself.
+        if (expected.StartsWith('"') && FractionDigits(expectedNumbers[0].Value) != FractionDigits(actualNumbers[0].Value))
+            return false;
+
+        var difference = decimal.Parse(expectedNumbers[0].Value, CultureInfo.InvariantCulture)
+            - decimal.Parse(actualNumbers[0].Value, CultureInfo.InvariantCulture);
+        return Math.Abs(difference) <= ComparisonOptions.IobTolerance;
+    }
+
+    private static int FractionDigits(string number)
+    {
+        var point = number.IndexOf('.');
+        return point < 0 ? 0 : number.Length - point - 1;
     }
 
     private static bool IsValidTimestamp(string value)
@@ -419,6 +448,30 @@ public class ComparisonOptions
     public IReadOnlyList<ValueNormaliser> ValueNormalisers { get; init; } = [];
 
     /// <summary>
+    /// The most an IOB-derived value may differ by. Nightscout serves the properties it computed
+    /// at its last data tick, up to a few seconds before the request, where Nocturne computes at
+    /// the request, so an IOB near a rounding boundary lands a hundredth apart.
+    /// </summary>
+    public const decimal IobTolerance = 0.01m;
+
+    /// <summary>
+    /// The body paths whose number may differ by <see cref="IobTolerance"/>: the IOB, the bolus
+    /// estimate and the IOB displays, which all follow the IOB. Every other path compares exactly.
+    /// </summary>
+    public static readonly IReadOnlySet<string> IobDerivedPaths = new HashSet<string>
+    {
+        "Body.state.iob",
+        "Body.state.bwp",
+        "Body.iob.display",
+        "Body.iob.displayLine"
+    };
+
+    /// <summary>
+    /// Body paths compared with <see cref="IobTolerance"/>, empty unless <see cref="WithIobTolerance"/>
+    /// </summary>
+    public IReadOnlySet<string> IobTolerantPaths { get; init; } = new HashSet<string>();
+
+    /// <summary>
     /// HTTP headers to compare
     /// </summary>
     public HashSet<string> HeadersToCompare { get; init; } = new()
@@ -458,73 +511,56 @@ public class ComparisonOptions
         AllowExtraActualFields = false
     };
 
+    public ComparisonOptions()
+    {
+    }
+
+    private ComparisonOptions(ComparisonOptions source)
+    {
+        DynamicFields = new HashSet<string>(source.DynamicFields);
+        IdFields = new HashSet<string>(source.IdFields);
+        TimestampFields = new HashSet<string>(source.TimestampFields);
+        HeadersToCompare = new HashSet<string>(source.HeadersToCompare);
+        ValueNormalisers = source.ValueNormalisers;
+        IobTolerantPaths = source.IobTolerantPaths;
+        AllowExtraActualFields = source.AllowExtraActualFields;
+        StatusCodeOnlyForErrors = source.StatusCodeOnlyForErrors;
+    }
+
     /// <summary>
     /// Create options with additional fields whose presence is checked but whose value is not
     /// </summary>
     public ComparisonOptions WithPresenceOnlyFields(params string[] fields)
     {
-        var options = WithIgnoredFields();
-        foreach (var field in fields)
-        {
-            options.IdFields.Add(field);
-        }
-
+        var options = new ComparisonOptions(this);
+        options.IdFields.UnionWith(fields);
         return options;
     }
+
+    /// <summary>
+    /// Create options that compare <see cref="IobDerivedPaths"/> to within <see cref="IobTolerance"/>
+    /// </summary>
+    public ComparisonOptions WithIobTolerance() => new(this) { IobTolerantPaths = IobDerivedPaths };
 
     /// <summary>
     /// Create options with additional fields to ignore
     /// </summary>
     public ComparisonOptions WithIgnoredFields(params string[] fields)
     {
-        var options = new ComparisonOptions
-        {
-            DynamicFields = new HashSet<string>(DynamicFields),
-            IdFields = new HashSet<string>(IdFields),
-            TimestampFields = new HashSet<string>(TimestampFields),
-            HeadersToCompare = new HashSet<string>(HeadersToCompare),
-            ValueNormalisers = ValueNormalisers,
-            AllowExtraActualFields = AllowExtraActualFields
-        };
-
-        foreach (var field in fields)
-        {
-            options.DynamicFields.Add(field);
-        }
-
+        var options = new ComparisonOptions(this);
+        options.DynamicFields.UnionWith(fields);
         return options;
     }
 
     /// <summary>
     /// Create options that require strict field matching (no extra fields allowed)
     /// </summary>
-    public ComparisonOptions WithStrictFieldMatching()
-    {
-        return new ComparisonOptions
-        {
-            DynamicFields = new HashSet<string>(DynamicFields),
-            IdFields = new HashSet<string>(IdFields),
-            TimestampFields = new HashSet<string>(TimestampFields),
-            HeadersToCompare = new HashSet<string>(HeadersToCompare),
-            ValueNormalisers = ValueNormalisers,
-            AllowExtraActualFields = false
-        };
-    }
+    public ComparisonOptions WithStrictFieldMatching() => new(this) { AllowExtraActualFields = false };
 
     /// <summary>
     /// Create options that rewrite what <paramref name="pattern"/> matches in the string values of
     /// <paramref name="fields"/> to <paramref name="replacement"/> before comparing them
     /// </summary>
-    public ComparisonOptions WithNormalisedValues(Regex pattern, string replacement, params string[] fields)
-    {
-        return new ComparisonOptions
-        {
-            DynamicFields = new HashSet<string>(DynamicFields),
-            IdFields = new HashSet<string>(IdFields),
-            TimestampFields = new HashSet<string>(TimestampFields),
-            HeadersToCompare = new HashSet<string>(HeadersToCompare),
-            ValueNormalisers = [.. ValueNormalisers, new ValueNormaliser(pattern, replacement, fields.ToHashSet())],
-            AllowExtraActualFields = AllowExtraActualFields
-        };
-    }
+    public ComparisonOptions WithNormalisedValues(Regex pattern, string replacement, params string[] fields) =>
+        new(this) { ValueNormalisers = [.. ValueNormalisers, new ValueNormaliser(pattern, replacement, fields.ToHashSet())] };
 }
