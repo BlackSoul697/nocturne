@@ -10,7 +10,8 @@ import { parseLastSignIn } from "#lib/components/auth/last-sign-in.js";
 import {
   LANGUAGE_COOKIE_NAME,
   PREFS_COOKIE_NAME,
-  parsePrefsCookie,
+  UNITS_COOKIE_NAME,
+  parseDevicePreferences,
   resolveLanguage,
 } from "#lib/stores/appearance-store.svelte.js";
 
@@ -77,7 +78,9 @@ export const load: LayoutServerLoad = async ({ locals, request, cookies, depends
       ? (locals.user?.preferences ?? null)
       : null;
   const tenantPreferences = locals.isGuestSession ? tenantPresentation : null;
-  const cookiePrefs = locals.isShareHost ? null : parsePrefsCookie(cookies.get(PREFS_COOKIE_NAME));
+  const cookiePrefs = locals.isShareHost
+    ? null
+    : parseDevicePreferences(cookies.get(PREFS_COOKIE_NAME), cookies.get(UNITS_COOKIE_NAME));
   const tenantDefault = locals.isAuthenticated ? locals.user?.defaultGlucoseUnits : undefined;
   const displayPreferences = displayPreferenceLayers({
     serverPrefs,

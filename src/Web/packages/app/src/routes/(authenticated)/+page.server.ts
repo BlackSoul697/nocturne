@@ -7,7 +7,11 @@ import { transformChartData, type TransformedChartData } from '#lib/utils/chart-
 import { hasPlotSize, renderPlotSnapshot } from '#lib/server/plot-snapshot.js';
 import { mergeChartData } from '#lib/utils/chart-data-merge.js';
 import { displayPreferenceLayers } from '#lib/server/display-preference-layers.js';
-import { PREFS_COOKIE_NAME, parsePrefsCookie } from '#lib/stores/appearance-store.svelte.js';
+import {
+	PREFS_COOKIE_NAME,
+	UNITS_COOKIE_NAME,
+	parseDevicePreferences,
+} from '#lib/stores/appearance-store.svelte.js';
 import { showsPredictions } from '#lib/types/dashboard-widgets.js';
 
 // Hours of data for initial fast load (most recent)
@@ -75,7 +79,10 @@ export const load: PageServerLoad = async ({ locals, request, parent, cookies, i
 					cookies,
 					preferenceLayers: displayPreferenceLayers({
 						serverPrefs: locals.user?.preferences,
-						cookiePrefs: parsePrefsCookie(cookies.get(PREFS_COOKIE_NAME)),
+						cookiePrefs: parseDevicePreferences(
+							cookies.get(PREFS_COOKIE_NAME),
+							cookies.get(UNITS_COOKIE_NAME)
+						),
 						tenantPreferences: null,
 						tenantDefault: locals.user?.defaultGlucoseUnits,
 					}),
