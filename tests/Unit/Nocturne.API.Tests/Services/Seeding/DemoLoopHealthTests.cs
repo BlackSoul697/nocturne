@@ -41,6 +41,9 @@ public class DemoLoopHealthTests
 
     internal static Run Simulate() => Simulate(End);
 
+    /// <summary>One run at <see cref="End"/>, which the tests that only read it share.</summary>
+    private static readonly Lazy<Run> Sample = new(Simulate);
+
     internal static Run Simulate(DateTime end)
     {
         var config = SampleDataSeeder.ConfigurationFor(Days);
@@ -155,7 +158,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_RecordsACycleEveryFiveMinutesWhileItCanRun()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         run.Steps.Select(s => s.Loop).Should().Contain(new[]
             { DemoLoopState.Manual, DemoLoopState.SiteChange, DemoLoopState.SensorWarmUp, DemoLoopState.PhoneOutOfRange });
@@ -165,7 +168,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_IsClosedForARealisticShareOfTheRange()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         var closedLoop = run.Health.Activity.ClosedLoop;
         closedLoop.Should().NotBeNull();
@@ -175,7 +178,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_InManualModeSuggestsAndEnactsNothing()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         var manual = run.Steps.Where(s => s.Loop == DemoLoopState.Manual).Select(s => Mills(s.Time)).ToHashSet();
         var cycles = run.Cycles.Where(c => manual.Contains(c.Mills)).ToList();
@@ -186,7 +189,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_NoTempRunsIntoAnInterruption()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         run.Temps.Should().NotBeEmpty();
         foreach (var (source, temp, _) in run.Temps)
@@ -200,7 +203,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_HasNoGlucoseWhileANewSensorWarmsUp()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         var warmUp = run.Steps.Where(s => s.Loop == DemoLoopState.SensorWarmUp).ToList();
         warmUp.Should().NotBeEmpty();
@@ -212,7 +215,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_TempsAreTheAlgorithmsAndLinkToTheirDevicesSnapshot()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         run.Temps.Should().NotBeEmpty();
         run.Temps.Should().OnlyContain(t => t.Default == Aid.TempBasalOrigin.Algorithm);
@@ -225,7 +228,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_SomeTempsAreCutToMaxSafeBasalAndAtCapIsJudged()
     {
-        var run = Simulate();
+        var run = Sample.Value;
 
         var capped = run.Temps.Where(t => t.Source.Rate == run.Steps[0].MaxSafeBasalRate).ToList();
         capped.Should().NotBeEmpty();
@@ -272,7 +275,7 @@ public class DemoLoopHealthTests
     [Fact]
     public void SampleLoop_IsTheSameOnEveryRun()
     {
-        var first = Simulate();
+        var first = Sample.Value;
         var second = Simulate();
 
         second.Temps.Select(t => (t.Source.Mills, t.Source.Rate))

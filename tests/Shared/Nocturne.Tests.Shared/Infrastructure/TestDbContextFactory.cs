@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -81,9 +83,9 @@ public sealed class SqliteTestDatabase : IDisposable
         ContextFactory = new PooledContextFactory(this);
 
         using var seed = CreateContext();
-        if (configure is null)
+        if (SchemaTemplate.For(configure) is { } template)
         {
-            SchemaTemplate.CopyInto(Connection);
+            template.CopyInto(Connection);
         }
         else
         {
@@ -147,32 +149,48 @@ public sealed class SqliteTestDatabase : IDisposable
     /// database. <c>EnsureCreated</c> diffs the whole model and runs its DDL, around half a second
     /// every time, which made schema creation most of the unit suite's run time; a backup copy of
     /// the finished database is a few milliseconds. A <c>configure</c> callback may replace
-    /// provider services, so those databases still build their own schema.
+    /// provider services, so a static method gets a template built with it; any other delegate
+    /// may carry state that configures differently per call, so it still builds its own schema.
     /// </summary>
-    private static class SchemaTemplate
+    private sealed class SchemaTemplate
     {
-        private static readonly Lazy<SqliteConnection> Template = new(Create, LazyThreadSafetyMode.ExecutionAndPublication);
+        private static readonly SchemaTemplate Default = new(null);
+
+        private static readonly ConcurrentDictionary<MethodInfo, SchemaTemplate> Configured = new();
+
+        private readonly Lazy<SqliteConnection> _template;
 
         // One connection is not safe for concurrent use, and test classes run in parallel.
-        private static readonly Lock CopyLock = new();
+        private readonly Lock _copyLock = new();
 
-        public static void CopyInto(SqliteConnection destination)
-        {
-            lock (CopyLock)
+        private SchemaTemplate(Action<DbContextOptionsBuilder<NocturneDbContext>>? configure) =>
+            _template = new(() => Create(configure), LazyThreadSafetyMode.ExecutionAndPublication);
+
+        public static SchemaTemplate? For(Action<DbContextOptionsBuilder<NocturneDbContext>>? configure) =>
+            configure switch
             {
-                Template.Value.BackupDatabase(destination);
+                null => Default,
+                { Target: null } => Configured.GetOrAdd(configure.Method, _ => new SchemaTemplate(configure)),
+                _ => null,
+            };
+
+        public void CopyInto(SqliteConnection destination)
+        {
+            lock (_copyLock)
+            {
+                _template.Value.BackupDatabase(destination);
             }
         }
 
-        private static SqliteConnection Create()
+        private static SqliteConnection Create(Action<DbContextOptionsBuilder<NocturneDbContext>>? configure)
         {
             var connection = new SqliteConnection("DataSource=:memory:");
             connection.Open();
-            var options = new DbContextOptionsBuilder<NocturneDbContext>()
+            var builder = new DbContextOptionsBuilder<NocturneDbContext>()
                 .UseSqlite(connection)
-                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
-                .Options;
-            using var context = new NocturneDbContext(options);
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+            configure?.Invoke(builder);
+            using var context = new NocturneDbContext(builder.Options);
             context.Database.EnsureCreated();
             return connection;
         }

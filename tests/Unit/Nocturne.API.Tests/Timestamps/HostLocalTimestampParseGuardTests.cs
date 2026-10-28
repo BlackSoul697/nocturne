@@ -103,8 +103,17 @@ public class HostLocalTimestampParseGuardTests
                     continue;
                 }
 
+                // A site names its receiver and a Parse method as written, so a file without both
+                // words holds none and is not parsed.
+                var text = File.ReadAllText(path);
+                if (!text.Contains("DateTime", StringComparison.Ordinal)
+                    || !text.Contains("Parse", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
-                var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(path));
+                var syntax = CSharpSyntaxTree.ParseText(text);
 
                 sites.AddRange(Detect(syntax, relative));
             }

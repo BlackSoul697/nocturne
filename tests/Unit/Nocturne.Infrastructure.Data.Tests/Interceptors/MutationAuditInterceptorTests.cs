@@ -85,6 +85,31 @@ public class TestNocturneDbContext : NocturneDbContext
 
         modelBuilder.Entity<TestNonAuditableEntity>(e => e.ClearQueryFilters());
     }
+
+    /// <summary>
+    /// Gives <paramref name="connection"/> this context's schema, copied from one built once per
+    /// test process: <c>EnsureCreated</c> runs the whole model's DDL, about half a second a call.
+    /// </summary>
+    public static void CreateSchema(SqliteConnection connection)
+    {
+        lock (TemplateLock)
+        {
+            Template.Value.BackupDatabase(connection);
+        }
+    }
+
+    private static readonly Lazy<SqliteConnection> Template = new(() =>
+    {
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
+        using var context = new TestNocturneDbContext(
+            new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options);
+        context.Database.EnsureCreated();
+        return connection;
+    });
+
+    // One connection is not safe for concurrent use, and test classes run in parallel.
+    private static readonly Lock TemplateLock = new();
 }
 
 #endregion
@@ -100,8 +125,10 @@ public class MutationAuditInterceptorTests : IDisposable
 
     public MutationAuditInterceptorTests()
     {
-        _connection = new SqliteConnection("Filename=:memory:");
-        _connection.Open();
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
+        TestNocturneDbContext.CreateSchema(connection);
+        _connection = connection;
 
         var httpContextAccessor = new Mock<IHttpContextAccessor>();
         httpContextAccessor.Setup(x => x.HttpContext).Returns((HttpContext)null!);
@@ -118,7 +145,6 @@ public class MutationAuditInterceptorTests : IDisposable
             .Options;
 
         using var context = CreateContext();
-        context.Database.EnsureCreated();
 
         // Seed the tenant so FK constraints are satisfied
         context.Tenants.Add(new TenantEntity { Id = _tenantId, Slug = "test" });

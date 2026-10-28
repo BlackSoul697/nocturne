@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -293,10 +294,15 @@ public class ChildScopeGuardTests
         };
     }
 
+    /// <remarks>
+    /// Only files whose text could hold a match are parsed: the migrations are most of <c>src</c> and
+    /// mention none of these names. A helper's declared type names <c>ServiceScope</c>, and an opening
+    /// node is an identifier naming a raw scope method, <c>Open</c> or a helper.
+    /// </remarks>
     private static List<string> Scan()
     {
         var root = RepositoryRoot();
-        var sources = new List<(string File, SyntaxTree Tree)>();
+        var sources = new List<(string File, string Text)>();
 
         foreach (var tree in ScannedTrees)
         {
@@ -306,15 +312,27 @@ public class ChildScopeGuardTests
                     || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
                     continue;
 
-                var file = Path.GetRelativePath(root, path).Replace('\\', '/');
-                sources.Add((file, CSharpSyntaxTree.ParseText(File.ReadAllText(path))));
+                sources.Add((Path.GetRelativePath(root, path).Replace('\\', '/'), File.ReadAllText(path)));
             }
         }
 
-        var helpers = ScopeHelpers(sources.Where(s => s.File != Seam).Select(s => s.Tree).ToList());
+        var trees = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
+        SyntaxTree Parse((string File, string Text) source) =>
+            trees.TryGetValue(source.File, out var tree)
+                ? tree
+                : trees[source.File] = CSharpSyntaxTree.ParseText(source.Text);
+
+        var helpers = ScopeHelpers(sources
+            .Where(s => s.File != Seam && s.Text.Contains("ServiceScope", StringComparison.Ordinal))
+            .Select(Parse)
+            .ToList());
+
+        var names = RawScopeMethods.Append(nameof(TenantJobScope.Open)).Concat(helpers.Keys).Select(Regex.Escape);
+        var mentions = new Regex($@"\b(?:{string.Join('|', names)})\b", RegexOptions.CultureInvariant);
 
         return sources
-            .SelectMany(s => OpeningMembers(s.Tree, helpers).Select(member => $"{s.File}: {member}"))
+            .Where(s => mentions.IsMatch(s.Text))
+            .SelectMany(s => OpeningMembers(Parse(s), helpers).Select(member => $"{s.File}: {member}"))
             .ToList();
     }
 
