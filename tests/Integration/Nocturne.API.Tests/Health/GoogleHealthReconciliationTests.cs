@@ -329,7 +329,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
             using var scope = provider.CreateScope();
             await using var db = await scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>()
                 .CreateForTenantAsync(tenantId);
-            var cursors = new ConnectorSyncCursorStore(db.AsFactory(), NullLogger<ConnectorSyncCursorStore>.Instance);
+            var cursors = new ConnectorSyncCursorStore(db.AsFactory(), TimeProvider.System, NullLogger<ConnectorSyncCursorStore>.Instance);
             await cursors.SetAsync("GoogleHealth", "health", new(null, "{\"backfillComplete\":true}"));
             Assert.Equal(3, (await coordinator.ProgressAsync(tenantId, default))!.PagesRead);
             Assert.Null(await Coordinator(provider).ProgressAsync(tenantId, default));
@@ -446,7 +446,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
         using var scope = provider.CreateScope();
         var contexts = scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>();
         await using var db = await contexts.CreateForTenantAsync(tenantId);
-        var cursors = new ConnectorSyncCursorStore(db.AsFactory(), NullLogger<ConnectorSyncCursorStore>.Instance);
+        var cursors = new ConnectorSyncCursorStore(db.AsFactory(), TimeProvider.System, NullLogger<ConnectorSyncCursorStore>.Instance);
 
         Assert.Null(await cursors.GetJsonAsync("GoogleHealth", "progress"));
         await cursors.SetJsonAsync("GoogleHealth", "progress", new JsonObject { ["pages"] = 3 });
@@ -466,7 +466,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
         Assert.Equal(1, (int)(await cursors.GetJsonAsync("GoogleHealth", "progress"))!);
 
         await using var other = await contexts.CreateForTenantAsync(otherTenantId);
-        var otherCursors = new ConnectorSyncCursorStore(other.AsFactory(), NullLogger<ConnectorSyncCursorStore>.Instance);
+        var otherCursors = new ConnectorSyncCursorStore(other.AsFactory(), TimeProvider.System, NullLogger<ConnectorSyncCursorStore>.Instance);
         Assert.True((bool)(await otherCursors.GetJsonAsync("GoogleHealth", "progress"))!["kept"]!);
     }
 
@@ -493,7 +493,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
         using var scope = provider.CreateScope();
         await using var db = await scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>()
             .CreateForTenantAsync(tenantId);
-        var cursors = new ConnectorSyncCursorStore(db.AsFactory(), NullLogger<ConnectorSyncCursorStore>.Instance);
+        var cursors = new ConnectorSyncCursorStore(db.AsFactory(), TimeProvider.System, NullLogger<ConnectorSyncCursorStore>.Instance);
         await cursors.SetAsync("GoogleHealth", "health", new(null, "restored"));
         Assert.Equal("restored", (await cursors.GetAsync("GoogleHealth", "health"))!.LastGuid);
 
@@ -534,6 +534,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IConnectorSyncCursorStore, ConnectorSyncCursorStore>();
         services.AddScoped<ITenantAccessor, HttpContextTenantAccessor>();
         services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(fixture.Database.AppConnectionString));

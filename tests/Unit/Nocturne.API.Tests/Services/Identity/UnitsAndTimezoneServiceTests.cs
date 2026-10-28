@@ -199,6 +199,7 @@ public class UnitsAndTimezoneServiceTests
     {
         return new UnitsAndTimezoneService(
             new TestNocturneDbContextFactory(Context()), _tenants.Object, _records.Object, _connectors.Object, _migrations.Object, _cache.Object,
+            TimeProvider.System,
             NullLogger<UnitsAndTimezoneService>.Instance);
     }
 

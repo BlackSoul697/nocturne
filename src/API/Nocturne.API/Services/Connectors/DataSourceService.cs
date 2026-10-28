@@ -408,7 +408,7 @@ public class DataSourceService : IDataSourceService
         await using var db = await _contexts.CreateAsync(cancellationToken);
         _logger.LogDebug("Getting active data sources");
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var last24Hours = now.AddHours(-24);
         var windowStart = now.AddDays(-DiscoveryWindowDays).UtcDateTime;
         var last24HoursDate = last24Hours.UtcDateTime;
@@ -1005,7 +1005,7 @@ public class DataSourceService : IDataSourceService
         }
 
         foreach (var purge in PurgesOf(metadata))
-        foreach (var stats in await purge.DescribeAsync(null, DateTime.UtcNow.AddHours(-24), cancellationToken))
+        foreach (var stats in await purge.DescribeAsync(null, _time.GetUtcNow().UtcDateTime.AddHours(-24), cancellationToken))
             counts[stats.DataType] = counts.GetValueOrDefault(stats.DataType) + stats.Count;
 
         return new ConnectorDataSummary
@@ -1339,7 +1339,7 @@ public class DataSourceService : IDataSourceService
     )
     {
         await using var db = await _contexts.CreateAsync(cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var oneDayAgoDate = now.AddHours(-24).UtcDateTime;
 
         // Query V4 sensor glucose stats
