@@ -153,7 +153,7 @@ public class HubRevalidationIntegrationTests : ApiIntegrationTestBase
     private async Task RevalidateAsync() =>
         await Fixture.Services.GetRequiredService<HubConnectionRevalidator>().RevalidateAsync(CancellationToken.None);
 
-    /// <summary>Whether <paramref name="token"/> on its own authenticates an HTTP request.</summary>
+    /// <summary>The status of an HTTP request that presents only <paramref name="token"/>.</summary>
     private async Task<HttpStatusCode> ProbeAsync(string token)
     {
         using var probe = AuthTestHelpers.CreateBearerClient(Fixture, token);
@@ -189,8 +189,10 @@ public class HubRevalidationIntegrationTests : ApiIntegrationTestBase
         string token;
         HubConnection upgrade, inBand;
 
-        // Minted and admitted on a JWT clock running behind by more than the token's lifetime plus
-        // the validator's skew. Once it is restored, every clock in the host reads the token as expired.
+        // Minted and admitted on a JWT clock running behind by more than the token's lifetime plus the
+        // validator's skew, so the token's exp is already past on the host's global clock while the hubs
+        // connect: this assumes nothing checks a token's expiry against that clock when it admits a hub
+        // connection. Restoring the JWT clock makes the token expired for JwtService too.
         using (Fixture.JwtClock.Shift(-(lifetime + JwtService.ClockSkew + TimeSpan.FromSeconds(2))))
         {
             token = AccessToken(grantId, lifetime);

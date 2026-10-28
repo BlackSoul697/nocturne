@@ -83,6 +83,9 @@ public class JwtService : IJwtService
         SecurityToken securityToken,
         TokenValidationParameters parameters)
     {
+        if (!parameters.ValidateLifetime)
+            return true;
+
         if (expires is null)
         {
             if (parameters.RequireExpirationTime)
