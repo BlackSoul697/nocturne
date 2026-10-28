@@ -80,7 +80,8 @@ public interface ITenantService
     /// <summary>
     /// <see cref="ValidateSlugAsync(string, CancellationToken)"/>, except that a reserved name passes
     /// when <paramref name="allowReserved"/> is set. Reserved names keep the platform's own subdomains
-    /// out of tenants' hands; a Development-only caller has no such subdomains to keep.
+    /// out of tenants' hands. Only the dev-only seed endpoint sets it (enabled in Development, or by
+    /// <c>NOCTURNE_ENABLE_DEV_ONLY_ENDPOINTS</c>), which already hands out owner sessions to anyone.
     /// </summary>
     Task<SlugValidationResult> ValidateSlugAsync(string slug, bool allowReserved, CancellationToken ct = default);
 

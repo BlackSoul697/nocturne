@@ -934,7 +934,7 @@ class Program
                     Url = gatewayEndpoint.Port == 443
                         ? $"https://{devTenantHost}"
                         : $"https://{devTenantHost}:{gatewayEndpoint.Port}",
-                    DisplayText = "Dev tenant",
+                    DisplayText = "Dev tenant (if seeded)",
                 }));
             }
 

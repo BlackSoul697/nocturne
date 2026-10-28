@@ -4,8 +4,8 @@ namespace Aspire.Hosting;
 
 /// <summary>
 /// A one-shot that runs <see cref="DevTenantSeeder"/> in the AppHost once the API is healthy and
-/// then finishes, always with exit code 0, so a resource that waits for its completion starts
-/// whether or not the seed went through.
+/// then finishes with exit code 0 whether or not the seed went through, so a resource that waits
+/// for its completion starts either way.
 /// </summary>
 public sealed class DevTenantSeedResource(string name) : Resource(name), IResourceWithWaitSupport;
 
@@ -29,28 +29,51 @@ public static class DevTenantSeedExtensions
             .ExcludeFromManifest()
             .OnInitializeResource(async (resource, e, ct) =>
             {
-                // Releases the WaitFor above, which holds until the API is healthy.
-                await e.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, e.Services), ct);
-
-                await e.Notifications.PublishUpdateAsync(resource, s => s with
+                // Aspire drops an exception thrown from this handler and leaves the resource in
+                // Waiting, which would hold the web app in Waiting with no error. Whatever the
+                // handler did not finish ends in a terminal state: FailedToStart when the API
+                // never came up (the web app then fails as it would waiting on the API itself).
+                var started = false;
+                var finished = false;
+                try
                 {
-                    State = KnownResourceStates.Running,
-                    StartTimeStamp = DateTime.UtcNow,
-                });
+                    // Runs the WaitFor above; throws once the API can no longer become healthy.
+                    await e.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, e.Services), ct);
 
-                using var http = new HttpClient
-                {
-                    BaseAddress = new Uri(api.GetEndpoint("http").Url),
-                    Timeout = TenantSeedClient.Timeout,
-                };
-                await new DevTenantSeeder(http, e.Logger).RunAsync(sampleDataDays, ct);
+                    await e.Notifications.PublishUpdateAsync(resource, s => s with
+                    {
+                        State = KnownResourceStates.Running,
+                        StartTimeStamp = DateTime.UtcNow,
+                    });
+                    started = true;
 
-                await e.Notifications.PublishUpdateAsync(resource, s => s with
+                    using var http = new HttpClient
+                    {
+                        BaseAddress = new Uri(api.GetEndpoint("http").Url),
+                        Timeout = TenantSeedClient.Timeout,
+                    };
+                    await new DevTenantSeeder(http, e.Logger).RunAsync(sampleDataDays, ct);
+
+                    await e.Notifications.PublishUpdateAsync(resource, s => s with
+                    {
+                        State = KnownResourceStates.Finished,
+                        ExitCode = 0,
+                        StopTimeStamp = DateTime.UtcNow,
+                    });
+                    finished = true;
+                }
+                finally
                 {
-                    State = KnownResourceStates.Finished,
-                    ExitCode = 0,
-                    StopTimeStamp = DateTime.UtcNow,
-                });
+                    if (!finished)
+                    {
+                        await e.Notifications.PublishUpdateAsync(resource, s => s with
+                        {
+                            State = started ? KnownResourceStates.Exited : KnownResourceStates.FailedToStart,
+                            ExitCode = 1,
+                            StopTimeStamp = DateTime.UtcNow,
+                        });
+                    }
+                }
             });
     }
 }
