@@ -604,6 +604,53 @@ public class TrackersControllerStartTests
         existing.CompletionEventType.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public async Task UpdateDefinition_WithABlankEventType_ClearsBothEvents(string? blank)
+    {
+        var existing = ArrangeStored("[]", null);
+        existing.StartEventType = "Sensor Start";
+        existing.CompletionEventType = "Sensor Stop";
+
+        var result = await CreateController().UpdateDefinition(existing.Id, new UpdateTrackerDefinitionRequest
+        {
+            StartEventType = blank,
+            CompletionEventType = blank,
+        });
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        existing.StartEventType.Should().BeNull();
+        existing.CompletionEventType.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateDefinition_ReplacesAnEventTypeWithTheCanonicalName()
+    {
+        var existing = ArrangeStored("[]", null);
+        existing.StartEventType = "Sensor Start";
+
+        await CreateController().UpdateDefinition(existing.Id, new UpdateTrackerDefinitionRequest
+        {
+            StartEventType = "pod change",
+        });
+
+        existing.StartEventType.Should().Be("Pod Change");
+    }
+
+    [Fact]
+    public void GetDeviceEventTypes_ListsOnlyNamesTheServerAccepts()
+    {
+        var names = CreateController().GetDeviceEventTypes().Result
+            .Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<string[]>().Subject;
+
+        names.Should().NotBeEmpty().And.OnlyHaveUniqueItems();
+        names.Where(name =>
+                !(TrackerDeviceEventWriter.TryNormalise(name, "StartEventType", out var canonical, out _) && canonical == name))
+            .Should().BeEmpty();
+    }
+
     private void FailEventWrites() =>
         _deviceEvents
             .Setup(d => d.CreateAsync(It.IsAny<DeviceEvent>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
