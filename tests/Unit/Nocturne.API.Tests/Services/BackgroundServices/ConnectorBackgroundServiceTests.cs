@@ -68,7 +68,7 @@ public class ConnectorBackgroundServiceTests
             TenantRunGuard? runGuard = null,
             Func<DateTime, DateTime?>? alignedSync = null,
             TimeSpan? minAlignedSpacing = null)
-            : base(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), logger, nudge, metrics, runGuard)
+            : base(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), logger, TimeProvider.System, nudge, metrics, runGuard)
         {
             _syncResult = syncResult;
             _onSync = onSync;
@@ -1516,7 +1516,7 @@ public class ConnectorBackgroundServiceTests
         IServiceProvider serviceProvider,
         ConnectorSyncBudget? budget = null,
         TimeSpan? pollInterval = null)
-        : ConnectorBackgroundService<TestConnectorConfig>(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), NullLogger.Instance)
+        : ConnectorBackgroundService<TestConnectorConfig>(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), NullLogger.Instance, TimeProvider.System)
     {
         private readonly TaskCompletionSource _secondSupervisionPass =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1604,7 +1604,8 @@ public class ConnectorBackgroundServiceTests
             new ServiceCollection().BuildServiceProvider(),
             new ConnectorSyncBudget(),
             ActiveTenantSnapshotTestDoubles.Unread(),
-            logger)
+            logger,
+            TimeProvider.System)
     {
         private int _startCount;
 

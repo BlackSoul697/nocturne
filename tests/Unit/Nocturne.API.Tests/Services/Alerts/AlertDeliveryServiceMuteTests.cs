@@ -51,7 +51,8 @@ public class AlertDeliveryServiceMuteTests
             Mock.Of<ISignalRBroadcastService>(),
             Mock.Of<IEngineAlarmRelay>(),
             services,
-            NullLogger<AlertDeliveryService>.Instance);
+            NullLogger<AlertDeliveryService>.Instance,
+            TimeProvider.System);
     }
 
     private static AlertPayload Payload(Guid excursionId) => new()
