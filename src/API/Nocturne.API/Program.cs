@@ -436,6 +436,7 @@ app.MapScalarApiReference((options, httpContext) =>
 {
     options.WithTheme(ScalarTheme.Mars);
     options.WithOpenApiRoutePattern("/openapi/{documentName}.json");
+    options.WithOperationTitleSource(OperationTitleSource.Path);
     options.AddDocument("nocturne", "Nocturne API", isDefault: true);
     options.AddDocument("nightscout", "Nightscout API");
     options.AddHeadContent(MermaidLazyLoader.HeadContent);
@@ -460,6 +461,12 @@ app.MapScalarApiReference((options, httpContext) =>
             {
                 flow.ClientId = scalarAuth.ClientId;
                 flow.RedirectUri = scalarAuth.RedirectUri;
+
+                // The spec's endpoints are relative, and Scalar passes them to `new URL()`
+                // with no base, which throws ("Failed to authorize oauth2 flow").
+                var origin = new Uri(scalarAuth.RedirectUri).GetLeftPart(UriPartial.Authority);
+                flow.AuthorizationUrl = origin + SecuritySchemeDefinitions.AuthorizationUrl;
+                flow.TokenUrl = origin + SecuritySchemeDefinitions.TokenUrl;
             }
             flow.Pkce = Pkce.Sha256;
             flow.SelectedScopes = [Scope.FullAccess];
