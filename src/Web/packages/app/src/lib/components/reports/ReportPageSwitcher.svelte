@@ -21,7 +21,7 @@
 </script>
 
 {#if family && reachable.length > 0}
-  <div class="border-t border-border px-3 @md:px-6 print:hidden">
+  <div class="relative border-t border-border px-3 @md:px-6 print:hidden">
     <nav aria-label="{family.title} pages" class="flex flex-wrap gap-1 py-1.5" data-testid="report-pages">
       {#each reachable as report (report.href)}
         {@const current = report.href === page.url.pathname}
