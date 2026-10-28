@@ -76,6 +76,7 @@ public class MigrationJobService : IMigrationJobService
     private readonly IConfiguration _configuration;
     private readonly ConcurrentDictionary<Guid, MigrationJob> _jobs = new();
     private readonly TenantRunGuard _runGuard;
+    private readonly TimeProvider _timeProvider;
 
     internal const string MigrationRunName = "migration";
 
@@ -83,13 +84,15 @@ public class MigrationJobService : IMigrationJobService
         ILogger<MigrationJobService> logger,
         IServiceProvider serviceProvider,
         IConfiguration configuration,
-        TenantRunGuard runGuard
+        TenantRunGuard runGuard,
+        TimeProvider timeProvider
     )
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _runGuard = runGuard;
+        _timeProvider = timeProvider;
     }
 
     private static readonly TimeSpan TerminalHolderWait = TimeSpan.FromSeconds(30);
@@ -124,24 +127,24 @@ public class MigrationJobService : IMigrationJobService
         {
             Id = jobId,
             Mode = request.Mode,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = _timeProvider.GetUtcNow().UtcDateTime,
             SourceDescription = sourceDesc,
         };
 
-        var job = new MigrationJob(jobId, tenantId, request, jobInfo, tenantContext, _logger, _serviceProvider);
+        var job = new MigrationJob(jobId, tenantId, request, jobInfo, tenantContext, _logger, _serviceProvider, _timeProvider);
 
         // One migration per tenant at a time: two runs over the same target race on their inserts.
         // The lease is held for the whole run and records the job id, so a refused start can report
         // which job it collided with rather than a bare conflict.
         IDisposable lease;
-        var terminalHolderDeadline = DateTime.UtcNow + TerminalHolderWait;
+        var terminalHolderDeadline = _timeProvider.GetUtcNow().UtcDateTime + TerminalHolderWait;
         while ((lease = _runGuard.TryAcquire(tenantId, MigrationRunName, jobId)) is null)
         {
             if (_runGuard.TryGetHolder(tenantId, MigrationRunName, out var runningJobId))
             {
                 // A job reports its terminal state before it writes its final record and releases
                 // the lease, so a caller who saw it finish must not be refused for that window.
-                if (IsTerminal(runningJobId) && DateTime.UtcNow < terminalHolderDeadline)
+                if (IsTerminal(runningJobId) && _timeProvider.GetUtcNow().UtcDateTime < terminalHolderDeadline)
                 {
                     await Task.Delay(TerminalHolderPollInterval, ct);
                     continue;
@@ -495,7 +498,10 @@ internal class MigrationJob
     private readonly TenantContext? _tenantContext;
     private readonly ILogger _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly TimeProvider _timeProvider;
     private readonly CancellationTokenSource _cts = new();
+
+    private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
 
     /// <summary>The tenant that owns this migration job. Used to scope status/cancel lookups.</summary>
     public Guid TenantId => _tenantId;
@@ -537,7 +543,8 @@ internal class MigrationJob
         MigrationJobInfo info,
         TenantContext? tenantContext,
         ILogger logger,
-        IServiceProvider serviceProvider
+        IServiceProvider serviceProvider,
+        TimeProvider timeProvider
     )
     {
         _id = id;
@@ -547,6 +554,7 @@ internal class MigrationJob
         _tenantContext = tenantContext;
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _timeProvider = timeProvider;
     }
 
     /// <summary>Audit endpoint recorded for migration-owned writes.</summary>
@@ -588,7 +596,7 @@ internal class MigrationJob
         {
             if (_state.IsLive())
             {
-                _completedAt = DateTime.UtcNow;
+                _completedAt = UtcNow;
                 _state = MigrationJobState.Cancelled;
             }
         }
@@ -604,7 +612,7 @@ internal class MigrationJob
 
         lock (_statusLock)
         {
-            _startedAt = DateTime.UtcNow;
+            _startedAt = UtcNow;
             if (_state == MigrationJobState.Pending)
                 _state = MigrationJobState.Running;
         }
@@ -629,7 +637,7 @@ internal class MigrationJob
             {
                 _errorMessage = summary;
                 _progressPercentage = 100;
-                _completedAt = DateTime.UtcNow;
+                _completedAt = UtcNow;
                 _state = MigrationJobState.Completed;
             }
         }
@@ -637,7 +645,7 @@ internal class MigrationJob
         {
             lock (_statusLock)
             {
-                _completedAt = DateTime.UtcNow;
+                _completedAt = UtcNow;
                 _state = MigrationJobState.Cancelled;
             }
         }
@@ -654,7 +662,7 @@ internal class MigrationJob
             lock (_statusLock)
             {
                 _errorMessage = message;
-                _completedAt = DateTime.UtcNow;
+                _completedAt = UtcNow;
                 _state = MigrationJobState.Failed;
             }
             _logger.LogError(ex, "Migration job {JobId} failed", _id);
@@ -715,7 +723,7 @@ internal class MigrationJob
             if (state == MigrationJobState.Completed)
             {
                 var source = await db.MigrationSources.FirstAsync(s => s.Id == sourceId, ct);
-                source.LastMigrationAt = completedAt ?? DateTime.UtcNow;
+                source.LastMigrationAt = completedAt ?? UtcNow;
 
                 // A run bounded to an older date range covers ground an earlier run already
                 // covered, so the watermark only ever advances.
@@ -788,7 +796,7 @@ internal class MigrationJob
                 ? HashUtils.Sha256Hex(_request.NightscoutApiSecret)
                 : null,
             MongoDatabaseName = isApi ? null : _request.MongoDatabaseName,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = UtcNow,
         };
         db.MigrationSources.Add(source);
         return source.Id;
@@ -1273,7 +1281,7 @@ internal class MigrationJob
     ///     silently importing days of history instead of years. Anchoring the upper bound
     ///     keeps every request explicitly dated.
     /// </summary>
-    private static DateTime FirstPageAnchor => DateTime.UtcNow;
+    private DateTime FirstPageAnchor => UtcNow;
 
     /// <summary>
     ///     Page size for every legacy-API pull. The merged v1 reads (devicestatus, activity) clamp
@@ -1976,7 +1984,7 @@ internal class MigrationJob
             : doc.Contains("created_at")
               && UploaderTimestamp.TryParse(doc["created_at"].AsString, out var createdAt)
                 ? createdAt.ToUnixTimeMilliseconds()
-            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            : _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         var defaultProfile = doc.Contains("defaultProfile") ? doc["defaultProfile"].AsString : "Default";
         var originalId = doc.Contains("_id") ? doc["_id"].AsObjectId.ToString() : null;

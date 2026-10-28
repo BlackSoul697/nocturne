@@ -37,7 +37,8 @@ public class SensorAlignedPollerTests
             new ServiceCollection().BuildServiceProvider(),
             new ConnectorSyncBudget(),
             ActiveTenantSnapshotTestDoubles.Unread(),
-            NullLogger.Instance)
+            NullLogger.Instance,
+            TimeProvider.System)
         where TConfig : BaseConnectorConfiguration, new()
     {
         public TimeSpan Tick => PollInterval;
