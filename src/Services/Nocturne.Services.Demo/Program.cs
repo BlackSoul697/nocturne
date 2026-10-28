@@ -37,7 +37,7 @@ public class Program
         builder.Services.AddSingleton<DemoSettingsGenerator>(sp =>
         {
             var config = sp.GetRequiredService<IOptions<DemoModeConfiguration>>().Value;
-            return new DemoSettingsGenerator(config);
+            return new DemoSettingsGenerator(config, sp.GetRequiredService<TimeProvider>());
         });
 
         // Configure HTTP clients for API communication
@@ -101,64 +101,64 @@ public class Program
                 : Results.Problem("Failed to provision demo tenant");
         });
 
-        app.MapPost("/pause", (IServiceProvider sp) =>
+        app.MapPost("/pause", (IServiceProvider sp, TimeProvider time) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             hostedService.Pause();
-            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = DateTime.UtcNow });
+            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = time.GetUtcNow().UtcDateTime });
         });
 
-        app.MapPost("/resume", (IServiceProvider sp) =>
+        app.MapPost("/resume", (IServiceProvider sp, TimeProvider time) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             hostedService.Resume();
-            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = DateTime.UtcNow });
+            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = time.GetUtcNow().UtcDateTime });
         });
 
-        app.MapPost("/stop", (IServiceProvider sp) =>
+        app.MapPost("/stop", (IServiceProvider sp, TimeProvider time) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             hostedService.Stop();
-            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = DateTime.UtcNow });
+            return Results.Ok(new { state = hostedService.State.ToString(), timestamp = time.GetUtcNow().UtcDateTime });
         });
 
-        app.MapPost("/wipe", async (IServiceProvider sp, CancellationToken ct) =>
+        app.MapPost("/wipe", async (IServiceProvider sp, TimeProvider time, CancellationToken ct) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             await hostedService.WipeAsync(ct);
-            return Results.Ok(new { message = "Demo data wiped", timestamp = DateTime.UtcNow });
+            return Results.Ok(new { message = "Demo data wiped", timestamp = time.GetUtcNow().UtcDateTime });
         });
 
-        app.MapPost("/reconfigure", async (IServiceProvider sp, CancellationToken ct) =>
+        app.MapPost("/reconfigure", async (IServiceProvider sp, TimeProvider time, CancellationToken ct) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             await hostedService.ReconfigureAsync(ct);
-            return Results.Ok(new { message = "Demo data reconfigured", state = hostedService.State.ToString(), timestamp = DateTime.UtcNow });
+            return Results.Ok(new { message = "Demo data reconfigured", state = hostedService.State.ToString(), timestamp = time.GetUtcNow().UtcDateTime });
         });
 
-        app.MapPost("/regenerate", async (IServiceProvider sp, CancellationToken ct) =>
+        app.MapPost("/regenerate", async (IServiceProvider sp, TimeProvider time, CancellationToken ct) =>
         {
             var hostedService = GetDemoHostedService(sp);
             if (hostedService == null)
                 return Results.Problem("Demo data hosted service not found");
 
             await hostedService.RegenerateDataAsync(ct);
-            return Results.Ok(new { message = "Demo data regeneration triggered", timestamp = DateTime.UtcNow });
+            return Results.Ok(new { message = "Demo data regeneration triggered", timestamp = time.GetUtcNow().UtcDateTime });
         });
 
         app.MapGet("/status", (IServiceProvider sp, IDemoDataGenerator generator) =>
