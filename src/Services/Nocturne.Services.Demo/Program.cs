@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Nocturne.Services.Demo.Configuration;
 using Nocturne.Services.Demo.Services;
@@ -22,7 +23,14 @@ public class Program
 
         builder.Services.Configure<DemoModeConfiguration>(demoModeSection);
 
-        // Register demo data generation service
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        // The realtime ticks run in this host's zone. The API seeds the backfill in the demo tenant's
+        // patient-record zone, so the two agree only while that zone is unset or equal to this one.
+        builder.Services.AddSingleton<DemoClock>(sp =>
+        {
+            var time = sp.GetRequiredService<TimeProvider>();
+            return new DemoClock(time, time.LocalTimeZone);
+        });
         builder.Services.AddSingleton<IDemoDataGenerator, DemoDataGenerator>();
 
         // Register demo settings generator

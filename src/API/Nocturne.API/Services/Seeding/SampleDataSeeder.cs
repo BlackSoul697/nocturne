@@ -195,11 +195,9 @@ public class SampleDataSeeder
         var config = ConfigurationFor(days);
         var clock = SeedingClock.Resolve(
             await db.PatientRecords.AsNoTracking().Select(r => r.Timezone).FirstOrDefaultAsync(ct), _time);
-        // The generator reads wall-clock values as host-local until the generator takes a zone, so
-        // what it is given or must agree with is in the host frame; the seeder's own rows use the
-        // tenant frame. One end for every generated stream, so the loop and the pump mode spans
-        // agree on the quiet end (DemoLoopInterruptions.QuietBeforeEnd).
-        var seedEnd = clock.HostNow;
+        // One end for every generated stream, so the loop and the pump mode spans agree on the quiet
+        // end (DemoLoopInterruptions.QuietBeforeEnd).
+        var seedEnd = clock.UtcNow;
 
         // The episode tracker rides along with the glucose stream so alarm
         // history matches the lows/highs actually visible on the chart.
@@ -209,7 +207,7 @@ public class SampleDataSeeder
 
         // Seed the therapy profile before glucose so scheduled-basal context
         // exists from the first record.
-        var profilesCreated = await SeedProfileAsync(db, config, clock.UtcNow, ct);
+        var profilesCreated = await SeedProfileAsync(db, config, clock, ct);
 
         var entryCount = 0;
         var treatmentCount = 0;
@@ -220,6 +218,7 @@ public class SampleDataSeeder
         {
             var generator = new DemoDataGenerator(
                 Options.Create(config),
+                clock.Demo,
                 _loggerFactory.CreateLogger<DemoDataGenerator>(),
                 _loggerFactory);
 
@@ -294,7 +293,7 @@ public class SampleDataSeeder
                         mealCarbLinks.Add((DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime, treatment.FoodType));
                 }
 
-                if (DemoDeviceStatusGenerator.ForStep(step, config.TargetGlucose, config.BasalRate) is { } status)
+                if (DemoDeviceStatusGenerator.ForStep(step, clock.Demo, config.TargetGlucose, config.BasalRate) is { } status)
                 {
                     // Deterministic legacy id, so a re-seed skips the statuses it already wrote.
                     status.Id = status.Mills.ToString("x24");
@@ -329,14 +328,14 @@ public class SampleDataSeeder
         }
         episodeTracker.Flush();
 
-        var localToday = clock.HostToday;
+        var localToday = clock.LocalToday;
 
         // Device changes as treatments: the decomposer turns them into
         // DeviceEvents, which drive the dashboard age pills (SAGE/CAGE/…).
         // The schedule is deterministic, so filter out changes whose
         // DeviceEvent already exists — a re-seed would otherwise insert exact
         // duplicates (treatments have no sync key).
-        var deviceSchedule = DemoDeviceLifecycle.GenerateSchedule(localToday, days);
+        var deviceSchedule = DemoDeviceLifecycle.GenerateSchedule(clock.LocalNow, days, clock.Demo);
         var existingDeviceEventTimes = (await db.DeviceEvents
                 .AsNoTracking()
                 .Where(d => d.DataSource == dataSource)
@@ -350,16 +349,16 @@ public class SampleDataSeeder
         if (deviceTreatments.Count > 0)
             await _treatmentService.CreateTreatmentsAsync(deviceTreatments, ct);
 
-        var sleepCount = await SeedSleepAsync(localToday, clock.UtcNow, days, dataSource, ct);
-        var (heartRateCount, stepCount) = await SeedActivityAsync(localToday, clock.UtcNow, days, dataSource, ct);
+        var sleepCount = await SeedSleepAsync(clock, days, dataSource, ct);
+        var (heartRateCount, stepCount) = await SeedActivityAsync(clock, days, dataSource, ct);
         var (trackerDefinitions, trackerInstances) =
             await SeedTrackersAsync(db, deviceSchedule, ownerSubjectId, ct);
         var (alertRules, alertExcursions) =
             await SeedAlertsAsync(db, tenant.TenantId, ownerSubjectId, episodeTracker.Episodes, ct);
         if (includeGlucose && dataSource == Nocturne.Core.Constants.DataSources.DemoService)
-            await SeedCompressionLowReviewsAsync(localToday, days, ct);
+            await SeedCompressionLowReviewsAsync(clock, days, ct);
 
-        var foodCount = await SeedFoodsAsync(db, mealCarbLinks, ownerSubjectId, ct);
+        var foodCount = await SeedFoodsAsync(db, clock, mealCarbLinks, ownerSubjectId, ct);
         var stateSpanCount = await SeedStateSpansAsync(db, clock, days, dataSource, ct);
         await SeedBodyWeightAsync(db, clock, days, dataSource, ct);
         await SeedTimezoneTimelineAsync(db, clock, days, ct);
@@ -399,7 +398,7 @@ public class SampleDataSeeder
     /// sensitivity/target schedules), unless the demo profile already exists.
     /// </summary>
     private async Task<int> SeedProfileAsync(
-        NocturneDbContext db, DemoModeConfiguration config, DateTime nowUtc, CancellationToken ct)
+        NocturneDbContext db, DemoModeConfiguration config, SeedingClock clock, CancellationToken ct)
     {
         var exists = await db.TherapySettings
             .AnyAsync(t => t.ProfileName == DemoTherapyProfile.ProfileName, ct);
@@ -407,7 +406,7 @@ public class SampleDataSeeder
             return 0;
 
         await _profileWriteService.CreateProfilesAsync(
-            [DemoTherapyProfile.BuildProfile(config, nowUtc)], ct);
+            [DemoTherapyProfile.BuildProfile(config, clock.UtcNow, clock.ZoneId)], ct);
         return 1;
     }
 
@@ -415,23 +414,22 @@ public class SampleDataSeeder
     /// One overnight sleep session per night, generated by the shared
     /// scenario-aware generator and written through <see cref="ISleepService"/>
     /// so RLS, entity mapping, and (Source, OriginalId) dedup on re-seed are
-    /// handled like a connector import. Anchored to local midnight so bedtime
-    /// lands at night in the viewer's timezone (dev runs the API and browser on
-    /// the same machine); stored as UTC.
+    /// handled like a connector import. Anchored to the tenant's local midnight
+    /// so bedtime lands at night in the tenant's zone; stored as UTC.
     /// </summary>
     private async Task<int> SeedSleepAsync(
-        DateTime localToday, DateTime nowUtc, int days, string sourceApp, CancellationToken ct)
+        SeedingClock clock, int days, string sourceApp, CancellationToken ct)
     {
         var count = 0;
         for (var d = 1; d <= days; d++)
         {
             // Night ending on the morning of (today - d + 1).
-            var localMorning = localToday.AddDays(-(d - 1));
-            var session = DemoHealthDataGenerator.GenerateSleepSession(localMorning, sourceApp);
+            var localMorning = clock.LocalToday.AddDays(-(d - 1));
+            var session = DemoHealthDataGenerator.GenerateSleepSession(localMorning, sourceApp, clock.Demo);
 
             // Seeding before ~08:00 local would otherwise write last night's
             // session with an EndTime still in the future.
-            if (session.EndTime > nowUtc)
+            if (session.EndTime > clock.UtcNow)
                 continue;
 
             await _sleepService.UpsertSessionAsync(session, ct);
@@ -447,17 +445,17 @@ public class SampleDataSeeder
     /// Deterministic sync identifiers make re-seeding update in place.
     /// </summary>
     private async Task<(int HeartRates, int Steps)> SeedActivityAsync(
-        DateTime localToday, DateTime now, int days, string dataSource, CancellationToken ct)
+        SeedingClock clock, int days, string dataSource, CancellationToken ct)
     {
         var heartRates = new List<HeartRate>();
         var stepCounts = new List<StepCount>();
 
         for (var d = 0; d < days; d++)
         {
-            var (dayHeartRates, daySteps) =
-                DemoHealthDataGenerator.GenerateDailyActivity(localToday.AddDays(-d), dataSource);
-            heartRates.AddRange(dayHeartRates.Where(h => h.Timestamp <= now));
-            stepCounts.AddRange(daySteps.Where(s => s.Timestamp <= now));
+            var (dayHeartRates, daySteps) = DemoHealthDataGenerator.GenerateDailyActivity(
+                clock.LocalToday.AddDays(-d), dataSource, clock.Demo);
+            heartRates.AddRange(dayHeartRates.Where(h => h.Timestamp <= clock.UtcNow));
+            stepCounts.AddRange(daySteps.Where(s => s.Timestamp <= clock.UtcNow));
         }
 
         foreach (var batch in heartRates.Chunk(BatchSize))
@@ -669,6 +667,7 @@ public class SampleDataSeeder
     /// </summary>
     private async Task<int> SeedFoodsAsync(
         NocturneDbContext db,
+        SeedingClock clock,
         List<(DateTime Time, string MealName)> mealCarbLinks, Guid? ownerSubjectId, CancellationToken ct)
     {
         var foodsByName = new Dictionary<string, FoodEntity>(StringComparer.OrdinalIgnoreCase);
@@ -732,7 +731,7 @@ public class SampleDataSeeder
                 // Deterministic rolls key on the meal's local calendar day,
                 // like every other demo stream (the UTC day differs east of
                 // Greenwich).
-                var localMeal = time.ToLocalTime();
+                var localMeal = clock.Demo.ToLocal(time);
                 if (DayScenarios.Roll(localMeal.Date, $"food-link:{localMeal.Hour}", 100) >= 60)
                     continue;
 
@@ -778,7 +777,7 @@ public class SampleDataSeeder
             .ToListAsync(ct);
         foreach (var temp in temps)
         {
-            var local = clock.UtcToHost(temp.Timestamp);
+            var local = clock.Demo.ToLocal(temp.Timestamp);
             temp.ScheduledRate = DemoTherapyProfile.ScheduledRateAt(local, baseRate);
         }
         await db.SaveChangesAsync(ct);
@@ -794,7 +793,7 @@ public class SampleDataSeeder
         NocturneDbContext db,
         SeedingClock clock, int days, string dataSource, CancellationToken ct)
     {
-        var localToday = clock.HostToday;
+        var localToday = clock.LocalToday;
         await db.StateSpans.PurgeAsync(s => s.Source == dataSource, ct);
         await db.ProfileActivations.PurgeAsync(a => a.DataSource == dataSource, ct);
 
@@ -802,14 +801,14 @@ public class SampleDataSeeder
         {
             Id = Guid.CreateVersion7(),
             TenantId = db.TenantId,
-            Timestamp = clock.HostToUtc(localToday.AddDays(-days)),
+            Timestamp = clock.ToUtc(localToday.AddDays(-days)),
             Phase = nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Requested),
             Origin = nameof(Nocturne.Core.Models.V4.ProfileActivationOrigin.User),
             BaseProfileName = DemoTherapyProfile.ProfileName,
             DataSource = dataSource,
         });
 
-        var spans = DemoLifestyleSeeds.BuildSpans(localToday, days, clock.HostNow);
+        var spans = DemoLifestyleSeeds.BuildSpans(localToday, days, clock.LocalNow);
         foreach (var seed in spans)
         {
             db.StateSpans.Add(new StateSpanEntity
@@ -818,8 +817,8 @@ public class SampleDataSeeder
                 TenantId = db.TenantId,
                 Category = seed.Category.ToString(),
                 State = seed.State,
-                StartTimestamp = clock.HostToUtc(seed.StartLocal),
-                EndTimestamp = seed.EndLocal is { } end ? clock.HostToUtc(end) : null,
+                StartTimestamp = clock.ToUtc(seed.StartLocal),
+                EndTimestamp = seed.EndLocal is { } end ? clock.ToUtc(end) : null,
                 Source = dataSource,
                 MetadataJson = seed.Metadata is null ? null : JsonSerializer.Serialize(seed.Metadata),
             });
@@ -910,10 +909,10 @@ public class SampleDataSeeder
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task SeedCompressionLowReviewsAsync(DateTime localToday, int days, CancellationToken ct)
+    private async Task SeedCompressionLowReviewsAsync(SeedingClock clock, int days, CancellationToken ct)
     {
         var nights = Enumerable.Range(0, days)
-            .Select(offset => DateOnly.FromDateTime(localToday.AddDays(-offset)))
+            .Select(offset => DateOnly.FromDateTime(clock.LocalToday.AddDays(-offset)))
             .Where(DemoCoverageSeeds.IsCompressionNight)
             .Take(3)
             .ToList();
@@ -966,7 +965,7 @@ public class SampleDataSeeder
             if (index == 0)
                 continue;
 
-            var nadirMills = DemoCoverageSeeds.CompressionNadirMills(night);
+            var nadirMills = DemoCoverageSeeds.CompressionNadirMills(night, clock.Demo);
             var suggestion = pendingByNight[night].FirstOrDefault(pending =>
                 pending.StartMills <= nadirMills && pending.EndMills >= nadirMills);
             if (suggestion is null)
