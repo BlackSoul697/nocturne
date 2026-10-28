@@ -260,11 +260,11 @@ public class ParityTestFixture : IAsyncLifetime
 }
 
 /// <summary>
-/// Collection definition for parity tests to share the fixture.
-/// DisableParallelization ensures tests run sequentially to avoid data contamination
-/// since they share the same Nightscout and PostgreSQL instances.
+/// The parity tests, sharing one Nightscout and one Nocturne database. A collection runs its own
+/// tests one at a time, which is all that sharing needs; no other collection touches either store,
+/// so the collection runs beside the rest.
 /// </summary>
-[CollectionDefinition("Parity", DisableParallelization = true)]
+[CollectionDefinition("Parity")]
 public class ParityTestCollection : ICollectionFixture<ParityTestFixture>
 {
 }

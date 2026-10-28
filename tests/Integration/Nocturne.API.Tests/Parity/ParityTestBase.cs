@@ -67,15 +67,11 @@ public abstract class ParityTestBase : IAsyncLifetime
 
     public virtual async Task InitializeAsync()
     {
-        // Clean up at the start of each test to ensure a clean slate
-        // This handles leftover data from previous test runs or parallel test execution
         await Fixture.CleanupDataAsync();
     }
 
-    public virtual async Task DisposeAsync()
-    {
-        await Fixture.CleanupDataAsync();
-    }
+    // The next test's setup clears what this one leaves.
+    public virtual Task DisposeAsync() => Task.CompletedTask;
 
     #region Data Seeding Helpers
 
