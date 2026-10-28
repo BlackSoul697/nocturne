@@ -460,7 +460,6 @@
   instanceName={completingInstance?.definitionName ?? "tracker"}
   category={completingDefinition?.category}
   definitionId={completingInstance?.definitionId}
-  completionEventType={completingDefinition?.completionEventType}
   defaultCompletedAt={completingDefaultDate ?? undefined}
   onClose={handleCompletionDialogClose}
   onComplete={handleCompletionComplete}
