@@ -20,6 +20,7 @@ using Xunit.Abstractions;
 
 namespace Nocturne.API.Tests;
 
+[Collection(ApiIntegrationShards.One)]
 public sealed class DemoCoverageIntegrationTests(
     ApiIntegrationTestFixture fixture,
     ITestOutputHelper output) : ApiIntegrationTestBase(fixture, output)

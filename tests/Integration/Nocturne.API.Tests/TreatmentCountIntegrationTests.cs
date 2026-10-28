@@ -12,6 +12,7 @@ namespace Nocturne.API.Tests.Integration;
 /// The no-filter treatment count adds up every table the legacy projection serves, records, state
 /// spans and profile activations alike, on real PostgreSQL, where the state-span filters run.
 /// </summary>
+[Collection(ApiIntegrationShards.One)]
 [Trait("Category", "Integration")]
 public class TreatmentCountIntegrationTests : ApiIntegrationTestBase
 {

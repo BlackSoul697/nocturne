@@ -157,6 +157,17 @@ fixture seeds its own tenant the same way, with Nightscout's `API_SECRET` as a l
 over the API: the API's entry point also carries NSwag's static `CreateHostBuilder`, which
 `WebApplicationFactory` otherwise prefers, and that host has no endpoints.
 
+**API integration shards.** The classes deriving `ApiIntegrationTestBase` are split across four
+xUnit collections, `ApiIntegrationShards.One` to `Four` (`Infrastructure/IntegrationTestCollection.cs`).
+Each has its own `ApiIntegrationTestFixture`, so its own API host on its own port and its own
+database. The shards run in parallel; the tests inside one run one after another. A class names its
+shard on itself, `[Collection(ApiIntegrationShards.Two)]`; the base names none, so a class without
+one gets no fixture and fails to run. `ApiIntegrationShardTests` requires every concrete class to
+name exactly one shard and no base class to name any. The shards are balanced by measured duration,
+so put a new class in the shortest. To find it or to rebalance, run the suite with
+`--logger "trx;LogFileName=api.trx"`, take each class's time from its first test's start to its last
+test's end, and total the classes of each shard.
+
 **SQLite unit databases.** `TestDbContextFactory.CreateSqlite*` copies a schema built once per
 process into each test's in-memory database with SQLite's backup API instead of running
 `EnsureCreated` per test.
@@ -222,7 +233,7 @@ node .github/scripts/coverage-report.mjs --base origin/main \
 - .NET: `dotnet test` over a solution builds and runs the test assemblies in parallel (MSBuild
   nodes); xUnit runs collections in parallel on one thread per core, which measured faster than a
   lower cap for the same memory. Integration fixtures each get their own cloned database, so their
-  collections run in parallel too.
+  collections run in parallel too, the four API integration shards among them.
 - vitest: the app unit suite uses half the cores, between two and four; the browser suite two pages,
   always headless; the other packages run their default pool.
 - e2e: vitest and Playwright use half the cores, at least two (`E2E_API_WORKERS`,

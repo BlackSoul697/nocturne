@@ -30,7 +30,7 @@ namespace Nocturne.API.Tests.Integration.Infrastructure;
 /// <summary>
 /// Runs the API in-process on a real Kestrel port against a database of its own on
 /// <see cref="SharedPostgres"/> (production role bootstrap, migrated schema), shared by every test
-/// in the <c>ApiIntegration</c> collection.
+/// in one of the <see cref="ApiIntegrationShards"/>; each shard runs its own.
 /// </summary>
 /// <remarks>
 /// This used to boot the whole Aspire AppHost, which never completes on GitHub runners and

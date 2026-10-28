@@ -15,6 +15,7 @@ namespace Nocturne.API.Tests.Integration.Auth;
 /// An authenticated request resolves its membership in one statement before its controller runs, and
 /// keeps nothing past the request: a removal, a revocation or a clamp applies on the next one.
 /// </summary>
+[Collection(ApiIntegrationShards.Two)]
 [Trait("Category", "Integration")]
 public class AuthenticatedRequestContextOpensIntegrationTests : ApiIntegrationTestBase
 {

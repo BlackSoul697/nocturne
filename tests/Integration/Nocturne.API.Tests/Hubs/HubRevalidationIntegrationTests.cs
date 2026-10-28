@@ -24,6 +24,7 @@ namespace Nocturne.API.Tests.Integration.Hubs;
 /// closes it once they do not: a revoked grant, a removed member or a deactivated tenant. Covers a credential presented
 /// on the upgrade request and one presented in-band.
 /// </summary>
+[Collection(ApiIntegrationShards.Three)]
 [Trait("Category", "Integration")]
 public class HubRevalidationIntegrationTests : ApiIntegrationTestBase
 {
