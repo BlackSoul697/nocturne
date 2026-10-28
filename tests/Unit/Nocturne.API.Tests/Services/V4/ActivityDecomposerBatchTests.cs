@@ -536,13 +536,13 @@ public class ActivityDecomposerBatchTests : IDisposable
 
     #endregion
 
-    #region IsStepCount
+    #region Classify
 
     [Theory]
-    [InlineData("steps-total", true)]
-    [InlineData("walk", false)]
-    [InlineData(null, false)]
-    public void IsStepCount_StepsKey_TrueOnlyForStepsTotalType(string? type, bool expected)
+    [InlineData("steps-total", ActivityDestination.StepCount)]
+    [InlineData("walk", ActivityDestination.StateSpan)]
+    [InlineData(null, ActivityDestination.StateSpan)]
+    public void Classify_StepsKey_IsAStepCountOnlyForStepsTotalType(string? type, ActivityDestination expected)
     {
         var activity = new Activity
         {
@@ -550,7 +550,26 @@ public class ActivityDecomposerBatchTests : IDisposable
             AdditionalProperties = new Dictionary<string, object> { ["steps"] = 1000 },
         };
 
-        _decomposer.IsStepCount(activity).Should().Be(expected);
+        _decomposer.Classify(activity).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(new[] { "bpm" }, "exercise", ActivityDestination.HeartRate)]
+    [InlineData(new[] { "metric" }, "exercise", ActivityDestination.StepCount)]
+    [InlineData(new[] { "bpm", "metric" }, "steps-total", ActivityDestination.HeartRate)]
+    [InlineData(new[] { "bpm" }, "sleep", ActivityDestination.HeartRate)]
+    [InlineData(new[] { "metric" }, "nap", ActivityDestination.StepCount)]
+    [InlineData(new string[0], "sleep", ActivityDestination.SleepSession)]
+    [InlineData(new string[0], "exercise", ActivityDestination.StateSpan)]
+    public void Classify_SensorKeysOutrankTheType(string[] keys, string type, ActivityDestination expected)
+    {
+        var activity = new Activity
+        {
+            Type = type,
+            AdditionalProperties = keys.ToDictionary(k => k, object (_) => 60),
+        };
+
+        _decomposer.Classify(activity).Should().Be(expected);
     }
 
     #endregion

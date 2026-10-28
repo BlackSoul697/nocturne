@@ -162,12 +162,11 @@ public class ActivityController : ControllerBase
     {
         try
         {
-            var activity = await _activityService.GetActivityByIdAsync(id, cancellationToken);
+            var activity = ActivityReadScopeGuard.FirstReadable(
+                await _activityService.GetStoredActivitiesAsync(id, cancellationToken),
+                _activityDecomposer,
+                HttpContext.GetGrantedScopes());
             if (activity == null)
-                return NotFound(new { error = $"Activity with ID {id} not found" });
-
-            if (!ActivityReadScopeGuard.CanRead(
-                activity, _activityDecomposer, HttpContext.GetGrantedScopes()))
                 return NotFound(new { error = $"Activity with ID {id} not found" });
 
             return Ok(activity);
@@ -362,8 +361,8 @@ public class ActivityController : ControllerBase
     /// and any other goes through the create path, which keeps the client's id.
     /// </summary>
     /// <remarks>
-    /// The scope gate covers the stored record as well as the payload, so a caller cannot edit
-    /// sleep, heart-rate or step data without that category's scope by sending another type.
+    /// The scope gate covers every record the id names as well as the payload, so a caller cannot
+    /// edit sleep, heart-rate or step data without that category's scope by sending another type.
     /// An id that names an activity the user deleted is refused with the 409 every other refused
     /// recreation gets (<see cref="Filters.RecreationBlockedFilter"/>), as a PUT of a deleted sleep
     /// session already was.
@@ -376,10 +375,8 @@ public class ActivityController : ControllerBase
     {
         var hasId = !string.IsNullOrWhiteSpace(activity.Id);
         var toCheck = new List<Activity> { activity };
-        if (hasId
-            && await _activityService.GetActivityByIdAsync(activity.Id!, cancellationToken)
-                is { } existing)
-            toCheck.Add(existing);
+        if (hasId)
+            toCheck.AddRange(await _activityService.GetStoredActivitiesAsync(activity.Id!, cancellationToken));
         var missingScope = ActivityWriteScopeGuard.FindMissingScope(
             toCheck, _activityDecomposer, HttpContext.GetGrantedScopes());
         if (missingScope is not null)

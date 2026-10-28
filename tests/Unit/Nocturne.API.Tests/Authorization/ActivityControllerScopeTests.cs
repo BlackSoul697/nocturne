@@ -152,8 +152,8 @@ public class ActivityControllerScopeTests
     public async Task GetActivity_HidesARecordWhoseCategoryScopeIsMissing()
     {
         var (controller, service) = BuildRead(grantedScopes: [Scope.HeartRateRead]);
-        service.Setup(s => s.GetActivityByIdAsync("sleep", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ActivityWithId("sleep"));
+        service.Setup(s => s.GetStoredActivitiesAsync("sleep", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ActivityWithId("sleep")]);
 
         var result = await controller.GetActivity("sleep");
 
@@ -164,8 +164,8 @@ public class ActivityControllerScopeTests
     public async Task GetActivity_ReturnsARecordWhoseCategoryScopeIsHeld()
     {
         var (controller, service) = BuildRead(grantedScopes: [Scope.SleepRead]);
-        service.Setup(s => s.GetActivityByIdAsync("sleep", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ActivityWithId("sleep"));
+        service.Setup(s => s.GetStoredActivitiesAsync("sleep", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ActivityWithId("sleep")]);
 
         var result = await controller.GetActivity("sleep");
 

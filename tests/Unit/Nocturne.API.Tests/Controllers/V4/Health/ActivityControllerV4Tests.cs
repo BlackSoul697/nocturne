@@ -36,6 +36,8 @@ public class ActivityControllerV4Tests
         _service.Setup(s => s.CountActivitiesByCategoryAsync(
                 It.IsAny<IReadOnlySet<string>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, long>());
+        _service.Setup(s => s.GetStoredActivitiesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
     }
 
     private void GrantScopes(params string[] scopes) =>
@@ -119,8 +121,8 @@ public class ActivityControllerV4Tests
     {
         const string id = "sleep-session-1";
         GrantScopes(Scope.TreatmentsReadWrite);
-        _service.Setup(x => x.GetActivityByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = id, Type = "sleep" });
+        _service.Setup(x => x.GetStoredActivitiesAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = id, Type = "sleep" }]);
         _decomposer.Setup(d => d.RequiredWriteScope(It.Is<Activity>(a => a.Type == "sleep")))
             .Returns(Scope.SleepReadWrite);
 
@@ -164,8 +166,8 @@ public class ActivityControllerV4Tests
     {
         const string id = "sleep-session-1";
         GrantScopes(Scope.GlucoseReadWrite);
-        _service.Setup(x => x.GetActivityByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = id, Type = "sleep" });
+        _service.Setup(x => x.GetStoredActivitiesAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = id, Type = "sleep" }]);
         _decomposer.Setup(d => d.RequiredWriteScope(It.IsAny<Activity>())).Returns(Scope.SleepReadWrite);
 
         var result = await _controller.DeleteActivity(id, CancellationToken.None);
@@ -180,8 +182,8 @@ public class ActivityControllerV4Tests
     {
         const string id = "sleep-session-1";
         GrantScopes(Scope.SleepReadWrite);
-        _service.Setup(x => x.GetActivityByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = id, Type = "sleep" });
+        _service.Setup(x => x.GetStoredActivitiesAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = id, Type = "sleep" }]);
         _decomposer.Setup(d => d.RequiredWriteScope(It.IsAny<Activity>())).Returns(Scope.SleepReadWrite);
         _service.Setup(x => x.DeleteActivityAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 

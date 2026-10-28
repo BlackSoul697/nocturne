@@ -93,8 +93,8 @@ public class ActivityV1WriteScopeTests
     public async Task UpdateActivity_HeartRateOnlyKeyOverAnExistingExercise_IsRefusedForTreatments()
     {
         var service = new Mock<IActivityService>();
-        service.Setup(s => s.GetActivityByIdAsync("a1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = "a1", Type = "exercise" });
+        service.Setup(s => s.GetStoredActivitiesAsync("a1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = "a1", Type = "exercise" }]);
         var decomposer = new Mock<IActivityDecomposer>();
         decomposer.Setup(d => d.RequiredWriteScope(It.IsAny<Activity>()))
             .Returns((Activity a) => a.Type == "heartrate" ? Scope.HeartRateReadWrite : Scope.TreatmentsReadWrite);
@@ -135,6 +135,8 @@ public class ActivityV1WriteScopeTests
     public async Task Write_IsGatedPerRecord(string route, string[] granted, string body, bool allowed)
     {
         var service = new Mock<IActivityService>();
+        service.Setup(s => s.GetStoredActivitiesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         service.Setup(s => s.CreateActivitiesAsync(It.IsAny<IEnumerable<Activity>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IEnumerable<Activity> a, CancellationToken _) => a.ToList());
         service.Setup(s => s.UpdateActivityAsync(It.IsAny<string>(), It.IsAny<Activity>(), It.IsAny<CancellationToken>()))
