@@ -43,6 +43,10 @@ public class ActivityControllerTests
         var httpContext = new DefaultHttpContext();
         _controller.ControllerContext = new ControllerContext() { HttpContext = httpContext };
 
+        _mockActivityService
+            .Setup(x => x.GetStoredActivitiesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
         // Default read classification: a regular StateSpan-backed activity, read under treatments.
         // Tests that exercise a dedicated category override this per record.
         _mockActivityDecomposer
@@ -181,8 +185,8 @@ public class ActivityControllerTests
         };
 
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(activityId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedActivity);
+            .Setup(x => x.GetStoredActivitiesAsync(activityId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([expectedActivity]);
 
         // Act
         var result = await _controller.GetActivity(activityId, CancellationToken.None);
@@ -201,8 +205,8 @@ public class ActivityControllerTests
         var activityId = "507f1f77bcf86cd799439011";
 
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(activityId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Activity?)null);
+            .Setup(x => x.GetStoredActivitiesAsync(activityId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         // Act
         var result = await _controller.GetActivity(activityId, CancellationToken.None);
@@ -284,8 +288,8 @@ public class ActivityControllerTests
         ClassifyReadScopesByType(new() { ["HeartRate"] = Scope.HeartRateRead });
         GrantScopes(Scope.TreatmentsRead);
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(activityId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = activityId, Type = "HeartRate", Mills = 1 });
+            .Setup(x => x.GetStoredActivitiesAsync(activityId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = activityId, Type = "HeartRate", Mills = 1 }]);
 
         var result = await _controller.GetActivity(activityId, CancellationToken.None);
 
@@ -300,8 +304,8 @@ public class ActivityControllerTests
         ClassifyReadScopesByType(new() { ["HeartRate"] = Scope.HeartRateRead });
         GrantScopes(Scope.HeartRateRead);
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(activityId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(record);
+            .Setup(x => x.GetStoredActivitiesAsync(activityId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([record]);
 
         var result = await _controller.GetActivity(activityId, CancellationToken.None);
 
@@ -405,8 +409,8 @@ public class ActivityControllerTests
         const string id = "sleep-session-1";
         GrantScopes(Scope.TreatmentsReadWrite);
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = id, Type = "sleep" });
+            .Setup(x => x.GetStoredActivitiesAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = id, Type = "sleep" }]);
         _mockActivityDecomposer
             .Setup(d => d.RequiredWriteScope(It.Is<Activity>(a => a.Type == "sleep")))
             .Returns(Scope.SleepReadWrite);
@@ -618,7 +622,7 @@ public class ActivityControllerTests
         result.Result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<Activity>().Which.Type.Should().Be("Walking");
         _mockActivityService.Verify(
-            x => x.GetActivityByIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            x => x.GetStoredActivitiesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockActivityService.Verify(
             x => x.UpdateActivityAsync(It.IsAny<string>(), It.IsAny<Activity>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -709,8 +713,8 @@ public class ActivityControllerTests
         const string id = "sleep-session-1";
         GrantScopes(Scope.TreatmentsReadWrite);
         _mockActivityService
-            .Setup(x => x.GetActivityByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Activity { Id = id, Type = "sleep" });
+            .Setup(x => x.GetStoredActivitiesAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Activity { Id = id, Type = "sleep" }]);
         _mockActivityDecomposer
             .Setup(d => d.RequiredWriteScope(It.Is<Activity>(a => a.Type == "sleep")))
             .Returns(Scope.SleepReadWrite);

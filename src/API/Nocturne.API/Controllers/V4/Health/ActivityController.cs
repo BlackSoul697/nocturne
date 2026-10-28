@@ -27,8 +27,9 @@ namespace Nocturne.API.Controllers.V4.Health;
 /// Create and update admit a caller holding <c>treatments.readwrite</c>, the category a
 /// StateSpan-backed activity writes under, or <c>sleep.readwrite</c>, the category a sleep-typed
 /// activity writes under; <see cref="IActivityDecomposer.RequiredWriteScope"/> then names the
-/// scope of each record. Delete admits <c>treatments.readwrite</c> only, because one id can name
-/// records in several storages and the guard sees only the first.
+/// scope of each record. Update and delete also check every record the id already names
+/// (<see cref="IActivityService.GetStoredActivitiesAsync"/>). Delete admits
+/// <c>treatments.readwrite</c> only.
 /// </para>
 /// </remarks>
 [ApiController]
@@ -114,12 +115,11 @@ public class ActivityController : ControllerBase
         string id,
         CancellationToken cancellationToken = default)
     {
-        var record = await _activityService.GetActivityByIdAsync(id, cancellationToken);
+        var record = ActivityReadScopeGuard.FirstReadable(
+            await _activityService.GetStoredActivitiesAsync(id, cancellationToken),
+            _activityDecomposer,
+            HttpContext.GetGrantedScopes());
         if (record == null)
-            return NotFound();
-
-        if (!ActivityReadScopeGuard.CanRead(
-            record, _activityDecomposer, HttpContext.GetGrantedScopes()))
             return NotFound();
 
         return Ok(record);
@@ -167,10 +167,8 @@ public class ActivityController : ControllerBase
         // Gate on both what is being written (the payload's destination) and what is being
         // modified (the existing record's destination) — updating an exercise record into a
         // sleep one, or editing a sleep session addressed by its id, both need sleep.readwrite.
-        var existing = await _activityService.GetActivityByIdAsync(id, cancellationToken);
         var toCheck = new List<Activity> { activity };
-        if (existing is not null)
-            toCheck.Add(existing);
+        toCheck.AddRange(await _activityService.GetStoredActivitiesAsync(id, cancellationToken));
         var missingScope = ActivityWriteScopeGuard.FindMissingScope(
             toCheck, _activityDecomposer, HttpContext.GetGrantedScopes());
         if (missingScope is not null)
@@ -194,16 +192,12 @@ public class ActivityController : ControllerBase
         string id,
         CancellationToken cancellationToken = default)
     {
-        // Resolve the target first so the delete is gated by the category it will remove
-        // (sleep/heart-rate/step). A missing record needs no category scope.
-        var existing = await _activityService.GetActivityByIdAsync(id, cancellationToken);
-        if (existing is not null)
-        {
-            var missingScope = ActivityWriteScopeGuard.FindMissingScope(
-                [existing], _activityDecomposer, HttpContext.GetGrantedScopes());
-            if (missingScope is not null)
-                return this.ForbiddenForScope(missingScope);
-        }
+        var missingScope = ActivityWriteScopeGuard.FindMissingScope(
+            await _activityService.GetStoredActivitiesAsync(id, cancellationToken),
+            _activityDecomposer,
+            HttpContext.GetGrantedScopes());
+        if (missingScope is not null)
+            return this.ForbiddenForScope(missingScope);
 
         var deleted = await _activityService.DeleteActivityAsync(id, cancellationToken);
         if (!deleted)
