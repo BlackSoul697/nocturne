@@ -930,6 +930,7 @@ msgstr ""
 
 #: src/lib/components/admin/OidcProviderDialog.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
+#: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Connection test failed"
 msgstr ""
 
@@ -3749,9 +3750,8 @@ msgstr ""
 msgid "Entry created"
 msgstr ""
 
-#: src/lib/components/entries/EntryEditDialog.svelte
-msgid "Failed to save entry"
-msgstr ""
+#~ msgid "Failed to save entry"
+#~ msgstr ""
 
 #: src/lib/components/entries/EntryEditDialog.svelte
 msgid "Entry deleted"
@@ -3764,6 +3764,7 @@ msgid "Failed to delete entry"
 msgstr ""
 
 #: src/lib/components/entries/EntryEditDialog.svelte
+#: src/lib/components/meals/MealBolusDialog.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
 msgid "Failed to save bolus"
 msgstr ""
@@ -12270,6 +12271,7 @@ msgstr ""
 #~ msgid "Connected successfully! Found {0} entries and {1} treatments."
 #~ msgstr ""
 
+#: src/routes/(authenticated)/settings/migration/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Failed to start migration"
 msgstr ""
@@ -33531,6 +33533,7 @@ msgstr ""
 msgid "<0/> Add insulin"
 msgstr ""
 
+#: src/lib/components/patient/PatientInsulinManager.svelte
 #: src/lib/components/patient/PatientInsulinManager.svelte
 msgid "Edit insulin"
 msgstr ""

@@ -930,6 +930,7 @@ msgstr "Connection successful{0}. <0/>"
 
 #: src/lib/components/admin/OidcProviderDialog.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
+#: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Connection test failed"
 msgstr "Connection test failed"
 
@@ -3749,9 +3750,8 @@ msgstr "Entry updated"
 msgid "Entry created"
 msgstr "Entry created"
 
-#: src/lib/components/entries/EntryEditDialog.svelte
-msgid "Failed to save entry"
-msgstr "Failed to save entry"
+#~ msgid "Failed to save entry"
+#~ msgstr "Failed to save entry"
 
 #: src/lib/components/entries/EntryEditDialog.svelte
 msgid "Entry deleted"
@@ -3764,6 +3764,7 @@ msgid "Failed to delete entry"
 msgstr "Failed to delete entry"
 
 #: src/lib/components/entries/EntryEditDialog.svelte
+#: src/lib/components/meals/MealBolusDialog.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
 msgid "Failed to save bolus"
 msgstr "Failed to save bolus"
@@ -12267,6 +12268,7 @@ msgstr "Your API secret"
 #~ msgid "Connected successfully! Found {0} entries and {1} treatments."
 #~ msgstr "Connected successfully! Found {0} entries and {1} treatments."
 
+#: src/routes/(authenticated)/settings/migration/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Failed to start migration"
 msgstr "Failed to start migration"
@@ -33528,6 +33530,7 @@ msgstr "Add insulin"
 msgid "<0/> Add insulin"
 msgstr "<0/> Add insulin"
 
+#: src/lib/components/patient/PatientInsulinManager.svelte
 #: src/lib/components/patient/PatientInsulinManager.svelte
 msgid "Edit insulin"
 msgstr "Edit insulin"
