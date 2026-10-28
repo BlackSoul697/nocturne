@@ -11,6 +11,7 @@
   import { Artwork } from "water-ui";
   import { batteryArtwork } from "#lib/watercolour-icons.js";
   import * as trackersRemote from "#lib/api/generated/trackers.generated.remote.js";
+  import { FormError, useSubmission } from "#lib/forms/index.js";
   import { tick } from "svelte";
   import {
     TrackerCategory,
@@ -150,6 +151,26 @@
 
   const createForm = $derived(createRemote.for("create"));
   const updateForm = $derived(updateRemote.for(editingDefinition?.id ?? ""));
+
+  const submission = useSubmission();
+  // A keyed form keeps its issues across openings, so show them only once this opening submits.
+  let submitted = $state(false);
+
+  $effect(() => {
+    if (open) {
+      submission.clear();
+      submitted = false;
+    }
+  });
+
+  async function save(submit: () => Promise<boolean>) {
+    submitted = true;
+    await submission.run(submit, async () => {
+      await tick();
+      open = false;
+    });
+  }
+
   /** The fields a definition is submitted under: the update form nests them under `request`. */
   type DefinitionFields = typeof createForm.fields | typeof updateForm.fields.request;
 
@@ -551,18 +572,16 @@
     </Dialog.Header>
 
     {#if isNewDefinition}
-      <form
-        {...createForm.enhance(async ({ submit }) => {
-          await submit();
-          if (createForm.result) {
-            await tick();
-            open = false;
-          }
-        })}
-      >
+      <form {...createForm.enhance(({ submit }) => save(submit))}>
         <div class="space-y-6 py-4">
           {@render definitionFormFields(createForm.fields)}
         </div>
+
+        <FormError
+          issues={submission.error ?? (submitted ? createForm.fields.allIssues() : undefined)}
+          focusOnShow
+          class="mb-4"
+        />
 
         <Dialog.Footer>
           <Button
@@ -581,19 +600,17 @@
         </Dialog.Footer>
       </form>
     {:else}
-      <form
-        {...updateForm.enhance(async ({ submit }) => {
-          await submit();
-          if (updateForm.result) {
-            await tick();
-            open = false;
-          }
-        })}
-      >
+      <form {...updateForm.enhance(({ submit }) => save(submit))}>
         <input {...updateForm.fields.id.as("hidden", editingDefinition?.id ?? "")} />
         <div class="space-y-6 py-4">
           {@render definitionFormFields(updateForm.fields.request)}
         </div>
+
+        <FormError
+          issues={submission.error ?? (submitted ? updateForm.fields.allIssues() : undefined)}
+          focusOnShow
+          class="mb-4"
+        />
 
         <Dialog.Footer>
           <Button
