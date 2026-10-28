@@ -26315,21 +26315,21 @@ msgstr ""
 msgid "<0/> Loop Analysis uses a maximum of 90 days. For a longer range, it uses only the most recent 90 days."
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisHarness.test.svelte
+#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisFiltersStandIn.test.svelte
 msgid "Filters panel"
 msgstr ""
 
 #: src/routes/(authenticated)/reports/loop-analysis/FiltersPanelHarness.test.svelte
-#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisHarness.test.svelte
+#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisFiltersStandIn.test.svelte
 msgid "Open filters"
 msgstr ""
 
 #: src/lib/components/layout/ReportsFilterSidebar.svelte
-#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisHarness.test.svelte
+#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisFiltersStandIn.test.svelte
 msgid "Apply filters"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisHarness.test.svelte
+#: src/routes/(authenticated)/reports/loop-analysis/LoopAnalysisFiltersStandIn.test.svelte
 msgid "Reset filters"
 msgstr ""
 
