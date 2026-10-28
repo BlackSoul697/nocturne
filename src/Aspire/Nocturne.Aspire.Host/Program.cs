@@ -532,6 +532,7 @@ class Program
         }
 
         IResourceBuilder<IResourceWithEndpoints> web;
+        var devOptions = DevOptions.From(builder.Configuration);
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -554,13 +555,17 @@ class Program
 
             ConfigureWebEnvironment(viteWeb);
 
-            // Dev auto-login, on unless NOCTURNE_DEV_AUTO_LOGIN is false (apphost
-            // appsettings or the host environment, e.g.
-            // `NOCTURNE_DEV_AUTO_LOGIN=false aspire start`): the web login page
-            // redirects through /api/v4/dev-only/auth/login instead of the
-            // passkey UI, since a seeded tenant's passkey is held by no one. Run
-            // mode only — the backing controller exists only in Development.
-            if (builder.Configuration.GetValue("NOCTURNE_DEV_AUTO_LOGIN", true))
+            // Waited for so the first page anyone opens is the seeded dashboard, never /setup.
+            if (devOptions.AutoSeed.Enabled)
+            {
+                var devSeed = builder.AddDevTenantSeed(
+                    "nocturne-dev-seed", api, devOptions.AutoSeed.SampleDataDays);
+                viteWeb.WaitForCompletion(devSeed);
+                devSeed.WithParentRelationship(viteWeb);
+            }
+
+            // Run mode only: the backing controller exists only in Development.
+            if (devOptions.AutoLogin)
             {
                 viteWeb.WithEnvironment("NOCTURNE_DEV_AUTO_LOGIN", "true");
             }
@@ -918,6 +923,19 @@ class Program
                     ),
                     "Gateway"
                 );
+            }
+
+            if (devOptions.AutoSeed.Enabled)
+            {
+                // Read from the allocated port: an explicit domain is on 443 only outside a worktree.
+                var devTenantHost = $"{DevTenantSeeder.Slug}.{customDomain}";
+                gateway.WithUrls(context => context.Urls.Add(new ResourceUrlAnnotation
+                {
+                    Url = gatewayEndpoint.Port == 443
+                        ? $"https://{devTenantHost}"
+                        : $"https://{devTenantHost}:{gatewayEndpoint.Port}",
+                    DisplayText = "Dev tenant (if seeded)",
+                }));
             }
 
             // Warn if custom domain doesn't resolve (no-op for *.localhost,

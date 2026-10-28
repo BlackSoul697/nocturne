@@ -449,14 +449,18 @@ public partial class TenantService : ITenantService
             .ToListAsync(ct);
     }
 
-    public async Task<SlugValidationResult> ValidateSlugAsync(string slug, CancellationToken ct = default)
+    public Task<SlugValidationResult> ValidateSlugAsync(string slug, CancellationToken ct = default) =>
+        ValidateSlugAsync(slug, allowReserved: false, ct);
+
+    public async Task<SlugValidationResult> ValidateSlugAsync(
+        string slug, bool allowReserved, CancellationToken ct = default)
     {
         var normalized = slug.ToLowerInvariant().Trim();
 
         if (!SlugPattern().IsMatch(normalized))
             return new SlugValidationResult(false, "Slug must be 3-63 characters, alphanumeric and hyphens only, no leading/trailing hyphens");
 
-        if (ReservedSlugs.Contains(normalized))
+        if (!allowReserved && ReservedSlugs.Contains(normalized))
             return new SlugValidationResult(false, "This name is reserved");
 
         await using var context = await _factory.CreatePlatformAsync(ct);
