@@ -78,7 +78,6 @@ public class SampleDataSeeder
     private readonly IProfileWriteService _profileWriteService;
     private readonly IDeviceStatusDecomposer _deviceStatusDecomposer;
     private readonly ITreatmentDecomposer _treatmentDecomposer;
-    private readonly ITreatmentCache _treatmentCache;
     private readonly ICompressionLowDetectionService _compressionLowDetectionService;
     private readonly ICompressionLowService _compressionLowService;
     private readonly ICompressionLowRepository _compressionLowRepository;
@@ -119,7 +118,6 @@ public class SampleDataSeeder
         IProfileWriteService profileWriteService,
         IDeviceStatusDecomposer deviceStatusDecomposer,
         ITreatmentDecomposer treatmentDecomposer,
-        ITreatmentCache treatmentCache,
         ICompressionLowDetectionService compressionLowDetectionService,
         ICompressionLowService compressionLowService,
         ICompressionLowRepository compressionLowRepository,
@@ -139,7 +137,6 @@ public class SampleDataSeeder
         _profileWriteService = profileWriteService;
         _deviceStatusDecomposer = deviceStatusDecomposer;
         _treatmentDecomposer = treatmentDecomposer;
-        _treatmentCache = treatmentCache;
         _compressionLowDetectionService = compressionLowDetectionService;
         _compressionLowService = compressionLowService;
         _compressionLowRepository = compressionLowRepository;
@@ -308,7 +305,6 @@ public class SampleDataSeeder
             await FlushEntriesAsync();
             await FlushTreatmentsAsync();
             await FlushStatusesAsync();
-            await _treatmentCache.InvalidateAsync(ct);
 
             await StampTempBasalScheduledRatesAsync(db, clock, dataSource, config.BasalRate, ct);
         }

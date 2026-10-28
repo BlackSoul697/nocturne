@@ -11,9 +11,9 @@ namespace Nocturne.API.Services.Treatments;
 /// as real-time storage events in the <c>treatments</c> collection group.
 /// </summary>
 /// <remarks>
-/// Unlike <see cref="SignalREntryEventSink"/>, this sink does not perform cache invalidation or
-/// V4 decomposition — those responsibilities belong to <see cref="TreatmentService"/> and
-/// <see cref="TreatmentReadService"/> respectively.
+/// This sink does not perform cache invalidation or V4 decomposition: the repositories clear the
+/// legacy read caches (<see cref="Nocturne.Core.Contracts.V4.ILegacyReadCacheInvalidation"/>), and
+/// <see cref="TreatmentReadService"/> decomposes.
 /// Broadcast failures are caught and logged without propagating.
 /// </remarks>
 /// <seealso cref="IDataEventSink{T}"/>

@@ -334,8 +334,6 @@ public class EntryServiceTests
                 It.IsAny<WriteOrigin>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
-        // Cache invalidation + broadcasting is handled by the chokepoint, not the service.
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -357,7 +355,6 @@ public class EntryServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.CreateEntriesAsync(entries, cancellationToken: CancellationToken.None));
 
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Theory]
@@ -462,7 +459,6 @@ public class EntryServiceTests
         _decomposer.Verify(
             x => x.DecomposeAsync(It.Is<Entry>(e => e.Id == entryId && e.Sgv == 125), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Once);
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -485,7 +481,6 @@ public class EntryServiceTests
         _decomposer.Verify(
             x => x.DecomposeAsync(It.IsAny<Entry>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Never);
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion
@@ -548,8 +543,6 @@ public class EntryServiceTests
         // Assert
         Assert.Equal(5, result);
         _decomposer.Verify(x => x.BulkDeleteAsync(find, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
-        // Cache invalidation is handled by the EventSink, not the service
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -569,8 +562,6 @@ public class EntryServiceTests
 
         // Assert
         Assert.Equal(0, result);
-        // Cache invalidation is handled by the EventSink, not the service
-        _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

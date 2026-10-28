@@ -24,10 +24,8 @@ namespace Nocturne.API.Services.ConnectorPublishing;
 /// <seealso cref="ITreatmentPublisher"/>
 internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPublisher
 {
-    private readonly INocturneDbContextFactory _contextFactory;
     private readonly ITreatmentService _treatmentService;
     private readonly ITreatmentDecomposer _treatmentDecomposer;
-    private readonly ITreatmentCache _treatmentCache;
     private readonly IBolusRepository _bolusRepository;
     private readonly ICarbIntakeRepository _carbIntakeRepository;
     private readonly IBGCheckRepository _bgCheckRepository;
@@ -42,10 +40,8 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
     private readonly IPatientDeviceStamper _patientDeviceStamper;
 
     public TreatmentPublisher(
-        INocturneDbContextFactory contextFactory,
         ITreatmentService treatmentService,
         ITreatmentDecomposer treatmentDecomposer,
-        ITreatmentCache treatmentCache,
         IBolusRepository bolusRepository,
         ICarbIntakeRepository carbIntakeRepository,
         IBGCheckRepository bgCheckRepository,
@@ -64,10 +60,8 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
         ILogger<TreatmentPublisher> logger)
         : base(auditContext, skips, tenantAccessor, logger)
     {
-        _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _treatmentService = treatmentService ?? throw new ArgumentNullException(nameof(treatmentService));
         _treatmentDecomposer = treatmentDecomposer ?? throw new ArgumentNullException(nameof(treatmentDecomposer));
-        _treatmentCache = treatmentCache ?? throw new ArgumentNullException(nameof(treatmentCache));
         _bolusRepository = bolusRepository ?? throw new ArgumentNullException(nameof(bolusRepository));
         _carbIntakeRepository = carbIntakeRepository ?? throw new ArgumentNullException(nameof(carbIntakeRepository));
         _bgCheckRepository = bgCheckRepository ?? throw new ArgumentNullException(nameof(bgCheckRepository));
@@ -340,13 +334,8 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
     public async Task<int> DeleteTreatmentsAsync(
         string source, IReadOnlySet<string> legacyIds, CancellationToken cancellationToken = default)
     {
-        int deleted;
         using (PushSystemAudit())
-            deleted = await _treatmentDecomposer.DeleteFromSourceAsync(source, legacyIds, cancellationToken);
-
-        if (deleted > 0)
-            await _treatmentCache.InvalidateAsync(cancellationToken);
-        return deleted;
+            return await _treatmentDecomposer.DeleteFromSourceAsync(source, legacyIds, cancellationToken);
     }
 
     // ── Patient Insulin resolution helpers ──────────────────────────────

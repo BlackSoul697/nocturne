@@ -25,9 +25,4 @@ public interface ITreatmentCache
         TreatmentQuery query,
         Func<Task<IReadOnlyList<Treatment>>> compute,
         CancellationToken ct = default);
-
-    /// <summary>
-    /// Invalidate all cached treatment data for the current tenant.
-    /// </summary>
-    Task InvalidateAsync(CancellationToken ct = default);
 }

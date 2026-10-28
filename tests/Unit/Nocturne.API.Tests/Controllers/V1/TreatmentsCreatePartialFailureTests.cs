@@ -108,7 +108,6 @@ public class TreatmentsCreatePartialFailureTests
     {
         await _controller.CreateTreatments(Batch());
 
-        _cache.Verify(c => c.InvalidateAsync(It.IsAny<CancellationToken>()), Times.AtLeastOnce);
         _events.Verify(
             e => e.OnCreatedAsync(
                 It.Is<IReadOnlyList<Treatment>>(written => written.Count == 1 && written[0].Notes == "first"),

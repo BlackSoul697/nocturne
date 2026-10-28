@@ -173,9 +173,8 @@ public class TreatmentService : ITreatmentService
     /// <remarks>
     /// Before persisting, each treatment is enriched with <see cref="TreatmentInsulinContext"/>
     /// via <see cref="PopulateInsulinContextAsync"/> if its <see cref="Treatment.EventType"/>
-    /// matches a known bolus or basal type and no context is already set. After creation,
-    /// the <see cref="ITreatmentCache"/> is invalidated and events are fired via
-    /// <see cref="IDataEventSink{T}.OnCreatedAsync(IReadOnlyList{T}, CancellationToken)"/>.
+    /// matches a known bolus or basal type and no context is already set. After creation, events are
+    /// fired via <see cref="IDataEventSink{T}.OnCreatedAsync(IReadOnlyList{T}, CancellationToken)"/>.
     /// </remarks>
     public Task<BulkWrite<Treatment>> CreateTreatmentsAsync(
         IEnumerable<Treatment> treatments, CancellationToken cancellationToken = default) =>
@@ -209,8 +208,7 @@ public class TreatmentService : ITreatmentService
         }
         catch (TreatmentBatchFailedException failed)
         {
-            // The treatments before the failing one are stored, so reads and write-back must see them.
-            await _cache.InvalidateAsync(CancellationToken.None);
+            // The treatments before the failing one are stored, so write-back must see them.
             completed = true;
             await _events.OnCreatedAsync(failed.Written, CancellationToken.None);
             await RecordRejectedAsync(failed.Written);
@@ -221,15 +219,10 @@ public class TreatmentService : ITreatmentService
         finally
         {
             // An exception the store does not expect still leaves what it stored before it.
-            if (!completed)
-            {
-                await _cache.InvalidateAsync(CancellationToken.None);
-                if (stored.Count > 0)
-                    await _events.OnCreatedAsync(stored, CancellationToken.None);
-            }
+            if (!completed && stored.Count > 0)
+                await _events.OnCreatedAsync(stored, CancellationToken.None);
         }
 
-        await _cache.InvalidateAsync(cancellationToken);
         await _events.OnCreatedAsync(created, cancellationToken);
         await RecordRejectedAsync(created);
 
@@ -277,11 +270,9 @@ public class TreatmentService : ITreatmentService
         string id, Treatment treatment, CancellationToken cancellationToken = default)
     {
         Treatment? updated;
-        var completed = false;
         try
         {
             updated = await _store.UpdateAsync(id, treatment, cancellationToken);
-            completed = true;
         }
         catch (DbUpdateException ex) when (StoreRefusal.ReasonFor(ex) is { } reason)
         {
@@ -291,16 +282,9 @@ public class TreatmentService : ITreatmentService
         {
             throw await RefuseAsync(treatment, ex.Message, ex);
         }
-        finally
-        {
-            // A failed update may have committed some of its records, and cached reads would keep serving the old treatment.
-            if (!completed)
-                await _cache.InvalidateAsync(CancellationToken.None);
-        }
 
         if (updated is null) return null;
 
-        await _cache.InvalidateAsync(cancellationToken);
         await _events.OnUpdatedAsync(updated, cancellationToken);
 
         return updated;
@@ -319,8 +303,6 @@ public class TreatmentService : ITreatmentService
 
         // Re-decompose (idempotent upsert via LegacyId matching)
         await _decomposer.DecomposeAsync(existing, WriteOrigin.Live, cancellationToken);
-
-        await _cache.InvalidateAsync(cancellationToken);
 
         // The merged record carries the upsert key, which the wire would coerce to a different
         // identifier than the create returned; AAPS stores the identifier from every response and
@@ -360,7 +342,6 @@ public class TreatmentService : ITreatmentService
         if (await _store.DeleteAsync(id, cancellationToken) is not { } deletion)
             return false;
 
-        await _cache.InvalidateAsync(cancellationToken);
         if (deletion.Served is not null)
             await _events.OnDeletedAsync(deletion.Served, cancellationToken);
 
@@ -379,10 +360,7 @@ public class TreatmentService : ITreatmentService
         if (FindQuery.Parse(find).HasFieldFilters)
             return await DeleteMatchingTreatmentsAsync(find, cancellationToken);
 
-        var count = await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
-        if (count > 0)
-            await _cache.InvalidateAsync(cancellationToken);
-        return count;
+        return await _decomposer.BulkDeleteAsync(find, WriteOrigin.Live, cancellationToken);
     }
 
     private async Task<long> DeleteMatchingTreatmentsAsync(string? find, CancellationToken ct)
@@ -400,8 +378,6 @@ public class TreatmentService : ITreatmentService
             }
         }
 
-        if (deleted > 0)
-            await _cache.InvalidateAsync(ct);
         return deleted;
     }
 

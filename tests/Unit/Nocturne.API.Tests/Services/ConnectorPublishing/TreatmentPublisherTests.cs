@@ -1,7 +1,6 @@
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Connectors.Core.Models;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -14,7 +13,6 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
-using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Services;
 using Xunit;
 using Nocturne.Core.Contracts.V4;
@@ -26,7 +24,6 @@ public class TreatmentPublisherTests
 {
     private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<ITreatmentDecomposer> _mockDecomposer = new();
-    private readonly Mock<ITreatmentCache> _mockCache = new();
     private readonly Mock<IBolusRepository> _mockBolusRepository;
     private readonly Mock<ICarbIntakeRepository> _mockCarbIntakeRepository;
     private readonly Mock<IBGCheckRepository> _mockBGCheckRepository;
@@ -38,16 +35,7 @@ public class TreatmentPublisherTests
     private readonly Mock<IPatientInsulinRepository> _mockPatientInsulinRepository;
     private readonly Mock<IBasalRateResolver> _mockBasalRateResolver;
     private readonly Mock<ITherapySettingsResolver> _mockTherapySettingsResolver;
-    private Mock<INocturneDbContextFactory> _mockContextFactory = null!;
     private readonly TreatmentPublisher _publisher;
-
-    private static readonly Guid TestTenantId = Guid.NewGuid();
-
-    private static NocturneDbContext NewDbContext() =>
-        new(new DbContextOptionsBuilder<NocturneDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options)
-        { TenantId = TestTenantId };
 
     public TreatmentPublisherTests()
     {
@@ -80,16 +68,9 @@ public class TreatmentPublisherTests
 
     private TreatmentPublisher CreatePublisher(IAuditContext auditContext)
     {
-        _mockContextFactory = new Mock<INocturneDbContextFactory>();
-        _mockContextFactory
-            .Setup(f => f.CreateAsync(It.IsAny<CancellationToken>()))
-            .Returns(() => new ValueTask<NocturneDbContext>(NewDbContext()));
-
         return new TreatmentPublisher(
-            _mockContextFactory.Object,
             _mockTreatmentService.Object,
             _mockDecomposer.Object,
-            _mockCache.Object,
             _mockBolusRepository.Object,
             _mockCarbIntakeRepository.Object,
             _mockBGCheckRepository.Object,
@@ -473,8 +454,6 @@ public class TreatmentPublisherTests
         _mockDecomposer.Verify(d => d.DeleteFromSourceAsync(
             "nightscout-connector", It.Is<IReadOnlySet<string>>(ids => ids.SetEquals(new[] { "t-1" })),
             It.IsAny<CancellationToken>()), Times.Once);
-        _mockCache.Verify(c => c.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once,
-            "reads served from the treatment cache would still show what was deleted");
     }
 
     [Fact]

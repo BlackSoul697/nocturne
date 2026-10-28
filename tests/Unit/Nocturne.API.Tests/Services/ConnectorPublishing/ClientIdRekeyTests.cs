@@ -1,5 +1,6 @@
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.API.Tests.Infrastructure;
+using Nocturne.API.Tests.TestDoubles;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,6 +49,7 @@ public class ClientIdRekeyTests : IDisposable
     private readonly SqliteTestDatabase _db;
     private readonly NocturneDbContext _context;
     private readonly TreatmentPublisher _publisher;
+    private readonly RecordingLegacyReads _legacyReads = new();
 
     public ClientIdRekeyTests()
     {
@@ -79,6 +81,20 @@ public class ClientIdRekeyTests : IDisposable
         live.Select(c => (c.LegacyId, c.Carbs)).Should().Equal((ObjectIdA, 10), (ObjectIdB, 11), (ObjectIdC, 12));
         live.Single(c => c.Id == stored).LegacyId.Should().Be(ObjectIdC,
             "the stored row moves to the equivalent at its time, not beside a copy");
+    }
+
+    /// <summary>
+    /// The repositories here have no port, so only the re-key, which moves rows around them, reports
+    /// the spans it re-keys alongside the tables.
+    /// </summary>
+    [Fact]
+    public async Task A_rekey_reports_the_tables_and_spans_it_moved_rows_in()
+    {
+        await StoreAsync(TrioId, Source, carbs: 12, at: MealAt.AddHours(3));
+
+        await _publisher.PublishTreatmentsAsync([Equivalent(ObjectIdC, 12, MealAt.AddHours(3))], Source, WriteOrigin.Live);
+
+        _legacyReads.Models.Should().Contain([typeof(Nocturne.Core.Models.V4.CarbIntake), typeof(StateSpan)]);
     }
 
     [Fact]
@@ -220,7 +236,8 @@ public class ClientIdRekeyTests : IDisposable
             _context.AsFactory(), bolus, Mock.Of<ITempBasalRepository>(), carbs, bgChecks, notes, deviceEvents, calculations,
             Mock.Of<IStateSpanService>(), ProfileActivationTestDeps.Repository(_context), ProfileActivationTestDeps.Writer(_context), Mock.Of<ITreatmentFoodService>(), Mock.Of<IDeviceService>(),
             Mock.Of<IPatientDeviceStamper>(), Mock.Of<IActiveProfileResolver>(),
-            Mock.Of<IPatientInsulinRepository>(), TempBasalTestDeps.Unscheduled(), audit, NullLogger<TreatmentDecomposer>.Instance);
+            Mock.Of<IPatientInsulinRepository>(), TempBasalTestDeps.Unscheduled(), audit, NullLogger<TreatmentDecomposer>.Instance,
+            legacyReads: _legacyReads);
         var store = new TreatmentReadService(
             Mock.Of<IV4ToLegacyProjectionService>(), decomposer, Mock.Of<IDecompositionPipeline>(),
             Mock.Of<ITempBasalRepository>(), bolus, carbs, bgChecks, notes, deviceEvents, calculations,
@@ -232,7 +249,7 @@ public class ClientIdRekeyTests : IDisposable
             Mock.Of<IPatientInsulinRepository>(), NullLogger<TreatmentService>.Instance);
 
         return new TreatmentPublisher(
-            ctxFactory, service, decomposer, Mock.Of<ITreatmentCache>(),
+            service, decomposer,
             bolus, carbs, bgChecks, calculations, Mock.Of<ITempBasalRepository>(),
             Mock.Of<IBasalInjectionRepository>(), notes, deviceEvents,
             Mock.Of<IPatientInsulinRepository>(), Mock.Of<IBasalRateResolver>(), Mock.Of<ITherapySettingsResolver>(),

@@ -102,7 +102,6 @@ public class SampleDataSeederMixedZoneTests : IDisposable
             Mock.Of<IProfileWriteService>(),
             statuses.Object,
             treatments.Object,
-            Mock.Of<ITreatmentCache>(),
             Mock.Of<ICompressionLowDetectionService>(),
             Mock.Of<ICompressionLowService>(),
             Mock.Of<ICompressionLowRepository>(),

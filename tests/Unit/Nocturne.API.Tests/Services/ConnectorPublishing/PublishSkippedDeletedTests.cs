@@ -88,7 +88,7 @@ public class PublishSkippedDeletedTests : IDisposable
             store, decomposer.Object, Mock.Of<ITreatmentCache>(), Mock.Of<IDataEventSink<Treatment>>(),
             Mock.Of<IPatientInsulinRepository>(), NullLogger<TreatmentService>.Instance);
         var publisher = new TreatmentPublisher(
-            new TestNocturneDbContextFactory(_context), service, decomposer.Object, Mock.Of<ITreatmentCache>(),
+            service, decomposer.Object,
             Mock.Of<IBolusRepository>(), Mock.Of<ICarbIntakeRepository>(), Mock.Of<IBGCheckRepository>(),
             Mock.Of<IBolusCalculationRepository>(), Mock.Of<ITempBasalRepository>(),
             Mock.Of<IBasalInjectionRepository>(), Mock.Of<INoteRepository>(), Mock.Of<IDeviceEventRepository>(),
@@ -156,7 +156,7 @@ public class PublishSkippedDeletedTests : IDisposable
             store, decomposer.Object, Mock.Of<ITreatmentCache>(), Mock.Of<IDataEventSink<Treatment>>(),
             Mock.Of<IPatientInsulinRepository>(), NullLogger<TreatmentService>.Instance);
         return new TreatmentPublisher(
-            new TestNocturneDbContextFactory(_context), service, decomposer.Object, Mock.Of<ITreatmentCache>(),
+            service, decomposer.Object,
             Mock.Of<IBolusRepository>(), Mock.Of<ICarbIntakeRepository>(), Mock.Of<IBGCheckRepository>(),
             Mock.Of<IBolusCalculationRepository>(), Mock.Of<ITempBasalRepository>(),
             Mock.Of<IBasalInjectionRepository>(), Mock.Of<INoteRepository>(), Mock.Of<IDeviceEventRepository>(),

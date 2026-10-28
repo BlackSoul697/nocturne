@@ -195,7 +195,7 @@ public class RecentTreatmentRepublishTests : IDisposable
             Mock.Of<IPatientInsulinRepository>(), NullLogger<TreatmentService>.Instance);
 
         return new TreatmentPublisher(
-            ctxFactory, service, decomposer, Mock.Of<ITreatmentCache>(),
+            service, decomposer,
             bolus, carbs, bgChecks, calculations, Mock.Of<ITempBasalRepository>(),
             Mock.Of<IBasalInjectionRepository>(), notes, deviceEvents,
             Mock.Of<IPatientInsulinRepository>(), Mock.Of<IBasalRateResolver>(), Mock.Of<ITherapySettingsResolver>(),

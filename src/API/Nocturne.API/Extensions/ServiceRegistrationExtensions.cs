@@ -710,6 +710,7 @@ public static class ServiceRegistrationExtensions
 
         services.AddSingleton<CacheFlights>();
         services.AddScoped<ITenantCache, TenantCache>();
+        services.AddScoped<ILegacyReadCacheInvalidation, LegacyReadCacheInvalidation>();
 
         services.AddScoped<IV4ToLegacyProjectionService, V4ToLegacyProjectionService>();
 

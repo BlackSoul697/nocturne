@@ -34,9 +34,4 @@ public interface IEntryCache
     Task<Entry?> GetOrComputeCurrentAsync(
         Func<Task<Entry?>> compute,
         CancellationToken ct = default);
-
-    /// <summary>
-    /// Invalidate all cached entry data for the current tenant.
-    /// </summary>
-    Task InvalidateAsync(CancellationToken ct = default);
 }

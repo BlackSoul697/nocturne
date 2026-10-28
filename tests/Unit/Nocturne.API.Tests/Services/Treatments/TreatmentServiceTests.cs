@@ -121,13 +121,12 @@ public class TreatmentServiceTests
     }
 
     [Fact]
-    public async Task CreateTreatmentsAsync_ShouldInvalidateCacheAndPublishEvents()
+    public async Task CreateTreatmentsAsync_ShouldPublishEvents()
     {
         var created = new List<Treatment> { new Treatment { Id = "1" } };
         _mockStore.Setup(x => x.CreateAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>(), It.IsAny<ICollection<Treatment>?>())).ReturnsAsync([.. created]);
         var result = await _treatmentService.CreateTreatmentsAsync(new List<Treatment> { new Treatment() }, CancellationToken.None);
         result.Should().ContainSingle();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnCreatedAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -141,7 +140,6 @@ public class TreatmentServiceTests
         var act = () => _treatmentService.CreateTreatmentsAsync([new Treatment(), new Treatment()], CancellationToken.None);
 
         (await act.Should().ThrowAsync<TreatmentBatchFailedException>()).Which.Should().BeSameAs(failure);
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnCreatedAsync(stored, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -160,7 +158,6 @@ public class TreatmentServiceTests
         var act = () => _treatmentService.CreateTreatmentsAsync([new Treatment(), new Treatment()], cts.Token);
 
         await act.Should().ThrowExactlyAsync<OperationCanceledException>();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnCreatedAsync(stored, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -177,7 +174,7 @@ public class TreatmentServiceTests
     }
 
     [Fact]
-    public async Task CreateTreatmentsAsync_WhenTheStoreThrowsAnythingElse_InvalidatesTheCache()
+    public async Task CreateTreatmentsAsync_WhenTheStoreThrowsAnythingElse_AnnouncesNothingAndPropagates()
     {
         _mockStore.Setup(x => x.CreateAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>(), It.IsAny<ICollection<Treatment>?>()))
             .ThrowsAsync(new NotSupportedException());
@@ -185,79 +182,65 @@ public class TreatmentServiceTests
         var act = () => _treatmentService.CreateTreatmentsAsync([new Treatment()], CancellationToken.None);
 
         await act.Should().ThrowAsync<NotSupportedException>();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnCreatedAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task UpdateTreatmentAsync_ShouldInvalidateCacheAndPublishEvent()
+    public async Task UpdateTreatmentAsync_ShouldPublishEvent()
     {
         var updated = new Treatment { Id = "id", EventType = "Meal Bolus" };
         _mockStore.Setup(x => x.UpdateAsync("id", It.IsAny<Treatment>(), It.IsAny<CancellationToken>())).ReturnsAsync(updated);
         var result = await _treatmentService.UpdateTreatmentAsync("id", new Treatment(), CancellationToken.None);
         result.Should().NotBeNull();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnUpdatedAsync(updated, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task UpdateTreatmentAsync_WhenNotFound_ShouldNotInvalidateOrPublish()
+    public async Task UpdateTreatmentAsync_WhenNotFound_ShouldNotPublish()
     {
         _mockStore.Setup(x => x.UpdateAsync("x", It.IsAny<Treatment>(), It.IsAny<CancellationToken>())).ReturnsAsync((Treatment?)null);
         var result = await _treatmentService.UpdateTreatmentAsync("x", new Treatment(), CancellationToken.None);
         result.Should().BeNull();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _mockEvents.Verify(x => x.OnUpdatedAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task UpdateTreatmentAsync_WhenTheStoreFails_InvalidatesTheCacheAndPropagates()
+    public async Task UpdateTreatmentAsync_WhenTheStoreFails_Propagates()
     {
         _mockStore.Setup(x => x.UpdateAsync("id", It.IsAny<Treatment>(), It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("store down"));
 
         var update = () => _treatmentService.UpdateTreatmentAsync("id", new Treatment(), CancellationToken.None);
 
         await update.Should().ThrowAsync<InvalidOperationException>();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnUpdatedAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeleteTreatmentAsync_ShouldInvalidateCacheAndPublishEvent()
+    public async Task DeleteTreatmentAsync_ShouldPublishEvent()
     {
         var existing = new Treatment { Id = "id" };
         _mockStore.Setup(x => x.DeleteAsync("id", It.IsAny<CancellationToken>())).ReturnsAsync(new TreatmentDeletion(existing));
         var result = await _treatmentService.DeleteTreatmentAsync("id", CancellationToken.None);
         result.Should().BeTrue();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnDeletedAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
         _mockStore.Verify(x => x.GetByIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeleteTreatmentAsync_WhenNotFound_ShouldNotInvalidateOrPublish()
+    public async Task DeleteTreatmentAsync_WhenNotFound_ShouldNotPublish()
     {
         _mockStore.Setup(x => x.DeleteAsync("x", It.IsAny<CancellationToken>())).ReturnsAsync((TreatmentDeletion?)null);
         var result = await _treatmentService.DeleteTreatmentAsync("x", CancellationToken.None);
         result.Should().BeFalse();
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _mockEvents.Verify(x => x.OnDeletedAsync(It.IsAny<Treatment?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeleteTreatmentsAsync_ShouldInvalidateCacheWhenDeleted()
+    public async Task DeleteTreatmentsAsync_ReturnsTheDecomposersCount()
     {
         _mockDecomposer.Setup(x => x.BulkDeleteAsync(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>())).ReturnsAsync(5);
         var result = await _treatmentService.DeleteTreatmentsAsync("q", CancellationToken.None);
         result.Should().Be(5);
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task DeleteTreatmentsAsync_WhenNoneDeleted_ShouldNotInvalidateCache()
-    {
-        _mockDecomposer.Setup(x => x.BulkDeleteAsync(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        var result = await _treatmentService.DeleteTreatmentsAsync("q", CancellationToken.None);
-        result.Should().Be(0);
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -282,7 +265,6 @@ public class TreatmentServiceTests
         decomposed.Notes.Should().Be("updated");
         result.Should().BeSameAs(served, "the response carries the id reads serve, not the upsert key");
         _mockDecomposer.Verify(x => x.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
-        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mockEvents.Verify(x => x.OnUpdatedAsync(served, It.IsAny<CancellationToken>()), Times.Once);
         _mockStore.Verify(x => x.GetForUpdateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
