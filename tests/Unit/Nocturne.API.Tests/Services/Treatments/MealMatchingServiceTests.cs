@@ -101,6 +101,7 @@ public class MealMatchingServiceTests
         };
         var settings = new MyFitnessPalMatchingSettingsService(
             context.AsFactory(),
+            TimeProvider.System,
             NullLogger<MyFitnessPalMatchingSettingsService>.Instance);
         await context.DisposeAsync();
 

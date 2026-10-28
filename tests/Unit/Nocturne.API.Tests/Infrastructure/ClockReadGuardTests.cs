@@ -33,7 +33,20 @@ public class ClockReadGuardTests
         "src/API/Nocturne.API/Services/Notifications",
         "src/API/Nocturne.API/Services/SetupHub",
         "src/API/Nocturne.API/Services/Compatibility",
+        "src/API/Nocturne.API/Services/Platform",
+        "src/API/Nocturne.API/Services/Connectors",
+        "src/API/Nocturne.API/Services/Identity",
     ];
+
+    /// <summary>
+    /// Files that read <see cref="DateTime.UtcNow"/> inside an EF query on purpose: Npgsql translates it
+    /// to the database's <c>now()</c>, so replicas whose clocks disagree still agree on what is recent.
+    /// Each is held to that, and to its count: a read outside a query lambda, or one more inside, fails.
+    /// </summary>
+    private static readonly Dictionary<string, int> DatabaseClockFiles = new()
+    {
+        ["src/API/Nocturne.API/Services/Platform/InstanceKey/InstanceKeyCheck.cs"] = 3,
+    };
 
     private static readonly HashSet<string> ClockTypes = [nameof(DateTime), nameof(DateTimeOffset)];
 
@@ -54,7 +67,12 @@ public class ClockReadGuardTests
             foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
             {
                 var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
-                reads.AddRange(Violations(File.ReadAllText(path)).Select(v => $"{relative}:{v}"));
+                var source = File.ReadAllText(path);
+                var inQueryOnly = DatabaseClockFiles.TryGetValue(relative, out var permitted);
+                var violations = Violations(source, inQueryOnly);
+                reads.AddRange(violations.Select(v => $"{relative}:{v}"));
+                if (inQueryOnly && Violations(source).Count - violations.Count != permitted)
+                    reads.Add($"{relative}: holds {Violations(source).Count - violations.Count} query-lambda clock reads, not {permitted}");
             }
         }
 
@@ -84,7 +102,19 @@ public class ClockReadGuardTests
         Violations(source).Should().HaveCount(expected);
     }
 
-    private static List<string> Violations(string source)
+    [Theory]
+    [InlineData("class C { void M() { q.Where(c => c.At > DateTime.UtcNow); } }", true, 0)]
+    [InlineData("class C { void M() { q.Update(s => s.Set(c => c.At, _ => DateTime.UtcNow)); } }", true, 0)]
+    [InlineData("class C { void M() { var t = DateTime.UtcNow; } }", true, 1)]
+    [InlineData("class C { void M() { q.Where(c => c.At > DateTime.UtcNow); } }", false, 1)]
+    [InlineData("class C { void M() { q.Select(c => TimeProvider.System.GetUtcNow()); } }", true, 1)]
+    public void A_database_clock_file_may_read_the_clock_only_inside_a_query_lambda(
+        string source, bool databaseClockFile, int expected)
+    {
+        Violations(source, databaseClockFile).Should().HaveCount(expected);
+    }
+
+    private static List<string> Violations(string source, bool allowInsideLambda = false)
     {
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot();
@@ -110,8 +140,11 @@ public class ClockReadGuardTests
         {
             var type = LastName(access.Expression);
             var member = access.Name.Identifier.ValueText;
-            if ((clockTypes.Contains(type) && StaticClockMembers.Contains(member))
-                || (type == nameof(TimeProvider) && member == nameof(TimeProvider.System)))
+            var isStaticClockRead = clockTypes.Contains(type) && StaticClockMembers.Contains(member);
+            var isSystemProvider = type == nameof(TimeProvider) && member == nameof(TimeProvider.System);
+            var translatedToSql = isStaticClockRead && allowInsideLambda
+                && access.Ancestors().OfType<LambdaExpressionSyntax>().Any();
+            if ((isStaticClockRead || isSystemProvider) && !translatedToSql)
                 Report(access);
         }
 

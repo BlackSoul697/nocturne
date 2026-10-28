@@ -70,6 +70,7 @@ public class GoogleHealthTests : IDisposable
         services.AddSingleton(db.AsFactory());
         services.AddSingleton(Mock.Of<ITenantAccessor>());
         services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IConnectorSyncCursorStore, ConnectorSyncCursorStore>();
         using var provider = services.BuildServiceProvider();
         var coordinator = new GoogleHealthCoordinator(provider.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System);
