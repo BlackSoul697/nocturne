@@ -9,11 +9,17 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Nocturne.API.Controllers.V4.DevOnly;
 using Nocturne.API.Multitenancy;
+using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Platform;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Auth;
+using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Tests.Shared.Infrastructure;
 using Npgsql;
@@ -64,6 +70,12 @@ public class ApiIntegrationTestFixture : IAsyncLifetime
     private TestDatabase? _database;
 
     public ControllableDemoModeService DemoModeService { get; } = new();
+
+    /// <summary>
+    /// The clock the API issues and validates JWTs on, and nothing else. A test shifts it to age a
+    /// token without waiting out its lifetime.
+    /// </summary>
+    public OffsetClock JwtClock { get; } = new();
 
     public string ApiBaseUrl { get; private set; } = string.Empty;
 
@@ -195,6 +207,10 @@ public class ApiIntegrationTestFixture : IAsyncLifetime
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IDemoModeService>(DemoModeService);
+                services.Replace(ServiceDescriptor.Scoped<IJwtService>(sp => new JwtService(
+                    sp.GetRequiredService<IOptions<JwtOptions>>(),
+                    sp.GetRequiredService<ILogger<JwtService>>(),
+                    JwtClock)));
                 ContextOpenLog.Register(services);
             });
         });
