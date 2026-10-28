@@ -136,7 +136,7 @@ internal sealed class DocsTenantFixture : IDisposable
             new RedirectUriValidator(),
             cache ?? new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new BaseDomainOptions { BaseDomain = BaseDomain }),
-            new Mock<ILogger<ScalarAuthProvider>>().Object);
+            TimeProvider.System, new Mock<ILogger<ScalarAuthProvider>>().Object);
     }
 
     public void Dispose() => _db.Dispose();

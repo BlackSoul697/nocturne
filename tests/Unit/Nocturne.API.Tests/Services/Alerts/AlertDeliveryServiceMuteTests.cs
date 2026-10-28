@@ -40,6 +40,7 @@ public class AlertDeliveryServiceMuteTests
             .ReturnsAsync(NewContext);
         var services = new ServiceCollection()
             .AddSingleton(factory.Object.AsNocturneFactory())
+            .AddSingleton(TimeProvider.System)
             .AddSingleton<ChatIdentityDirectoryService>()
             .AddSingleton(_notifications.Object)
             .AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>))

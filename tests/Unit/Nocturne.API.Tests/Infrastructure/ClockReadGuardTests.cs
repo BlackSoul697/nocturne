@@ -36,6 +36,14 @@ public class ClockReadGuardTests
         "src/API/Nocturne.API/Services/Platform",
         "src/API/Nocturne.API/Services/Connectors",
         "src/API/Nocturne.API/Services/Identity",
+        "src/API/Nocturne.API/Services/Analytics",
+        "src/API/Nocturne.API/Services/Legacy",
+        "src/API/Nocturne.API/Services/Chat",
+        "src/API/Nocturne.API/Services/V4",
+        "src/API/Nocturne.API/Services/ClientDevices",
+        "src/API/Nocturne.API/Services/CoachMarks",
+        "src/API/Nocturne.API/Services/Docs",
+        "src/API/Nocturne.API/Services/DevOnly",
     ];
 
     /// <summary>

@@ -627,7 +627,7 @@ if (app.Environment.IsDevelopment() && !isNSwagGeneration)
     await using var devSeedDb = await devSeedScope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>().CreateAsync();
     var devSeedLogger = devSeedScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     await DevIdentityFixtureSeeder.SeedAsync(
-        devSeedDb, app.Configuration, devSeedLogger, CancellationToken.None);
+        devSeedDb, app.Configuration, app.Services.GetRequiredService<TimeProvider>(), devSeedLogger, CancellationToken.None);
 }
 
 await app.RunAsync();

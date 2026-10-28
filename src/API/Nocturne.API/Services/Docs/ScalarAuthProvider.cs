@@ -87,6 +87,7 @@ public sealed class ScalarAuthProvider
     private readonly RedirectUriValidator _redirectUriValidator;
     private readonly IMemoryCache _cache;
     private readonly BaseDomainOptions _baseDomain;
+    private readonly TimeProvider _time;
     private readonly ILogger<ScalarAuthProvider> _logger;
 
     public ScalarAuthProvider(
@@ -96,6 +97,7 @@ public sealed class ScalarAuthProvider
         RedirectUriValidator redirectUriValidator,
         IMemoryCache cache,
         IOptions<BaseDomainOptions> baseDomain,
+        TimeProvider timeProvider,
         ILogger<ScalarAuthProvider> logger)
     {
         _factory = factory;
@@ -104,6 +106,7 @@ public sealed class ScalarAuthProvider
         _redirectUriValidator = redirectUriValidator;
         _cache = cache;
         _baseDomain = baseDomain.Value;
+        _time = timeProvider;
         _logger = logger;
     }
 
@@ -396,7 +399,7 @@ public sealed class ScalarAuthProvider
 
             registered.Add(redirectUri);
             client.RedirectUris = JsonSerializer.Serialize(registered);
-            client.UpdatedAt = DateTime.UtcNow;
+            client.UpdatedAt = _time.GetUtcNow().UtcDateTime;
             await db.SaveChangesAsync(token);
             return client.ClientId;
         }, ct: ct);

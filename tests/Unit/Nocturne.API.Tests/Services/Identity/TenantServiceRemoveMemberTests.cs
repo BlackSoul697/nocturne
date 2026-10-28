@@ -217,7 +217,7 @@ public sealed class TenantServiceRemoveMemberTests : IDisposable
 
         result.Ok.Should().BeTrue();
         var directory = new ChatIdentityDirectoryService(
-            (new Factory(_db.Options, _tenantId)).AsNocturneFactory(), Mock.Of<ILogger<ChatIdentityDirectoryService>>());
+            (new Factory(_db.Options, _tenantId)).AsNocturneFactory(), TimeProvider.System, Mock.Of<ILogger<ChatIdentityDirectoryService>>());
         (await directory.GetCandidatesAsync("discord", "chat-user", default))
             .Select(c => c.Label).Should().BeEquivalentTo(["elsewhere"]);
         (await directory.GetCandidatesAsync("discord", "another-chat-user", default))

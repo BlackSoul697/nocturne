@@ -38,6 +38,7 @@ public class DevAdminController : ControllerBase
     private readonly ISecretEncryptionService _encryption;
     private readonly ITenantService _tenantService;
     private readonly IMemoryCache _cache;
+    private readonly TimeProvider _time;
     private readonly ILogger<DevAdminController> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -51,12 +52,14 @@ public class DevAdminController : ControllerBase
     /// <param name="encryption">Service for secret encryption/decryption in snapshots.</param>
     /// <param name="tenantService">Service for tenant lifecycle management.</param>
     /// <param name="cache">Tenant-resolution cache, which a restored snapshot invalidates.</param>
+    /// <param name="timeProvider">Clock that stamps seeded fixture credentials.</param>
     /// <param name="logger">Logger instance.</param>
     public DevAdminController(
         INocturneDbContextFactory contexts,
         ISecretEncryptionService encryption,
         ITenantService tenantService,
         IMemoryCache cache,
+        TimeProvider timeProvider,
         ILogger<DevAdminController> logger
     )
     {
@@ -64,6 +67,7 @@ public class DevAdminController : ControllerBase
         _encryption = encryption;
         _tenantService = tenantService;
         _cache = cache;
+        _time = timeProvider;
         _logger = logger;
     }
 
@@ -1064,7 +1068,7 @@ public class DevAdminController : ControllerBase
         // passkeys (re-seeded from docs/seed/dev-identities.json) can then sign
         // in to this tenant with the developer's actual authenticator.
         var fixtureSubjectIds = await DevIdentityFixtureSeeder.SeedAsync(
-            db, configuration, _logger, ct);
+            db, configuration, _time, _logger, ct);
         foreach (var fixtureSubjectId in fixtureSubjectIds)
         {
             if (fixtureSubjectId == subjectResult.Subject.Id)

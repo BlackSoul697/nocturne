@@ -78,7 +78,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
         await db.SaveChangesAsync();
         await UseTenantAsync(db, tenantId);
         var service = new HeartRateService(db.AsFactory(), Mock.Of<IDocumentProcessingService>(),
-            Mock.Of<ISignalRBroadcastService>(), NullLogger<HeartRateService>.Instance);
+            Mock.Of<ISignalRBroadcastService>(), TimeProvider.System, NullLogger<HeartRateService>.Instance);
 
         var averages = (await service.GetHeartRateMinuteAveragesByDateRangeAsync(start, end)).ToArray();
 
@@ -109,7 +109,7 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
             });
         await db.SaveChangesAsync();
         var service = new HeartRateService(db.AsFactory(), Mock.Of<IDocumentProcessingService>(),
-            Mock.Of<ISignalRBroadcastService>(), NullLogger<HeartRateService>.Instance);
+            Mock.Of<ISignalRBroadcastService>(), TimeProvider.System, NullLogger<HeartRateService>.Instance);
 
         var averages = (await service.GetHeartRateMinuteAveragesByDateRangeAsync(
             new DateTime(2025, 11, 2, 5, 0, 0, DateTimeKind.Utc),

@@ -13,6 +13,7 @@ using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Infrastructure.Data.Repositories.V4;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Services.Demo.Services;
+using Nocturne.API.Tests.TestDoubles;
 using Xunit;
 using Aid = Nocturne.Core.Models.V4;
 
@@ -55,7 +56,7 @@ public class DemoLoopHealthTests
             readings.AddRange(DemoCoverageSeeds.CgmReadings(step));
             if (DemoDeviceStatusGenerator.ForStep(step, DemoTestClock.Host, config.TargetGlucose, config.BasalRate) is not { } status)
                 continue;
-            var snapshot = DeviceStatusDecomposer.MapToApsSnapshot(status, status.Mills.ToString("x24"), SampleDataSeeder.DevSampleDataSource, null)!;
+            var snapshot = DeviceStatusDecomposerDoubles.Mapping().MapToApsSnapshot(status, status.Mills.ToString("x24"), SampleDataSeeder.DevSampleDataSource, null)!;
             snapshot.Id = Guid.NewGuid();
             snapshots.Add(snapshot);
         }
