@@ -153,7 +153,7 @@
   );
 </script>
 
-<div class="p-3 w-[480px]">
+<div class="p-3 w-120 max-w-[calc(100vw-2rem)]">
   <div class="flex items-center justify-between mb-2">
     <Button
       variant="ghost"
