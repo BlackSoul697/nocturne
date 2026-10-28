@@ -126,6 +126,7 @@ internal sealed class DocsTenantFixture : IDisposable
             new Mock<ITenantService>().Object,
             TestPublicAccessCache.Create(),
             Mock.Of<ITenantCache>(),
+            TimeProvider.System,
             new Mock<ILogger<DemoTenantService>>().Object);
 
         return new ScalarAuthProvider(
