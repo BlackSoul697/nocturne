@@ -119,10 +119,10 @@ public static class DeviceCatalog
     private static readonly IReadOnlyList<DeviceCatalogEntry> _entries =
     [
         // CGMs — Dexcom
-        new() { Id = "dexcom-g7",        Name = "Dexcom G7",          Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, WarmupMinutes = 30,  UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
-        new() { Id = "dexcom-g7-15-day", Name = "Dexcom G7 15 Day",   Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 15, WarmupMinutes = 60,  UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
+        new() { Id = "dexcom-g7",        Name = "Dexcom G7",          Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, GraceHours = 12, WarmupMinutes = 30,  UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
+        new() { Id = "dexcom-g7-15-day", Name = "Dexcom G7 15 Day",   Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 15, GraceHours = 12, WarmupMinutes = 60,  UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
         new() { Id = "dexcom-g6",        Name = "Dexcom G6",          Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, WarmupMinutes = 120, UpdateIntervalMinutes = 5, HasSeparateTransmitter = true, TransmitterDurationDays = 90 } },
-        new() { Id = "dexcom-one-plus",  Name = "Dexcom ONE+",        Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, WarmupMinutes = 30,  UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
+        new() { Id = "dexcom-one-plus",  Name = "Dexcom ONE+",        Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, GraceHours = 12, WarmupMinutes = 30, UpdateIntervalMinutes = 5, HasSeparateTransmitter = false } },
         new() { Id = "dexcom-one",       Name = "Dexcom ONE",         Manufacturer = "Dexcom", Category = DeviceCategory.CGM, Cgm = new() { SensorDurationDays = 10, WarmupMinutes = 120, UpdateIntervalMinutes = 5, HasSeparateTransmitter = true, TransmitterDurationDays = 90 } },
 
         // CGMs — Abbott

@@ -100,6 +100,15 @@ public class DeviceCatalogTests
     }
 
     [Fact]
+    public void OnlyTheDexcomG7Sensors_CarryAGracePeriod()
+    {
+        DeviceCatalog.GetByCategory(DeviceCategory.CGM)
+            .Where(e => e.Cgm?.GraceHours is not null)
+            .Select(e => (e.Id, e.Cgm!.GraceHours))
+            .Should().BeEquivalentTo([("dexcom-g7", (int?)12), ("dexcom-g7-15-day", (int?)12), ("dexcom-one-plus", (int?)12)]);
+    }
+
+    [Fact]
     public void AllEntries_ShouldHaveUniqueIds()
     {
         var entries = DeviceCatalog.GetAll();
