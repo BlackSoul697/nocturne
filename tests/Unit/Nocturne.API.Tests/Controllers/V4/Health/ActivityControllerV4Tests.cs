@@ -1,3 +1,4 @@
+using System.Reflection;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +31,8 @@ public class ActivityControllerV4Tests
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
 
+        _decomposer.Setup(d => d.RequiredWriteScope(It.IsAny<Activity>()))
+            .Returns(Scope.TreatmentsReadWrite);
         _service.Setup(s => s.CountActivitiesByCategoryAsync(
                 It.IsAny<IReadOnlySet<string>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, long>());
@@ -108,7 +111,7 @@ public class ActivityControllerV4Tests
     }
 
     /// <summary>
-    /// The payload here is a regular activity, which needs no category scope of its own — only the
+    /// The payload here is a regular activity, which needs only treatments.readwrite. Only the
     /// record being edited is a sleep session, so the gate has to look at both.
     /// </summary>
     [Fact]
@@ -131,6 +134,29 @@ public class ActivityControllerV4Tests
         _service.Verify(
             x => x.UpdateActivityAsync(It.IsAny<string>(), It.IsAny<Activity>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Theory]
+    [InlineData("sleep", true)]
+    [InlineData("exercise", false)]
+    public async Task CreateActivities_SleepOnlyKey_WritesSleepAndNothingElse(string type, bool allowed)
+    {
+        var granted = new[] { Scope.SleepReadWrite };
+        var attribute = typeof(ActivityController).GetMethod(nameof(ActivityController.CreateActivities))!
+            .GetCustomAttribute<Nocturne.API.Attributes.RequireScopeAttribute>()!;
+        attribute.RequiredScopes.Should().Contain(Scope.SleepReadWrite);
+        GrantScopes(granted);
+        _decomposer.Setup(d => d.RequiredWriteScope(It.IsAny<Activity>()))
+            .Returns((Activity a) => a.Type == "sleep" ? Scope.SleepReadWrite : Scope.TreatmentsReadWrite);
+        _service.Setup(s => s.CreateActivitiesAsync(It.IsAny<IEnumerable<Activity>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IEnumerable<Activity> a, CancellationToken _) => a.ToList());
+
+        var result = await _controller.CreateActivities(
+            [new UpsertActivityRequest { Type = type, Mills = 1700000000000 }],
+            CancellationToken.None);
+
+        result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode
+            .Should().Be(allowed ? StatusCodes.Status201Created : StatusCodes.Status403Forbidden);
     }
 
     [Fact]

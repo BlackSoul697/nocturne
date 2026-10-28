@@ -386,7 +386,8 @@ public class ActivityService : IActivityService
             // Sleep-typed payloads whose id is not a session Guid are upserted by
             // OriginalId, matching the row created by CreateActivitiesAsync. Falling
             // through to the StateSpan path would recategorize the record as Exercise.
-            if (ActivityStateSpanMapper.IsSleepType(activity.Type))
+            if (!_activityDecomposer.IsSensorData(activity)
+                && ActivityStateSpanMapper.IsSleepType(activity.Type))
             {
                 var sleepSession = ActivityStateSpanMapper.ToSleepSession(activity);
                 sleepSession.OriginalId = id;

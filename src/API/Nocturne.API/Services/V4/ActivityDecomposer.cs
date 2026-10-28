@@ -113,12 +113,12 @@ public class ActivityDecomposer : IActivityDecomposer, IDecomposer<Activity>
     /// Returns the OAuth write scope required to persist this activity, based on the dedicated
     /// table it routes to: heart-rate data needs <c>heartrate.readwrite</c>, step-count data
     /// <c>stepcount.readwrite</c>, and sleep-typed activities <c>sleep.readwrite</c>. Regular
-    /// activities (exercise, illness, travel) route to StateSpans and carry no category scope,
-    /// so this returns <see langword="null"/>. Uses the same predicates as the create/update
+    /// activities (exercise, illness, travel) route to StateSpans and need
+    /// <c>treatments.readwrite</c>. Uses the same predicates as the create/update
     /// routing so the scope gate and the storage destination cannot drift apart.
     /// </summary>
     /// <param name="activity">The activity to classify.</param>
-    public string? RequiredWriteScope(Activity activity)
+    public string RequiredWriteScope(Activity activity)
     {
         if (IsHeartRate(activity))
             return Scope.HeartRateReadWrite;
@@ -126,25 +126,19 @@ public class ActivityDecomposer : IActivityDecomposer, IDecomposer<Activity>
             return Scope.StepCountReadWrite;
         if (ActivityStateSpanMapper.IsSleepType(activity.Type))
             return Scope.SleepReadWrite;
-        return null;
+        return Scope.TreatmentsReadWrite;
     }
 
     /// <summary>
     /// Returns the OAuth read scope required to see this activity. Derived from
     /// <see cref="RequiredWriteScope"/> so the read gate and the storage destination cannot drift
-    /// apart. A regular activity reads under <c>treatments.read</c>, which is the scope the legacy
-    /// activity read plane has always required for StateSpan-backed activities. A dedicated
-    /// destination with no read counterpart falls back to <see cref="Scope.FullAccess"/>,
+    /// apart. A destination with no read counterpart falls back to <see cref="Scope.FullAccess"/>,
     /// which only an admin grant holds.
     /// </summary>
     /// <param name="activity">The activity to classify.</param>
     public string RequiredReadScope(Activity activity)
     {
-        var writeScope = RequiredWriteScope(activity);
-        if (writeScope is null)
-            return Scope.TreatmentsRead;
-
-        return Scope.ImpliedReadScope(writeScope) ?? Scope.FullAccess;
+        return Scope.ImpliedReadScope(RequiredWriteScope(activity)) ?? Scope.FullAccess;
     }
 
     /// <inheritdoc/>
