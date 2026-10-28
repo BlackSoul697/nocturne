@@ -499,6 +499,10 @@ internal class MigrationJob
 
     /// <summary>The tenant that owns this migration job. Used to scope status/cancel lookups.</summary>
     public Guid TenantId => _tenantId;
+
+    // A terminal state and the fields that describe it are written together under this lock, and
+    // every reader copies them under it, so none sees a terminal state before the fields it carries.
+    private readonly Lock _statusLock = new();
     private MigrationJobState _state = MigrationJobState.Pending;
     private string? _currentOperation;
     private string? _errorMessage;
@@ -556,18 +560,23 @@ internal class MigrationJob
     private AsyncServiceScope CreateTenantScope() =>
         TenantJobScope.Open(_serviceProvider, _tenantContext, AuditEndpoint);
 
-    public MigrationJobStatus GetStatus() =>
-        new()
+    public MigrationJobStatus GetStatus()
+    {
+        lock (_statusLock)
         {
-            JobId = _id,
-            State = _state,
-            ProgressPercentage = _progressPercentage,
-            CurrentOperation = _currentOperation,
-            ErrorMessage = _errorMessage,
-            StartedAt = _startedAt,
-            CompletedAt = _completedAt,
-            CollectionProgress = _collectionProgress.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-        };
+            return new()
+            {
+                JobId = _id,
+                State = _state,
+                ProgressPercentage = _progressPercentage,
+                CurrentOperation = _currentOperation,
+                ErrorMessage = _errorMessage,
+                StartedAt = _startedAt,
+                CompletedAt = _completedAt,
+                CollectionProgress = _collectionProgress.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+            };
+        }
+    }
 
     public void Cancel()
     {
@@ -575,8 +584,14 @@ internal class MigrationJob
         // Leave terminal states untouched — cancelling a job that already Completed/Failed must
         // not rewrite its (now persisted) outcome, which would also un-satisfy the startup
         // "was this source ever migrated?" check.
-        if (_state.IsLive())
-            _state = MigrationJobState.Cancelled;
+        lock (_statusLock)
+        {
+            if (_state.IsLive())
+            {
+                _completedAt = DateTime.UtcNow;
+                _state = MigrationJobState.Cancelled;
+            }
+        }
     }
 
     public async Task ExecuteAsync(CancellationToken externalCt)
@@ -587,8 +602,12 @@ internal class MigrationJob
         );
         var ct = linkedCts.Token;
 
-        _startedAt = DateTime.UtcNow;
-        _state = MigrationJobState.Running;
+        lock (_statusLock)
+        {
+            _startedAt = DateTime.UtcNow;
+            if (_state == MigrationJobState.Pending)
+                _state = MigrationJobState.Running;
+        }
         await PersistSnapshotAsync(CancellationToken.None);
 
         try
@@ -605,20 +624,26 @@ internal class MigrationJob
             // A run that got some collections through stays Completed rather than gaining a state
             // the UI's badge switch does not know; the summary is what stops it reading as a clean
             // import.
-            _state = MigrationJobState.Completed;
-            _errorMessage = FailureSummary();
-            _progressPercentage = 100;
-            _completedAt = DateTime.UtcNow;
+            var summary = FailureSummary();
+            lock (_statusLock)
+            {
+                _errorMessage = summary;
+                _progressPercentage = 100;
+                _completedAt = DateTime.UtcNow;
+                _state = MigrationJobState.Completed;
+            }
         }
         catch (OperationCanceledException)
         {
-            _state = MigrationJobState.Cancelled;
-            _completedAt = DateTime.UtcNow;
+            lock (_statusLock)
+            {
+                _completedAt = DateTime.UtcNow;
+                _state = MigrationJobState.Cancelled;
+            }
         }
         catch (Exception ex)
         {
-            _state = MigrationJobState.Failed;
-            _errorMessage = ex switch
+            var message = ex switch
             {
                 // Already worded for the person who has to fix it; an inner transport message
                 // appended to it would only add jargon.
@@ -626,7 +651,12 @@ internal class MigrationJob
                 { InnerException: not null } => $"{ex.Message} Inner: {ex.InnerException.Message}",
                 _ => ex.Message,
             };
-            _completedAt = DateTime.UtcNow;
+            lock (_statusLock)
+            {
+                _errorMessage = message;
+                _completedAt = DateTime.UtcNow;
+                _state = MigrationJobState.Failed;
+            }
             _logger.LogError(ex, "Migration job {JobId} failed", _id);
         }
         finally
@@ -643,6 +673,15 @@ internal class MigrationJob
     /// </summary>
     public async Task PersistSnapshotAsync(CancellationToken ct)
     {
+        MigrationJobState state;
+        DateTime startedAt;
+        DateTime? completedAt;
+        string? errorMessage;
+        lock (_statusLock)
+        {
+            (state, startedAt, completedAt, errorMessage) = (_state, _startedAt, _completedAt, _errorMessage);
+        }
+
         try
         {
             using var scope = _serviceProvider.CreateScope();
@@ -661,22 +700,22 @@ internal class MigrationJob
             run.TenantId = _tenantId;
             run.Mode = _request.Mode.ToString();
             run.SourceDescription = _info.SourceDescription is { Length: > 512 } d ? d[..512] : _info.SourceDescription;
-            run.State = _state.ToString();
-            run.StartedAt = _startedAt == default ? _info.CreatedAt : _startedAt;
-            run.CompletedAt = _completedAt;
+            run.State = state.ToString();
+            run.StartedAt = startedAt == default ? _info.CreatedAt : startedAt;
+            run.CompletedAt = completedAt;
             run.DateRangeStart = _request.StartDate?.AsUtc();
             run.DateRangeEnd = _request.EndDate?.AsUtc();
-            run.ErrorMessage = _errorMessage;
+            run.ErrorMessage = errorMessage;
             run.EntriesMigrated = (int)Math.Min(int.MaxValue, MigratedCount("entries"));
             run.TreatmentsMigrated = (int)Math.Min(int.MaxValue, MigratedCount("treatments"));
             run.CollectionOutcomes = _collectionProgress.IsEmpty
                 ? null
                 : System.Text.Json.JsonSerializer.Serialize(_collectionProgress.Values.ToList(), s_outcomeJson);
 
-            if (_state == MigrationJobState.Completed)
+            if (state == MigrationJobState.Completed)
             {
                 var source = await db.MigrationSources.FirstAsync(s => s.Id == sourceId, ct);
-                source.LastMigrationAt = _completedAt ?? DateTime.UtcNow;
+                source.LastMigrationAt = completedAt ?? DateTime.UtcNow;
 
                 // A run bounded to an older date range covers ground an earlier run already
                 // covered, so the watermark only ever advances.
@@ -689,7 +728,7 @@ internal class MigrationJob
 
             await db.SaveChangesAsync(ct);
         }
-        catch (Exception ex) when (_state is not MigrationJobState.Pending)
+        catch (Exception ex) when (state is not MigrationJobState.Pending)
         {
             _logger.LogError(ex, "Failed to persist migration job {JobId}", _id);
         }
