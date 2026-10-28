@@ -46,6 +46,12 @@ public class ClockReadGuardTests
         "src/API/Nocturne.API/Services/DevOnly",
     ];
 
+    /// <summary>Migrated files whose folder is not yet migrated as a whole.</summary>
+    private static readonly string[] Files =
+    [
+        "src/API/Nocturne.API/Services/Auth/JwtService.cs",
+    ];
+
     /// <summary>
     /// Files that read <see cref="DateTime.UtcNow"/> inside an EF query on purpose: Npgsql translates it
     /// to the database's <c>now()</c>, so replicas whose clocks disagree still agree on what is recent.
@@ -82,6 +88,22 @@ public class ClockReadGuardTests
                 if (inQueryOnly && Violations(source).Count - violations.Count != permitted)
                     reads.Add($"{relative}: holds {Violations(source).Count - violations.Count} query-lambda clock reads, not {permitted}");
             }
+        }
+
+        reads.Should().BeEmpty("these read a static clock or the system clock; inject TimeProvider instead");
+    }
+
+    [Fact]
+    public void A_migrated_file_reads_no_static_clock()
+    {
+        var root = RepositoryRoot();
+        var reads = new List<string>();
+
+        foreach (var file in Files)
+        {
+            var path = Path.Combine(root, file);
+            File.Exists(path).Should().BeTrue($"{file} is listed in {nameof(Files)}");
+            reads.AddRange(Violations(File.ReadAllText(path)).Select(v => $"{file}:{v}"));
         }
 
         reads.Should().BeEmpty("these read a static clock or the system clock; inject TimeProvider instead");
