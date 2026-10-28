@@ -230,49 +230,67 @@ public class NightscoutContainer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Empties every collection a parity test writes and makes Nightscout drop its in-memory
-    /// copy of them, leaving it as it was before any test wrote.
+    /// Empties the collections parity tests write and the cache Nightscout serves v1 reads from.
+    /// Authorization subjects and Nightscout's notification state are kept.
     /// </summary>
     /// <remarks>
-    /// Nightscout serves v1 entries, treatments and device statuses, and builds ddata, from a cache
-    /// of recent documents that every reload merges into what it reads from Mongo, so a document
-    /// deleted in Mongo alone stays in what it serves. A v1 delete whose query names no <c>_id</c>
-    /// clears that cache for all three collections and requests the reload that
-    /// <c>ParityTestBase.WaitForNightscoutEmptyAsync</c> waits for. So the collections are emptied
-    /// in Mongo, as v3 permanent deletes would, then, if that removed anything, such a delete, which
-    /// by then matches nothing, clears the cache. Every write a test makes through the API keeps the
-    /// cache in step with Mongo, so collections that were already empty leave nothing to clear. It
-    /// throws rather than let a test start on a document it left behind.
+    /// Nightscout keeps recent entries, treatments and device statuses in a cache that v1 reads are
+    /// served from and that every reload merges into what it reads from Mongo, so a document deleted
+    /// in Mongo alone is still served. The cache is cleared on every call, even when Mongo held
+    /// nothing: a reload that read Mongo before the delete and lands after the clear puts the
+    /// documents back. The clear also requests the reload that
+    /// <c>ParityTestBase.WaitForNightscoutEmptyAsync</c> waits for.
     /// </remarks>
     public async Task CleanupDataAsync(CancellationToken cancellationToken = default)
     {
         if (_httpClient == null || _mongoClient == null) return;
 
         var database = _mongoClient.GetDatabase("nightscout");
-        var deletes = await Task.WhenAll(DataCollections.Select(name => database.GetCollection<BsonDocument>(name)
+        await Task.WhenAll(DataCollections.Select(name => database.GetCollection<BsonDocument>(name)
             .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken)));
 
-        if (deletes.Any(d => d.DeletedCount > 0))
+        // A v1 remove that names no _id clears the cache of all three collections. It needs a find:
+        // treatments.remove reads opts.find._id in its Mongo callback, and without one that throws
+        // in the Nightscout process. Treatments, because devicestatus.remove requests no reload.
+        using var clear = await _httpClient.DeleteAsync(
+            "/api/v1/treatments/?find[created_at][$gte]=1970-01-01T00:00:00.000Z", cancellationToken);
+        if (!clear.IsSuccessStatusCode)
         {
-            using var flush = await _httpClient.DeleteAsync(
-                "/api/v1/treatments/?find[created_at][$gte]=1970-01-01T00:00:00.000Z", cancellationToken);
-            if (!flush.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException(
-                    $"Nightscout answered {(int)flush.StatusCode} to the v1 treatments delete that clears its cache: "
-                    + await flush.Content.ReadAsStringAsync(cancellationToken));
-            }
+            throw new InvalidOperationException(
+                $"Nightscout answered {(int)clear.StatusCode} to the v1 treatments delete that clears its cache: "
+                + await clear.Content.ReadAsStringAsync(cancellationToken));
         }
 
-        var counts = await Task.WhenAll(DataCollections.Select(async name => (
-            Name: name,
-            Count: await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(
-                FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken))));
-        var left = counts.Where(c => c.Count > 0).Select(c => $"{c.Name} ({c.Count})").ToList();
+        await AssertCacheServedReadsEmptyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Throws unless the v1 reads Nightscout serves from its cache return nothing. With
+    /// <c>count=1</c> each is served from the cache when it holds anything, else from Mongo.
+    /// It cannot see a reload that read Mongo before the delete and lands after the check.
+    /// </summary>
+    private async Task AssertCacheServedReadsEmptyAsync(CancellationToken cancellationToken)
+    {
+        string[] paths = ["/api/v1/entries?count=1", "/api/v1/treatments?count=1", "/api/v1/devicestatus?count=1"];
+        var served = await Task.WhenAll(paths.Select(async path =>
+        {
+            using var response = await _httpClient!.GetAsync(path, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Nightscout answered {(int)response.StatusCode} to {path} after cleanup: {body}");
+            }
+
+            using var json = JsonDocument.Parse(body);
+            return (Path: path, Count: json.RootElement.GetArrayLength());
+        }));
+
+        var left = served.Where(s => s.Count > 0).Select(s => s.Path).ToList();
         if (left.Count > 0)
         {
             throw new InvalidOperationException(
-                $"Nightscout cleanup left documents in: {string.Join(", ", left)}.");
+                $"Nightscout still serves documents after cleanup from: {string.Join(", ", left)}.");
         }
     }
 
