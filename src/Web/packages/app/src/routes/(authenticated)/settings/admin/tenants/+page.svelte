@@ -412,7 +412,7 @@
       {#if currentTenant}
         <p class="text-sm">
           Members of <span class="font-medium">{currentTenant.displayName}</span>
-          (<span class="break-all font-mono">{currentTenant.slug}</span>)
+          (<span class="font-mono">{currentTenant.slug}</span>)
         </p>
       {/if}
       {#if platformAdminError}

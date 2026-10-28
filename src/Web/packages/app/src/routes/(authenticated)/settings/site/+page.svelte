@@ -176,7 +176,7 @@
         <dl class="grid grid-cols-1 gap-4 @md:grid-cols-2">
           <div>
             <dt class="text-sm font-medium text-muted-foreground">Slug</dt>
-            <dd class="mt-1 break-all font-mono text-sm">{settings.slug}</dd>
+            <dd class="mt-1 font-mono text-sm">{settings.slug}</dd>
           </div>
           <div>
             <dt class="text-sm font-medium text-muted-foreground">Created</dt>
