@@ -68,15 +68,14 @@ public interface IActivityDecomposer
 
     /// <summary>
     /// Returns the OAuth write scope required to persist the activity, based on the dedicated
-    /// table it routes to (heart rate, step count, or sleep), or <see langword="null"/> for a
-    /// regular activity that routes to StateSpans and carries no category scope.
+    /// table it routes to (heart rate, step count, or sleep), or <c>treatments.readwrite</c> for a
+    /// regular activity that routes to StateSpans.
     /// </summary>
-    string? RequiredWriteScope(Activity activity);
+    string RequiredWriteScope(Activity activity);
 
     /// <summary>
     /// Returns the OAuth read scope required to see the activity, based on the storage it came
-    /// from (heart rate, step count, sleep, or StateSpans). Unlike
-    /// <see cref="RequiredWriteScope"/> this is never <see langword="null"/>: the merged activity
+    /// from (heart rate, step count, sleep, or StateSpans). The merged activity
     /// read endpoints return records from all four storages in one response, so every record
     /// needs a category to be filtered on.
     /// </summary>

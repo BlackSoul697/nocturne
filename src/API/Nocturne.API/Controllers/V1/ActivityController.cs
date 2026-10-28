@@ -186,9 +186,20 @@ public class ActivityController : ControllerBase
     /// Create one or more new activities.
     /// Heart rate and step count data is automatically routed to dedicated tables.
     /// </summary>
+    /// <remarks>
+    /// The scope requirement is an OR, like the reads' (<see cref="GetActivities"/>): each record
+    /// is written to the storage its content routes to, and that storage has its own write scope.
+    /// Admission means the caller holds at least one of those categories;
+    /// <see cref="ActivityWriteScopeGuard"/> then requires the write scope of every record's
+    /// storage, so a batch needs every scope its records need. The PUT actions follow the same rule.
+    /// </remarks>
     [HttpPost]
     [Authorize]
-    [RequireScope(Scope.TreatmentsReadWrite)]
+    [RequireScope(
+        Scope.TreatmentsReadWrite,
+        Scope.HeartRateReadWrite,
+        Scope.StepCountReadWrite,
+        Scope.SleepReadWrite)]
     [ProducesResponseType(typeof(IEnumerable<Activity>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -247,7 +258,11 @@ public class ActivityController : ControllerBase
     /// <remarks>Nightscout's save takes one document, so an array is refused.</remarks>
     [HttpPut]
     [Authorize]
-    [RequireScope(Scope.TreatmentsReadWrite)]
+    [RequireScope(
+        Scope.TreatmentsReadWrite,
+        Scope.HeartRateReadWrite,
+        Scope.StepCountReadWrite,
+        Scope.SleepReadWrite)]
     [ProducesResponseType(typeof(Activity), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -278,7 +293,11 @@ public class ActivityController : ControllerBase
     /// </summary>
     [HttpPut("{id}")]
     [Authorize]
-    [RequireScope(Scope.TreatmentsReadWrite)]
+    [RequireScope(
+        Scope.TreatmentsReadWrite,
+        Scope.HeartRateReadWrite,
+        Scope.StepCountReadWrite,
+        Scope.SleepReadWrite)]
     [ProducesResponseType(typeof(Activity), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]

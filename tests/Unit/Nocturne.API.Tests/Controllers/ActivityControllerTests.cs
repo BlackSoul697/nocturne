@@ -48,7 +48,10 @@ public class ActivityControllerTests
         _mockActivityDecomposer
             .Setup(d => d.RequiredReadScope(It.IsAny<Activity>()))
             .Returns(Scope.TreatmentsRead);
-        GrantScopes(Scope.TreatmentsRead);
+        _mockActivityDecomposer
+            .Setup(d => d.RequiredWriteScope(It.IsAny<Activity>()))
+            .Returns(Scope.TreatmentsReadWrite);
+        GrantScopes(Scope.TreatmentsRead, Scope.TreatmentsReadWrite);
     }
 
     /// <summary>Populates the request's granted scopes, as the auth middleware does at runtime.</summary>

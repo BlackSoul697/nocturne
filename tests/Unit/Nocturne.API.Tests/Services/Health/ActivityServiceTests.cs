@@ -79,6 +79,38 @@ public class ActivityServiceTests
         );
     }
 
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData("bpm")]
+    [InlineData("metric")]
+    public async Task UpdateActivityAsync_SensorBodyWithSleepType_NeverUpsertsASleepSession(string sensorKey)
+    {
+        var service = new ActivityService(
+            _mockStateSpanService.Object,
+            _mockSleepService.Object,
+            _mockDocumentProcessingService.Object,
+            _mockSignalRBroadcastService.Object,
+            Mock.Of<IDataEventSink<Activity>>(),
+            new Nocturne.API.Services.V4.ActivityDecomposer(
+                Mock.Of<Nocturne.Infrastructure.Data.Services.INocturneDbContextFactory>(),
+                Mock.Of<Nocturne.Core.Contracts.Repositories.IStateSpanRepository>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Nocturne.API.Services.V4.ActivityDecomposer>.Instance),
+            _mockHeartRateService.Object,
+            _mockStepCountService.Object,
+            _mockLogger.Object);
+        var activity = new Activity
+        {
+            Type = "sleep",
+            AdditionalProperties = new Dictionary<string, object> { [sensorKey] = 60 },
+        };
+
+        await service.UpdateActivityAsync("abc", activity, CancellationToken.None);
+
+        _mockSleepService.Verify(
+            s => s.UpsertSessionAsync(It.IsAny<SleepSession>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
