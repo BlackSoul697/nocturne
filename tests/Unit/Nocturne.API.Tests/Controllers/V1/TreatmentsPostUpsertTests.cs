@@ -62,7 +62,7 @@ public class TreatmentsPostUpsertTests : IDisposable
         var bolusCalcRepo = new BolusCalculationRepository(ctxFactory, dedup, audit, NullLogger<BolusCalculationRepository>.Instance);
 
         var tempBasalRepo = new Mock<ITempBasalRepository>();
-        tempBasalRepo
+        tempBasalRepo.As<IV4Repository<Nocturne.Core.Models.V4.TempBasal>>()
             .Setup(r => r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -99,6 +99,7 @@ public class TreatmentsPostUpsertTests : IDisposable
         var projection = new V4ToLegacyProjectionService(
             bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo,
             tempBasalRepo.Object, bolusCalcRepo,
+            Mock.Of<IProfileActivationRepository>(),
             foods.Object,
             _context.AsFactory(),
             NullLogger<V4ToLegacyProjectionService>.Instance);
