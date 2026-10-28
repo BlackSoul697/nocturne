@@ -138,7 +138,7 @@ public sealed class DemoCoverageIntegrationTests(
             await dbContext.SaveChangesAsync();
 
             await Nocturne.API.Services.Demo.DemoDataPurge.PurgeEntriesAsync(dbContext, CancellationToken.None);
-            await Nocturne.API.Services.Demo.DemoDataPurge.PurgeTreatmentsAsync(dbContext, CancellationToken.None);
+            await Nocturne.API.Services.Demo.DemoDataPurge.PurgeTreatmentsAsync(dbContext, TimeProvider.System, CancellationToken.None);
             (await dbContext.SensorGlucose.IgnoreQueryFilters().AnyAsync(r => r.Id == realReading.Id)).Should().BeTrue();
             (await dbContext.CompressionLowSuggestions.IgnoreQueryFilters()
                 .AnyAsync(s => s.Id == realSuggestion.Id)).Should().BeTrue();
