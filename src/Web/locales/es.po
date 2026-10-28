@@ -7134,10 +7134,8 @@ msgstr "Reprogramado"
 msgid "Missed"
 msgstr "No asistido"
 
-#: src/lib/components/trackers/TrackerCompletionDialog.svelte
-#: src/lib/components/trackers/TrackerStartDialog.svelte
-msgid "Nocturne Tracker"
-msgstr "Seguimiento de Nocturne"
+#~ msgid "Nocturne Tracker"
+#~ msgstr "Seguimiento de Nocturne"
 
 #. 0: instanceName
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte

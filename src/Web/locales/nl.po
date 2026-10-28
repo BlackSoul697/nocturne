@@ -7134,10 +7134,8 @@ msgstr ""
 msgid "Missed"
 msgstr ""
 
-#: src/lib/components/trackers/TrackerCompletionDialog.svelte
-#: src/lib/components/trackers/TrackerStartDialog.svelte
-msgid "Nocturne Tracker"
-msgstr ""
+#~ msgid "Nocturne Tracker"
+#~ msgstr ""
 
 #. 0: instanceName
 #: src/lib/components/trackers/TrackerCompletionDialog.svelte
