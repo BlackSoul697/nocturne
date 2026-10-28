@@ -104,6 +104,20 @@ describe("MealBolusDialog", () => {
     expect(store.treatmentRevision).toBe(before);
   });
 
+  it("leaves the saving state and says why when the server refuses the save", async () => {
+    createBolus.mockRejectedValueOnce({ status: 400, body: { message: "Insulin is too high" } });
+    const { store, onSave } = mount();
+    const before = store.treatmentRevision;
+
+    await page.getByRole("button", { name: "Add bolus" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalledWith("Insulin is too high"));
+    await expect.element(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(store.treatmentRevision).toBe(before);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("posts a new bolus as the create schema takes it", async () => {
     mount({ correlationId: "0192f0e4-0000-7000-8000-000000000001" });
 
