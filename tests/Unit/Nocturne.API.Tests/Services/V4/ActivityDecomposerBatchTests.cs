@@ -594,10 +594,10 @@ public class ActivityDecomposerBatchTests : IDisposable
     [InlineData("illness")]
     [InlineData("travel")]
     [InlineData("restaurant")] // contains "rest" but is not an exact sleep type
-    public void RequiredWriteScope_RegularActivity_ReturnsNull(string type)
+    public void RequiredWriteScope_RegularActivity_ReturnsTreatmentsReadWrite(string type)
     {
         _decomposer.RequiredWriteScope(CreateRegularActivity("r", type))
-            .Should().BeNull();
+            .Should().Be(Scope.TreatmentsReadWrite);
     }
 
     #endregion

@@ -24,9 +24,11 @@ namespace Nocturne.API.Controllers.V4.Health;
 /// per record via <see cref="ActivityWriteScopeGuard"/>, because the destination is not known until
 /// the body has been read.
 /// <para>
-/// The baseline is <c>treatments.readwrite</c>, the category a StateSpan-backed activity reads
-/// under: <see cref="IActivityDecomposer.RequiredWriteScope"/> is null for those records, so the
-/// per-record guard alone gates nothing for them.
+/// Create and update admit a caller holding <c>treatments.readwrite</c>, the category a
+/// StateSpan-backed activity writes under, or <c>sleep.readwrite</c>, the category a sleep-typed
+/// activity writes under; <see cref="IActivityDecomposer.RequiredWriteScope"/> then names the
+/// scope of each record. Delete admits <c>treatments.readwrite</c> only, because one id can name
+/// records in several storages and the guard sees only the first.
 /// </para>
 /// </remarks>
 [ApiController]
@@ -127,7 +129,7 @@ public class ActivityController : ControllerBase
     /// Create one or more activity records
     /// </summary>
     [HttpPost]
-    [RequireScope(Scope.TreatmentsReadWrite)]
+    [RequireScope(Scope.TreatmentsReadWrite, Scope.SleepReadWrite)]
     [ProducesResponseType(typeof(IEnumerable<Activity>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IEnumerable<Activity>>> CreateActivities(
@@ -152,7 +154,7 @@ public class ActivityController : ControllerBase
     /// Update an existing activity record
     /// </summary>
     [HttpPut("{id}")]
-    [RequireScope(Scope.TreatmentsReadWrite)]
+    [RequireScope(Scope.TreatmentsReadWrite, Scope.SleepReadWrite)]
     [ProducesResponseType(typeof(Activity), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<Activity>> UpdateActivity(
@@ -193,7 +195,7 @@ public class ActivityController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         // Resolve the target first so the delete is gated by the category it will remove
-        // (sleep/heart-rate/step). A regular activity or a missing record needs no category scope.
+        // (sleep/heart-rate/step). A missing record needs no category scope.
         var existing = await _activityService.GetActivityByIdAsync(id, cancellationToken);
         if (existing is not null)
         {
