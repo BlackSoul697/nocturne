@@ -38346,3 +38346,7 @@ msgstr "Could not load the calendar"
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Could not load profiles"
 msgstr "Could not load profiles"
+
+#: src/routes/(authenticated)/StickyBarProbe.test.svelte
+msgid "bar"
+msgstr "bar"

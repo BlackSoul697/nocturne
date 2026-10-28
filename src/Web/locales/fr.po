@@ -38349,3 +38349,7 @@ msgstr ""
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Could not load profiles"
 msgstr ""
+
+#: src/routes/(authenticated)/StickyBarProbe.test.svelte
+msgid "bar"
+msgstr ""
