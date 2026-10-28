@@ -248,6 +248,37 @@ public class ScalarAuthProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task TryPrepareAsync_AddsTheTrailingSlashUriToAClientRegisteredWithoutIt()
+    {
+        var tenantId = _fixture.SeedTenant("demo", isDemo: true, withDemoMember: true);
+
+        await _fixture.BuildProvider().TryPrepareAsync(DocsTenantFixture.BuildContext("demo.nocturne.run"));
+
+        string clientId;
+        await using (var seed = _fixture.Db())
+        {
+            var client = await seed.OAuthClients.IgnoreQueryFilters()
+                .SingleAsync(c => c.TenantId == tenantId);
+            client.RedirectUris = JsonSerializer.Serialize(new List<string> { "https://demo.nocturne.run/scalar" });
+            await seed.SaveChangesAsync();
+            clientId = client.ClientId;
+        }
+
+        var context = DocsTenantFixture.BuildContext("demo.nocturne.run");
+        await _fixture.BuildProvider().TryPrepareAsync(context);
+
+        var auth = (ScalarAuthContext)context.Items[ScalarAuthContext.HttpContextItemKey]!;
+        auth.ClientId.Should().Be(clientId);
+        auth.RedirectUri.Should().Be("https://demo.nocturne.run/scalar/");
+
+        await using var db = _fixture.Db();
+        var updated = await db.OAuthClients.IgnoreQueryFilters()
+            .SingleAsync(c => c.TenantId == tenantId);
+        JsonSerializer.Deserialize<List<string>>(updated.RedirectUris)
+            .Should().Equal("https://demo.nocturne.run/scalar", "https://demo.nocturne.run/scalar/");
+    }
+
+    [Fact]
     public async Task TryPrepareAsync_StopsAddingRedirectUrisAtTheCap()
     {
         // Unreachable by construction — the URI comes from configuration plus the stored slug,

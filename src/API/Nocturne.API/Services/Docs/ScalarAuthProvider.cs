@@ -68,7 +68,8 @@ public sealed class ScalarAuthProvider
     /// domain and the tenant's stored slug, and the only part a caller influences is the scheme,
     /// which <see cref="RedirectUriValidator"/> narrows to https on a public host and http on
     /// loopback. So one tenant can accumulate at most one entry per deployment origin, and a
-    /// deployment has one. Kept rather than deleted because the row is written by an
+    /// deployment has one, plus the <c>/scalar</c> entry registered before the redirect URI took
+    /// its trailing slash. Kept rather than deleted because the row is written by an
     /// unauthenticated request, so the bound must not rest on that argument staying true.
     /// </remarks>
     internal const int MaxRedirectUris = 5;
