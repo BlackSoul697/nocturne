@@ -7,7 +7,6 @@
   import * as Select from "#lib/components/ui/select/index.js";
   import { DurationInput } from "#lib/components/ui/duration-input/index.js";
   import { TrackerNotificationEditor, type TrackerNotification } from "#lib/components/trackers/index.js";
-  import EventTypeCombobox from "#lib/components/treatments/EventTypeCombobox.svelte";
   import { Artwork } from "water-ui";
   import { batteryArtwork } from "#lib/watercolour-icons.js";
   import * as trackersRemote from "#lib/api/generated/trackers.generated.remote.js";
@@ -89,6 +88,10 @@
       ? [...formTriggerEventTypes, eventType]
       : formTriggerEventTypes.filter((t) => t !== eventType);
   }
+
+  const noDeviceEvent = "none";
+  const deviceEventTypesQuery = trackersRemote.getDeviceEventTypes();
+  const deviceEventTypes = $derived(deviceEventTypesQuery.current ?? []);
 
   const endEventTypesQuery = trackersRemote.getEndEventTypes();
   const endEventTypes = $derived(endEventTypesQuery.current ?? []);
@@ -471,12 +474,8 @@
     <input {...fields.isFavorite.as("hidden", true)} />
   {/if}
   <input {...fields.icon.as("hidden", formIcon)} />
-  {#if formStartEventType}
-    <input {...fields.startEventType.as("hidden", formStartEventType)} />
-  {/if}
-  {#if formCompletionEventType}
-    <input {...fields.completionEventType.as("hidden", formCompletionEventType)} />
-  {/if}
+  <input {...fields.startEventType.as("hidden", formStartEventType ?? "")} />
+  <input {...fields.completionEventType.as("hidden", formCompletionEventType ?? "")} />
 
   <div class="space-y-2">
     <Label for="dashboardVisibility">Dashboard visibility</Label>
@@ -540,24 +539,46 @@
 
     <div class="space-y-2">
       <Label for="startEventType" size="sm">Create event on start</Label>
-      <EventTypeCombobox
-        bind:value={formStartEventType}
-        onSelect={(type) => (formStartEventType = type)}
-        placeholder="None - do not create event"
-      />
+      {@render deviceEventPicker(
+        "startEventType",
+        formStartEventType,
+        (type) => (formStartEventType = type),
+      )}
     </div>
 
     <div class="space-y-2">
       <Label for="completionEventType" size="sm">
         Create event on completion
       </Label>
-      <EventTypeCombobox
-        bind:value={formCompletionEventType}
-        onSelect={(type) => (formCompletionEventType = type)}
-        placeholder="None - do not create event"
-      />
+      {@render deviceEventPicker(
+        "completionEventType",
+        formCompletionEventType,
+        (type) => (formCompletionEventType = type),
+      )}
     </div>
   </div>
+{/snippet}
+
+{#snippet deviceEventPicker(
+  id: string,
+  value: string | undefined,
+  onSelect: (type: string | undefined) => void,
+)}
+  <Select.Root
+    type="single"
+    value={value ?? noDeviceEvent}
+    onValueChange={(selected) => onSelect(selected === noDeviceEvent ? undefined : selected)}
+  >
+    <Select.Trigger {id} data-testid={id}>
+      {value || "None"}
+    </Select.Trigger>
+    <Select.Content>
+      <Select.Item value={noDeviceEvent} label="None" />
+      {#each deviceEventTypes as eventType (eventType)}
+        <Select.Item value={eventType} label={eventType} />
+      {/each}
+    </Select.Content>
+  </Select.Root>
 {/snippet}
 
 <Dialog.Root bind:open>

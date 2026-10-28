@@ -8,6 +8,7 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Monitoring;
+using Nocturne.Connectors.Core.Constants;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
@@ -164,6 +165,9 @@ public class TrackersController : ControllerBase, IWriteScopedController
         return null;
     }
 
+    private static string? ResolveEventType(string? requested, string? normalised, string? stored) =>
+        string.IsNullOrWhiteSpace(requested) ? null : normalised ?? stored;
+
     private static string? Changed(string? requested, string? stored) =>
         string.Equals(requested?.Trim(), stored?.Trim(), StringComparison.OrdinalIgnoreCase) ? null : requested;
 
@@ -277,6 +281,16 @@ public class TrackersController : ControllerBase, IWriteScopedController
     [ProducesResponseType(typeof(string[]), StatusCodes.Status200OK)]
     public ActionResult<string[]> GetEndEventTypes() =>
         Ok(TrackerTriggerService.EndingEventTypes.ToArray());
+
+    /// <summary>
+    /// The device event types a definition can create when a run starts or completes: the Nightscout
+    /// names that map to a device event.
+    /// </summary>
+    [HttpGet("device-event-types")]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(string[]), StatusCodes.Status200OK)]
+    public ActionResult<string[]> GetDeviceEventTypes() =>
+        Ok(TreatmentTypes.DeviceEventTypeMap.Keys.ToArray());
 
     /// <summary>
     /// Get a specific tracker definition
@@ -480,8 +494,10 @@ public class TrackersController : ControllerBase, IWriteScopedController
         existing.LowReservoirUrgency = request.LowReservoirUrgency ?? existing.LowReservoirUrgency;
         existing.IsFavorite = request.IsFavorite ?? existing.IsFavorite;
         existing.DashboardVisibility = request.DashboardVisibility ?? existing.DashboardVisibility;
-        existing.StartEventType = startEventType ?? existing.StartEventType;
-        existing.CompletionEventType = completionEventType ?? existing.CompletionEventType;
+        // Applied as posted, like LowReservoirUnits: the editor posts the whole definition, so null or
+        // blank clears the event.
+        existing.StartEventType = ResolveEventType(request.StartEventType, startEventType, existing.StartEventType);
+        existing.CompletionEventType = ResolveEventType(request.CompletionEventType, completionEventType, existing.CompletionEventType);
         existing.Mode = request.Mode ?? existing.Mode;
 
         // Handle notification thresholds update (replaces all existing if provided)
@@ -1176,12 +1192,14 @@ public class UpdateTrackerDefinitionRequest
     public DashboardVisibility? DashboardVisibility { get; set; }
 
     /// <summary>
-    /// Event type to create when tracker is started (for Nightscout compatibility)
+    /// Event type to create when tracker is started (for Nightscout compatibility). Applied as
+    /// posted: null or blank clears it.
     /// </summary>
     public string? StartEventType { get; set; }
 
     /// <summary>
-    /// Event type to create when tracker is completed (for Nightscout compatibility)
+    /// Event type to create when tracker is completed (for Nightscout compatibility). Applied as
+    /// posted: null or blank clears it.
     /// </summary>
     public string? CompletionEventType { get; set; }
 

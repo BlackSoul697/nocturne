@@ -24,6 +24,7 @@ vi.mock("#lib/api/generated/trackers.generated.remote.js", async () => {
   return {
     getTriggerEventTypes: () => remoteQuery(() => ["Pod Change", "Pod Activated", "Site Change"]),
     getEndEventTypes: () => remoteQuery(() => ["Sensor Stop", "Pod Deactivated"]),
+    getDeviceEventTypes: () => remoteQuery(() => ["Sensor Start", "Sensor Stop", "Pod Change"]),
     createDefinition: form(
       {
         "~standard": {
@@ -249,5 +250,65 @@ describe("TrackerEditorDialog edit", () => {
       .element(page.getByRole("alert"))
       .toHaveTextContent("Event mode trackers should not have a lifespan");
     await expect.element(page.getByTestId("tracker-editor")).toBeVisible();
+  });
+});
+
+describe("TrackerEditorDialog device events", () => {
+  const posted = (name: string) =>
+    document.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value;
+
+  async function pick(id: string, name: string) {
+    await page.getByTestId(id).click();
+    await page.getByRole("option", { name, exact: true }).click();
+    await expect.element(page.getByRole("listbox")).not.toBeInTheDocument();
+  }
+
+  it("offers None and only the names the server lists", async () => {
+    open(TrackerCategory.Sensor);
+
+    await page.getByTestId("startEventType").click();
+    await expect.element(page.getByRole("listbox")).toBeVisible();
+
+    const options = [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent?.trim());
+    expect(options).toEqual(["None", "Sensor Start", "Sensor Stop", "Pod Change"]);
+  });
+
+  it("posts the chosen start and completion events", async () => {
+    open(TrackerCategory.Sensor);
+
+    await pick("startEventType", "Sensor Start");
+    await pick("completionEventType", "Sensor Stop");
+
+    expect(posted("startEventType")).toBe("Sensor Start");
+    expect(posted("completionEventType")).toBe("Sensor Stop");
+  });
+
+  it("posts both fields blank once None clears a stored event, so the server clears it", async () => {
+    open(TrackerCategory.Sensor, {
+      formStartEventType: "Sensor Start",
+      formCompletionEventType: "Sensor Stop",
+    });
+    expect(posted("startEventType")).toBe("Sensor Start");
+
+    await pick("startEventType", "None");
+    await pick("completionEventType", "None");
+
+    expect(posted("startEventType")).toBe("");
+    expect(posted("completionEventType")).toBe("");
+    await expect.element(page.getByTestId("startEventType")).toHaveTextContent("None");
+  });
+
+  it("shows a stored name the server no longer offers, and posts it unchanged", async () => {
+    open(TrackerCategory.Sensor, { formStartEventType: "Meal Bolus" });
+
+    await expect.element(page.getByTestId("startEventType")).toHaveTextContent("Meal Bolus");
+    expect(posted("startEventType")).toBe("Meal Bolus");
+  });
+
+  it("posts both fields on a save with no event chosen", async () => {
+    open(TrackerCategory.Sensor);
+
+    expect(posted("startEventType")).toBe("");
+    expect(posted("completionEventType")).toBe("");
   });
 });
