@@ -3,6 +3,9 @@ import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntryRecord } from "#lib/constants/entry-categories.js";
 
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock("svelte-sonner", () => ({ toast: { success: vi.fn(), error: toastError } }));
+
 // What each form's handler received once its schema accepted the post, keyed by record kind and
 // `create` or `update`.
 const handlers = vi.hoisted(() => {
@@ -89,6 +92,7 @@ const id = (n: number) => `0192f0e4-0000-7000-8000-00000000000${n}`;
 describe("EntryEditDialog saves", () => {
   beforeEach(() => {
     for (const handler of Object.values(handlers)) handler.mockClear();
+    toastError.mockClear();
   });
 
   it("creates a meal bolus as the create schemas take it", async () => {
@@ -101,6 +105,18 @@ describe("EntryEditDialog saves", () => {
       expect(handlers["carbs.create"]).toHaveBeenCalledOnce();
     });
     expect(handlers["bolus.create"].mock.calls[0][0]).not.toHaveProperty("mills");
+  });
+
+  it("stops saving and stays open when the server refuses a record", async () => {
+    handlers["bolus.create"].mockRejectedValueOnce({ status: 400, body: { message: "Insulin is too high" } });
+    const onClose = vi.fn();
+    render(EntryEditDialog, { open: true, entry: null, onClose });
+
+    await page.getByRole("button", { name: "Create" }).click();
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalledWith("Insulin is too high"));
+    await expect.element(page.getByRole("button", { name: "Create" })).toBeEnabled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("saves each kind of record under request, as its update schema takes it", async () => {
