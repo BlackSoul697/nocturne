@@ -23,23 +23,14 @@ public class SensorAlignedPollerTests
 
     [ConnectorRegistration("SensorTest", "sensor-test", "SENSORTEST", "SensorTest", Source,
         SensorReadingIntervalSeconds = 300)]
-    private sealed class SensorConfig : BaseConnectorConfiguration
-    {
-        protected override void ValidateSourceSpecificConfiguration() { }
-    }
+    private sealed class SensorConfig : BaseConnectorConfiguration;
 
     [ConnectorRegistration("PlainTest", "plain-test", "PLAINTEST", "PlainTest", "plain-test-source")]
-    private sealed class PlainConfig : BaseConnectorConfiguration
-    {
-        protected override void ValidateSourceSpecificConfiguration() { }
-    }
+    private sealed class PlainConfig : BaseConnectorConfiguration;
 
     [ConnectorRegistration("SourcelessTest", "sourceless-test", "SOURCELESSTEST", "SourcelessTest",
         SensorReadingIntervalSeconds = 300)]
-    private sealed class SourcelessConfig : BaseConnectorConfiguration
-    {
-        protected override void ValidateSourceSpecificConfiguration() { }
-    }
+    private sealed class SourcelessConfig : BaseConnectorConfiguration;
 
     private sealed class ExposedPoller<TConfig>()
         : ConnectorBackgroundService<TConfig>(
