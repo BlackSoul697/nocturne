@@ -294,10 +294,7 @@ public class ConnectorPollingRegistrationTests
             .Distinct()];
 
     [ConnectorRegistration("PollingTest", "polling-test", "POLLINGTEST", "PollingTest")]
-    private sealed class PollingTestConfiguration : BaseConnectorConfiguration
-    {
-        protected override void ValidateSourceSpecificConfiguration() { }
-    }
+    private sealed class PollingTestConfiguration : BaseConnectorConfiguration;
 
     private sealed class RecordingConnectorService : IConnectorService<PollingTestConfiguration>
     {

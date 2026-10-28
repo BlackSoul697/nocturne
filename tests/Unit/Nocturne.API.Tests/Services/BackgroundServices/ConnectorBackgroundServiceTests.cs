@@ -31,10 +31,7 @@ public class ConnectorBackgroundServiceTests
     /// names the connector in logs, health rows and audit endpoints.
     /// </summary>
     [ConnectorRegistration("TestConnector", "test-connector", "TESTCONNECTOR", "TestConnector")]
-    private class TestConnectorConfig : BaseConnectorConfiguration
-    {
-        protected override void ValidateSourceSpecificConfiguration() { }
-    }
+    private class TestConnectorConfig : BaseConnectorConfiguration;
 
     /// <summary>
     /// Concrete test subclass that returns a preconfigured SyncResult from PerformSyncAsync.
