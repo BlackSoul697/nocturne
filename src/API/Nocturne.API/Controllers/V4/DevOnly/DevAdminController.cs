@@ -722,7 +722,7 @@ public class DevAdminController : ControllerBase
         _logger.LogInformation("Dev tenant creation: slug={Slug}, displayName={DisplayName}",
             request.Slug, request.DisplayName);
 
-        var validation = await _tenantService.ValidateSlugAsync(request.Slug, ct);
+        var validation = await _tenantService.ValidateSlugAsync(request.Slug, allowReserved: true, ct);
         if (!validation.IsValid)
             return await SlugRejectionAsync(request.Slug, validation.Message, ct);
 
@@ -1022,7 +1022,7 @@ public class DevAdminController : ControllerBase
             .Replace("\n", string.Empty);
         _logger.LogInformation("Dev seed-tenant: slug={Slug}", sanitizedSlugForLog);
 
-        var validation = await _tenantService.ValidateSlugAsync(slug, ct);
+        var validation = await _tenantService.ValidateSlugAsync(slug, allowReserved: true, ct);
         if (!validation.IsValid)
             return await SlugRejectionAsync(slug, validation.Message, ct);
 
@@ -1279,7 +1279,7 @@ public class DevAdminController : ControllerBase
     {
         var normalized = (slug ?? string.Empty).Trim().ToLowerInvariant();
         var candidates = string.IsNullOrEmpty(normalized)
-            ? ["sleepy", "dev-tenant", "sandbox"]
+            ? ["test", "sandbox", "demo2"]
             : new[]
             {
                 $"{normalized}-tenant", $"{normalized}-local", $"my-{normalized}",
@@ -1291,7 +1291,7 @@ public class DevAdminController : ControllerBase
         {
             if (suggestions.Count >= 3)
                 break;
-            if ((await _tenantService.ValidateSlugAsync(candidate, ct)).IsValid)
+            if ((await _tenantService.ValidateSlugAsync(candidate, allowReserved: true, ct)).IsValid)
                 suggestions.Add(candidate);
         }
 

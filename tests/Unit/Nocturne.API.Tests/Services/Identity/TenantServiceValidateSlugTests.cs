@@ -51,5 +51,30 @@ public sealed class TenantServiceValidateSlugTests : IDisposable
         result.Message.Should().Contain("3-63 characters");
     }
 
+    [Fact]
+    public async Task ValidateSlugAsync_RejectsAReservedSlug()
+    {
+        var result = await Service().ValidateSlugAsync("dev");
+
+        result.IsValid.Should().BeFalse();
+        result.Message.Should().Be("This name is reserved");
+    }
+
+    [Fact]
+    public async Task ValidateSlugAsync_AcceptsAReservedSlugWhenAllowed()
+    {
+        var result = await Service().ValidateSlugAsync("dev", allowReserved: true);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ValidateSlugAsync_StillRejectsAMalformedSlugWhenReservedIsAllowed()
+    {
+        var result = await Service().ValidateSlugAsync("d", allowReserved: true);
+
+        result.IsValid.Should().BeFalse();
+    }
+
     public void Dispose() => _db.Dispose();
 }
