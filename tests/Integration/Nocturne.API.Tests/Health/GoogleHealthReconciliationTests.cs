@@ -565,7 +565,8 @@ public sealed class GoogleHealthReconciliationTests(GoogleHealthPostgresFixture 
         tenant.SetupGet(a => a.TenantId).Returns(() => db.TenantId);
         return new(
             Mock.Of<IHeartRateService>(), Mock.Of<IStepCountService>(), Mock.Of<IBodyWeightService>(),
-            Mock.Of<ISleepService>(), db.AsFactory(), tenant.Object, NullLogger<GoogleHealthReadingWriter>.Instance);
+            Mock.Of<ISleepService>(), db.AsFactory(), tenant.Object, TimeProvider.System,
+            NullLogger<GoogleHealthReadingWriter>.Instance);
     }
 
 }
