@@ -57,7 +57,8 @@ public class NotificationV2ServiceTests
                     PushServerEnvironment = pushServerEnvironment ?? new LoopConfiguration().PushServerEnvironment,
                 }
             ),
-            apns
+            apns,
+            TimeProvider.System
         );
         _mockProfileProjection
             .Setup(p => p.GetCurrentProfileAsync(It.IsAny<CancellationToken>()))

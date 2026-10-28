@@ -33,6 +33,7 @@ public class MealMatchingService : IMealMatchingService
     private readonly IInAppNotificationService _notificationService;
     private readonly IInAppNotificationRepository _notificationRepository;
     private readonly IMyFitnessPalMatchingSettingsService _settingsService;
+    private readonly TimeProvider _time;
     private readonly ILogger<MealMatchingService> _logger;
 
     public MealMatchingService(
@@ -42,6 +43,7 @@ public class MealMatchingService : IMealMatchingService
         IInAppNotificationService notificationService,
         IInAppNotificationRepository notificationRepository,
         IMyFitnessPalMatchingSettingsService settingsService,
+        TimeProvider timeProvider,
         ILogger<MealMatchingService> logger)
     {
         _foodEntryRepository = foodEntryRepository;
@@ -50,6 +52,7 @@ public class MealMatchingService : IMealMatchingService
         _notificationService = notificationService;
         _notificationRepository = notificationRepository;
         _settingsService = settingsService;
+        _time = timeProvider;
         _logger = logger;
     }
 
@@ -383,9 +386,9 @@ public class MealMatchingService : IMealMatchingService
             carbIntake.Id);
     }
 
-    private static string FormatTimeDisplay(DateTimeOffset time)
+    private string FormatTimeDisplay(DateTimeOffset time)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var localTime = time.ToLocalTime();
 
         if (localTime.Date == now.Date)
