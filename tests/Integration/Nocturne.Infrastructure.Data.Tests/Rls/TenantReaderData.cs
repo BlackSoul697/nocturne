@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Infrastructure.Data.Configuration;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Services;
@@ -29,11 +30,12 @@ internal sealed record ReaderCounts(long Steps, long Foods, long Notes, long Spa
 
 internal static class TenantReaderData
 {
-    public static ServiceProvider BuildProvider(string connectionString)
+    public static ServiceProvider BuildProvider(
+        string connectionString, Action<PostgreSqlConfiguration>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddPostgreSqlInfrastructure(connectionString, configuration: null);
+        services.AddPostgreSqlInfrastructure(connectionString, configuration: null, configure);
         services.AddScoped<ITenantAccessor, SettableTenantAccessor>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
