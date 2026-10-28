@@ -85,6 +85,20 @@ public class DeviceCatalogTests
         g7.Cgm.TransmitterDurationDays.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("dexcom-g7", 10, 30, 5)]
+    [InlineData("dexcom-g7-15-day", 15, 60, 5)]
+    [InlineData("libre-3", 14, 60, 1)]
+    [InlineData("libre-3-plus", 15, 60, 1)]
+    public void SensorWearAndWarmup_MatchLabelling(string id, int days, int warmupMinutes, int intervalMinutes)
+    {
+        var cgm = DeviceCatalog.GetById(id)!.Cgm!;
+        cgm.SensorDurationDays.Should().Be(days);
+        cgm.WarmupMinutes.Should().Be(warmupMinutes);
+        cgm.UpdateIntervalMinutes.Should().Be(intervalMinutes);
+        cgm.HasSeparateTransmitter.Should().BeFalse();
+    }
+
     [Fact]
     public void AllEntries_ShouldHaveUniqueIds()
     {
