@@ -7766,9 +7766,8 @@ msgstr "NC: {0}"
 #~ msgid "Calendar view is still available"
 #~ msgstr "Calendar view is still available"
 
-#: src/routes/(authenticated)/calendar/+page.svelte
-msgid "Failed to load calendar data"
-msgstr "Failed to load calendar data"
+#~ msgid "Failed to load calendar data"
+#~ msgstr "Failed to load calendar data"
 
 #: src/routes/(authenticated)/+layout.svelte
 #: src/routes/(authenticated)/calendar/+page.svelte
@@ -12730,9 +12729,8 @@ msgstr "Delay"
 msgid "Loading profiles..."
 msgstr "Loading profiles..."
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Failed to load profiles"
-msgstr "Failed to load profiles"
+#~ msgid "Failed to load profiles"
+#~ msgstr "Failed to load profiles"
 
 #~ msgid "<0/> Packing Calculator"
 #~ msgstr "<0/> Packing Calculator"
@@ -38347,3 +38345,11 @@ msgstr "The instance key changed. Nocturne cannot read the saved secrets for the
 #: src/lib/components/ui/duration-input/duration-input.svelte
 msgid "Use a whole number of hours."
 msgstr "Use a whole number of hours."
+
+#: src/routes/(authenticated)/calendar/+page.svelte
+msgid "Could not load the calendar"
+msgstr "Could not load the calendar"
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Could not load profiles"
+msgstr "Could not load profiles"

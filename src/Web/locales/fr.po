@@ -7768,9 +7768,8 @@ msgstr ""
 #~ msgid "Calendar view is still available"
 #~ msgstr ""
 
-#: src/routes/(authenticated)/calendar/+page.svelte
-msgid "Failed to load calendar data"
-msgstr ""
+#~ msgid "Failed to load calendar data"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/+layout.svelte
 #: src/routes/(authenticated)/calendar/+page.svelte
@@ -12733,9 +12732,8 @@ msgstr ""
 msgid "Loading profiles..."
 msgstr ""
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Failed to load profiles"
-msgstr ""
+#~ msgid "Failed to load profiles"
+#~ msgstr ""
 
 #~ msgid "<0/> Packing Calculator"
 #~ msgstr ""
@@ -38349,4 +38347,12 @@ msgstr ""
 
 #: src/lib/components/ui/duration-input/duration-input.svelte
 msgid "Use a whole number of hours."
+msgstr ""
+
+#: src/routes/(authenticated)/calendar/+page.svelte
+msgid "Could not load the calendar"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Could not load profiles"
 msgstr ""
