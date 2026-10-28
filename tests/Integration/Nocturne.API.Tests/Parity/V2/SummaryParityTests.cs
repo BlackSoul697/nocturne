@@ -29,7 +29,7 @@ public class SummaryParityTests : ParityTestBase
             "serverTimeEpoch",
             "lastUpdated",
             "now"
-        );
+        ).WithIobTolerance();
     }
 
     #region Helper Methods

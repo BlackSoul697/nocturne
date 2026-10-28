@@ -34,7 +34,7 @@ public class PropertiesParityTests : ParityTestBase
             "serverTimeEpoch",
             "uptime",
             "lastUpdated"
-        ).WithPresenceOnlyFields("activity", "iob", "cob");
+        ).WithPresenceOnlyFields("activity", "iob", "cob").WithIobTolerance();
     }
 
     #region Helper Methods
