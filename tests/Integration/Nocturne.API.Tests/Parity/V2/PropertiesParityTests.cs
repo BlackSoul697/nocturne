@@ -18,19 +18,22 @@ public class PropertiesParityTests : ParityTestBase
     public PropertiesParityTests(ParityTestFixture fixture, ITestOutputHelper output)
         : base(fixture, output) { }
 
-    protected override ComparisonOptions GetComparisonOptions()
-    {
-        // Properties responses contain dynamic computed values. Nocturne computes iob activity
-        // from the resolved sensitivity, a default one with no profile, where Nightscout reports 0,
-        // and no client shows it. The three-decimal iob and the unrounded cob move between the two
-        // requests, so only their displays are compared.
-        return ComparisonOptions.Default.WithIgnoredFields(
-            "serverTime",
-            "serverTimeEpoch",
-            "uptime",
-            "lastUpdated"
-        ).WithPresenceOnlyFields("activity", "iob", "cob").WithReloadLagTolerance();
-    }
+    protected override ComparisonOptions GetComparisonOptions() => Options;
+
+    /// <summary>
+    /// Nocturne computes iob activity from the resolved sensitivity, a default one with no profile,
+    /// where Nightscout reports 0, and no client shows it. The three-decimal iob moves between the
+    /// two requests, so only its display is compared. The unrounded cob and its display are compared
+    /// to within <see cref="ComparisonOptions.ReloadLagToleranceTable"/>; the rest of the cob
+    /// property (decayedBy, isDecaying, carbs_hr, rawCarbImpact, source, lastCarbs) does not move
+    /// with time while the carbs decay, so it is compared exactly.
+    /// </summary>
+    internal static readonly ComparisonOptions Options = ComparisonOptions.Default.WithIgnoredFields(
+        "serverTime",
+        "serverTimeEpoch",
+        "uptime",
+        "lastUpdated"
+    ).WithPresenceOnlyFields("activity", "iob").WithReloadLagTolerance();
 
     #region Helper Methods
 
