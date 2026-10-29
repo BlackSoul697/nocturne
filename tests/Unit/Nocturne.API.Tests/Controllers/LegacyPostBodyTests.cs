@@ -4,12 +4,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Legacy;
 using Nocturne.Core.Contracts.Alerts;
-using Nocturne.Core.Contracts.Effects;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
-using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Profiles;
@@ -306,41 +304,27 @@ public class LegacyPostBodyTests
     private static Handler DeviceStatusHandler(string name)
     {
         var statuses = new List<DeviceStatus>();
-        var decomposer = new Mock<IDeviceStatusDecomposer>();
-        decomposer
-            .Setup(d => d.DecomposeAsync(
-                It.IsAny<DeviceStatus>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .Callback<DeviceStatus, string?, WriteOrigin, CancellationToken>((ds, _, _, _) => statuses.Add(ds))
-            .ReturnsAsync(new DecompositionResult());
-        var projection = new DeviceStatusProjectionService(
-            Mock.Of<IDeviceStatusGroupRepository>(),
-            Mock.Of<IApsSnapshotRepository>(),
-            Mock.Of<IPumpSnapshotRepository>(),
-            Mock.Of<IUploaderSnapshotRepository>(),
-            Mock.Of<IStateSpanRepository>(),
-            Mock.Of<IDeviceStatusExtrasRepository>(),
-            TimeProvider.System,
-            NullLogger<DeviceStatusProjectionService>.Instance);
+        var deviceStatuses = new Mock<IDeviceStatusService>();
+        deviceStatuses
+            .Setup(s => s.CreateDeviceStatusesAsync(
+                It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<DeviceStatus>, string?, WriteOrigin, CancellationToken>((created, _, _, _) => statuses.AddRange(created))
+            .ReturnsAsync((IReadOnlyList<DeviceStatus> created, string? _, WriteOrigin _, CancellationToken _) =>
+                new BulkWrite<DeviceStatus>(created, 0));
         var single = $$"""{"app":"AAPS","Device":"openaps://phone","Mills":{{Millis}}}""";
         var malformed = """{"app":"AAPS","Device":"openaps://phone","Mills":"abc"}""";
 
         if (name == "v1 devicestatus")
         {
             var v1 = WithContext(new LegacyV1.DeviceStatusController(
-                projection,
-                decomposer.Object,
-                Mock.Of<IWriteSideEffects>(),
-                Mock.Of<IDataEventSink<DeviceStatus>>(),
+                deviceStatuses.Object,
                 TimeProvider.System,
                 NullLogger<LegacyV1.DeviceStatusController>.Instance));
             return new Handler(single, malformed, async body => Unwrap(await v1.CreateDeviceStatus(Json(body))), () => statuses.Count, () => statuses.All(s => s.Device == "openaps://phone"));
         }
 
         var v3 = WithContext(new LegacyV3.DeviceStatusController(
-            projection,
-            decomposer.Object,
-            Mock.Of<IWriteSideEffects>(),
-            Mock.Of<IDataEventSink<DeviceStatus>>(),
+            deviceStatuses.Object,
             Mock.Of<IDocumentProcessingService>(),
             NullLogger<LegacyV3.DeviceStatusController>.Instance));
         return new Handler(single, malformed, async body => await v3.CreateDeviceStatus(Json(body)), () => statuses.Count, () => statuses.All(s => s.Device == "openaps://phone"));

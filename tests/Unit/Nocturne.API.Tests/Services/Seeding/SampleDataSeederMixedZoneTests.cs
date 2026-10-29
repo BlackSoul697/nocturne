@@ -5,6 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Seeding;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
@@ -61,9 +62,9 @@ public class SampleDataSeederMixedZoneTests : IDisposable
                 return new BulkWrite<Entry>(written, 0);
             });
 
-        var statuses = new Mock<IDeviceStatusDecomposer>();
+        var statuses = new Mock<IDeviceStatusService>();
         statuses
-            .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Setup(d => d.ImportDeviceStatusesAsync(It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DecompositionResult());
 
         var sleep = new Mock<ISleepService>();

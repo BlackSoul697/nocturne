@@ -1,13 +1,13 @@
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
-namespace Nocturne.Core.Contracts.V4;
+namespace Nocturne.API.Services.DeviceStatuses;
 
 /// <summary>
 /// Decomposes a legacy DeviceStatus record into typed v4 snapshot tables.
 /// </summary>
-/// <seealso cref="IDecompositionPipeline"/>
-public interface IDeviceStatusDecomposer
+internal interface IDeviceStatusDecomposer
 {
     /// <summary>
     /// Extracts APS, pump, and uploader snapshots from a DeviceStatus record
@@ -53,13 +53,6 @@ public interface IDeviceStatusDecomposer
     /// to broadcast (live) or stay silent (backfill).</param>
     Task<DecompositionResult> DecomposeBatchAsync(
         IReadOnlyList<DeviceStatus> statuses, string? source, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>
-    /// Deletes all v4 snapshot records that were decomposed from a legacy DeviceStatus with the given ID.
-    /// </summary>
-    /// <param name="legacyId">The legacy DeviceStatus ID</param>
-    /// <returns>Total number of v4 records deleted across all snapshot tables</returns>
-    Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes every v4 record of the stored device status <paramref name="storedId"/> resolves to:

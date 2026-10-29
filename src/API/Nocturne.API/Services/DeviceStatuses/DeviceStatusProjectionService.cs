@@ -11,7 +11,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Services.Devices;
+namespace Nocturne.API.Services.DeviceStatuses;
 
 /// <summary>
 /// Reassembles legacy <see cref="DeviceStatus"/> documents from the V4 snapshot tables
@@ -25,7 +25,7 @@ namespace Nocturne.API.Services.Devices;
 /// </remarks>
 /// <seealso cref="V4.DeviceStatusDecomposer"/>
 /// <seealso cref="DeviceStatus"/>
-public class DeviceStatusProjectionService
+internal class DeviceStatusProjectionService : IDeviceStatusStore
 {
     private readonly IDeviceStatusGroupRepository _groupRepo;
     private readonly IApsSnapshotRepository _apsRepo;
@@ -69,12 +69,6 @@ public class DeviceStatusProjectionService
     }
 
     /// <summary>
-    /// The time fields a projected status carries for its anchor's time, the one the store filters by.
-    /// </summary>
-    private static readonly IReadOnlySet<string> AnchorTimeFields =
-        new[] { "created_at", "date", "mills" }.ToFrozenSet(StringComparer.Ordinal);
-
-    /// <summary>
     /// Most statuses projected into memory for one find whose conditions only the projected document
     /// can answer: the merged-read budget <see cref="LegacyReadLimits.MaxMergedCount"/> documents.
     /// </summary>
@@ -109,21 +103,7 @@ public class DeviceStatusProjectionService
         return (descending ? live.OrderByDescending(key) : live.OrderBy(key)).Skip(skip).Take(count).ToList();
     }
 
-    /// <summary>Parses a find, in either wire form, for <see cref="GetMatchingAsync"/>.</summary>
-    public static FindQuery ParseFind(string? find) =>
-        FindQuery.Parse(find, bareRegexFields: null, AnchorTimeFields);
-
-    /// <summary>
-    /// A page of the statuses <paramref name="find"/> matches, newest first or, when
-    /// <paramref name="descending"/> is <c>false</c>, the oldest first, evaluated as legacy
-    /// Nightscout evaluates it. The device equality and time bounds filter the store; every
-    /// condition is tested against the projected document.
-    /// </summary>
-    /// <param name="sort">
-    /// <see cref="ReadSortField.SrvModified"/> orders by modification stamp when the find is empty or
-    /// only bounds <c>srvModified</c> from below, which is served by the modified-since pages; any
-    /// other field orders by time.
-    /// </param>
+    /// <inheritdoc />
     public async Task<IReadOnlyList<DeviceStatus>> GetMatchingAsync(
         FindQuery find, int count, int skip, CancellationToken ct,
         bool descending = true, ReadSortField sort = ReadSortField.Time)
@@ -159,7 +139,7 @@ public class DeviceStatusProjectionService
         return matching.Skip(skip).Take(count).ToList();
     }
 
-    /// <summary>The number of statuses <see cref="GetMatchingAsync"/> pages through.</summary>
+    /// <inheritdoc />
     public async Task<long> CountMatchingAsync(FindQuery find, CancellationToken ct)
     {
         if (!TryGetStoreWindow(find, out var from, out var to))
@@ -226,12 +206,7 @@ public class DeviceStatusProjectionService
         return true;
     }
 
-    /// <summary>
-    /// Returns a single <see cref="DeviceStatus"/> by ID.
-    /// Tries UUID parse for primary key lookup, then falls back to legacy ID lookup.
-    /// </summary>
-    /// <param name="id">UUID string or legacy MongoDB ObjectId.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <inheritdoc />
     public async Task<DeviceStatus?> GetByIdAsync(string id, CancellationToken ct)
     {
         ApsSnapshot? aps = null;
@@ -314,13 +289,7 @@ public class DeviceStatusProjectionService
         return ProjectFromSnapshots(aps, pump, uploader, null, null, _logger);
     }
 
-    /// <summary>
-    /// Returns <see cref="DeviceStatus"/> documents modified since the given Unix millisecond
-    /// threshold. Used for AAPS incremental sync. A deleted status projects with <c>isValid: false</c>.
-    /// </summary>
-    /// <param name="lastModified">Unix millisecond timestamp threshold.</param>
-    /// <param name="limit">Maximum number of results.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <inheritdoc />
     public async Task<IEnumerable<DeviceStatus>> GetModifiedSinceAsync(
         long lastModified, int limit, CancellationToken ct)
     {

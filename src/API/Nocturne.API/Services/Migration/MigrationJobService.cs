@@ -12,6 +12,7 @@ using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using DecompositionResult = Nocturne.Core.Models.V4.DecompositionResult;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Treatments;
@@ -1380,8 +1381,8 @@ internal class MigrationJob
         "devicestatus", "device statuses", s_createdAtCursor, OneRecordPerDocument: false,
         sp =>
         {
-            var decomposer = sp.GetRequiredService<IDeviceStatusDecomposer>();
-            return (page, ct) => decomposer.DecomposeBatchAsync(page, source: null, WriteOrigin.Backfill, ct);
+            var deviceStatuses = sp.GetRequiredService<IDeviceStatusService>();
+            return (page, ct) => deviceStatuses.ImportDeviceStatusesAsync(page, source: null, ct);
         });
 
     private static readonly PagedCollection<Activity> s_activityCollection = new(
@@ -1971,8 +1972,8 @@ internal class MigrationJob
             status.Id = doc["_id"].AsObjectId.ToString();
 
         using var scope = CreateTenantScope();
-        var decomposer = scope.ServiceProvider.GetRequiredService<Core.Contracts.V4.IDeviceStatusDecomposer>();
-        await decomposer.DecomposeAsync(status, source: null, WriteOrigin.Backfill, ct);
+        await scope.ServiceProvider.GetRequiredService<IDeviceStatusService>()
+            .CreateDeviceStatusesAsync([status], source: null, WriteOrigin.Backfill, ct);
     }
 
     private async Task TransformProfileAsync(

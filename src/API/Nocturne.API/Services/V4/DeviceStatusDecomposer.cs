@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Nocturne.API.Services.DeviceStatuses;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
@@ -23,7 +24,7 @@ namespace Nocturne.API.Services.V4;
 /// override period.
 /// </summary>
 /// <seealso cref="IDeviceStatusDecomposer"/>
-public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer
+internal class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer
 {
     private readonly IApsSnapshotRepository _apsRepo;
     private readonly IPumpSnapshotRepository _pumpRepo;
@@ -1024,9 +1025,9 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer
 
     /// <summary>
     /// The snapshot tables a status's stored correlation id is read from, in the APS, pump, uploader
-    /// order <see cref="DeleteByLegacyIdAsync"/> prefers. The group's extras row carries no legacy id
+    /// order <see cref="DeleteStoredAsync"/> prefers. The group's extras row carries no legacy id
     /// of its own and is found through that id, so a re-send that moved the snapshots onto a new one
-    /// would orphan it beyond <see cref="DeleteByLegacyIdAsync"/>'s reach.
+    /// would orphan it beyond <see cref="DeleteStoredAsync"/>'s reach.
     /// </summary>
     private StoredCorrelationLookup[] SnapshotTables =>
     [
@@ -1256,10 +1257,6 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer
     }
 
     #endregion
-
-    /// <inheritdoc />
-    public Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default)
-        => DeleteStoredAsync(legacyId, origin, ct);
 
     /// <inheritdoc />
     /// <remarks>

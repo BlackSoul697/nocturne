@@ -21,9 +21,6 @@ namespace Nocturne.API.Tests.Infrastructure;
 /// do not, so a type resolved from a string is not seen. Constructor reflection over the API and test
 /// assemblies is the second net; it places each type by the file that declares it, not by its namespace.
 /// </para>
-/// <para>
-/// The exemptions are the usages the device status slice (#2970) removes, deleting the group.
-/// </para>
 /// </remarks>
 [Trait("Category", "Unit")]
 public class LegacyModulePortGuardTests
@@ -41,62 +38,12 @@ public class LegacyModulePortGuardTests
     [
         new("Entries", "Entry", ["IEntryStore", "IEntryCache", "IEntryDecomposer"]),
         new("Treatments", "Treatment", ["ITreatmentStore", "ITreatmentCache", "ITreatmentDecomposer"]),
-        new("DeviceStatuses", "DeviceStatus", ["IDeviceStatusDecomposer"]),
+        new("DeviceStatuses", "DeviceStatus", ["IDeviceStatusStore", "IDeviceStatusDecomposer"]),
     ];
 
     private const string Registration = "src/API/Nocturne.API/Extensions/ServiceRegistrationExtensions.cs";
 
     private static readonly string[] ReflectedSources = ["src/API/Nocturne.API", "tests/Unit/Nocturne.API.Tests"];
-
-    /// <summary>Constructors outside a module that take one of its ports, as <c>Type(Port)</c>.</summary>
-    private static readonly string[] ConstructorExemptions =
-    [
-        // #2970 DeviceStatus
-        "Nocturne.API.Controllers.V1.DeviceStatusController(IDeviceStatusDecomposer)",
-        "Nocturne.API.Controllers.V3.DeviceStatusController(IDeviceStatusDecomposer)",
-        "Nocturne.API.Services.ConnectorPublishing.DevicePublisher(IDeviceStatusDecomposer)",
-        "Nocturne.API.Services.Seeding.SampleDataSeeder(IDeviceStatusDecomposer)",
-    ];
-
-    /// <summary>Members of <c>src</c> outside a module that name one of its ports, as <c>path: Member(Port)</c>.</summary>
-    private static readonly string[] SourceExemptions =
-    [
-        // #2970 DeviceStatus
-        "src/API/Nocturne.API/Controllers/V1/DeviceStatusController.cs: DeviceStatusController._decomposer(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Controllers/V1/DeviceStatusController.cs: DeviceStatusController.DeviceStatusController(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Controllers/V3/DeviceStatusController.cs: DeviceStatusController._decomposer(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Controllers/V3/DeviceStatusController.cs: DeviceStatusController.DeviceStatusController(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/ConnectorPublishing/DevicePublisher.cs: DevicePublisher._decomposer(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/ConnectorPublishing/DevicePublisher.cs: DevicePublisher.DevicePublisher(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJob.s_deviceStatusCollection(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJob.TransformDeviceStatusAsync(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/Seeding/SampleDataSeeder.cs: SampleDataSeeder._deviceStatusDecomposer(IDeviceStatusDecomposer)",
-        "src/API/Nocturne.API/Services/Seeding/SampleDataSeeder.cs: SampleDataSeeder.SampleDataSeeder(IDeviceStatusDecomposer)",
-    ];
-
-    /// <summary>Test files outside a module that name one of its ports, as <c>path(Port)</c>.</summary>
-    private static readonly string[] TestExemptions =
-    [
-        // #2970 DeviceStatus
-        "tests/Integration/Nocturne.API.Tests/DeviceStatusV3StoredStatusIntegrationTests.cs(IDeviceStatusDecomposer)",
-        "tests/Integration/Nocturne.API.Tests/LoopClosedLoopIntegrationTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/DeviceStatusCreateIdentityTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/LegacyPostBodyTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/LegacyDeleteByIdTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/LegacyReadCountCapTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/DeviceStatusHistoryHeaderTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/UploaderIdBindingTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/V3CreateResponseTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/V3DeviceStatusFindTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/V3FilterOperatorMergeTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/V3SearchTotalTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V3/V3SortTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Migration/MigrationJobHarness.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/DevicePublisherTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/PublishSkippedDeletedTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/RecentGlucoseAndDeviceStatusPublishTests.cs(IDeviceStatusDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/Seeding/SampleDataSeederMixedZoneTests.cs(IDeviceStatusDecomposer)",
-    ];
 
     private static readonly IReadOnlyDictionary<string, Module> ModuleOfPort =
         Modules.SelectMany(m => m.Ports.Select(p => (p, m))).ToDictionary(x => x.p, x => x.m);
@@ -104,48 +51,42 @@ public class LegacyModulePortGuardTests
     private static readonly Assembly Api = typeof(ServiceRegistrationExtensions).Assembly;
 
     [Fact]
-    public void OnlyTheExemptionsTakeAPortInAConstructorOutsideItsModule()
+    public void NothingTakesAPortInAConstructorOutsideItsModule()
     {
         var files = DeclaringFiles();
         var takers = ConstructorTakers(Api, files)
-            .Concat(ConstructorTakers(typeof(LegacyModulePortGuardTests).Assembly, files))
-            .ToList();
+            .Concat(ConstructorTakers(typeof(LegacyModulePortGuardTests).Assembly, files));
 
-        takers.Except(ConstructorExemptions).Should().BeEmpty("inject the module's service, not its store, cache or decomposer");
-        ConstructorExemptions.Except(takers).Should().BeEmpty("a stale exemption would silently cover a future injection");
+        takers.Should().BeEmpty("inject the module's service, not its store, cache or decomposer");
     }
 
     [Fact]
-    public void OnlyTheExemptionsNameAPortInSourceOutsideItsModule()
+    public void NothingNamesAPortInSourceOutsideItsModule()
     {
         var namers = Sources("src")
             .Where(s => s.Path != Registration)
             .SelectMany(s => NamedPorts(s.Tree)
                 .Where(hit => !ModuleOfPort[hit.Port].Owns(s.Path))
                 .Select(hit => $"{s.Path}: {hit.Member}({hit.Port})"))
-            .Distinct()
-            .ToList();
+            .Distinct();
 
-        namers.Except(SourceExemptions).Should().BeEmpty("use the module's service, not its store, cache or decomposer");
-        SourceExemptions.Except(namers).Should().BeEmpty("a stale exemption would silently cover a future use");
+        namers.Should().BeEmpty("use the module's service, not its store, cache or decomposer");
     }
 
     [Fact]
-    public void OnlyTheExemptionsNameAPortInATestOutsideItsModule()
+    public void NothingNamesAPortInATestOutsideItsModule()
     {
         var namers = Sources("tests")
             .SelectMany(s => NamedPorts(s.Tree)
                 .Where(hit => !ModuleOfPort[hit.Port].Owns(s.Path))
                 .Select(hit => $"{s.Path}({hit.Port})"))
-            .Distinct()
-            .ToList();
+            .Distinct();
 
-        namers.Except(TestExemptions).Should().BeEmpty("a consumer's test mocks the module's service");
-        TestExemptions.Except(namers).Should().BeEmpty("a stale exemption would silently cover a future mock");
+        namers.Should().BeEmpty("a consumer's test mocks the module's service");
     }
 
     [Fact]
-    public void EveryPortIsDeclaredOnceAndTheEntryAndTreatmentPortsAreInternal()
+    public void EveryPortIsDeclaredOnceAndInternal()
     {
         var contracts = Assembly.Load("Nocturne.Core.Contracts");
         var declared = Api.GetTypes().Concat(contracts.GetTypes())
@@ -153,8 +94,7 @@ public class LegacyModulePortGuardTests
             .ToList();
 
         declared.Select(t => t.Name).Should().BeEquivalentTo(ModuleOfPort.Keys, "a renamed port would drop out of the guard");
-        declared.Where(t => ModuleOfPort[t.Name].Folder is "Entries" or "Treatments")
-            .Should().OnlyContain(t => !t.IsPublic && t.Assembly == Api);
+        declared.Should().OnlyContain(t => !t.IsPublic && t.Assembly == Api);
     }
 
     [Theory]

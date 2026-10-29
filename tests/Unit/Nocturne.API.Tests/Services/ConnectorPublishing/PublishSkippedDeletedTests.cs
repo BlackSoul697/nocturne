@@ -10,6 +10,7 @@ using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Glucose;
@@ -134,15 +135,16 @@ public class PublishSkippedDeletedTests : IDisposable
             Mock.Of<ITenantAccessor>(), NullLogger<TreatmentPublisher>.Instance);
 
     [Fact]
-    public async Task Device_statuses_the_user_deleted_are_counted_through_the_decomposer()
+    public async Task Device_statuses_the_user_deleted_are_counted_through_the_device_status_service()
     {
-        var decomposer = new Mock<IDeviceStatusDecomposer>();
-        decomposer
-            .Setup(d => d.DecomposeAsync(
-                It.IsAny<DeviceStatus>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DecompositionResult { SkippedDeleted = 1 });
+        var deviceStatuses = new Mock<IDeviceStatusService>();
+        deviceStatuses
+            .Setup(d => d.CreateDeviceStatusesAsync(
+                It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<DeviceStatus> statuses, string? _, WriteOrigin _, CancellationToken _) =>
+                new BulkWrite<DeviceStatus>(statuses, statuses.Count));
         var publisher = new DevicePublisher(
-            decomposer.Object, Mock.Of<IDeviceEventRepository>(), Mock.Of<IPatientDeviceStamper>(),
+            deviceStatuses.Object, Mock.Of<IDeviceEventRepository>(), Mock.Of<IPatientDeviceStamper>(),
             Mock.Of<IAuditContext>(), Mock.Of<IApsSnapshotRepository>(), Mock.Of<IPatientDeviceRepository>(),
             Mock.Of<IPumpSnapshotRepository>(), Mock.Of<IUploaderSnapshotRepository>(), _tally,
             Mock.Of<ITenantAccessor>(), NullLogger<DevicePublisher>.Instance);

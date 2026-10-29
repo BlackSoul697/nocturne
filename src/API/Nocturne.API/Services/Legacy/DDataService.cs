@@ -6,11 +6,12 @@ using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Profiles;
-using Nocturne.API.Services.Devices;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.API.Services.Platform;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 
 namespace Nocturne.API.Services.Legacy;
 
@@ -31,7 +32,7 @@ public class DDataService : IDDataService
     private readonly IEntryService _entries;
     private readonly ITreatmentService _treatments;
     private readonly IProfileProjectionService _profiles;
-    private readonly DeviceStatusProjectionService _projectionService;
+    private readonly IDeviceStatusService _deviceStatuses;
     private readonly IFoodRepository _food;
     private readonly IActivityService _activities;
     private readonly IStoreSizeReader _storeSize;
@@ -63,7 +64,7 @@ public class DDataService : IDDataService
         IEntryService entries,
         ITreatmentService treatments,
         IProfileProjectionService profiles,
-        DeviceStatusProjectionService projectionService,
+        IDeviceStatusService deviceStatuses,
         IFoodRepository food,
         IActivityService activities,
         IStoreSizeReader storeSize,
@@ -74,7 +75,7 @@ public class DDataService : IDDataService
         _entries = entries;
         _treatments = treatments;
         _profiles = profiles;
-        _projectionService = projectionService;
+        _deviceStatuses = deviceStatuses;
         _food = food;
         _activities = activities;
         _storeSize = storeSize;
@@ -794,11 +795,11 @@ public class DDataService : IDDataService
                     ["$lte"] = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).UtcDateTime.ToString("o"),
                 },
             };
-            var deviceStatuses = await _projectionService.GetMatchingAsync(
-                DeviceStatusProjectionService.ParseFind(JsonSerializer.Serialize(window)),
+            var deviceStatuses = await _deviceStatuses.GetDeviceStatusesAsync(
+                FindQuery.ParseDeviceStatus(JsonSerializer.Serialize(window)),
                 count: 1000,
                 skip: 0,
-                ct: cancellationToken
+                cancellationToken: cancellationToken
             );
             ddata.DeviceStatus = deviceStatuses.ToList();
         }

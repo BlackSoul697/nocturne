@@ -8,6 +8,7 @@ using Moq;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Migration;
 using Nocturne.Core.Contracts.Audit;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Treatments;
@@ -66,9 +67,9 @@ internal static class MigrationJobHarness
             .ReturnsAsync((IReadOnlyList<Treatment> page, CancellationToken _) =>
                 treatmentOutcome?.Invoke(page) ?? new DecompositionResult());
 
-        var deviceStatuses = new Mock<IDeviceStatusDecomposer>();
+        var deviceStatuses = new Mock<IDeviceStatusService>();
         deviceStatuses
-            .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.ImportDeviceStatusesAsync(It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DecompositionResult());
 
         var profiles = new Mock<IProfileDecomposer>();

@@ -22,6 +22,7 @@ using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Services.Demo.Configuration;
 using Nocturne.Services.Demo.Services;
 using Nocturne.Infrastructure.Data.Services;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.API.Services.Seeding;
@@ -77,7 +78,7 @@ public class SampleDataSeeder
     private readonly ITrackerRepository _trackerRepository;
     private readonly IRuleScopeClassifier _scopeClassifier;
     private readonly IProfileWriteService _profileWriteService;
-    private readonly IDeviceStatusDecomposer _deviceStatusDecomposer;
+    private readonly IDeviceStatusService _deviceStatuses;
     private readonly ICompressionLowDetectionService _compressionLowDetectionService;
     private readonly ICompressionLowService _compressionLowService;
     private readonly ICompressionLowRepository _compressionLowRepository;
@@ -116,7 +117,7 @@ public class SampleDataSeeder
         ITrackerRepository trackerRepository,
         IRuleScopeClassifier scopeClassifier,
         IProfileWriteService profileWriteService,
-        IDeviceStatusDecomposer deviceStatusDecomposer,
+        IDeviceStatusService deviceStatuses,
         ICompressionLowDetectionService compressionLowDetectionService,
         ICompressionLowService compressionLowService,
         ICompressionLowRepository compressionLowRepository,
@@ -134,7 +135,7 @@ public class SampleDataSeeder
         _trackerRepository = trackerRepository;
         _scopeClassifier = scopeClassifier;
         _profileWriteService = profileWriteService;
-        _deviceStatusDecomposer = deviceStatusDecomposer;
+        _deviceStatuses = deviceStatuses;
         _compressionLowDetectionService = compressionLowDetectionService;
         _compressionLowService = compressionLowService;
         _compressionLowRepository = compressionLowRepository;
@@ -254,8 +255,8 @@ public class SampleDataSeeder
             async Task FlushStatusesAsync()
             {
                 if (statusBatch.Count == 0) return;
-                await _deviceStatusDecomposer.DecomposeBatchAsync(
-                    statusBatch, dataSource, WriteOrigin.Backfill, ct);
+                await _deviceStatuses.ImportDeviceStatusesAsync(
+                    statusBatch, dataSource, ct);
                 deviceStatusCount += statusBatch.Count;
                 statusBatch.Clear();
             }

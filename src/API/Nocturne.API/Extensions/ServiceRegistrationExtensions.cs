@@ -31,6 +31,7 @@ using Nocturne.API.Services.ConnectorPublishing;
 using Nocturne.API.Services.Connectors;
 using Nocturne.API.Services.Demo;
 using Nocturne.API.Services.Devices;
+using Nocturne.API.Services.DeviceStatuses;
 using Nocturne.API.Services.Docs;
 using Nocturne.API.Services.Effects;
 using Nocturne.API.Services.Entries;
@@ -64,6 +65,7 @@ using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Devices;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Glucose;
@@ -760,7 +762,8 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IStateSpanService, StateSpanService>();
         services.AddScoped<ISleepService, SleepService>();
         services.AddScoped<ISleepReportService, SleepReportService>();
-        services.AddScoped<DeviceStatusProjectionService>();
+        services.AddScoped<IDeviceStatusService, DeviceStatusService>();
+        services.AddScoped<IDeviceStatusStore, DeviceStatusProjectionService>();
         services.AddScoped<IDataEventSink<DeviceStatus>>(sp =>
         {
             var sinks = new List<IDataEventSink<DeviceStatus>>();

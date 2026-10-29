@@ -12,7 +12,7 @@ using Nocturne.Core.Models.Queries;
 using Nocturne.API.Extensions;
 using Nocturne.API.Helpers;
 using Nocturne.API.Authorization;
-using Nocturne.API.Services.Devices;
+using Nocturne.Core.Contracts.DeviceStatuses;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -22,7 +22,7 @@ namespace Nocturne.API.Controllers.V1;
 /// </summary>
 /// <seealso cref="IEntryService"/>
 /// <seealso cref="ITreatmentService"/>
-/// <seealso cref="DeviceStatusProjectionService"/>
+/// <seealso cref="IDeviceStatusService"/>
 /// <seealso cref="IProfileProjectionService"/>
 /// <seealso cref="IFoodRepository"/>
 /// <seealso cref="IActivityService"/>
@@ -43,7 +43,7 @@ public class CountController : ControllerBase
 
     private readonly IEntryService _entryService;
     private readonly ITreatmentService _treatmentService;
-    private readonly DeviceStatusProjectionService _deviceStatusProjection;
+    private readonly IDeviceStatusService _deviceStatuses;
     private readonly IProfileProjectionService _profileProjectionService;
     private readonly IFoodRepository _foodRepository;
     private readonly IActivityService _activityService;
@@ -55,7 +55,7 @@ public class CountController : ControllerBase
     /// </summary>
     /// <param name="entryService">Service for glucose entry records.</param>
     /// <param name="treatmentService">Service for treatment records.</param>
-    /// <param name="deviceStatusProjection">Projection of V4 snapshots into legacy device status.</param>
+    /// <param name="deviceStatuses">Service for device status records.</param>
     /// <param name="profileProjectionService">Service for profile projection and counting.</param>
     /// <param name="foodRepository">Repository for food records.</param>
     /// <param name="activityService">Service for activity operations.</param>
@@ -64,7 +64,7 @@ public class CountController : ControllerBase
     public CountController(
         IEntryService entryService,
         ITreatmentService treatmentService,
-        DeviceStatusProjectionService deviceStatusProjection,
+        IDeviceStatusService deviceStatuses,
         IProfileProjectionService profileProjectionService,
         IFoodRepository foodRepository,
         IActivityService activityService,
@@ -74,7 +74,7 @@ public class CountController : ControllerBase
     {
         _entryService = entryService;
         _treatmentService = treatmentService;
-        _deviceStatusProjection = deviceStatusProjection;
+        _deviceStatuses = deviceStatuses;
         _profileProjectionService = profileProjectionService;
         _foodRepository = foodRepository;
         _activityService = activityService;
@@ -206,8 +206,8 @@ public class CountController : ControllerBase
 
         try
         {
-            var count = await _deviceStatusProjection.CountMatchingAsync(
-                DeviceStatusProjectionService.ParseFind(LegacyFindDateWindow.Apply(find, _timeProvider.GetUtcNow())),
+            var count = await _deviceStatuses.CountDeviceStatusesAsync(
+                FindQuery.ParseDeviceStatus(LegacyFindDateWindow.Apply(find, _timeProvider.GetUtcNow())),
                 cancellationToken);
 
             _logger.LogDebug("Found {Count} device status entries matching criteria", count);
@@ -358,8 +358,8 @@ public class CountController : ControllerBase
                         cancellationToken);
                     break;
                 case "devicestatus":
-                    count = await _deviceStatusProjection.CountMatchingAsync(
-                        DeviceStatusProjectionService.ParseFind(LegacyFindDateWindow.Apply(
+                    count = await _deviceStatuses.CountDeviceStatusesAsync(
+                        FindQuery.ParseDeviceStatus(LegacyFindDateWindow.Apply(
                             LegacyFindQueryString.Resolve(HttpContext?.Request, find), _timeProvider.GetUtcNow())),
                         cancellationToken);
                     break;

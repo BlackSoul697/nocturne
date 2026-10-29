@@ -6,6 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Controllers.V1;
 using Nocturne.API.Helpers;
+using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
@@ -13,7 +14,6 @@ using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
-using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Queries;
@@ -237,7 +237,7 @@ public class TreatmentFindDateWindowTests
         httpContext.Request.QueryString = new QueryString(queryString);
         return new CountController(
             Mock.Of<IEntryService>(), service,
-            CountControllerTests.DeviceStatusProjection(new Mock<IDeviceStatusGroupRepository>()),
+            Mock.Of<IDeviceStatusService>(),
             Mock.Of<IProfileProjectionService>(), Mock.Of<IFoodRepository>(),
             Mock.Of<IActivityService>(), new FakeTimeProvider(Now), NullLogger<CountController>.Instance)
         {
