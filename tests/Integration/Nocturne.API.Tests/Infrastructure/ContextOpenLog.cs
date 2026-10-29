@@ -12,15 +12,19 @@ using Nocturne.Infrastructure.Data.Services;
 namespace Nocturne.API.Tests.Integration.Infrastructure;
 
 /// <summary>
-/// Every context the API's <see cref="INocturneDbContextFactory"/> hands out during a request, with
-/// its kind, its caller and whether the controller action had started.
+/// Every context the API's <see cref="INocturneDbContextFactory"/> hands out while a tagged request is
+/// in the pipeline, on the request thread or on work the request started and did not await, with its
+/// kind, its caller and whether the controller action had started. Opens after the request has left
+/// the pipeline are not logged, though work it started may still be running.
 /// </summary>
 /// <remarks>
-/// A context opens on whatever thread asks for it, including work the request started and did not
-/// await, which runs beside the request on its execution context. Reading the request from there
-/// races the request thread's own feature reads (#3064), so the tag is read once, on the request
-/// thread at the head of the pipeline, and an open reads only the <see cref="RequestTag"/> that flows
-/// with the execution context.
+/// A context opens on whatever thread asks for it, and work the request did not await runs beside
+/// the request on its execution context, so an <see cref="IHttpContextAccessor"/> there returns the
+/// live request. Reading any request feature there can land while the request thread is inserting a
+/// feature of its own: the read sees the bumped revision and clears the request's feature cache, and
+/// the request thread reads back null (#3064: <c>HasFormContentType</c> threw in model binding). So
+/// the tag is read once, on the request thread at the head of the pipeline, and an open reads only
+/// the <see cref="RequestTag"/> that flows with the execution context.
 /// </remarks>
 public sealed class ContextOpenLog
 {
@@ -64,7 +68,7 @@ public sealed class ContextOpenLog
 
     private void Record(string kind)
     {
-        if (_current.Value is not { } tag)
+        if (_current.Value is not { Ended: false } tag)
             return;
 
         _opens.GetOrAdd(tag.Id, _ => new())
@@ -93,12 +97,17 @@ public sealed class ContextOpenLog
     private sealed class RequestTag(string id)
     {
         private volatile bool _actionStarted;
+        private volatile bool _ended;
 
         public string Id { get; } = id;
 
         public bool ActionStarted => _actionStarted;
 
+        public bool Ended => _ended;
+
         public void MarkActionStarted() => _actionStarted = true;
+
+        public void End() => _ended = true;
     }
 
     private sealed class TagReader(ContextOpenLog log) : IStartupFilter
@@ -107,10 +116,22 @@ public sealed class ContextOpenLog
         {
             app.Use(async (context, nextMiddleware) =>
             {
-                if (context.Request.Headers[RequestIdHeader].FirstOrDefault() is { } id)
-                    log._current.Value = new RequestTag(id);
+                if (context.Request.Headers[RequestIdHeader].FirstOrDefault() is not { } id)
+                {
+                    await nextMiddleware(context);
+                    return;
+                }
 
-                await nextMiddleware(context);
+                var tag = new RequestTag(id);
+                log._current.Value = tag;
+                try
+                {
+                    await nextMiddleware(context);
+                }
+                finally
+                {
+                    tag.End();
+                }
             });
             next(app);
         };

@@ -14,24 +14,69 @@ namespace Nocturne.API.Tests.Integration.Infrastructure;
 public class ContextOpenLogTests
 {
     /// <summary>
-    /// Replays issue #3064 deterministically. Work a request starts and does not await (the
-    /// last-used stamp in <c>MemberScopeMiddleware</c>) opens a context on a pool thread while the
-    /// request thread is creating its form feature in model binding. Reading any request feature on
-    /// the other thread inside that window clears the request's feature cache, and the request
-    /// thread's <c>HasFormContentType</c> then throws <see cref="NullReferenceException"/>.
+    /// Replays the interleaving in <see cref="ContextOpenLog"/>'s remarks, with the open on
+    /// <see cref="Task.Run(Func{Task})"/> as <c>MemberScopeMiddleware</c>'s last-used stamp makes it.
     /// </summary>
     [Fact]
     public async Task A_context_opened_by_work_the_request_did_not_await_is_logged_without_touching_the_request()
+    {
+        await using var provider = Provider();
+        var factory = provider.GetRequiredService<INocturneDbContextFactory>();
+
+        var features = new FeaturesThatYieldOnFormFeature(() =>
+            Task.Run(() => factory.CreateForTenantAsync(Guid.CreateVersion7()).AsTask()).GetAwaiter().GetResult());
+        var (context, requestId) = TaggedRequest(provider, features);
+
+        await Pipeline(provider, ctx =>
+        {
+            _ = ctx.Request.HasFormContentType;
+            return Task.CompletedTask;
+        })(context);
+
+        provider.GetRequiredService<ContextOpenLog>().OpensOf(requestId)
+            .Should().ContainSingle().Which.Kind.Should().Be("tenant");
+    }
+
+    [Fact]
+    public async Task A_context_opened_after_the_request_left_the_pipeline_is_not_logged_against_it()
+    {
+        await using var provider = Provider();
+        var factory = provider.GetRequiredService<INocturneDbContextFactory>();
+        var (context, requestId) = TaggedRequest(provider, new FeatureCollection());
+        var released = new TaskCompletionSource();
+        Task? detached = null;
+
+        await Pipeline(provider, _ =>
+        {
+            detached = Task.Run(async () =>
+            {
+                await released.Task;
+                await factory.CreateForTenantAsync(Guid.CreateVersion7());
+            });
+            return Task.CompletedTask;
+        })(context);
+        released.SetResult();
+        await detached!;
+
+        provider.GetRequiredService<ContextOpenLog>().OpensOf(requestId).Should().BeEmpty();
+    }
+
+    private static ServiceProvider Provider()
     {
         var services = new ServiceCollection();
         services.AddHttpContextAccessor();
         services.AddTransient(_ => Mock.Of<INocturneDbContextFactory>());
         ContextOpenLog.Register(services);
-        await using var provider = services.BuildServiceProvider();
-        var factory = provider.GetRequiredService<INocturneDbContextFactory>();
+        return services.BuildServiceProvider();
+    }
 
-        var features = new FeaturesThatYieldOnFormFeature(() =>
-            Task.Run(() => factory.CreateForTenantAsync(Guid.CreateVersion7()).AsTask()).GetAwaiter().GetResult());
+    /// <summary>
+    /// A request on <paramref name="features"/> carrying a <see cref="ContextOpenLog"/> tag, made the
+    /// accessor's current request as hosting does before the pipeline runs.
+    /// </summary>
+    private static (HttpContext Context, string RequestId) TaggedRequest(
+        IServiceProvider provider, IFeatureCollection features)
+    {
         features.Set<IHttpRequestFeature>(new HttpRequestFeature { Method = "POST" });
         features.Set<IHttpResponseFeature>(new HttpResponseFeature());
         features.Set<IHttpResponseBodyFeature>(new StreamResponseBodyFeature(Stream.Null));
@@ -43,14 +88,7 @@ public class ContextOpenLogTests
             context.Request.Headers[name] = values.ToArray();
 
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
-        await Pipeline(provider, ctx =>
-        {
-            _ = ctx.Request.HasFormContentType;
-            return Task.CompletedTask;
-        })(context);
-
-        provider.GetRequiredService<ContextOpenLog>().OpensOf(requestId)
-            .Should().ContainSingle().Which.Kind.Should().Be("tenant");
+        return (context, requestId);
     }
 
     private static RequestDelegate Pipeline(IServiceProvider provider, RequestDelegate endpoint)
