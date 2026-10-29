@@ -21,7 +21,7 @@ namespace Nocturne.API.Controllers.V1;
 /// Implements the /api/v1/count/* endpoints from the legacy JavaScript implementation.
 /// </summary>
 /// <seealso cref="IEntryService"/>
-/// <seealso cref="ITreatmentStore"/>
+/// <seealso cref="ITreatmentService"/>
 /// <seealso cref="DeviceStatusProjectionService"/>
 /// <seealso cref="IProfileProjectionService"/>
 /// <seealso cref="IFoodRepository"/>
@@ -42,7 +42,7 @@ public class CountController : ControllerBase
     private const string UnreadableFindMessage = "The find carries no condition the activity collection can read.";
 
     private readonly IEntryService _entryService;
-    private readonly ITreatmentStore _treatmentStore;
+    private readonly ITreatmentService _treatmentService;
     private readonly DeviceStatusProjectionService _deviceStatusProjection;
     private readonly IProfileProjectionService _profileProjectionService;
     private readonly IFoodRepository _foodRepository;
@@ -54,7 +54,7 @@ public class CountController : ControllerBase
     /// Initializes a new instance of <see cref="CountController"/>.
     /// </summary>
     /// <param name="entryService">Service for glucose entry records.</param>
-    /// <param name="treatmentStore">Store for treatment records.</param>
+    /// <param name="treatmentService">Service for treatment records.</param>
     /// <param name="deviceStatusProjection">Projection of V4 snapshots into legacy device status.</param>
     /// <param name="profileProjectionService">Service for profile projection and counting.</param>
     /// <param name="foodRepository">Repository for food records.</param>
@@ -63,7 +63,7 @@ public class CountController : ControllerBase
     /// <param name="logger">Logger instance.</param>
     public CountController(
         IEntryService entryService,
-        ITreatmentStore treatmentStore,
+        ITreatmentService treatmentService,
         DeviceStatusProjectionService deviceStatusProjection,
         IProfileProjectionService profileProjectionService,
         IFoodRepository foodRepository,
@@ -73,7 +73,7 @@ public class CountController : ControllerBase
     )
     {
         _entryService = entryService;
-        _treatmentStore = treatmentStore;
+        _treatmentService = treatmentService;
         _deviceStatusProjection = deviceStatusProjection;
         _profileProjectionService = profileProjectionService;
         _foodRepository = foodRepository;
@@ -160,7 +160,7 @@ public class CountController : ControllerBase
 
         try
         {
-            var count = await _treatmentStore.CountAsync(
+            var count = await _treatmentService.CountTreatmentsAsync(
                 LegacyFindDateWindow.Apply(find, _timeProvider.GetUtcNow()), cancellationToken);
 
             _logger.LogDebug("Found {Count} treatments matching criteria", count);
@@ -352,7 +352,7 @@ public class CountController : ControllerBase
                     );
                     break;
                 case "treatments":
-                    count = await _treatmentStore.CountAsync(
+                    count = await _treatmentService.CountTreatmentsAsync(
                         LegacyFindDateWindow.Apply(
                             LegacyFindQueryString.Resolve(HttpContext?.Request, find), _timeProvider.GetUtcNow()),
                         cancellationToken);

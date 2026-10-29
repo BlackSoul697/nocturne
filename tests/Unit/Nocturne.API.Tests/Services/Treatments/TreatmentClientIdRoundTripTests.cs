@@ -4,7 +4,6 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -32,7 +31,7 @@ using Xunit;
 
 using V4Models = Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Tests.Services.V4;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// Trio's lowercase <c>id</c> through the v1 service path an api-secret upload and
@@ -122,12 +121,9 @@ public class TreatmentClientIdRoundTripTests : IDisposable
             _context.AsFactory(),
             NullLogger<V4ToLegacyProjectionService>.Instance);
 
-        var pipeline = new DecompositionPipeline(
-            new ServiceCollection().AddSingleton<IDecomposer<Treatment>>(decomposer).BuildServiceProvider(),
-            NullLogger<DecompositionPipeline>.Instance);
 
         var store = new TreatmentReadService(
-            projection, decomposer, pipeline,
+            projection, decomposer,
             tempBasalRepo.Object, bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
             Mock.Of<IProfileActivationRepository>(),
             Mock.Of<IStateSpanService>(),

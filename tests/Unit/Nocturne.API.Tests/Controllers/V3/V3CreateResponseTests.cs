@@ -144,7 +144,7 @@ public class V3CreateResponseTests
 
         AssertDeduplicated(result, controller);
         service.Verify(
-            s => s.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<CancellationToken>()),
+            s => s.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -196,8 +196,8 @@ public class V3CreateResponseTests
             .Setup(s => s.GetTreatmentByIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
         service
-            .Setup(s => s.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IEnumerable<Treatment> t, CancellationToken _) =>
+            .Setup(s => s.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IEnumerable<Treatment> t, WriteOrigin _, CancellationToken _) =>
                 new BulkWrite<Treatment>(t.Select(x => { x.Id = StoredId; return x; }).ToList(), 0));
         var controller = WithContext(new TreatmentsController(
             processing.Object,

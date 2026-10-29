@@ -16,7 +16,7 @@ using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.V4;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// Tests for the primary-record selection logic inside

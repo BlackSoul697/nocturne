@@ -10,6 +10,7 @@ using Nocturne.API.Services.Migration;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -41,7 +42,7 @@ internal static class MigrationJobHarness
     }
 
     /// <param name="entryOutcome">What the entry import reports for each page; empty when omitted.</param>
-    /// <param name="treatmentOutcome">What the treatment decomposer reports for each page; empty when omitted.</param>
+    /// <param name="treatmentOutcome">What the treatment import reports for each page; empty when omitted.</param>
     /// <param name="profileOutcome">What the profile decomposer reports for each profile; empty when omitted.</param>
     /// <param name="interceptor">Attached to every <see cref="NocturneDbContext"/> the provider creates.</param>
     public static ServiceProvider BuildProvider(
@@ -59,10 +60,10 @@ internal static class MigrationJobHarness
             .ReturnsAsync((IReadOnlyList<Entry> page, CancellationToken _) =>
                 entryOutcome?.Invoke(page) ?? new DecompositionResult());
 
-        var treatments = new Mock<ITreatmentDecomposer>();
+        var treatments = new Mock<ITreatmentService>();
         treatments
-            .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<Treatment> page, WriteOrigin _, CancellationToken _) =>
+            .Setup(s => s.ImportTreatmentsAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<Treatment> page, CancellationToken _) =>
                 treatmentOutcome?.Invoke(page) ?? new DecompositionResult());
 
         var deviceStatuses = new Mock<IDeviceStatusDecomposer>();

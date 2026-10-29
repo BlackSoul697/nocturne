@@ -78,7 +78,6 @@ public class SampleDataSeeder
     private readonly IRuleScopeClassifier _scopeClassifier;
     private readonly IProfileWriteService _profileWriteService;
     private readonly IDeviceStatusDecomposer _deviceStatusDecomposer;
-    private readonly ITreatmentDecomposer _treatmentDecomposer;
     private readonly ICompressionLowDetectionService _compressionLowDetectionService;
     private readonly ICompressionLowService _compressionLowService;
     private readonly ICompressionLowRepository _compressionLowRepository;
@@ -118,7 +117,6 @@ public class SampleDataSeeder
         IRuleScopeClassifier scopeClassifier,
         IProfileWriteService profileWriteService,
         IDeviceStatusDecomposer deviceStatusDecomposer,
-        ITreatmentDecomposer treatmentDecomposer,
         ICompressionLowDetectionService compressionLowDetectionService,
         ICompressionLowService compressionLowService,
         ICompressionLowRepository compressionLowRepository,
@@ -137,7 +135,6 @@ public class SampleDataSeeder
         _scopeClassifier = scopeClassifier;
         _profileWriteService = profileWriteService;
         _deviceStatusDecomposer = deviceStatusDecomposer;
-        _treatmentDecomposer = treatmentDecomposer;
         _compressionLowDetectionService = compressionLowDetectionService;
         _compressionLowService = compressionLowService;
         _compressionLowRepository = compressionLowRepository;
@@ -238,8 +235,7 @@ public class SampleDataSeeder
             async Task FlushTreatmentsAsync()
             {
                 if (treatmentBatch.Count == 0) return;
-                var decomposed = await _treatmentDecomposer.DecomposeBatchAsync(
-                    treatmentBatch, WriteOrigin.Backfill, ct);
+                var decomposed = await _treatmentService.ImportTreatmentsAsync(treatmentBatch, ct);
                 // Every shape the demo generator emits is one Nocturne stores, so a skip is a
                 // generator/decomposer mismatch that would leave the tenant without that history.
                 if (decomposed.SkippedUnsupported > 0)
@@ -344,7 +340,7 @@ public class SampleDataSeeder
             .Select(e => DemoDeviceLifecycle.ToTreatment(e, dataSource))
             .ToList();
         if (deviceTreatments.Count > 0)
-            await _treatmentService.CreateTreatmentsAsync(deviceTreatments, ct);
+            await _treatmentService.CreateTreatmentsAsync(deviceTreatments, WriteOrigin.Backfill, ct);
 
         var sleepCount = await SeedSleepAsync(clock, days, dataSource, ct);
         var (heartRateCount, stepCount) = await SeedActivityAsync(clock, days, dataSource, ct);

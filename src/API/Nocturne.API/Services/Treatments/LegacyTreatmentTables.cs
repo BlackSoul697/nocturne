@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Nocturne.API.Services.ProfileActivations;
+using Nocturne.API.Services.V4;
 using Nocturne.Connectors.Core.Constants;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -16,7 +17,7 @@ using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Mappers;
 using Nocturne.Infrastructure.Data.Mappers.V4;
 
-namespace Nocturne.API.Services.V4;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>The V4 repositories the tables of <see cref="LegacyTreatmentTables"/> read and write through.</summary>
 internal sealed record LegacyTreatmentRepositories(
@@ -878,6 +879,7 @@ internal static class LegacyTreatmentTables
 
         treatment.Id = activation.Id.ToString();
         treatment.Mills = activation.Mills;
+        treatment.DataSource = activation.DataSource;
         treatment.RawTimestamp ??= TreatmentUploadedTimestamp.OfSpan(metadata);
         treatment.EnteredBy = metadata.TryReadString(ProfileActivationLegacyFields.EnteredByKey);
         treatment.Notes = metadata.TryReadString(NotesKey);

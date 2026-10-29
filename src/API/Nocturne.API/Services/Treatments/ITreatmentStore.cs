@@ -1,16 +1,18 @@
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Contracts.Treatments;
 
-namespace Nocturne.Core.Contracts.Treatments;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>
 /// Driven port for treatment persistence backed by V4 granular tables.
 /// Reads are projected from V4 repositories into the legacy Treatment shape.
-/// Writes are routed through the decomposition pipeline.
+/// Writes go through <see cref="ITreatmentDecomposer"/>.
 /// </summary>
 /// <seealso cref="ITreatmentCache"/>
 /// <seealso cref="TreatmentQuery"/>
-public interface ITreatmentStore
+internal interface ITreatmentStore
 {
     /// <summary>
     /// Queries treatments using the specified <see cref="TreatmentQuery"/> parameters,
@@ -20,7 +22,7 @@ public interface ITreatmentStore
     /// <returns>A read-only list of <see cref="Treatment"/> records matching the query.</returns>
     Task<IReadOnlyList<Treatment>> QueryAsync(TreatmentQuery query, CancellationToken ct = default);
 
-    /// <inheritdoc cref="Nocturne.Core.Contracts.V4.IV4ToLegacyProjectionService.GetLatestProjectedTreatmentAsync"/>
+    /// <inheritdoc cref="ITreatmentService.GetLatestTreatmentOfTypeAsync"/>
     Task<Treatment?> GetLatestOfTypeAsync(string eventType, long fromMills, long toMills, CancellationToken ct = default);
 
     /// <summary>
@@ -62,8 +64,7 @@ public interface ITreatmentStore
     Task<IReadOnlyList<Treatment>> GetModifiedSinceAsync(long lastModifiedMills, int limit, CancellationToken ct = default);
 
     /// <summary>
-    /// Creates one or more treatments, routing writes to both the legacy table and V4
-    /// granular tables via the decomposition pipeline.
+    /// Creates one or more treatments in the V4 granular tables through <see cref="ITreatmentDecomposer"/>.
     /// </summary>
     /// <returns>
     /// The created <see cref="Treatment"/> records, each under the id reads serve for it, carrying
@@ -71,13 +72,18 @@ public interface ITreatmentStore
     /// </returns>
     /// <exception cref="TreatmentBatchFailedException">A treatment could not be stored.</exception>
     /// <param name="treatments">The treatments to write, in order.</param>
+    /// <param name="origin">Write classification of the decomposed records.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <param name="stored">
-    /// Receives each treatment as it is stored, so a caller still knows what landed when the batch
-    /// ends in an exception it does not expect.
+    /// Receives each treatment that wrote a record, as it is stored, so a caller still knows what
+    /// landed when the batch ends in an exception it does not expect. A treatment that wrote nothing,
+    /// such as one the user had deleted, is not received.
     /// </param>
     Task<BulkWrite<Treatment>> CreateAsync(
-        IReadOnlyList<Treatment> treatments, CancellationToken ct = default, ICollection<Treatment>? stored = null);
+        IReadOnlyList<Treatment> treatments,
+        WriteOrigin origin,
+        CancellationToken ct = default,
+        ICollection<Treatment>? stored = null);
 
     /// <summary>
     /// Updates an existing treatment by ID, propagating changes to V4 tables.
@@ -103,4 +109,4 @@ public interface ITreatmentStore
 /// The treatment as reads served it before the delete, or <c>null</c> for a record reads do not
 /// serve.
 /// </param>
-public sealed record TreatmentDeletion(Treatment? Served);
+internal sealed record TreatmentDeletion(Treatment? Served);

@@ -1,6 +1,7 @@
 using Nocturne.Core.Models;
+using Nocturne.Core.Contracts.Treatments;
 
-namespace Nocturne.Core.Contracts.Treatments;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>
 /// Driven port for treatment-specific caching. The adapter owns cache key
@@ -8,7 +9,7 @@ namespace Nocturne.Core.Contracts.Treatments;
 /// </summary>
 /// <seealso cref="ITreatmentStore"/>
 /// <seealso cref="TreatmentQuery"/>
-public interface ITreatmentCache
+internal interface ITreatmentCache
 {
     /// <summary>
     /// Get cached treatments for the given query, or compute and cache them.

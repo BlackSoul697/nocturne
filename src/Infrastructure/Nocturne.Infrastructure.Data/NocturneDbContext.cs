@@ -573,7 +573,7 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
     /// <summary>
     /// Tables a v3 history endpoint pages through <see cref="HistoryPage"/> on <c>sys_updated_at</c>:
-    /// the V4 record tables of the treatment projection's <c>LegacyTreatmentTables.All</c> (its state
+    /// the V4 record tables the legacy treatment projection reads (its state
     /// spans page on <c>ix_state_spans_tenant_category_updated_at</c>), the four tables a device
     /// status is decomposed into, the three glucose types the entry projection reads and the five
     /// profile-decomposition tables.

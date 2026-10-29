@@ -2,7 +2,6 @@ using Nocturne.API.Tests.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Audit;
@@ -24,7 +23,7 @@ using Xunit;
 
 using V4Models = Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Tests.Services.V4;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// A legacy treatment through the v1/v3 service path, decomposed into V4 records and read back:
@@ -104,12 +103,9 @@ public class LegacyTreatmentRoundTripTests : IDisposable
             _context.AsFactory(),
             NullLogger<V4ToLegacyProjectionService>.Instance);
 
-        var pipeline = new DecompositionPipeline(
-            new ServiceCollection().AddSingleton<IDecomposer<Treatment>>(decomposer).BuildServiceProvider(),
-            NullLogger<DecompositionPipeline>.Instance);
 
         _store = new TreatmentReadService(
-            projection, decomposer, pipeline,
+            projection, decomposer,
             tempBasalRepo, bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
             Mock.Of<IProfileActivationRepository>(),
             Mock.Of<IStateSpanService>(),

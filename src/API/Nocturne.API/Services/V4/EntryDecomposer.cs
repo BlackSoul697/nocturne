@@ -23,8 +23,7 @@ namespace Nocturne.API.Services.V4;
 /// Supports idempotent create-or-update via <c>LegacyId</c> matching.
 /// </summary>
 /// <seealso cref="IEntryDecomposer"/>
-/// <seealso cref="IDecomposer{T}"/>
-internal class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Entry>
+internal class EntryDecomposer : DecomposerBase, IEntryDecomposer
 {
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
     private readonly IMeterGlucoseRepository _meterGlucoseRepository;

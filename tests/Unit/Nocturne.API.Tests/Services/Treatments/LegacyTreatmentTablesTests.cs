@@ -1,9 +1,11 @@
 using FluentAssertions;
+using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.V4;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 public class LegacyTreatmentTablesTests
 {
@@ -33,5 +35,16 @@ public class LegacyTreatmentTablesTests
     {
         LegacyTreatmentTables.ServesStateSpan(new StateSpan { Category = category, OriginalId = originalId })
             .Should().Be(served);
+    }
+
+    [Fact]
+    public void AProfileSwitchIsServedWithItsDataSource()
+    {
+        var activation = new ProfileActivation
+        {
+            Id = Guid.CreateVersion7(), Timestamp = DateTime.UtcNow, LegacyId = "switch-1", DataSource = "nightscout-connector",
+        };
+
+        LegacyTreatmentTables.ProjectProfileActivation(activation).DataSource.Should().Be("nightscout-connector");
     }
 }

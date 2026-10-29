@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Nocturne.API.Services.ProfileActivations;
+using Nocturne.API.Services.Treatments;
 using Nocturne.Connectors.Core.Constants;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
@@ -45,9 +46,8 @@ namespace Nocturne.API.Services.V4;
 /// Supports idempotent create-or-update via <c>LegacyId</c> matching.
 /// </summary>
 /// <seealso cref="ITreatmentDecomposer"/>
-/// <seealso cref="IDecomposer{T}"/>
 /// <seealso cref="IStateSpanService"/>
-public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomposer<Treatment>
+internal class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer
 {
     private readonly INocturneDbContextFactory _contexts;
     private readonly IBolusRepository _bolusRepository;

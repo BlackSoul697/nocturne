@@ -61,11 +61,6 @@ public class SampleDataSeederMixedZoneTests : IDisposable
                 return new BulkWrite<Entry>(written, 0);
             });
 
-        var treatments = new Mock<ITreatmentDecomposer>();
-        treatments
-            .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DecompositionResult());
-
         var statuses = new Mock<IDeviceStatusDecomposer>();
         statuses
             .Setup(d => d.DecomposeBatchAsync(It.IsAny<IReadOnlyList<DeviceStatus>>(), It.IsAny<string?>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
@@ -80,10 +75,13 @@ public class SampleDataSeederMixedZoneTests : IDisposable
                 return session;
             });
 
-        var deviceChanges = new Mock<ITreatmentService>();
-        deviceChanges
-            .Setup(t => t.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IEnumerable<Treatment> batch, CancellationToken _) =>
+        var treatments = new Mock<ITreatmentService>();
+        treatments
+            .Setup(t => t.ImportTreatmentsAsync(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DecompositionResult());
+        treatments
+            .Setup(t => t.CreateTreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), WriteOrigin.Backfill, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IEnumerable<Treatment> batch, WriteOrigin _, CancellationToken _) =>
             {
                 var written = batch.ToList();
                 _deviceChanges.AddRange(written);
@@ -94,7 +92,7 @@ public class SampleDataSeederMixedZoneTests : IDisposable
             tenant.Object,
             _db.ContextFactory.AsNocturneFactory(),
             entries.Object,
-            deviceChanges.Object,
+            treatments.Object,
             sleep.Object,
             Mock.Of<IHeartRateService>(),
             Mock.Of<IStepCountService>(),
@@ -102,7 +100,6 @@ public class SampleDataSeederMixedZoneTests : IDisposable
             Mock.Of<IRuleScopeClassifier>(),
             Mock.Of<IProfileWriteService>(),
             statuses.Object,
-            treatments.Object,
             Mock.Of<ICompressionLowDetectionService>(),
             Mock.Of<ICompressionLowService>(),
             Mock.Of<ICompressionLowRepository>(),

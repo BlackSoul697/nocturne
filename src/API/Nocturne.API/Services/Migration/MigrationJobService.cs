@@ -14,6 +14,7 @@ using Nocturne.Core.Models.Authorization;
 using DecompositionResult = Nocturne.Core.Models.V4.DecompositionResult;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Services;
@@ -1371,8 +1372,8 @@ internal class MigrationJob
         "treatments", "treatments", s_createdAtCursor, OneRecordPerDocument: false,
         sp =>
         {
-            var decomposer = sp.GetRequiredService<ITreatmentDecomposer>();
-            return (page, ct) => decomposer.DecomposeBatchAsync(page, WriteOrigin.Backfill, ct);
+            var treatments = sp.GetRequiredService<ITreatmentService>();
+            return (page, ct) => treatments.ImportTreatmentsAsync(page, ct);
         });
 
     private static readonly PagedCollection<DeviceStatus> s_deviceStatusCollection = new(

@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Entries;
-using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -11,7 +10,7 @@ using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Services;
 
-namespace Nocturne.API.Services.V4;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>
 /// Projects V4 granular records back into the legacy <see cref="Treatment"/> shape for v1/v2/v3 API
@@ -19,7 +18,7 @@ namespace Nocturne.API.Services.V4;
 /// </summary>
 /// <remarks>
 /// This service is the read side of the dual-path architecture.
-/// The write side (legacy record → V4 typed record) is handled by <see cref="DecompositionPipeline"/>.
+/// The write side (legacy record → V4 typed record) is handled by <see cref="ITreatmentDecomposer"/>.
 /// Projection covers: <see cref="Bolus"/> and <see cref="CarbIntake"/> → <see cref="Treatment"/>,
 /// <see cref="DeviceEvent"/> → <see cref="Treatment"/> using the legacy event-type map, and the
 /// <see cref="StateSpan"/>s and <see cref="ProfileActivation"/>s a legacy treatment was decomposed
@@ -31,8 +30,7 @@ namespace Nocturne.API.Services.V4;
 /// </remarks>
 /// <seealso cref="IV4ToLegacyProjectionService"/>
 /// <seealso cref="LegacyTreatmentTables"/>
-/// <seealso cref="DecompositionPipeline"/>
-public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
+internal class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
 {
     private readonly LegacyTreatmentRepositories _repositories;
     private readonly ITreatmentFoodService _treatmentFoodService;

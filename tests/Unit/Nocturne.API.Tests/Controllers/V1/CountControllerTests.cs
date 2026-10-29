@@ -23,7 +23,7 @@ namespace Nocturne.API.Tests.Controllers.V1;
 public class CountControllerTests
 {
     private readonly Mock<IEntryService> _mockEntryService;
-    private readonly Mock<ITreatmentStore> _mockTreatmentStore;
+    private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<IDeviceStatusGroupRepository> _mockDeviceStatusGroupRepository;
     private readonly Mock<IProfileProjectionService> _mockProfileProjectionService;
     private readonly Mock<IFoodRepository> _mockFoodRepository;
@@ -34,7 +34,7 @@ public class CountControllerTests
     public CountControllerTests()
     {
         _mockEntryService = new Mock<IEntryService>();
-        _mockTreatmentStore = new Mock<ITreatmentStore>();
+        _mockTreatmentService = new Mock<ITreatmentService>();
         _mockDeviceStatusGroupRepository = new Mock<IDeviceStatusGroupRepository>();
         _mockProfileProjectionService = new Mock<IProfileProjectionService>();
         _mockFoodRepository = new Mock<IFoodRepository>();
@@ -43,7 +43,7 @@ public class CountControllerTests
 
         _controller = new CountController(
             _mockEntryService.Object,
-            _mockTreatmentStore.Object,
+            _mockTreatmentService.Object,
             DeviceStatusProjection(_mockDeviceStatusGroupRepository),
             _mockProfileProjectionService.Object,
             _mockFoodRepository.Object,
@@ -74,8 +74,8 @@ public class CountControllerTests
 
         refused.Result.Should().BeOfType<ObjectResult>()
             .Which.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
-        _mockTreatmentStore.Verify(
-            s => s.CountAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockTreatmentService.Verify(
+            s => s.CountTreatmentsAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
 
         var allowed = await _controller.CountGeneric("entries");
         allowed.Result.Should().NotBeOfType<ObjectResult>();
@@ -151,8 +151,8 @@ public class CountControllerTests
     [Fact]
     public async Task CountEvery_Match_AnswersOneGroupRow()
     {
-        _mockTreatmentStore
-            .Setup(s => s.CountAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        _mockTreatmentService
+            .Setup(s => s.CountTreatmentsAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(3L);
         _mockDeviceStatusGroupRepository
             .Setup(s => s.CountAsync(null, null, null, It.IsAny<CancellationToken>()))

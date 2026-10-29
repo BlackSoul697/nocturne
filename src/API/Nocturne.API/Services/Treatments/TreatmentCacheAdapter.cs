@@ -13,7 +13,7 @@ namespace Nocturne.API.Services.Treatments;
 /// </summary>
 /// <seealso cref="ITreatmentCache"/>
 /// <seealso cref="TreatmentService"/>
-public class TreatmentCacheAdapter : ITreatmentCache
+internal class TreatmentCacheAdapter : ITreatmentCache
 {
     /// <summary>The <see cref="ITenantCache"/> key family every treatment read is cached under.</summary>
     private const string CacheFamily = TenantCacheFamily.Treatments;

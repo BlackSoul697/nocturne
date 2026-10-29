@@ -1,7 +1,8 @@
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Entries;
+using Nocturne.Core.Contracts.Treatments;
 
-namespace Nocturne.Core.Contracts.V4;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>
 /// Projects V4 granular records (Bolus, CarbIntake, BGCheck, Note, DeviceEvent)
@@ -9,7 +10,7 @@ namespace Nocturne.Core.Contracts.V4;
 /// </summary>
 /// <seealso cref="IEntryService"/>
 /// <seealso cref="ITreatmentService"/>
-public interface IV4ToLegacyProjectionService
+internal interface IV4ToLegacyProjectionService
 {
     /// <summary>
     /// Returns a set of legacy <see cref="Treatment"/> objects synthesised from V4 treatment records
@@ -26,11 +27,8 @@ public interface IV4ToLegacyProjectionService
         CancellationToken ct = default
     );
 
-    /// <summary>
-    /// The newest treatment of one legacy event type within the window, bounds inclusive, or
-    /// <c>null</c>. Served by an index seek, not a scan of the window. Only the types Nightscout's
-    /// dataloader looks up singly are served: a device event type, and a Profile Switch of zero duration.
-    /// </summary>
+    /// <inheritdoc cref="ITreatmentService.GetLatestTreatmentOfTypeAsync"/>
+    /// <remarks>Served by an index seek, not a scan of the window.</remarks>
     Task<Treatment?> GetLatestProjectedTreatmentAsync(
         string eventType,
         long fromMills,

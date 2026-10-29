@@ -2,13 +2,14 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.V4;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// The tables that carry the <see cref="HistoryPage"/> index are listed in Infrastructure, while the

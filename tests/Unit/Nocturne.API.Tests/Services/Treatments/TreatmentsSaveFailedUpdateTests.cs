@@ -17,7 +17,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
-namespace Nocturne.API.Tests.Controllers.V1;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// A save whose update of a stored treatment fails answers a server error. Only a treatment that
@@ -39,7 +39,6 @@ public class TreatmentsSaveFailedUpdateTests
         var store = new TreatmentReadService(
             _projection.Object,
             _decomposer.Object,
-            Mock.Of<IDecompositionPipeline>(),
             Mock.Of<ITempBasalRepository>(),
             _bolusRepo.Object,
             _carbIntakeRepo.Object,

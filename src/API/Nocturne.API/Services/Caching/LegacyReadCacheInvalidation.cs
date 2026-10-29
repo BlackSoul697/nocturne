@@ -1,4 +1,4 @@
-using Nocturne.API.Services.V4;
+using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;

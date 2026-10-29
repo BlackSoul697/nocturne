@@ -350,9 +350,9 @@ public class LegacyPostBodyTests
     {
         var service = new Mock<ITreatmentService>();
         service
-            .Setup(s => s.CreateV1TreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<Treatment>, CancellationToken>((t, _) => created.AddRange(t))
-            .ReturnsAsync((IEnumerable<Treatment> t, CancellationToken _) => new BulkWrite<Treatment>(t.ToList(), 0));
+            .Setup(s => s.CreateV1TreatmentsAsync(It.IsAny<IEnumerable<Treatment>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<Treatment>, WriteOrigin, CancellationToken>((t, _, _) => created.AddRange(t))
+            .ReturnsAsync((IEnumerable<Treatment> t, WriteOrigin _, CancellationToken _) => new BulkWrite<Treatment>(t.ToList(), 0));
         return WithContext(new LegacyV1.TreatmentsController(
             service.Object,
             new DocumentProcessingService(TimeProvider.System, NullLogger<DocumentProcessingService>.Instance),

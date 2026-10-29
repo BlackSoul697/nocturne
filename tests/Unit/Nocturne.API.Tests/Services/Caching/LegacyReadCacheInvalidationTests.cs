@@ -4,6 +4,7 @@ using Nocturne.API.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Services.Caching;
+using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
 using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Contracts.Audit;

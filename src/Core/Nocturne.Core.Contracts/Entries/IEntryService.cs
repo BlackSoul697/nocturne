@@ -126,7 +126,7 @@ public interface IEntryService
     /// </summary>
     /// <remarks>
     /// AAPS's NSClientV3 uses <c>PATCH v3/entries/{id}</c> rather than <c>PUT</c> to update entries;
-    /// see <c>TreatmentService.PatchTreatmentAsync</c> for the equivalent treatments implementation
+    /// see <see cref="Treatments.ITreatmentService.PatchTreatmentAsync"/> for the equivalent treatments implementation
     /// this mirrors.
     /// </remarks>
     /// <param name="patchData">JSON merge-patch data</param>

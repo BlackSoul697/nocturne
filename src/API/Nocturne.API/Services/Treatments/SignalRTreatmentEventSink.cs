@@ -19,7 +19,7 @@ namespace Nocturne.API.Services.Treatments;
 /// <seealso cref="IDataEventSink{T}"/>
 /// <seealso cref="ISignalRBroadcastService"/>
 /// <seealso cref="TreatmentService"/>
-public class SignalRTreatmentEventSink : IDataEventSink<Treatment>
+internal class SignalRTreatmentEventSink : IDataEventSink<Treatment>
 {
     private readonly ISignalRBroadcastService _broadcast;
     private readonly ILogger<SignalRTreatmentEventSink> _logger;

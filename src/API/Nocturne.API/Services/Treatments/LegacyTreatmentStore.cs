@@ -1,13 +1,12 @@
 using System.Diagnostics;
 using Nocturne.Core.Contracts.Glucose;
-using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Mappers;
 
-namespace Nocturne.API.Services.V4;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>One way a client-sent treatment id may name a stored record.</summary>
 internal abstract record LegacyRecordKey
@@ -88,13 +87,11 @@ internal sealed class LegacyTreatmentStore(
     LegacyTreatmentRepositories repositories,
     IV4ToLegacyProjectionService projection,
     ITreatmentDecomposer decomposer,
-    IDecompositionPipeline pipeline,
     IStateSpanService stateSpans)
 {
     private readonly LegacyTreatmentRepositories _repositories = repositories;
     private readonly IV4ToLegacyProjectionService _projection = projection;
     private readonly ITreatmentDecomposer _decomposer = decomposer;
-    private readonly IDecompositionPipeline _pipeline = pipeline;
     private readonly IStateSpanService _stateSpans = stateSpans;
 
     /// <summary>
@@ -297,7 +294,7 @@ internal sealed class LegacyTreatmentStore(
         if (served.Id is not { } id || await _projection.GetStateSpanTreatmentIdAsync(spanId, ct) is not { } treatmentId)
             return null;
 
-        await _pipeline.DeleteByLegacyIdAsync<Treatment>(treatmentId, WriteOrigin.Live, ct);
+        await _decomposer.DeleteByLegacyIdAsync(treatmentId, WriteOrigin.Live, ct);
         return await _stateSpans.DeleteStateSpanAsync(id, ct) ? new TreatmentDeletion(served) : null;
     }
 
@@ -351,7 +348,7 @@ internal sealed class LegacyTreatmentStore(
             // its own. The halves of a meal need not share one, so each is deleted by its own.
             if (Record.LegacyId is { Length: > 0 } legacyId)
             {
-                var records = await Store._pipeline.DeleteByLegacyIdAsync<Treatment>(legacyId, WriteOrigin.Live, ct);
+                var records = await Store._decomposer.DeleteByLegacyIdAsync(legacyId, WriteOrigin.Live, ct);
                 var span = await Store.SpanHoldsAsync(legacyId, ct)
                     && await Store._projection.GetProjectedStateSpanTreatmentAsync(legacyId, ct) is { } spanServed
                         ? await Store.DeleteSpanAsync(spanServed, legacyId, ct)

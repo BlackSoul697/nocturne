@@ -22,8 +22,7 @@ namespace Nocturne.API.Tests.Infrastructure;
 /// assemblies is the second net; it places each type by the file that declares it, not by its namespace.
 /// </para>
 /// <para>
-/// The exemptions are the usages the treatment (#2969) and device status (#2970) slices remove; each of
-/// those deletes its group.
+/// The exemptions are the usages the device status slice (#2970) removes, deleting the group.
 /// </para>
 /// </remarks>
 [Trait("Category", "Unit")]
@@ -52,12 +51,6 @@ public class LegacyModulePortGuardTests
     /// <summary>Constructors outside a module that take one of its ports, as <c>Type(Port)</c>.</summary>
     private static readonly string[] ConstructorExemptions =
     [
-        // #2969 Treatment
-        "Nocturne.API.Controllers.V1.CountController(ITreatmentStore)",
-        "Nocturne.API.Services.ConnectorPublishing.TreatmentPublisher(ITreatmentDecomposer)",
-        "Nocturne.API.Services.Seeding.SampleDataSeeder(ITreatmentDecomposer)",
-        "Nocturne.API.Services.V4.LegacyTreatmentStore(ITreatmentDecomposer)",
-
         // #2970 DeviceStatus
         "Nocturne.API.Controllers.V1.DeviceStatusController(IDeviceStatusDecomposer)",
         "Nocturne.API.Controllers.V3.DeviceStatusController(IDeviceStatusDecomposer)",
@@ -68,17 +61,6 @@ public class LegacyModulePortGuardTests
     /// <summary>Members of <c>src</c> outside a module that name one of its ports, as <c>path: Member(Port)</c>.</summary>
     private static readonly string[] SourceExemptions =
     [
-        // #2969 Treatment
-        "src/API/Nocturne.API/Controllers/V1/CountController.cs: CountController._treatmentStore(ITreatmentStore)",
-        "src/API/Nocturne.API/Controllers/V1/CountController.cs: CountController.CountController(ITreatmentStore)",
-        "src/API/Nocturne.API/Services/ConnectorPublishing/TreatmentPublisher.cs: TreatmentPublisher._treatmentDecomposer(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/ConnectorPublishing/TreatmentPublisher.cs: TreatmentPublisher.TreatmentPublisher(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/Migration/MigrationJobService.cs: MigrationJob.s_treatmentsCollection(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/Seeding/SampleDataSeeder.cs: SampleDataSeeder._treatmentDecomposer(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/Seeding/SampleDataSeeder.cs: SampleDataSeeder.SampleDataSeeder(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/V4/LegacyTreatmentStore.cs: LegacyTreatmentStore.LegacyTreatmentStore(ITreatmentDecomposer)",
-        "src/API/Nocturne.API/Services/V4/LegacyTreatmentStore.cs: LegacyTreatmentStore._decomposer(ITreatmentDecomposer)",
-
         // #2970 DeviceStatus
         "src/API/Nocturne.API/Controllers/V1/DeviceStatusController.cs: DeviceStatusController._decomposer(IDeviceStatusDecomposer)",
         "src/API/Nocturne.API/Controllers/V1/DeviceStatusController.cs: DeviceStatusController.DeviceStatusController(IDeviceStatusDecomposer)",
@@ -95,28 +77,6 @@ public class LegacyModulePortGuardTests
     /// <summary>Test files outside a module that name one of its ports, as <c>path(Port)</c>.</summary>
     private static readonly string[] TestExemptions =
     [
-        // #2969 Treatment
-        "tests/Integration/Nocturne.API.Tests/PercentTempBasalIntegrationTests.cs(ITreatmentDecomposer)",
-        "tests/Integration/Nocturne.API.Tests/TreatmentBatchFailureIntegrationTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Authorization/ActivityReadScopeGuardTests.cs(ITreatmentStore)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/CountControllerTests.cs(ITreatmentStore)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentFindDateWindowTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentFindDateWindowTests.cs(ITreatmentStore)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsCreatePartialFailureTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsCreatePartialFailureTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsPostUpsertTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsSaveFailedUpdateTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsSaveFailedUpdateTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Migration/MigrationJobHarness.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/ClientIdRekeyTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/PublishSkippedDeletedTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/PublishSkippedDeletedTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/RecentTreatmentRepublishTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/TreatmentPublisherTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/Seeding/SampleDataSeederMixedZoneTests.cs(ITreatmentDecomposer)",
-        "tests/Unit/Nocturne.API.Tests/Services/V4/LegacyTreatmentRoundTripTests.cs(ITreatmentCache)",
-        "tests/Unit/Nocturne.API.Tests/Services/V4/TreatmentClientIdRoundTripTests.cs(ITreatmentCache)",
-
         // #2970 DeviceStatus
         "tests/Integration/Nocturne.API.Tests/DeviceStatusV3StoredStatusIntegrationTests.cs(IDeviceStatusDecomposer)",
         "tests/Integration/Nocturne.API.Tests/LoopClosedLoopIntegrationTests.cs(IDeviceStatusDecomposer)",
@@ -185,7 +145,7 @@ public class LegacyModulePortGuardTests
     }
 
     [Fact]
-    public void EveryPortIsDeclaredOnceAndTheEntryPortsAreInternal()
+    public void EveryPortIsDeclaredOnceAndTheEntryAndTreatmentPortsAreInternal()
     {
         var contracts = Assembly.Load("Nocturne.Core.Contracts");
         var declared = Api.GetTypes().Concat(contracts.GetTypes())
@@ -193,12 +153,13 @@ public class LegacyModulePortGuardTests
             .ToList();
 
         declared.Select(t => t.Name).Should().BeEquivalentTo(ModuleOfPort.Keys, "a renamed port would drop out of the guard");
-        declared.Where(t => ModuleOfPort[t.Name].Folder == "Entries").Should().OnlyContain(t => !t.IsPublic && t.Assembly == Api);
+        declared.Where(t => ModuleOfPort[t.Name].Folder is "Entries" or "Treatments")
+            .Should().OnlyContain(t => !t.IsPublic && t.Assembly == Api);
     }
 
     [Theory]
     [InlineData("Nocturne.API.Services.Entries.IEntryStore")]
-    [InlineData("Nocturne.Core.Contracts.Treatments.ITreatmentCache, Nocturne.Core.Contracts")]
+    [InlineData("Nocturne.API.Services.Treatments.ITreatmentCache")]
     public void FindsAPortWrappedInAParameterType(string portName)
     {
         var port = Api.GetType(portName) ?? Type.GetType(portName, throwOnError: true)!;
@@ -215,7 +176,7 @@ public class LegacyModulePortGuardTests
 
     [Theory]
     [InlineData("class C { readonly Mock<IEntryStore> _store = new(); }", "C._store(IEntryStore)")]
-    [InlineData("class C { object M() => Mock.Of<Nocturne.Core.Contracts.Treatments.ITreatmentCache>(); }", "C.M(ITreatmentCache)")]
+    [InlineData("class C { object M() => Mock.Of<Nocturne.API.Services.Treatments.ITreatmentCache>(); }", "C.M(ITreatmentCache)")]
     [InlineData("using Port = Nocturne.API.Services.Entries.IEntryDecomposer; class C { }", "(file)(IEntryDecomposer)")]
     [InlineData("class C(IEntryStore store) { }", "C.C(IEntryStore)")]
     [InlineData("namespace N; class X<T> where T : IEntryStore { }", "X(IEntryStore)")]

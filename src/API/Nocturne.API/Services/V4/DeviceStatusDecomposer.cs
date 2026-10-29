@@ -23,8 +23,7 @@ namespace Nocturne.API.Services.V4;
 /// override period.
 /// </summary>
 /// <seealso cref="IDeviceStatusDecomposer"/>
-/// <seealso cref="IDecomposer{T}"/>
-public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, IDecomposer<DeviceStatus>
+public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer
 {
     private readonly IApsSnapshotRepository _apsRepo;
     private readonly IPumpSnapshotRepository _pumpRepo;
@@ -67,9 +66,8 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     }
 
     /// <summary>
-    /// <see cref="IDecomposer{T}"/> entry point used by the generic decomposition pipeline and
-    /// migration paths, which carry no connector data source. Delegates to the source-aware
-    /// overload with <c>source: null</c>.
+    /// The source-aware overload with <c>source: null</c>, for a write that carries no connector data
+    /// source.
     /// </summary>
     public Task<V4Models.DecompositionResult> DecomposeAsync(DeviceStatus ds, WriteOrigin origin, CancellationToken ct = default)
         => DecomposeAsync(ds, source: null, origin, ct);

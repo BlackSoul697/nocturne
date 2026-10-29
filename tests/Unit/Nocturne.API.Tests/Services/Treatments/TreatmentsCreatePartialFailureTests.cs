@@ -19,7 +19,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
-namespace Nocturne.API.Tests.Controllers.V1;
+namespace Nocturne.API.Tests.Services.Treatments;
 
 /// <summary>
 /// A v1 POST whose treatment fails to store answers as cgm-remote-monitor's ordered
@@ -39,7 +39,6 @@ public class TreatmentsCreatePartialFailureTests
         var store = new TreatmentReadService(
             Mock.Of<IV4ToLegacyProjectionService>(),
             _decomposer.Object,
-            Mock.Of<IDecompositionPipeline>(),
             Mock.Of<ITempBasalRepository>(),
             Mock.Of<IBolusRepository>(),
             Mock.Of<ICarbIntakeRepository>(),
@@ -70,11 +69,18 @@ public class TreatmentsCreatePartialFailureTests
 
         _decomposer
             .Setup(d => d.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DecompositionResult());
+            .ReturnsAsync(WritesANote);
         _decomposer
             .Setup(d => d.DecomposeAsync(
                 It.Is<Treatment>(t => t.Notes == "second"), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DbUpdateException("store down"));
+    }
+
+    private static DecompositionResult WritesANote()
+    {
+        var result = new DecompositionResult();
+        result.CreatedRecords.Add(new Note { Id = Guid.CreateVersion7() });
+        return result;
     }
 
     [Fact]

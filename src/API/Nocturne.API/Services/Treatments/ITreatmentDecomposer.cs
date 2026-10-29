@@ -1,17 +1,18 @@
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Contracts.V4;
 
-namespace Nocturne.Core.Contracts.V4;
+namespace Nocturne.API.Services.Treatments;
 
 /// <summary>
 /// Decomposes legacy Treatment records into v4 granular models (Bolus, CarbIntake, BGCheck, Note, BolusCalculation)
 /// and delegates StateSpan-backed types (TempBasal, ProfileSwitch) to <see cref="IStateSpanService"/>.
 /// Handles idempotent create-or-update based on LegacyId matching.
 /// </summary>
-/// <seealso cref="IDecompositionPipeline"/>
 /// <seealso cref="IStateSpanService"/>
-public interface ITreatmentDecomposer
+internal interface ITreatmentDecomposer
 {
     /// <summary>
     /// Decomposes a single legacy Treatment into the appropriate v4 record types
@@ -51,36 +52,18 @@ public interface ITreatmentDecomposer
     /// </summary>
     Task<IReadOnlySet<string>> GetDeletedByUserAsync(IReadOnlyCollection<string> legacyIds, CancellationToken ct = default);
 
-    /// <summary>
-    /// Soft-deletes <paramref name="source"/>'s records decomposed from <paramref name="legacyIds"/>,
-    /// including the state spans those treatments served as and the profile rows of a Profile Switch,
-    /// leaving every other source's rows under those ids alone. A deleted row that was a dedup
-    /// group's primary hands the flag to a surviving member, so another source's copy of the
-    /// event stays visible.
-    /// </summary>
-    /// <returns>Total number of v4 records deleted across all tables.</returns>
+    /// <inheritdoc cref="ITreatmentService.DeleteFromSourceAsync"/>
     Task<int> DeleteFromSourceAsync(string source, IReadOnlySet<string> legacyIds, CancellationToken ct = default);
 
-    /// <summary>
-    /// The legacy ids of <paramref name="source"/>'s live records, including the state spans its
-    /// Profile Switches, overrides and temporary targets were stored as, whose event time falls in
-    /// [<paramref name="from"/>, <paramref name="to"/>], each with that event time.
-    /// </summary>
+    /// <inheritdoc cref="ITreatmentService.GetStoredIdsFromSourceAsync"/>
     Task<IReadOnlyDictionary<string, DateTime>> GetLegacyIdsFromSourceAsync(
         string source, DateTime from, DateTime to, CancellationToken ct = default);
 
-    /// <summary>
-    /// Moves <paramref name="source"/>'s records stored under a treatment's client id
-    /// (<see cref="TreatmentClientId"/>) onto the treatment's own id, when nothing is stored under that
-    /// id yet. Of treatments sharing a client id, the one at the records' time takes them (the first when
-    /// none is). Records the user deleted stay under the client id and are copied onto every one of
-    /// them, so they keep blocking equivalents delivered in a later call too.
-    /// </summary>
-    /// <returns>Total number of v4 records moved.</returns>
+    /// <inheritdoc cref="ITreatmentService.RekeyClientIdRecordsAsync"/>
     Task<int> RekeyClientIdRecordsAsync(
         string source, IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
 
-    /// <summary>Of treatments <paramref name="source"/> delivered again, the ones to decompose again.</summary>
+    /// <inheritdoc cref="ITreatmentService.SelectForRepublishAsync"/>
     Task<IReadOnlyList<Treatment>> SelectForRepublishAsync(
         string source, IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
 
