@@ -196,11 +196,11 @@ public class ApiIntegrationTestFixture : IAsyncLifetime
     private const int StartAttempts = 5;
 
     /// <summary>
-    /// The app pool's ceiling per host. Every shard and the parity fixture run a host against the one
+    /// The app pool's ceiling per host. Every API and parity shard runs a host against the one
     /// <see cref="SharedPostgres"/> server, whose <c>max_connections</c> the default of 100 per host
     /// would exceed.
     /// </summary>
-    private const int MaxPoolSize = 40;
+    internal const int MaxPoolSize = 40;
 
     public async Task InitializeAsync()
     {

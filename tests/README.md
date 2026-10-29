@@ -169,6 +169,16 @@ shard's results by start time and charge each class from the previous class's la
 own last test end. That charge includes the cleanup before each test and the class's own fixtures,
 such as the MongoDB container of the migration classes. Total the classes of each shard.
 
+**Parity shards.** The parity classes are split the same way across `ParityShards.One` and `Two`
+(`Infrastructure/ParityTestFixture.cs`), each with its own `ParityTestFixture`: a Nightscout 15.0.3
+container, its MongoDB, and an API host on its own database. The same rules apply, held by
+`ParityShardTests`, and they are balanced and measured the same way. Nightscout serves summary,
+properties and `ddata` reads from memory that it reloads from Mongo 5 seconds after the last write
+(a constant in its source, with no setting), and that wait is most of a parity shard's time. A test
+that reads that memory waits once, after its last write, for a reload that started after the wait
+began (`ParityTestBase.WaitForNightscoutBodyAsync`); a test that writes nothing first calls
+`WaitForNightscoutEmptyAsync`.
+
 **SQLite unit databases.** `TestDbContextFactory.CreateSqlite*` copies a schema built once per
 process into each test's in-memory database with SQLite's backup API instead of running
 `EnsureCreated` per test.
@@ -234,7 +244,8 @@ node .github/scripts/coverage-report.mjs --base origin/main \
 - .NET: `dotnet test` over a solution builds and runs the test assemblies in parallel (MSBuild
   nodes); xUnit runs collections in parallel on one thread per core, which measured faster than a
   lower cap for the same memory. Integration fixtures each get their own cloned database, so their
-  collections run in parallel too, the four API integration shards among them.
+  collections run in parallel too, the four API integration shards and the two parity shards among
+  them.
 - vitest: the app unit suite uses half the cores, between two and four; the browser suite two pages,
   always headless; the other packages run their default pool.
 - e2e: vitest and Playwright use half the cores, at least two (`E2E_API_WORKERS`,

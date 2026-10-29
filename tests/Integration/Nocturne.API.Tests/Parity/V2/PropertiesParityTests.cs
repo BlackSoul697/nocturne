@@ -12,16 +12,11 @@ namespace Nocturne.API.Tests.Integration.Parity.V2;
 /// - GET /api/v2/properties - Get all properties
 /// - GET /api/v2/properties/{path} - Get specific properties
 /// </summary>
+[Collection(ParityShards.One)]
 public class PropertiesParityTests : ParityTestBase
 {
     public PropertiesParityTests(ParityTestFixture fixture, ITestOutputHelper output)
         : base(fixture, output) { }
-
-    public override async Task InitializeAsync()
-    {
-        await base.InitializeAsync();
-        await WaitForNightscoutEmptyAsync();
-    }
 
     protected override ComparisonOptions GetComparisonOptions()
     {
@@ -202,6 +197,7 @@ public class PropertiesParityTests : ParityTestBase
     [Fact]
     public async Task GetAllProperties_Empty_ReturnsSameShape()
     {
+        await WaitForNightscoutEmptyAsync();
         await AssertGetParityAsync("/api/v2/properties");
     }
 
@@ -470,6 +466,7 @@ public class PropertiesParityTests : ParityTestBase
     [Fact]
     public async Task GetSpecificProperty_EmptyPath_ReturnsSameShape()
     {
+        await WaitForNightscoutEmptyAsync();
         await AssertGetParityAsync("/api/v2/properties/");
     }
 

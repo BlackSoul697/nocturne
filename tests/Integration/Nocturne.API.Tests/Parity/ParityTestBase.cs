@@ -21,7 +21,6 @@ namespace Nocturne.API.Tests.Integration.Parity;
 /// - Ignores field order (JSON comparison is unordered)
 /// - Handles dynamic fields (IDs, timestamps) appropriately
 /// </summary>
-[Collection("Parity")]
 [Trait("Category", "Parity")]
 [Parity]
 public abstract class ParityTestBase : IAsyncLifetime
@@ -184,9 +183,9 @@ public abstract class ParityTestBase : IAsyncLifetime
 
     /// <summary>
     /// Waits until the summary Nightscout serves at <paramref name="path"/> lists the seeded
-    /// <paramref name="sgvs"/> and <paramref name="treatments"/>. Nightscout serves summary reads
-    /// from memory it reloads about 5 seconds after a write, so a read straight after seeding sees
-    /// the data from before it. Returns on timeout and leaves the assertion to report the difference.
+    /// <paramref name="sgvs"/> and <paramref name="treatments"/>, after the reload
+    /// <see cref="WaitForNightscoutBodyAsync"/> waits for. Returns on timeout and leaves the
+    /// assertion to report the difference.
     /// </summary>
     protected Task WaitForNightscoutReloadAsync(
         string path,
@@ -202,11 +201,11 @@ public abstract class ParityTestBase : IAsyncLifetime
             cancellationToken);
 
     /// <summary>
-    /// Waits until the data store Nightscout serves at <c>/api/v2/ddata/at</c> holds no entries,
-    /// treatments, device statuses or profiles, which is when it has reloaded the cleanup's
-    /// deletions. A test reading Nightscout's in-memory state calls it from
-    /// <see cref="InitializeAsync"/>, so it does not seed on top of the previous test's data.
-    /// Returns on timeout and leaves the assertion to report the difference.
+    /// Waits until Nightscout has reloaded the cleanup's deletions and its in-memory data store
+    /// (<c>/api/v2/ddata/at</c>) holds no entries, treatments, device statuses or profiles. For a
+    /// test that compares Nightscout's in-memory state without writing first; a test that writes
+    /// waits once, after its writes, since that reload reads the cleanup too. Returns on timeout
+    /// and leaves the assertion to report the difference.
     /// </summary>
     protected Task WaitForNightscoutEmptyAsync(CancellationToken cancellationToken = default) =>
         WaitForNightscoutBodyAsync(
@@ -217,10 +216,19 @@ public abstract class ParityTestBase : IAsyncLifetime
             cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Waits until <paramref name="ready"/> accepts the body Nightscout serves at
-    /// <paramref name="path"/>, for seeded data <see cref="WaitForNightscoutReloadAsync"/> cannot
-    /// see in the summary. Returns on timeout and leaves the assertion to report the difference.
+    /// Waits until Nightscout has reloaded its in-memory data since this call and
+    /// <paramref name="ready"/> accepts the body it serves at <paramref name="path"/>. Returns on
+    /// timeout and leaves the assertion to report the difference.
     /// </summary>
+    /// <remarks>
+    /// Nightscout serves summary, properties and <c>ddata</c> reads from memory it reloads from
+    /// Mongo 5 seconds after the last write (a fixed debounce, <c>UPDATE_THROTTLE</c> in its
+    /// <c>lib/server/bootevent.js</c>), so a read straight after a write sees the data from before
+    /// it. Until that reload the previous test's data is still in memory and can satisfy
+    /// <paramref name="ready"/>, so the wait also requires a reload that started after this call:
+    /// its <c>lastUpdated</c> on <c>/api/v2/ddata/at</c>, against Nightscout's own clock. Called
+    /// after the last write, that reload reads every write before it, the cleanup's included.
+    /// </remarks>
     protected async Task WaitForNightscoutBodyAsync(
         string path,
         Func<JsonNode?, bool> ready,
@@ -228,16 +236,24 @@ public abstract class ParityTestBase : IAsyncLifetime
         CancellationToken cancellationToken = default)
     {
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
+        var since = (await GetNightscoutJsonAsync("/api/v1/status.json", cancellationToken))?["serverTimeEpoch"]
+            ?.GetValue<long>() ?? throw new InvalidOperationException("Nightscout's status has no serverTimeEpoch.");
 
         while (true)
         {
-            using var response = await NightscoutClient.GetAsync(path, cancellationToken);
-            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-            if (ready(body) || DateTime.UtcNow >= deadline)
+            var reloaded = (await GetNightscoutJsonAsync("/api/v2/ddata/at", cancellationToken))?["lastUpdated"]
+                ?.GetValue<long>() >= since;
+            if ((reloaded && ready(await GetNightscoutJsonAsync(path, cancellationToken))) || DateTime.UtcNow >= deadline)
                 return;
 
-            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
         }
+    }
+
+    private async Task<JsonNode?> GetNightscoutJsonAsync(string path, CancellationToken cancellationToken)
+    {
+        using var response = await NightscoutClient.GetAsync(path, cancellationToken);
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
     #endregion
