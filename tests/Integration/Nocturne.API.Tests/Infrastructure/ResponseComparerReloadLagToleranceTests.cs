@@ -38,6 +38,24 @@ public class ResponseComparerReloadLagToleranceTests
     }
 
     [Theory]
+    [InlineData("""{"cob":{"display":26.3}}""", """{"cob":{"display":26.2}}""")]
+    [InlineData("""{"cob":{"displayLine":"COB: 26.3g"}}""", """{"cob":{"displayLine":"COB: 26.2g"}}""")]
+    public async Task A_difference_of_one_tenth_on_a_COB_display_matches(string expected, string actual)
+    {
+        (await MatchesAsync(Tolerant, expected, actual)).Should().BeTrue();
+        (await MatchesAsync(Tolerant, actual, expected)).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("""{"cob":{"display":26.3}}""", """{"cob":{"display":26.1}}""")]
+    [InlineData("""{"cob":{"displayLine":"COB: 26.3g"}}""", """{"cob":{"displayLine":"COB: 26.1g"}}""")]
+    [InlineData("""{"cob":{"cob":26.3}}""", """{"cob":{"cob":26.2}}""")]
+    public async Task A_difference_above_one_tenth_or_off_the_COB_displays_does_not_match(string expected, string actual)
+    {
+        (await MatchesAsync(Tolerant, expected, actual)).Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData("""{"state":{"cob":3.89}}""", """{"state":{"cob":3.88}}""")]
     [InlineData("""{"iob":{"basaliob":3.89}}""", """{"iob":{"basaliob":3.88}}""")]
     [InlineData("""{"state":{"battery":75}}""", """{"state":{"battery":74.99}}""")]
