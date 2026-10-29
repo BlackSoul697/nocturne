@@ -10,10 +10,13 @@ namespace Nocturne.API.Tests.Integration.Infrastructure;
 /// </summary>
 /// <remarks>
 /// Every concrete <see cref="ApiIntegrationTestBase"/> names its shard with
-/// <c>[Collection(ApiIntegrationShards.…)]</c> on the class itself; the base carries none, so a
-/// class that names no shard has no fixture and fails, and no class lands in a shard nobody chose
-/// (<see cref="ApiIntegrationShardTests"/>). The shards are balanced by measured duration and a new
-/// class goes in the shortest; <c>tests/README.md</c> says how to measure them.
+/// <c>[Collection(ApiIntegrationShards.…)]</c> on the class itself, and no base names one: a class
+/// inherits its base's <c>[Collection]</c> unless it names its own, so a base's would put every new
+/// class in a shard nobody chose. A class that names none has no fixture and fails to run. Nor may a
+/// class take <see cref="ApiIntegrationTestFixture"/> as a class fixture, which would boot a private
+/// host for it. <see cref="ApiIntegrationShardTests"/> holds these rules. The shards are balanced by
+/// measured duration and a new class goes in the shortest; <c>tests/README.md</c> says how to measure
+/// them.
 /// </remarks>
 public static class ApiIntegrationShards
 {

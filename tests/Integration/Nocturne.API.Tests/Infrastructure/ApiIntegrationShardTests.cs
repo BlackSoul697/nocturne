@@ -3,13 +3,11 @@ using Xunit;
 
 namespace Nocturne.API.Tests.Integration.Infrastructure;
 
-/// <summary>
-/// Holds the rule of <see cref="ApiIntegrationShards"/>: every concrete
-/// <see cref="ApiIntegrationTestBase"/> names exactly one shard on itself, and nothing else decides
-/// it.
-/// </summary>
+/// <summary>The rules of <see cref="ApiIntegrationShards"/>, which states their reasons.</summary>
 public class ApiIntegrationShardTests
 {
+    private const string Rules = "the shard rules on ApiIntegrationShards";
+
     private static readonly Type[] Types = typeof(ApiIntegrationTestBase).Assembly.GetTypes();
 
     private static readonly Type[] ApiTests =
@@ -24,10 +22,8 @@ public class ApiIntegrationShardTests
             .Select(type => $"{type.FullName} [{string.Join(", ", DeclaredCollections(type))}]")
             .ToList();
 
-        offenders.Should().BeEmpty(
-            "each class runs on the fixture of the collection it names, so it must name one of {0} " +
-            "on the class itself, chosen to keep the shards' durations level",
-            string.Join(", ", ApiIntegrationShards.All));
+        offenders.Should().BeEmpty("each class names one of {0} on itself, per {1}",
+            string.Join(", ", ApiIntegrationShards.All), Rules);
     }
 
     [Fact]
@@ -38,9 +34,18 @@ public class ApiIntegrationShardTests
             .Select(type => type.FullName)
             .ToList();
 
-        offenders.Should().BeEmpty(
-            "a class inherits its base's [Collection] unless it names its own, so a base that names " +
-            "one puts every new class in that shard without anyone choosing it");
+        offenders.Should().BeEmpty("no base names a collection, per {0}", Rules);
+    }
+
+    [Fact]
+    public void NoApiIntegrationTestTakesTheFixtureAsAClassFixture()
+    {
+        var offenders = ApiTests
+            .Where(type => type.GetInterfaces().Contains(typeof(IClassFixture<ApiIntegrationTestFixture>)))
+            .Select(type => type.FullName)
+            .ToList();
+
+        offenders.Should().BeEmpty("a class shares its shard's host rather than booting its own, per {0}", Rules);
     }
 
     [Fact]

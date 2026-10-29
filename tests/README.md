@@ -161,12 +161,13 @@ over the API: the API's entry point also carries NSwag's static `CreateHostBuild
 xUnit collections, `ApiIntegrationShards.One` to `Four` (`Infrastructure/IntegrationTestCollection.cs`).
 Each has its own `ApiIntegrationTestFixture`, so its own API host on its own port and its own
 database. The shards run in parallel; the tests inside one run one after another. A class names its
-shard on itself, `[Collection(ApiIntegrationShards.Two)]`; the base names none, so a class without
-one gets no fixture and fails to run. `ApiIntegrationShardTests` requires every concrete class to
-name exactly one shard and no base class to name any. The shards are balanced by measured duration,
-so put a new class in the shortest. To find it or to rebalance, run the suite with
-`--logger "trx;LogFileName=api.trx"`, take each class's time from its first test's start to its last
-test's end, and total the classes of each shard.
+shard on itself, `[Collection(ApiIntegrationShards.Two)]`; the remarks on `ApiIntegrationShards`
+give the rules and `ApiIntegrationShardTests` holds them. The shards are balanced by measured
+duration, so put a new class in the shortest. To find it or to rebalance, run the suite with
+`--logger "trx;LogFileName=api.trx"`. Within a shard the classes run one after another, so order a
+shard's results by start time and charge each class from the previous class's last test end to its
+own last test end. That charge includes the cleanup before each test and the class's own fixtures,
+such as the MongoDB container of the migration classes. Total the classes of each shard.
 
 **SQLite unit databases.** `TestDbContextFactory.CreateSqlite*` copies a schema built once per
 process into each test's in-memory database with SQLite's backup API instead of running
