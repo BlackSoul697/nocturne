@@ -11,7 +11,7 @@ namespace Nocturne.Infrastructure.Data.Interceptors;
 /// <summary>
 /// Drops a backend's auto-prepared statements after a command on it fails, before the next command
 /// runs on that backend. A workaround for npgsql/npgsql#6391: remove it once a release carrying the
-/// fix ships and the repo moves to it (it pins Npgsql 10.0.0).
+/// fix ships and the repo moves to it.
 /// </summary>
 /// <remarks>
 /// Npgsql marks a statement it is auto-preparing as prepared once PostgreSQL has parsed it, but

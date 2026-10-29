@@ -18,9 +18,9 @@ namespace Nocturne.Infrastructure.Data.Tests;
 /// later lessee, then fails with "Received unexpected backend message DataRow". The pool is capped
 /// at one connection and preparation starts on a statement's second use, so the refused write is
 /// always the one that prepares, and every write below shares its backend. A write attributed to a
-/// user batches its audit row ahead of the refused insert, as an API request's does; a batched write
-/// puts an insert with a result set ahead of it, which a failure after the first result set is
-/// reported past every command hook.
+/// user batches its audit row ahead of the refused insert, as an API request's does. A batched write
+/// puts an insert that returns rows ahead of it: the refused insert then fails after the batch's
+/// first result set, which EF reports to no command hook, only to the save.
 /// </summary>
 [Trait("Category", "Integration")]
 [Collection("RLS completeness")]
