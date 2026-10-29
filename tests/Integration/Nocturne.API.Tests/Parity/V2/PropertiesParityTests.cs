@@ -296,7 +296,7 @@ public class PropertiesParityTests : ParityTestBase
     {
         await SeedProfileForTestAsync();
 
-        await WaitForNightscoutBodyAsync("/api/v2/summary", body => body?["profile"] is JsonObject);
+        await WaitForNightscoutBodyAsync("/api/v2/summary", body => body?["profile"] is JsonObject { Count: > 0 });
         await AssertGetParityAsync("/api/v2/properties/basal");
     }
 

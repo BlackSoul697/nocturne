@@ -201,11 +201,10 @@ public abstract class ParityTestBase : IAsyncLifetime
             cancellationToken);
 
     /// <summary>
-    /// Waits until Nightscout has reloaded the cleanup's deletions and its in-memory data store
-    /// (<c>/api/v2/ddata/at</c>) holds no entries, treatments, device statuses or profiles. For a
-    /// test that compares Nightscout's in-memory state without writing first; a test that writes
-    /// waits once, after its writes, since that reload reads the cleanup too. Returns on timeout
-    /// and leaves the assertion to report the difference.
+    /// Waits as <see cref="WaitForNightscoutBodyAsync"/> does until Nightscout's in-memory data
+    /// (<c>/api/v2/ddata/at</c>) holds no entries, treatments, device statuses or profiles, for a
+    /// test that compares that data without writing first. Returns on timeout and leaves the
+    /// assertion to report the difference.
     /// </summary>
     protected Task WaitForNightscoutEmptyAsync(CancellationToken cancellationToken = default) =>
         WaitForNightscoutBodyAsync(
@@ -216,18 +215,28 @@ public abstract class ParityTestBase : IAsyncLifetime
             cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Waits until Nightscout has reloaded its in-memory data since this call and
-    /// <paramref name="ready"/> accepts the body it serves at <paramref name="path"/>. Returns on
-    /// timeout and leaves the assertion to report the difference.
+    /// Waits until Nightscout has finished a reload of its in-memory data that started after this
+    /// call, and <paramref name="ready"/> accepts the body it then serves at <paramref name="path"/>.
+    /// A test that writes calls it once, after its last write. Returns on timeout and leaves the
+    /// assertion to report the difference.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Nightscout serves summary, properties and <c>ddata</c> reads from memory it reloads from
     /// Mongo 5 seconds after the last write (a fixed debounce, <c>UPDATE_THROTTLE</c> in its
-    /// <c>lib/server/bootevent.js</c>), so a read straight after a write sees the data from before
-    /// it. Until that reload the previous test's data is still in memory and can satisfy
-    /// <paramref name="ready"/>, so the wait also requires a reload that started after this call:
-    /// its <c>lastUpdated</c> on <c>/api/v2/ddata/at</c>, against Nightscout's own clock. Called
-    /// after the last write, that reload reads every write before it, the cleanup's included.
+    /// <c>lib/server/bootevent.js</c>), so until then the previous test's data is still served and
+    /// can satisfy <paramref name="ready"/>. A reload that started after this call reads every write
+    /// before it, the cleanup's included, so one wait after the writes covers both.
+    /// </para>
+    /// <para>
+    /// The reload stamps <c>lastUpdated</c> (on <c>/api/v2/ddata/at</c>) when it starts, clears
+    /// entries, treatments and device statuses, and fills each collection as its Mongo query
+    /// answers; sgvs, profiles and the derived treatment lists hold the previous values until then,
+    /// and the properties and the summary's profile change only after the last one. Nothing it
+    /// serves marks the end, so a read counts only from <see cref="ReloadSettleTime"/> after the
+    /// stamp, by Nightscout's own clock, and only if no later reload has started by the time the read
+    /// has been answered.
+    /// </para>
     /// </remarks>
     protected async Task WaitForNightscoutBodyAsync(
         string path,
@@ -236,19 +245,45 @@ public abstract class ParityTestBase : IAsyncLifetime
         CancellationToken cancellationToken = default)
     {
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
-        var since = (await GetNightscoutJsonAsync("/api/v1/status.json", cancellationToken))?["serverTimeEpoch"]
-            ?.GetValue<long>() ?? throw new InvalidOperationException("Nightscout's status has no serverTimeEpoch.");
+        var since = await NightscoutClockAsync(cancellationToken);
 
         while (true)
         {
-            var reloaded = (await GetNightscoutJsonAsync("/api/v2/ddata/at", cancellationToken))?["lastUpdated"]
-                ?.GetValue<long>() >= since;
-            if ((reloaded && ready(await GetNightscoutJsonAsync(path, cancellationToken))) || DateTime.UtcNow >= deadline)
+            var poll = TimeSpan.FromMilliseconds(250);
+            if (await NightscoutReloadStartAsync(cancellationToken) is { } started && started >= since)
+            {
+                var settling = started + (long)ReloadSettleTime.TotalMilliseconds - await NightscoutClockAsync(cancellationToken);
+                if (settling > 0)
+                {
+                    poll = TimeSpan.FromMilliseconds(settling);
+                }
+                else if (ready(await GetNightscoutJsonAsync(path, cancellationToken))
+                    && await NightscoutReloadStartAsync(cancellationToken) == started)
+                {
+                    return;
+                }
+            }
+
+            if (DateTime.UtcNow >= deadline)
                 return;
 
-            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+            await Task.Delay(poll, cancellationToken);
         }
     }
+
+    /// <summary>
+    /// How long after a reload starts <see cref="WaitForNightscoutBodyAsync"/> takes it to have
+    /// finished. Nightscout's log shows the reloads of these tests finishing 5 to 20 ms after they
+    /// start.
+    /// </summary>
+    private static readonly TimeSpan ReloadSettleTime = TimeSpan.FromSeconds(1);
+
+    private async Task<long> NightscoutClockAsync(CancellationToken cancellationToken) =>
+        (await GetNightscoutJsonAsync("/api/v1/status.json", cancellationToken))?["serverTimeEpoch"]?.GetValue<long>()
+        ?? throw new InvalidOperationException("Nightscout's status has no serverTimeEpoch.");
+
+    private async Task<long?> NightscoutReloadStartAsync(CancellationToken cancellationToken) =>
+        (await GetNightscoutJsonAsync("/api/v2/ddata/at", cancellationToken))?["lastUpdated"]?.GetValue<long>();
 
     private async Task<JsonNode?> GetNightscoutJsonAsync(string path, CancellationToken cancellationToken)
     {

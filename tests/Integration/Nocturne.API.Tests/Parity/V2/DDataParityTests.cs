@@ -152,7 +152,9 @@ public class DDataParityTests : ParityTestBase
     [Fact]
     public async Task GetDDataAt_IsoDateString_ReturnsSameShape()
     {
-        // The only test here compared with Nightscout; the rest are ParityDivergences.
+        // Nightscout answers an earlier time from a copy of its in-memory data that it refills from
+        // Mongo, so the wait makes that copy start from the cleaned data, not the previous test's.
+        // The other tests here are ParityDivergences, which compare nothing with Nightscout.
         await WaitForNightscoutEmptyAsync();
         var at = TestTimeProvider.GetTestTime().AddHours(-1);
         await SeedEntriesAsync(TestDataFactory.CreateEntrySequence(5, 5, startTime: at));

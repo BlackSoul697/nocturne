@@ -176,8 +176,9 @@ container, its MongoDB, and an API host on its own database. The same rules appl
 properties and `ddata` reads from memory that it reloads from Mongo 5 seconds after the last write
 (a constant in its source, with no setting), and that wait is most of a parity shard's time. A test
 that reads that memory waits once, after its last write, for a reload that started after the wait
-began (`ParityTestBase.WaitForNightscoutBodyAsync`); a test that writes nothing first calls
-`WaitForNightscoutEmptyAsync`.
+began to have finished (`ParityTestBase.WaitForNightscoutBodyAsync`, whose remarks say how it tells);
+a test that compares Nightscout's in-memory data without writing calls `WaitForNightscoutEmptyAsync`
+first.
 
 **SQLite unit databases.** `TestDbContextFactory.CreateSqlite*` copies a schema built once per
 process into each test's in-memory database with SQLite's backup API instead of running
