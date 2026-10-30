@@ -1,9 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Nocturne.API.Middleware.Handlers;
 using Nocturne.API.Services.Auth;
 using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Contracts.Auth;
@@ -11,10 +9,12 @@ using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Extensions;
 using AuthRole = Nocturne.Core.Models.Authorization.Role;
 using AuthSubject = Nocturne.Core.Models.Authorization.Subject;
+using DirectGrantLookup = Nocturne.Core.Models.Authorization.DirectGrantLookup;
+using OAuthGrantEdit = Nocturne.Core.Models.Authorization.OAuthGrantEdit;
+using OAuthGrantRecord = Nocturne.Core.Models.Authorization.OAuthGrantRecord;
 using OAuthGrantTypes = Nocturne.Core.Models.Authorization.OAuthGrantTypes;
 using Scope = Nocturne.Core.Models.Authorization.Scope;
 using ScopeTranslator = Nocturne.Core.Models.Authorization.ScopeTranslator;
@@ -36,6 +36,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     private readonly ISubjectService _subjectService;
     private readonly IRoleService _roleService;
     private readonly IDirectGrantService _directGrantService;
+    private readonly IOAuthGrantRepository _grants;
     private readonly IJwtService _jwtService;
     private readonly INocturneDbContextFactory _contexts;
     private readonly ICategoryReadContext _categoryReadContext;
@@ -58,6 +59,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         ISubjectService subjectService,
         IRoleService roleService,
         IDirectGrantService directGrantService,
+        IOAuthGrantRepository grants,
         IJwtService jwtService,
         INocturneDbContextFactory contexts,
         ICategoryReadContext categoryReadContext,
@@ -69,6 +71,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         _subjectService = subjectService;
         _roleService = roleService;
         _directGrantService = directGrantService;
+        _grants = grants ?? throw new ArgumentNullException(nameof(grants));
         _jwtService = jwtService;
         _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _categoryReadContext = categoryReadContext;
@@ -90,9 +93,8 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>Authorization response with JWT token</returns>
     public async Task<AuthorizationResponse?> GenerateJwtFromAccessTokenAsync(string accessToken)
     {
-        await using var db = await _contexts.CreateAsync();
         _logger.LogDebug("Generating JWT for access token");
-        return await GenerateJwtFromDirectGrantAsync(db, accessToken);
+        return await GenerateJwtFromDirectGrantAsync(accessToken);
     }
 
     /// <summary>
@@ -100,26 +102,23 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// so the minted JWT carries the grant's scopes, tenant pin and 24-hour limit rather than the
     /// subject's roles/permissions, and downstream requests authenticate through
     /// <see cref="Middleware.Handlers.OAuthAccessTokenHandler"/>.
-    /// The grants query relies on the global query filter of a context reading as the request,
-    /// which carries the request's resolved tenant, matching how subject lookups are tenant-scoped on this endpoint.
+    /// The grants are read as the request's reader, whose tenant is the one the request resolved,
+    /// matching how subject lookups are tenant-scoped on this endpoint.
     /// </summary>
-    private async Task<AuthorizationResponse?> GenerateJwtFromDirectGrantAsync(NocturneDbContext db, string accessToken)
+    private async Task<AuthorizationResponse?> GenerateJwtFromDirectGrantAsync(string accessToken)
     {
-        var tokenHash = HashUtils.Sha256Hex(accessToken);
+        var judgedAt = _time.GetUtcNow().UtcDateTime;
 
-        var live = db.OAuthGrants
-            .AsNoTracking()
-            .Where(DirectGrantTokenHandler.IsLiveDirectGrant(_time.GetUtcNow().UtcDateTime));
-
-        var grant = await live.FirstOrDefaultAsync(g => g.TokenHash == tokenHash);
+        var grant = await _grants.FindLiveDirectGrantAsync(
+            new DirectGrantLookup.ByTokenHash([HashUtils.Sha256Hex(accessToken)]), judgedAt, CancellationToken.None);
 
         // An imported Nightscout token is matched by digest prefix rather than by hash, the same
         // fallback DirectGrantTokenHandler takes; the prefix is validated hex, so it is safe here.
         if (grant == null
             && LegacyNightscoutToken.ExtractDigestPrefix(accessToken) is { } digestPrefix)
         {
-            grant = await live.FirstOrDefaultAsync(
-                g => g.LegacyTokenDigest != null && g.LegacyTokenDigest.StartsWith(digestPrefix));
+            grant = await _grants.FindLiveDirectGrantAsync(
+                new DirectGrantLookup.ByLegacyTokenDigestPrefix(digestPrefix), judgedAt, CancellationToken.None);
         }
 
         if (grant == null)
@@ -155,13 +154,11 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         );
 
         // Stamp last-used so grants exchanged for JWTs don't show as never used.
-        // Awaited (not fire-and-forget like the auth handlers) because the context is
-        // disposed when this method returns; failure must not block the exchange.
+        // Awaited (not fire-and-forget like the auth handlers) because the request's scope is
+        // gone when this method returns; failure must not block the exchange.
         try
         {
-            await db.OAuthGrants
-                .Where(g => g.Id == grant.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(g => g.LastUsedAt, _time.GetUtcNow().UtcDateTime));
+            await _grants.RecordUseAsync(grant.Id, _time.GetUtcNow().UtcDateTime, presentation: null, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -308,6 +305,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <summary>
     /// Get all subjects
     /// </summary>
+    /// <remarks>Lists the tokens <see cref="IsDeviceToken"/> admits, and no others.</remarks>
     /// <returns>List of all subjects</returns>
     public async Task<List<Subject>> GetAllSubjectsAsync()
     {
@@ -322,9 +320,8 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return [];
             }
 
-            var grants = await DeviceGrants(db, deviceSubjectId)
-                .OrderByDescending(g => g.CreatedAt)
-                .ToListAsync();
+            var grants = await _grants.ListDirectAsync(
+                deviceSubjectId, _time.GetUtcNow().UtcDateTime, CancellationToken.None);
             return grants.Select(MapGrantToLegacySubject).ToList();
         }
         catch (Exception ex)
@@ -357,8 +354,8 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return null;
             }
 
-            var grant = await DeviceGrants(db, deviceSubjectId).FirstOrDefaultAsync(g => g.Id == guid);
-            return grant == null ? null : MapGrantToLegacySubject(grant);
+            var grant = await _grants.GetAsync(guid, CancellationToken.None);
+            return grant is null || !IsDeviceToken(grant, deviceSubjectId) ? null : MapGrantToLegacySubject(grant);
         }
         catch (Exception ex)
         {
@@ -394,7 +391,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
             }
 
             var result = await _directGrantService.CreateAsync(
-                db,
+                pinnedTenantId: null,
                 deviceSubjectId,
                 label,
                 [.. scopes],
@@ -454,20 +451,14 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return null;
             }
 
-            var grant = await db.OAuthGrants
-                .Where(g => g.SubjectId == deviceSubjectId)
-                .Where(DirectGrantTokenHandler.IsLiveDirectGrant(_time.GetUtcNow().UtcDateTime))
-                .FirstOrDefaultAsync(g => g.Id == guid);
+            var grant = await _grants.GetAsync(guid, CancellationToken.None);
 
-            if (grant == null)
+            if (grant == null || !IsDeviceToken(grant, deviceSubjectId))
             {
                 return null;
             }
 
-            if (!string.IsNullOrWhiteSpace(subject.Name))
-            {
-                grant.Label = subject.Name;
-            }
+            var edit = new OAuthGrantEdit(Label: string.IsNullOrWhiteSpace(subject.Name) ? null : subject.Name);
 
             // An absent roles list leaves the grant's authority alone; an empty one would otherwise
             // read as "revoke every scope", which no Nightscout client means by omitting the field.
@@ -485,12 +476,12 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                         nameof(subject));
                 }
 
-                grant.Scopes = Scope.NormalizeForStorage(scopes);
+                edit = edit with { Scopes = Scope.NormalizeForStorage(scopes) };
             }
 
-            await db.SaveChangesAsync();
+            var updated = await _grants.UpdateAsync(grant.Id, edit, CancellationToken.None);
 
-            return MapGrantToLegacySubject(grant);
+            return updated == null ? null : MapGrantToLegacySubject(updated);
         }
         catch (Exception ex)
         {
@@ -502,6 +493,10 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <summary>
     /// Delete a subject by ID
     /// </summary>
+    /// <remarks>
+    /// Revokes rather than deletes: the row is the audit trail for everything the token did. Scoped
+    /// to the device subject for the reason on <see cref="IsDeviceToken"/>.
+    /// </remarks>
     /// <param name="id">Subject ID</param>
     /// <returns>True if deleted, false if not found</returns>
     public async Task<bool> DeleteSubjectAsync(string id)
@@ -517,11 +512,9 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return false;
             }
 
-            // Revoked rather than deleted: the row is the audit trail for everything the token did.
-            // Scoped to the device subject for the reason given on DeviceGrants.
             return await db.FindDeviceSubjectOf(db.TenantId) is { } deviceSubjectId
                 && await _directGrantService.RevokeAsync(
-                    db, guid, deviceSubjectId, ipAddress: null, userAgent: null);
+                    pinnedTenantId: null, guid, deviceSubjectId, ipAddress: null, userAgent: null);
         }
         catch (Exception ex)
         {
@@ -531,17 +524,14 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     }
 
     /// <summary>
-    /// The live tokens this API owns: the ones issued to the tenant's device subject, which is who
-    /// it issues to. A member's own tokens are theirs to manage through
-    /// <c>DirectGrantController</c>, so listing them here would put every member's credentials on
-    /// an admin screen and let <see cref="DeleteSubjectAsync"/> revoke them.
+    /// Whether <paramref name="grant"/> is a token this API owns: a direct grant live now, issued to
+    /// the tenant's device subject <paramref name="deviceSubjectId"/>, which is who it issues to.
+    /// A member's own tokens are theirs to manage through <c>DirectGrantController</c>; admitting
+    /// them here would put every member's credentials on an admin screen and let
+    /// <see cref="DeleteSubjectAsync"/> revoke them.
     /// </summary>
-    private IQueryable<OAuthGrantEntity> DeviceGrants(NocturneDbContext db, Guid deviceSubjectId) =>
-        db.OAuthGrants
-            .AsNoTracking()
-            .Where(g => g.SubjectId == deviceSubjectId)
-            .Where(DirectGrantTokenHandler.IsLiveDirectGrant(_time.GetUtcNow().UtcDateTime));
-
+    private bool IsDeviceToken(OAuthGrantRecord grant, Guid deviceSubjectId) =>
+        grant.SubjectId == deviceSubjectId && grant.IsLiveDirectGrantAt(_time.GetUtcNow().UtcDateTime);
 
     /// <summary>
     /// The scopes a Nightscout <c>roles</c> list confers. Each entry is looked up as a role name
@@ -571,7 +561,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// rendered back as legacy permission strings so the list round-trips through
     /// <see cref="UpdateSubjectAsync"/>.
     /// </summary>
-    private static Subject MapGrantToLegacySubject(OAuthGrantEntity grant) =>
+    private static Subject MapGrantToLegacySubject(OAuthGrantRecord grant) =>
         new()
         {
             Id = grant.Id.ToString(),
