@@ -38355,3 +38355,16 @@ msgstr "Changed by"
 #: src/lib/components/audit/AuditReadsTable.svelte
 msgid "Read by"
 msgstr "Read by"
+
+#. 0: voice.name
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are the thresholds from {0}'s Nightscout site. Check that they are still right."
+msgstr "These are the thresholds from {0}'s Nightscout site. Check that they are still right."
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are the thresholds from the Nightscout site. Check that they are still right."
+msgstr "These are the thresholds from the Nightscout site. Check that they are still right."
+
+#: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
+msgid "These are the thresholds from your Nightscout site. Check that they are still right."
+msgstr "These are the thresholds from your Nightscout site. Check that they are still right."
