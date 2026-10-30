@@ -6,8 +6,8 @@ namespace Nocturne.API.Tests.Infrastructure;
 /// <summary>
 /// The repository's C# sources, read once per test process for the guards that scan them. Build
 /// output is left out, as are the generated EF migration designers and model snapshot: they hold
-/// only model-builder calls and are most of the lines under <c>src</c>, so a guard that read them
-/// spent its time on code no guard has a rule for.
+/// only model-builder calls and are most of the lines under <c>src</c>. A guard with a rule for
+/// the model's column defaults (<c>HistoryClampLiftPremiseTests</c>) reads the snapshot on its own.
 /// </summary>
 internal static class RepoSources
 {
@@ -26,8 +26,13 @@ internal static class RepoSources
     public static IReadOnlyList<SourceFile> Tests => TestFiles.Value;
 
     /// <summary>The sources under a repository-relative directory such as <c>src/API</c>.</summary>
+    /// <exception cref="DirectoryNotFoundException">The directory is not in the checkout, so a
+    /// guard listing a renamed one fails rather than scanning nothing.</exception>
     public static IEnumerable<SourceFile> Under(string directory)
     {
+        if (!Directory.Exists(Path.Combine(Root, directory)))
+            throw new DirectoryNotFoundException($"{directory} is not under {Root}.");
+
         var prefix = directory.TrimEnd('/') + "/";
         var tree = prefix.StartsWith("src/", StringComparison.Ordinal) ? Src
             : prefix.StartsWith("tests/", StringComparison.Ordinal) ? Tests
@@ -38,15 +43,16 @@ internal static class RepoSources
 
     private static List<SourceFile> Read(string tree) =>
         Directory.EnumerateFiles(Path.Combine(Root, tree), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(path) && !IsGeneratedMigration(path))
+            .Select(path => (Absolute: path, Relative: Path.GetRelativePath(Root, path).Replace('\\', '/')))
+            .Where(file => !IsBuildOutput(file.Relative) && !IsGeneratedMigration(file.Relative))
             .AsParallel()
-            .Select(path => new SourceFile(Path.GetRelativePath(Root, path).Replace('\\', '/'), File.ReadAllText(path)))
+            .Select(file => new SourceFile(file.Relative, File.ReadAllText(file.Absolute)))
             .OrderBy(file => file.Path, StringComparer.Ordinal)
             .ToList();
 
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}");
+    private static bool IsBuildOutput(string relativePath) =>
+        relativePath.Contains("/obj/", StringComparison.Ordinal)
+        || relativePath.Contains("/bin/", StringComparison.Ordinal);
 
     private static bool IsGeneratedMigration(string path) =>
         path.EndsWith(".Designer.cs", StringComparison.Ordinal)

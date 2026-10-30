@@ -22,8 +22,8 @@ namespace Nocturne.API.Tests.Services.BackgroundServices;
 public class NightscoutRealtimeListenerTests
 {
     /// <summary>
-    /// Long enough for one refused connect to the discard port, short enough that the tests
-    /// dialling it do not sit out the production ten-second cap and the reconnect backoff.
+    /// Cuts a dial of the discard port short of the production cap and the reconnect backoff. The
+    /// tests read only the warning that follows, which the service logs whatever ended the connect.
     /// </summary>
     private static readonly TimeSpan ConnectBudget = TimeSpan.FromSeconds(1);
 
