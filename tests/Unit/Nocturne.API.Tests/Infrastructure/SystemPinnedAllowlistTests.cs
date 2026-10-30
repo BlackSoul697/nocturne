@@ -86,42 +86,17 @@ public class SystemPinnedAllowlistTests
 
     private static List<string> Scan()
     {
-        var root = RepositoryRoot();
         var callers = new List<string>();
 
-        foreach (var tree in ScannedTrees)
+        foreach (var source in ScannedTrees.SelectMany(RepoSources.Under))
         {
-            foreach (var path in Directory.EnumerateFiles(Path.Combine(root, tree), "*.cs", SearchOption.AllDirectories))
-            {
-                if (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                    || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-                    continue;
+            if (!source.Text.Contains(Method, StringComparison.Ordinal))
+                continue;
 
-                var text = File.ReadAllText(path);
-                if (!text.Contains(Method, StringComparison.Ordinal))
-                    continue;
-
-                var file = Path.GetRelativePath(root, path).Replace('\\', '/');
-                callers.AddRange(CallingMembers(CSharpSyntaxTree.ParseText(text))
-                    .Select(member => $"{file}: {member}"));
-            }
+            callers.AddRange(CallingMembers(source.Tree)
+                .Select(member => $"{source.Path}: {member}"));
         }
 
         return callers;
-    }
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (Directory.Exists(Path.Combine(directory.FullName, "tests", "Unit")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException($"No tests/Unit directory above {AppContext.BaseDirectory}.");
     }
 }

@@ -234,40 +234,10 @@ public class PerOperationContextGuardTests
             .Distinct()
             .ToList();
 
-    private static List<(string, SyntaxTree)> Load()
-    {
-        var root = RepositoryRoot();
-        var sources = new List<(string, SyntaxTree)>();
-
-        foreach (var path in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories))
-        {
-            if (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                || path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}"))
-                continue;
-
-            var text = File.ReadAllText(path);
-            if (!text.Contains(Context, StringComparison.Ordinal) && !text.Contains(Clamp, StringComparison.Ordinal))
-                continue;
-
-            sources.Add((Path.GetRelativePath(root, path).Replace('\\', '/'), CSharpSyntaxTree.ParseText(text)));
-        }
-
-        return sources;
-    }
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (Directory.Exists(Path.Combine(directory.FullName, "tests", "Unit")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException($"No tests/Unit directory above {AppContext.BaseDirectory}.");
-    }
+    private static List<(string, SyntaxTree)> Load() =>
+        RepoSources.Src
+            .Where(s => !s.Path.Contains("/Migrations/", StringComparison.Ordinal)
+                && (s.Text.Contains(Context, StringComparison.Ordinal) || s.Text.Contains(Clamp, StringComparison.Ordinal)))
+            .Select(s => (s.Path, s.Tree))
+            .ToList();
 }
