@@ -459,7 +459,7 @@ Design notes:
 ## Web Frontend
 
 - **SvelteKit 2** / **Svelte 5** (runes), **Tailwind CSS 4**, **shadcn-svelte**, **layerchart**, **Zod 4**
-- **pnpm** workspaces (Node.js 24+, pnpm 9+)
+- **pnpm** workspaces (Node.js 24+, pnpm 11; `pnpm-workspace.yaml` is written for v11 and `pnpm install --frozen-lockfile` fails the lockfile check on pnpm 10, so use `npx pnpm@11` or install 11)
 
 ## Local Container Build
 
