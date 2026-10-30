@@ -1376,10 +1376,8 @@ msgstr "Wiederherstellen"
 msgid "Time"
 msgstr "Zeit"
 
-#: src/lib/components/audit/AuditMutationsTable.svelte
-#: src/lib/components/audit/AuditReadsTable.svelte
-msgid "Subject"
-msgstr "Subjekt"
+#~ msgid "Subject"
+#~ msgstr "Subjekt"
 
 #: src/lib/components/audit/AuditMutationsTable.svelte
 msgid "Entity ID"
@@ -38348,4 +38346,12 @@ msgstr ""
 
 #: src/routes/(authenticated)/StickyBarProbe.test.svelte
 msgid "bar"
+msgstr ""
+
+#: src/lib/components/audit/AuditMutationsTable.svelte
+msgid "Changed by"
+msgstr ""
+
+#: src/lib/components/audit/AuditReadsTable.svelte
+msgid "Read by"
 msgstr ""

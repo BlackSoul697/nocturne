@@ -1376,10 +1376,8 @@ msgstr "Restore"
 msgid "Time"
 msgstr "Time"
 
-#: src/lib/components/audit/AuditMutationsTable.svelte
-#: src/lib/components/audit/AuditReadsTable.svelte
-msgid "Subject"
-msgstr "Subject"
+#~ msgid "Subject"
+#~ msgstr "Subject"
 
 #: src/lib/components/audit/AuditMutationsTable.svelte
 msgid "Entity ID"
@@ -38349,3 +38347,11 @@ msgstr "Could not load profiles"
 #: src/routes/(authenticated)/StickyBarProbe.test.svelte
 msgid "bar"
 msgstr "bar"
+
+#: src/lib/components/audit/AuditMutationsTable.svelte
+msgid "Changed by"
+msgstr "Changed by"
+
+#: src/lib/components/audit/AuditReadsTable.svelte
+msgid "Read by"
+msgstr "Read by"
