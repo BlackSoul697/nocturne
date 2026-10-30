@@ -2797,6 +2797,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("mode");
 
+                    b.Property<string>("SourceAlarmSettings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_alarm_settings");
+
                     b.Property<string>("SourceDescription")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")
