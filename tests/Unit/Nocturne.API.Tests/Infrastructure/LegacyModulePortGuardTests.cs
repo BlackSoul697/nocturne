@@ -199,12 +199,11 @@ public class LegacyModulePortGuardTests
     /// <summary>Each top-level type's reflection name (<c>Namespace.Name`arity</c>) to the files declaring it.</summary>
     private static Dictionary<string, List<string>> DeclaringFiles()
     {
-        var root = RepositoryRoot();
         var files = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
-        foreach (var (path, tree) in ReflectedSources.SelectMany(dir => Parse(root, dir, _ => true)))
+        foreach (var source in ReflectedSources.SelectMany(RepoSources.Under))
         {
-            foreach (var type in tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            foreach (var type in source.Tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
                          .Where(t => !t.Ancestors().OfType<BaseTypeDeclarationSyntax>().Any()))
             {
                 var ns = string.Join(".", type.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(n => n.Name.ToString()));
@@ -213,44 +212,13 @@ public class LegacyModulePortGuardTests
 
                 if (!files.TryGetValue(name, out var paths))
                     files[name] = paths = [];
-                paths.Add(path);
+                paths.Add(source.Path);
             }
         }
 
         return files;
     }
 
-    private static IEnumerable<(string Path, SyntaxTree Tree)> Sources(string tree) =>
-        Parse(RepositoryRoot(), tree, text => ModuleOfPort.Keys.Any(port => text.Contains(port, StringComparison.Ordinal)));
-
-    private static IEnumerable<(string Path, SyntaxTree Tree)> Parse(string root, string tree, Func<string, bool> wanted)
-    {
-        foreach (var path in Directory.EnumerateFiles(Path.Combine(root, tree), "*.cs", SearchOption.AllDirectories))
-        {
-            if (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-                continue;
-
-            var text = File.ReadAllText(path);
-            if (!wanted(text))
-                continue;
-
-            yield return (Path.GetRelativePath(root, path).Replace('\\', '/'), CSharpSyntaxTree.ParseText(text));
-        }
-    }
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (Directory.Exists(Path.Combine(directory.FullName, "tests", "Unit")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException($"No tests/Unit directory above {AppContext.BaseDirectory}.");
-    }
+    private static IEnumerable<SourceFile> Sources(string tree) =>
+        RepoSources.Under(tree).Where(s => ModuleOfPort.Keys.Any(port => s.Text.Contains(port, StringComparison.Ordinal)));
 }
