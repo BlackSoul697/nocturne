@@ -7767,7 +7767,6 @@ msgstr ""
 #: src/routes/(authenticated)/+layout.svelte
 #: src/routes/(authenticated)/calendar/+page.svelte
 #: src/routes/(authenticated)/compatibility/test/+page.svelte
-#: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "An error occurred"
 msgstr ""
@@ -9194,10 +9193,12 @@ msgstr ""
 #. 0: basic.count
 #. 0: formatNumber(totalReadings)
 #. 0: formatNumber(readingCount)
+#. 0: formatNumber(readingCount)
 #. 0: readings.length
 #. 0: formatNumber(readingCount)
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
+#: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/(authenticated)/reports/battery/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
@@ -22402,10 +22403,8 @@ msgstr ""
 #~ msgid "{0} meals · {1}g/day · {2}g avg/meal"
 #~ msgstr ""
 
-#. 0: formatNumber(readingCount)
-#: src/routes/(authenticated)/reports/+page.svelte
-msgid "· {0} readings"
-msgstr ""
+#~ msgid "· {0} readings"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "Consensus target: at least 70% of time in range."
@@ -28851,9 +28850,8 @@ msgstr ""
 msgid "Could not load the complete report. Try again before printing."
 msgstr ""
 
-#: src/routes/(authenticated)/reports/+page.svelte
-msgid "Could not load reports"
-msgstr ""
+#~ msgid "Could not load reports"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "There are not enough glucose readings between these dates to summarize. Choose a longer date range."
@@ -32564,9 +32562,8 @@ msgstr ""
 msgid "Meal attribution"
 msgstr ""
 
-#: src/routes/(authenticated)/reports/+page.svelte
-msgid "Error loading reports"
-msgstr ""
+#~ msgid "Error loading reports"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "<0/> Executive summary"
@@ -38367,4 +38364,16 @@ msgstr ""
 
 #: src/routes/(unauthenticated)/setup/(guided)/alerts/AlertSetup.svelte
 msgid "These are the thresholds from your Nightscout site. Check that they are still right."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Loading the range analysis"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Could not load the reading count."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Loading the reading count"
 msgstr ""
