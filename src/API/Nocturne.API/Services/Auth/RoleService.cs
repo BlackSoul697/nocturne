@@ -11,7 +11,6 @@ namespace Nocturne.API.Services.Auth;
 public class RoleService : IRoleService
 {
     private readonly IRoleRepository _roles;
-    private readonly TimeProvider _time;
     private readonly ILogger<RoleService> _logger;
 
     /// <summary>
@@ -68,10 +67,9 @@ public class RoleService : IRoleService
         ["denied"] = ("No access", Array.Empty<string>()),
     };
 
-    public RoleService(IRoleRepository roles, TimeProvider time, ILogger<RoleService> logger)
+    public RoleService(IRoleRepository roles, ILogger<RoleService> logger)
     {
         _roles = roles ?? throw new ArgumentNullException(nameof(roles));
-        _time = time;
         _logger = logger;
     }
 
@@ -118,7 +116,7 @@ public class RoleService : IRoleService
         }
 
         var updated = await _roles.UpdateAsync(
-            role.Id, role.Name, role.Description, role.Permissions, _time.GetUtcNow().UtcDateTime, CancellationToken.None);
+            role.Id, role.Name, role.Description, role.Permissions, CancellationToken.None);
 
         _logger.LogInformation("Updated role: {RoleName}", role.Name);
 

@@ -170,7 +170,6 @@ public class OidcProviderService : IOidcProviderService
                 provider.DefaultRoles,
                 provider.IsEnabled,
                 provider.DisplayOrder),
-            DateTime.UtcNow,
             CancellationToken.None);
         return updated == null ? null : MapToModel(updated);
     }
@@ -181,11 +180,11 @@ public class OidcProviderService : IOidcProviderService
 
     /// <inheritdoc />
     public Task<bool> EnableProviderAsync(Guid providerId) =>
-        _providers.SetEnabledAsync(providerId, true, DateTime.UtcNow, CancellationToken.None);
+        _providers.SetEnabledAsync(providerId, true, CancellationToken.None);
 
     /// <inheritdoc />
     public Task<bool> DisableProviderAsync(Guid providerId) =>
-        _providers.SetEnabledAsync(providerId, false, DateTime.UtcNow, CancellationToken.None);
+        _providers.SetEnabledAsync(providerId, false, CancellationToken.None);
 
     /// <inheritdoc />
     public async Task<OidcDiscoveryDocument?> GetDiscoveryDocumentAsync(

@@ -298,7 +298,7 @@ public class DevAdminController : ControllerBase
     /// restore time, because <see cref="Infrastructure.Data.Entities.ISystemTimestamped"/>,
     /// <see cref="Infrastructure.Data.Entities.IEntityTimestamped"/> and
     /// <see cref="Infrastructure.Data.Entities.ConnectorConfigurationEntity.LastModified"/> are
-    /// server-assigned on insert. A tenant updated in place is stamped only if its columns changed.
+    /// server-assigned on insert. A tenant or subject updated in place is stamped only if its columns changed.
     /// </remarks>
     [HttpPost("snapshot")]
     public async Task<ActionResult> ImportSnapshot(
@@ -855,7 +855,6 @@ public class DevAdminController : ControllerBase
                     subject.Notes = s.Notes;
                     subject.IsActive = s.IsActive;
                     subject.IsSystemSubject = s.IsSystemSubject;
-                    subject.UpdatedAt = s.UpdatedAt;
                     subject.LastLoginAt = s.LastLoginAt;
                     subject.OriginalId = s.OriginalId;
                     subject.PreferredLanguage = s.PreferredLanguage;

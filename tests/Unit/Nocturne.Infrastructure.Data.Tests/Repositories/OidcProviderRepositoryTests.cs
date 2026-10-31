@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Tests.Shared.Infrastructure;
@@ -13,6 +14,7 @@ namespace Nocturne.Infrastructure.Data.Tests.Repositories;
 public class OidcProviderRepositoryTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Past = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly SqliteTestDatabase _db;
 
@@ -24,6 +26,12 @@ public class OidcProviderRepositoryTests : IDisposable
     public void Dispose() => _db.Dispose();
 
     private OidcProviderRepository Providers() => new(new TestNocturneDbContextFactory(_db.CreateContext(Guid.Empty)));
+
+    private async Task AgeAsync(params Guid[] ids)
+    {
+        await using var db = _db.CreateContext(Guid.Empty);
+        await db.OidcProviders.Where(p => ids.Contains(p.Id)).ExecuteUpdateAsync(s => s.SetProperty(p => p.UpdatedAt, Past));
+    }
 
     private static NewOidcProvider Keycloak(Guid? id = null, bool enabled = true, int order = 0) => new(
         "Keycloak", "oidc", "https://issuer.example", "nocturne", Id: id, IsEnabled: enabled, DisplayOrder: order,
@@ -65,9 +73,11 @@ public class OidcProviderRepositoryTests : IDisposable
     public async Task AnEditKeepsTheSecretUnlessItBringsOne()
     {
         var id = await Providers().CreateAsync(Keycloak(), CancellationToken.None);
+        await AgeAsync(id);
 
         var kept = await Providers().UpdateAsync(id, new OidcProviderEdit(
-            "KC", "oauth2", "{\"token\":\"t\"}", "https://issuer.example", "client2", null, ["read"], "{}", ["admin"], false, 3), Now, CancellationToken.None);
+            "KC", "oauth2", "{\"token\":\"t\"}", "https://issuer.example", "client2", null, ["read"], "{}", ["admin"], false, 3), CancellationToken.None);
+        kept!.UpdatedAt.Should().BeAfter(Past);
         kept.Should().BeEquivalentTo(new
         {
             Name = "KC", ProviderType = "oauth2", OAuth2SettingsJson = "{\"token\":\"t\"}", ClientId = "client2",
@@ -75,9 +85,9 @@ public class OidcProviderRepositoryTests : IDisposable
         });
 
         var replaced = await Providers().UpdateAsync(id, new OidcProviderEdit(
-            "KC", "oauth2", null, "https://issuer.example", "client2", [9], ["read"], "{}", ["admin"], true, 3), Now, CancellationToken.None);
+            "KC", "oauth2", null, "https://issuer.example", "client2", [9], ["read"], "{}", ["admin"], true, 3), CancellationToken.None);
         replaced!.ClientSecretEncrypted.Should().Equal(9);
-        (await Providers().UpdateAsync(Guid.CreateVersion7(), new OidcProviderEdit("x", "oidc", null, "i", "c", null, [], "{}", [], true, 0), Now, CancellationToken.None))
+        (await Providers().UpdateAsync(Guid.CreateVersion7(), new OidcProviderEdit("x", "oidc", null, "i", "c", null, [], "{}", [], true, 0), CancellationToken.None))
             .Should().BeNull();
     }
 
@@ -85,8 +95,10 @@ public class OidcProviderRepositoryTests : IDisposable
     public async Task EnablingDiscoveryCachingAndDeletingAnswerForTheRow()
     {
         var id = await Providers().CreateAsync(Keycloak(enabled: false), CancellationToken.None);
+        await AgeAsync(id);
 
-        (await Providers().SetEnabledAsync(id, true, Now, CancellationToken.None)).Should().BeTrue();
+        (await Providers().SetEnabledAsync(id, true, CancellationToken.None)).Should().BeTrue();
+        (await Providers().GetAsync(id, CancellationToken.None))!.UpdatedAt.Should().BeAfter(Past);
         (await Providers().CacheDiscoveryDocumentAsync(id, "{\"issuer\":\"x\"}", Now, CancellationToken.None)).Should().BeTrue();
         (await Providers().GetAsync(id, CancellationToken.None)).Should().BeEquivalentTo(new
         {
@@ -96,8 +108,21 @@ public class OidcProviderRepositoryTests : IDisposable
         (await Providers().DeleteAsync(id, CancellationToken.None)).Should().BeTrue();
         (await Providers().GetAsync(id, CancellationToken.None)).Should().BeNull();
         (await Providers().DeleteAsync(id, CancellationToken.None)).Should().BeFalse();
-        (await Providers().SetEnabledAsync(id, true, Now, CancellationToken.None)).Should().BeFalse();
+        (await Providers().SetEnabledAsync(id, true, CancellationToken.None)).Should().BeFalse();
         (await Providers().CacheDiscoveryDocumentAsync(id, "{}", Now, CancellationToken.None)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ASyncOfAnUnchangedProviderRecordsTheTimeTheCallerGave()
+    {
+        var id = Guid.CreateVersion7();
+        NewOidcProvider Configured() => new("Keycloak", "oidc", "https://issuer.example", "nocturne", Id: id, Scopes: ["openid"], DefaultRoles: ["readable"]);
+        await Providers().CreateAsync(Configured(), CancellationToken.None);
+        await AgeAsync(id);
+
+        await Providers().SyncConfiguredAsync([Configured()], Now, CancellationToken.None);
+
+        (await Providers().GetAsync(id, CancellationToken.None))!.UpdatedAt.Should().Be(Now);
     }
 
     [Fact]
@@ -108,6 +133,7 @@ public class OidcProviderRepositoryTests : IDisposable
         var added = Guid.CreateVersion7();
         await Providers().CreateAsync(Keycloak(keep), CancellationToken.None);
         await Providers().CreateAsync(new NewOidcProvider("Stale", "oidc", "https://stale.example", "c", Id: stale), CancellationToken.None);
+        await AgeAsync(keep, stale);
 
         await Providers().SyncConfiguredAsync(
         [
@@ -123,6 +149,8 @@ public class OidcProviderRepositoryTests : IDisposable
         }, "the sync carries no secret or claim mapping, so the stored ones stay");
         kept!.Scopes.Should().Equal("openid");
         (await Providers().GetAsync(stale, CancellationToken.None)).Should().BeEquivalentTo(new { IsEnabled = false });
+        (await Providers().GetAsync(stale, CancellationToken.None))!.UpdatedAt.Should().BeAfter(Past);
+        kept.UpdatedAt.Should().NotBe(Now, "the save stamps a row whose columns changed, over the caller's time");
         (await Providers().GetAsync(added, CancellationToken.None)).Should().BeEquivalentTo(new
         {
             Name = "GitHub", ProviderType = "oauth2", OAuth2SettingsJson = "{\"token\":\"t\"}", Icon = "github", IsEnabled = true,

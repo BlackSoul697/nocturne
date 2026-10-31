@@ -25,14 +25,14 @@ public interface IOidcProviderRepository
     /// <summary>Stores a provider and returns its id.</summary>
     Task<Guid> CreateAsync(NewOidcProvider provider, CancellationToken ct);
 
-    /// <summary>Applies <paramref name="edit"/> and stamps the provider updated at <paramref name="now"/>; null when there is none.</summary>
-    Task<OidcProviderRecord?> UpdateAsync(Guid providerId, OidcProviderEdit edit, DateTime now, CancellationToken ct);
+    /// <summary>Applies <paramref name="edit"/>; null when there is none.</summary>
+    Task<OidcProviderRecord?> UpdateAsync(Guid providerId, OidcProviderEdit edit, CancellationToken ct);
 
     /// <summary>Deletes the provider; false when there is none.</summary>
     Task<bool> DeleteAsync(Guid providerId, CancellationToken ct);
 
-    /// <summary>Enables or disables the provider and stamps it updated at <paramref name="now"/>; false when there is none.</summary>
-    Task<bool> SetEnabledAsync(Guid providerId, bool enabled, DateTime now, CancellationToken ct);
+    /// <summary>Enables or disables the provider; false when there is none.</summary>
+    Task<bool> SetEnabledAsync(Guid providerId, bool enabled, CancellationToken ct);
 
     /// <summary>Keeps the discovery document fetched at <paramref name="cachedAt"/>; false when there is no such provider.</summary>
     Task<bool> CacheDiscoveryDocumentAsync(Guid providerId, string documentJson, DateTime cachedAt, CancellationToken ct);
@@ -41,7 +41,8 @@ public interface IOidcProviderRepository
     /// Makes the stored providers match <paramref name="configured"/>, each of which names its id:
     /// an existing row takes the configured values, a missing one is added, and an enabled row not
     /// among them is disabled, in one save. Stored secrets, claim mappings and discovery documents
-    /// are left as they are.
+    /// are left as they are. An existing row whose values are unchanged is recorded as updated at
+    /// <paramref name="now"/>.
     /// </summary>
     Task SyncConfiguredAsync(IReadOnlyList<NewOidcProvider> configured, DateTime now, CancellationToken ct);
 
