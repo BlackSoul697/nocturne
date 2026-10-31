@@ -63,7 +63,6 @@ public class ConnectorHealthErrorMessageTests : IDisposable
             Prepare = c => c.SavingChanges += (_, _) => _saved.AddRange(c.ConnectorConfigurations.Local),
         };
         _service = new ConnectorConfigurationService(
-            contexts,
             new ConnectorConfigurationRepository(contexts),
             new SubjectRepository(contexts),
             new OAuthGrantRepository(contexts),

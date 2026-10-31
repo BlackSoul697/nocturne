@@ -69,7 +69,7 @@ public class MetadataPublisherBackfillMarkTests
             Mock.Of<IHeartRateService>(),
             Mock.Of<ITenantOwnerResolver>(),
             Mock.Of<ITenantAccessor>(),
-            _db.AsFactory(),
+            new ActivityDedupRepository(_db.AsFactory()),
             new ConnectorConfigurationRepository(_db.AsFactory()),
             Mock.Of<IProfileActivationRepository>(),
             new ProfileActivationWriter(Mock.Of<IProfileActivationRepository>(), Mock.Of<ITenantCache>(), TempBasalTestDeps.NoReresolution()),

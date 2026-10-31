@@ -2,11 +2,10 @@ using Nocturne.API.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
-using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.API.Middleware.Handlers;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Models.Authorization;
-using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Controllers.Authentication;
 
@@ -37,7 +36,7 @@ namespace Nocturne.API.Controllers.Authentication;
 [Tags("Authentication")]
 public class DirectGrantController : ControllerBase
 {
-    private readonly INocturneDbContextFactory _contexts;
+    private readonly ISubjectRepository _subjects;
     private readonly IDirectGrantService _directGrantService;
 
     /// <summary>
@@ -45,10 +44,10 @@ public class DirectGrantController : ControllerBase
     /// </summary>
     /// <param name="directGrantService">The service that creates, lists, and revokes direct grants.</param>
     public DirectGrantController(
-        INocturneDbContextFactory contexts,
+        ISubjectRepository subjects,
         IDirectGrantService directGrantService)
     {
-        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        _subjects = subjects ?? throw new ArgumentNullException(nameof(subjects));
         _directGrantService = directGrantService;
     }
 
@@ -179,7 +178,7 @@ public class DirectGrantController : ControllerBase
     /// The tenant's device-token holder, when the caller may manage it, and nothing otherwise.
     /// </summary>
     /// <remarks>
-    /// A site's uploader tokens belong to nobody (see <see cref="DeviceSubjectFilter"/>), so no
+    /// A site's uploader tokens belong to nobody (see <see cref="ISubjectRepository.FindDeviceSubjectAsync"/>), so no
     /// person's own list would ever contain them. Revoking a device is the operation someone
     /// reaches for when a phone is lost, so it cannot be the one thing this screen cannot do.
     /// Gated on <see cref="Scope.MembersManage"/> rather than shown to every member, because a
@@ -192,9 +191,7 @@ public class DirectGrantController : ControllerBase
             return [];
         }
 
-        await using var db = await _contexts.CreateAsync(HttpContext.RequestAborted);
-        return await db.FindDeviceSubjectOf(
-            db.TenantId, HttpContext.RequestAborted) is { } holderId
+        return await _subjects.FindDeviceSubjectAsync(HttpContext.RequestAborted) is { } holderId
             ? [holderId]
             : [];
     }

@@ -172,6 +172,20 @@ public class SubjectRepository : ISubjectRepository
     }
 
     /// <inheritdoc/>
+    public virtual async Task<Guid?> FindDeviceSubjectAsync(CancellationToken ct)
+    {
+        await using var lease = await OpenAsync(ct);
+        return await lease.Context.FindDeviceSubjectOf(lease.Context.TenantId, ct);
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<Guid> EnsureDeviceSubjectAsync(CancellationToken ct)
+    {
+        await using var db = await Transactional.CreateAsync(ct);
+        return await db.DeviceSubjectOf(db.TenantId, ct);
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<IReadOnlyList<SubjectRecord>> ListPendingAccessRequestsAsync(CancellationToken ct)
     {
         await using var lease = await OpenAsync(ct);

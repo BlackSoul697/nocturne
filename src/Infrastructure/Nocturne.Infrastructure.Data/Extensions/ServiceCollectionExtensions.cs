@@ -207,6 +207,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrackerRepository, TrackerRepository>();
         services.AddScoped<IStateSpanRepository, StateSpanRepository>();
         services.AddScoped<ISleepSessionRepository, SleepSessionRepository>();
+        services.AddScoped<IActivityDedupRepository, ActivityDedupRepository>();
         services.AddScoped<ISystemEventRepository, SystemEventRepository>();
         services.AddScoped<IUserFoodFavoriteRepository, UserFoodFavoriteRepository>();
         services.AddScoped<ITreatmentFoodRepository, TreatmentFoodRepository>();

@@ -76,7 +76,7 @@ public class DirectGrantControllerTests : IDisposable
                 new GuestSessionCacheService(new MemoryCache(new MemoryCacheOptions()))),
             new Mock<ILogger<DirectGrantService>>().Object);
 
-        _controller = new DirectGrantController(_dbContext.AsFactory(), directGrantService);
+        _controller = new DirectGrantController(new SubjectRepository(_dbContext.AsFactory()), directGrantService);
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext,

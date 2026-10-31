@@ -67,7 +67,6 @@ public class ConnectorConfigurationLegacyGrantTests : IDisposable
         var logger = NullLogger<ConnectorConfigurationService>.Instance;
 
         _service = new ConnectorConfigurationService(
-            _dbContext.AsFactory(),
             new ConnectorConfigurationRepository(_dbContext.AsFactory()),
             new SubjectRepository(_dbContext.AsFactory()),
             new OAuthGrantRepository(_dbContext.AsFactory()),

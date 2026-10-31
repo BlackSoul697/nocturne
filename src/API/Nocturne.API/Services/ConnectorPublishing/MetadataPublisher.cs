@@ -2,10 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.ProfileActivations;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
-using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Entities;
-using Nocturne.Infrastructure.Data.Extensions;
-using Nocturne.Infrastructure.Data.Mappers;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Connectors;
@@ -19,7 +15,6 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4;
-using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.ConnectorPublishing;
 
@@ -41,7 +36,7 @@ internal sealed class MetadataPublisher : ConnectorPublisherBase, IMetadataPubli
     private readonly IStepCountService _stepCountService;
     private readonly IHeartRateService _heartRateService;
     private readonly ITenantOwnerResolver _tenantOwnerResolver;
-    private readonly INocturneDbContextFactory _contexts;
+    private readonly IActivityDedupRepository _activityDedup;
     private readonly IConnectorConfigurationRepository _configurations;
     private readonly IProfileActivationRepository _profileActivations;
     private readonly ProfileActivationWriter _profileActivationWriter;
@@ -59,7 +54,7 @@ internal sealed class MetadataPublisher : ConnectorPublisherBase, IMetadataPubli
         IHeartRateService heartRateService,
         ITenantOwnerResolver tenantOwnerResolver,
         ITenantAccessor tenantAccessor,
-        INocturneDbContextFactory contexts,
+        IActivityDedupRepository activityDedup,
         IConnectorConfigurationRepository configurations,
         IProfileActivationRepository profileActivations,
         ProfileActivationWriter profileActivationWriter,
@@ -81,7 +76,7 @@ internal sealed class MetadataPublisher : ConnectorPublisherBase, IMetadataPubli
         _stepCountService = stepCountService ?? throw new ArgumentNullException(nameof(stepCountService));
         _heartRateService = heartRateService ?? throw new ArgumentNullException(nameof(heartRateService));
         _tenantOwnerResolver = tenantOwnerResolver ?? throw new ArgumentNullException(nameof(tenantOwnerResolver));
-        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        _activityDedup = activityDedup ?? throw new ArgumentNullException(nameof(activityDedup));
         _configurations = configurations ?? throw new ArgumentNullException(nameof(configurations));
     }
 
@@ -231,10 +226,7 @@ internal sealed class MetadataPublisher : ConnectorPublisherBase, IMetadataPubli
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// An activity is stored as a state span, heart rate, step count or sleep session, each carrying
-    /// the activity's id as its <c>OriginalId</c>.
-    /// </remarks>
+    /// <remarks>Held ids are read as <see cref="IActivityDedupRepository"/> describes.</remarks>
     public Task<int?> PublishRecentActivityAsync(
         IEnumerable<Activity> activities,
         string source,
@@ -243,18 +235,7 @@ internal sealed class MetadataPublisher : ConnectorPublisherBase, IMetadataPubli
             activities, a => a.Id,
             unheld => WriteActivityAsync(unheld, source, cancellationToken),
             source,
-            ids => HeldAsync(db => db.GetHeldOriginalIdsAsync<StateSpanEntity>(ids, cancellationToken), cancellationToken),
-            ids => HeldAsync(db => db.GetHeldOriginalIdsAsync<HeartRateEntity>(ids, cancellationToken), cancellationToken),
-            ids => HeldAsync(db => db.GetHeldOriginalIdsAsync<StepCountEntity>(ids, cancellationToken), cancellationToken),
-            ids => HeldAsync(db => db.GetHeldOriginalIdsAsync<SleepSessionEntity>(
-                ids, s => s.Source == ActivityStateSpanMapper.StoredSleepSessionSource, cancellationToken), cancellationToken));
-
-    private async Task<IReadOnlySet<string>> HeldAsync(
-        Func<NocturneDbContext, Task<IReadOnlySet<string>>> held, CancellationToken ct)
-    {
-        await using var db = await _contexts.CreateAsync(ct);
-        return await held(db);
-    }
+            ids => _activityDedup.GetHeldIdsAsync(ids, cancellationToken));
 
     /// <remarks>
     /// A Profile span, as an instance before profile activations replays it, is published as the
