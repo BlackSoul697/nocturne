@@ -257,7 +257,7 @@ public class OidcController : ControllerBase
                 result.ErrorDescription
             );
 
-            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, subjectId: null, success: false,
+            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, targetSubjectId: null, success: false,
                 ipAddress: GetClientIpAddress(), userAgent: Request.Headers.UserAgent,
                 errorMessage: result.ErrorDescription,
                 detailsJson: JsonSerializer.Serialize(new { method = "oidc" }));

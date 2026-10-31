@@ -557,7 +557,7 @@ public class PasskeyController : ControllerBase
         {
             _logger.LogWarning(ex, "Passkey login completion failed");
 
-            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, subjectId: null, success: false,
+            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, targetSubjectId: null, success: false,
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 userAgent: Request.Headers.UserAgent.ToString(),
                 errorMessage: ex.Message,
