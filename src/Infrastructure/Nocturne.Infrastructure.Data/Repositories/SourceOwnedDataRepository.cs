@@ -2,8 +2,11 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
+using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Connectors;
 using Nocturne.Core.Models.Services;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Extensions;
@@ -31,23 +34,30 @@ namespace Nocturne.Infrastructure.Data.Repositories;
 ///   stamp on a row holding the record's sync key or primary key, so it blocks their re-import the
 ///   same way; once released, a record keyed by its primary key revives its row in place.</item>
 /// </list>
-/// No delete or release here clears a legacy read cache.
+/// Each purge and each release tells <see cref="ILegacyReadCacheInvalidation"/> once, after its tables have
+/// committed, which model types it changed, so the legacy read caches stop serving them.
 /// </remarks>
 public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDataPurge
 {
     private readonly INocturneDbContextFactory _contexts;
     private readonly IAuditContext _audit;
+    private readonly ILegacyReadCacheInvalidation? _legacyReads;
 
     /// <summary>
     /// A module whose calls each open their own context and attribute writes to <paramref name="audit"/>.
     /// The actor is required: a purge with no actor reads as a system mutation, which stamps no
     /// <c>deleted_by_user</c> flag, so the next sync would re-import what the user deleted.
     /// </summary>
-    public SourceOwnedDataRepository(INocturneDbContextFactory contexts, IAuditContext audit)
+    public SourceOwnedDataRepository(
+        INocturneDbContextFactory contexts, IAuditContext audit, ILegacyReadCacheInvalidation? legacyReads = null)
     {
         _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _audit = audit ?? throw new ArgumentNullException(nameof(audit));
+        _legacyReads = legacyReads;
     }
+
+    private Task ReportWrittenAsync(IReadOnlyCollection<Type> models) =>
+        models.Count == 0 ? Task.CompletedTask : _legacyReads?.WrittenAsync(models) ?? Task.CompletedTask;
 
     /// <summary>
     /// What a source owns in one table: the buckets discovery groups it into (none for a table
@@ -57,6 +67,9 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
     private interface IOwnedTable
     {
         string Type { get; }
+
+        /// <summary>The model type the table's rows are served as, which a write to it reports.</summary>
+        Type Model { get; }
 
         Task<List<SourceBucket>> BucketsAsync(
             NocturneDbContext db, DateTime windowStart, DateTime last24HoursDate, CancellationToken ct);
@@ -68,12 +81,13 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
         Task<int> SoftDeleteAsync(
             NocturneDbContext db, string source, IAuditContext? audit, string scope, CancellationToken ct);
 
-        Task AllowReimportAsync(
+        Task<int> AllowReimportAsync(
             NocturneDbContext db, string source, IAuditContext? audit, string scope, CancellationToken ct);
     }
 
     private sealed class OwnedTable<T>(
         string type,
+        Type model,
         Func<NocturneDbContext, IQueryable<T>> rows,
         Func<string, Expression<Func<T, bool>>> ownedBy,
         Func<string, IQueryable<T>, DateTime, DateTime, CancellationToken, Task<List<SourceBucket>>>? buckets = null,
@@ -81,6 +95,8 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
         : IOwnedTable where T : class, ITenantScoped, ISoftDeletable
     {
         public string Type => type;
+
+        public Type Model => model;
 
         public Task<List<SourceBucket>> BucketsAsync(
             NocturneDbContext db, DateTime windowStart, DateTime last24HoursDate, CancellationToken ct) =>
@@ -100,47 +116,48 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
             NocturneDbContext db, string source, IAuditContext? audit, string scope, CancellationToken ct) =>
             db.AuditedSoftDeleteAsync(rows(db).Where(ownedBy(source)), audit, scope, ct);
 
-        public Task AllowReimportAsync(
+        public Task<int> AllowReimportAsync(
             NocturneDbContext db, string source, IAuditContext? audit, string scope, CancellationToken ct) =>
             db.AuditedAllowReimportAsync(rows(db).Where(ownedBy(source)), audit, scope, ct);
     }
 
-    private static OwnedTable<T> TimeSeries<T>(string type, Func<NocturneDbContext, IQueryable<T>> rows)
+    private static OwnedTable<T> TimeSeries<T>(
+        string type, Type model, Func<NocturneDbContext, IQueryable<T>> rows)
         where T : class, ITenantScoped, ISoftDeletable, ISourcedEntity, IObservationTimestamped =>
-        new(type, rows, SourceFilter.For<T>, TimeSeriesBuckets);
+        new(type, model, rows, SourceFilter.For<T>, TimeSeriesBuckets);
 
     private static readonly IOwnedTable[] OwnedTables =
     [
-        TimeSeries<BolusEntity>(SourceDataTypes.Boluses, db => db.Boluses),
-        TimeSeries<CarbIntakeEntity>(SourceDataTypes.CarbIntake, db => db.CarbIntakes),
-        TimeSeries<BolusCalculationEntity>(SourceDataTypes.BolusCalculations, db => db.BolusCalculations),
-        TimeSeries<DeviceEventEntity>(SourceDataTypes.DeviceEvents, db => db.DeviceEvents),
-        TimeSeries<BGCheckEntity>(SourceDataTypes.BGChecks, db => db.BGChecks),
-        TimeSeries<NoteEntity>(SourceDataTypes.Notes, db => db.Notes),
-        TimeSeries<ApsSnapshotEntity>(SourceDataTypes.DeviceStatus, db => db.ApsSnapshots),
-        TimeSeries<TempBasalEntity>(SourceDataTypes.TempBasals, db => db.TempBasals),
+        TimeSeries<BolusEntity>(SourceDataTypes.Boluses, typeof(Bolus), db => db.Boluses),
+        TimeSeries<CarbIntakeEntity>(SourceDataTypes.CarbIntake, typeof(CarbIntake), db => db.CarbIntakes),
+        TimeSeries<BolusCalculationEntity>(SourceDataTypes.BolusCalculations, typeof(BolusCalculation), db => db.BolusCalculations),
+        TimeSeries<DeviceEventEntity>(SourceDataTypes.DeviceEvents, typeof(DeviceEvent), db => db.DeviceEvents),
+        TimeSeries<BGCheckEntity>(SourceDataTypes.BGChecks, typeof(BGCheck), db => db.BGChecks),
+        TimeSeries<NoteEntity>(SourceDataTypes.Notes, typeof(Note), db => db.Notes),
+        TimeSeries<ApsSnapshotEntity>(SourceDataTypes.DeviceStatus, typeof(ApsSnapshot), db => db.ApsSnapshots),
+        TimeSeries<TempBasalEntity>(SourceDataTypes.TempBasals, typeof(TempBasal), db => db.TempBasals),
         new OwnedTable<StateSpanEntity>(
-            SourceDataTypes.StateSpans, db => db.StateSpans, source => s => s.Source == source, StateSpanBuckets),
+            SourceDataTypes.StateSpans, typeof(StateSpan), db => db.StateSpans, source => s => s.Source == source, StateSpanBuckets),
         new OwnedTable<ProfileActivationEntity>(
-            SourceDataTypes.StateSpans, db => db.ProfileActivations, SourceFilter.For<ProfileActivationEntity>),
-        TimeSeries<HeartRateEntity>(SourceDataTypes.HeartRate, db => db.HeartRates),
-        TimeSeries<StepCountEntity>(SourceDataTypes.Steps, db => db.StepCounts),
+            SourceDataTypes.StateSpans, typeof(ProfileActivation), db => db.ProfileActivations, SourceFilter.For<ProfileActivationEntity>),
+        TimeSeries<HeartRateEntity>(SourceDataTypes.HeartRate, typeof(HeartRate), db => db.HeartRates),
+        TimeSeries<StepCountEntity>(SourceDataTypes.Steps, typeof(StepCount), db => db.StepCounts),
         new OwnedTable<BodyWeightEntity>(
-            SourceDataTypes.BodyWeight, db => db.BodyWeights, SourceFilter.For<BodyWeightEntity>, BodyWeightBuckets),
+            SourceDataTypes.BodyWeight, typeof(BodyWeight), db => db.BodyWeights, SourceFilter.For<BodyWeightEntity>, BodyWeightBuckets),
         new OwnedTable<TherapySettingsEntity>(
-            SourceDataTypes.Profiles, db => db.TherapySettings, SourceFilter.For<TherapySettingsEntity>,
+            SourceDataTypes.Profiles, typeof(TherapySettings), db => db.TherapySettings, SourceFilter.For<TherapySettingsEntity>,
             profileName: e => e.ProfileName),
         new OwnedTable<BasalScheduleEntity>(
-            SourceDataTypes.Profiles, db => db.BasalSchedules, SourceFilter.For<BasalScheduleEntity>,
+            SourceDataTypes.Profiles, typeof(BasalSchedule), db => db.BasalSchedules, SourceFilter.For<BasalScheduleEntity>,
             profileName: e => e.ProfileName),
         new OwnedTable<CarbRatioScheduleEntity>(
-            SourceDataTypes.Profiles, db => db.CarbRatioSchedules, SourceFilter.For<CarbRatioScheduleEntity>,
+            SourceDataTypes.Profiles, typeof(CarbRatioSchedule), db => db.CarbRatioSchedules, SourceFilter.For<CarbRatioScheduleEntity>,
             profileName: e => e.ProfileName),
         new OwnedTable<SensitivityScheduleEntity>(
-            SourceDataTypes.Profiles, db => db.SensitivitySchedules, SourceFilter.For<SensitivityScheduleEntity>,
+            SourceDataTypes.Profiles, typeof(SensitivitySchedule), db => db.SensitivitySchedules, SourceFilter.For<SensitivityScheduleEntity>,
             profileName: e => e.ProfileName),
         new OwnedTable<TargetRangeScheduleEntity>(
-            SourceDataTypes.Profiles, db => db.TargetRangeSchedules, SourceFilter.For<TargetRangeScheduleEntity>,
+            SourceDataTypes.Profiles, typeof(TargetRangeSchedule), db => db.TargetRangeSchedules, SourceFilter.For<TargetRangeScheduleEntity>,
             profileName: e => e.ProfileName),
     ];
 
@@ -410,11 +427,22 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
         await using var db = await _contexts.CreateAsync(ct);
         var deleted = new Dictionary<string, long>();
         var profileNames = new HashSet<string>();
-        foreach (var table in OwnedTables)
+        var written = new HashSet<Type>();
+        try
         {
-            profileNames.UnionWith(await table.ProfileNamesAsync(db, source, ct));
-            var count = await table.SoftDeleteAsync(db, source, _audit, scope, ct);
-            if (count > 0) deleted[table.Type] = deleted.GetValueOrDefault(table.Type) + count;
+            foreach (var table in OwnedTables)
+            {
+                profileNames.UnionWith(await table.ProfileNamesAsync(db, source, ct));
+                var count = await table.SoftDeleteAsync(db, source, _audit, scope, ct);
+                if (count <= 0) continue;
+
+                deleted[table.Type] = deleted.GetValueOrDefault(table.Type) + count;
+                written.Add(table.Model);
+            }
+        }
+        finally
+        {
+            await ReportWrittenAsync(written);
         }
 
         return new SourcePurgeResult(deleted, profileNames);
@@ -424,10 +452,24 @@ public class SourceOwnedDataRepository : ISourceOwnedDataReader, ISourceOwnedDat
     public virtual async Task AllowReimportBySourceAsync(string source, string scope, CancellationToken ct)
     {
         await using var db = await _contexts.CreateAsync(ct);
-        await db.AuditedAllowReimportAsync(db.SensorGlucose.FromSource(source), _audit, scope, ct);
-        await db.AuditedAllowReimportAsync(db.MeterGlucose.FromSource(source), _audit, scope, ct);
-        await db.AuditedAllowReimportAsync(db.Calibrations.FromSource(source), _audit, scope, ct);
-        foreach (var table in OwnedTables)
-            await table.AllowReimportAsync(db, source, _audit, scope, ct);
+        var written = new HashSet<Type>();
+        try
+        {
+            if (await db.AuditedAllowReimportAsync(db.SensorGlucose.FromSource(source), _audit, scope, ct) > 0)
+                written.Add(typeof(SensorGlucose));
+            if (await db.AuditedAllowReimportAsync(db.MeterGlucose.FromSource(source), _audit, scope, ct) > 0)
+                written.Add(typeof(MeterGlucose));
+            if (await db.AuditedAllowReimportAsync(db.Calibrations.FromSource(source), _audit, scope, ct) > 0)
+                written.Add(typeof(Calibration));
+            foreach (var table in OwnedTables)
+            {
+                if (await table.AllowReimportAsync(db, source, _audit, scope, ct) > 0)
+                    written.Add(table.Model);
+            }
+        }
+        finally
+        {
+            await ReportWrittenAsync(written);
+        }
     }
 }

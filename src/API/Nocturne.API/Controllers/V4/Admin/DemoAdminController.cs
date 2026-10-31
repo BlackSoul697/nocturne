@@ -161,9 +161,16 @@ public class DemoAdminController : ControllerBase
 
         await using var db = await _factory.CreateForTenantAsync(tenant.Id, ct);
 
-        var deleted = await DemoDataPurge.PurgeEntriesAsync(db, ct);
-
-        return Ok(new DemoDeleteResultDto(deleted));
+        var writes = new DemoPurgeWrites();
+        try
+        {
+            var deleted = await writes.PurgeEntriesAsync(db, ct);
+            return Ok(new DemoDeleteResultDto(deleted));
+        }
+        finally
+        {
+            await writes.ReportInTenantAsync(HttpContext.RequestServices, TenantContextOf(tenant));
+        }
     }
 
     /// <summary>
@@ -180,10 +187,17 @@ public class DemoAdminController : ControllerBase
 
         await using var db = await _factory.CreateForTenantAsync(tenant.Id, ct);
 
-        var deleted = await DemoDataPurge.PurgeTreatmentsAsync(db, _time, ct)
-            + await DemoDataPurge.PurgeDeviceStatusAsync(db, ct);
-
-        return Ok(new DemoDeleteResultDto(deleted));
+        var writes = new DemoPurgeWrites();
+        try
+        {
+            var treatments = await writes.PurgeTreatmentsAsync(db, _time, ct);
+            var deviceStatus = await writes.PurgeDeviceStatusAsync(db, ct);
+            return Ok(new DemoDeleteResultDto(treatments + deviceStatus));
+        }
+        finally
+        {
+            await writes.ReportInTenantAsync(HttpContext.RequestServices, TenantContextOf(tenant));
+        }
     }
 
     /// <summary>
@@ -231,7 +245,7 @@ public class DemoAdminController : ControllerBase
 
         var seeded = await SampleDataSeeder.SeedInTenantScopeAsync(
             HttpContext.RequestServices,
-            new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive, tenant.IsDemo),
+            TenantContextOf(tenant),
             request?.Days ?? 7,
             publicSubjectId,
             DataSources.DemoService,
@@ -242,6 +256,9 @@ public class DemoAdminController : ControllerBase
     }
 
     private Task<TenantRecord?> FindDemoTenantAsync(CancellationToken ct) => _tenants.FindDemoTenantAsync(ct);
+
+    private static TenantContext TenantContextOf(TenantRecord tenant) =>
+        new(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive, tenant.IsDemo);
 
     private static DemoStateDto ToDto(TenantRecord tenant, bool alreadyExisted) => new(
         TenantId: tenant.Id,

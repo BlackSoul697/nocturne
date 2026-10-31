@@ -11,9 +11,11 @@ using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
+using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 using Nocturne.Infrastructure.Data.Repositories;
@@ -67,7 +69,10 @@ public class DemoDataPurgeParityTests : IDisposable
     private DemoAdminController CreateController() =>
         new(Mock.Of<ITenantService>(), null!, new TenantRepository((new ContextFactory(_db.Options)).AsNocturneFactory()),
             new TenantMembershipRepository((new ContextFactory(_db.Options)).AsNocturneFactory()),
-            (new ContextFactory(_db.Options)).AsNocturneFactory(), TimeProvider.System);
+            (new ContextFactory(_db.Options)).AsNocturneFactory(), TimeProvider.System)
+        {
+            ControllerContext = new DemoAdminRequest().Context,
+        };
 
     private DataSourceService CreateService(NocturneDbContext context) => new(
         new SourceOwnedDataRepository(context.AsFactory(), Mock.Of<IAuditContext>()),
@@ -225,6 +230,49 @@ public class DemoDataPurgeParityTests : IDisposable
 
         controllerDeleted.Should().Be(SeededRows);
         serviceDeleted.Should().Be(SeededRows);
+    }
+
+    [Fact]
+    public async Task ServicePurge_ReportsTheModelsOfEveryGroupItDeleted()
+    {
+        SeedOneDemoRowOfEveryType();
+        var reads = new RecordingLegacyReads();
+
+        await using var ctx = NewContext();
+        await new DemoDataPurger(ctx.AsFactory(), TimeProvider.System, reads).PurgeAsync(default);
+
+        reads.Models.Should().Contain([
+            typeof(SensorGlucose), typeof(MeterGlucose), typeof(Calibration),
+            typeof(Bolus), typeof(CarbIntake), typeof(BGCheck), typeof(Note), typeof(DeviceEvent),
+            typeof(BolusCalculation), typeof(TempBasal), typeof(StateSpan), typeof(ApsSnapshot),
+        ]);
+    }
+
+    [Fact]
+    public async Task ServicePurge_ReportsNothingWhenThereIsNothingToDelete()
+    {
+        var reads = new RecordingLegacyReads();
+
+        await using var ctx = NewContext();
+        await new DemoDataPurger(ctx.AsFactory(), TimeProvider.System, reads).PurgeAsync(default);
+
+        reads.Models.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ServicePurge_ReportsTheGroupThatFailedPartWayAndNoGroupThatNeverStarted()
+    {
+        SeedOneDemoRowOfEveryType();
+        var reads = new RecordingLegacyReads();
+
+        await using var ctx = NewContext();
+        await ctx.Database.ExecuteSqlRawAsync("DROP TABLE lab_hba1c_results");
+        var purge = () => new DemoDataPurger(ctx.AsFactory(), TimeProvider.System, reads).PurgeAsync(default);
+
+        await purge.Should().ThrowAsync<Exception>();
+
+        reads.Models.Should().Contain([typeof(Bolus), typeof(CarbIntake)])
+            .And.NotContain([typeof(SensorGlucose), typeof(ApsSnapshot)]);
     }
 
     [Fact]
