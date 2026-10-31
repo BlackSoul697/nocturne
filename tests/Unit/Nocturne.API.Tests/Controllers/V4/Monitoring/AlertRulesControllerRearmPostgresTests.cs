@@ -90,11 +90,6 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
         public override ValueTask<NocturneDbContext> CreateAsync(CancellationToken ct = default) => ValueTask.FromResult(create());
     }
 
-    private sealed class RawFactory(Func<NocturneDbContext> create) : IDbContextFactory<NocturneDbContext>
-    {
-        public NocturneDbContext CreateDbContext() => create();
-    }
-
     private NocturneDbContext Context(Guid tenant, Failure failure) =>
         new(new DbContextOptionsBuilder<NocturneDbContext>()
             .UseNpgsql(database.AppConnectionString, npgsql => npgsql.EnableRetryOnFailure(
@@ -157,7 +152,7 @@ public class AlertRulesControllerRearmPostgresTests(AlertRulesControllerRearmPos
         var controller = new AlertRulesController(
             new Factory(() => Context(tenant, failure)),
             new TenantMembershipRepository(new Factory(() => Context(tenant, failure))),
-            new AlertRepository(new RawFactory(() => Context(tenant, failure))),
+            new AlertRepository(new Factory(() => Context(tenant, failure))),
             new AlertRuleRepository(new Factory(() => Context(tenant, failure))),
             MockTenantAccessor.Create(tenant).Object,
             Mock.Of<IAlertReferenceService>(),

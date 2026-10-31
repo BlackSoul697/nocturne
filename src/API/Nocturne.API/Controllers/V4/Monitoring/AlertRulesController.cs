@@ -112,7 +112,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(typeof(List<AlertRuleResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<AlertRuleResponse>>> GetRules(CancellationToken ct)
     {
-        var rules = await _alerts.GetRulesAsync(_tenantAccessor.TenantId, ct);
+        var rules = await _alerts.GetRulesAsync(ct);
         return Ok(await ToResponsesAsync(rules, ct));
     }
 
@@ -126,7 +126,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AlertRuleResponse>> GetRule(Guid id, CancellationToken ct)
     {
-        var rule = await _alerts.GetRuleAsync(_tenantAccessor.TenantId, id, ct);
+        var rule = await _alerts.GetRuleAsync(id, ct);
         if (rule is null)
             return NotFound();
 
@@ -159,8 +159,6 @@ public class AlertRulesController : ControllerBase
         if (await RejectInvalidTrackerAgeAsync(db, leaves, ct) is { } badTracker)
             return badTracker;
 
-        var tenantId = db.TenantId;
-
         var conditionParamsJson = trees.ConditionParams;
 
         var ruleId = await _rules.CreateAsync(
@@ -181,7 +179,7 @@ public class AlertRulesController : ControllerBase
                 _channels.ToWrites(request.Channels ?? [])),
             ct);
 
-        return CreatedAtAction(nameof(GetRule), new { id = ruleId }, await ReadBackAsync(tenantId, ruleId, ct));
+        return CreatedAtAction(nameof(GetRule), new { id = ruleId }, await ReadBackAsync(ruleId, ct));
     }
 
     /// <summary>
@@ -197,7 +195,7 @@ public class AlertRulesController : ControllerBase
         Guid id, [FromBody] UpdateAlertRuleRequest request, CancellationToken ct)
     {
         var tenantId = _tenantAccessor.TenantId;
-        var rule = await _alerts.GetRuleAsync(tenantId, id, ct);
+        var rule = await _alerts.GetRuleAsync(id, ct);
         if (rule is null)
             return NotFound();
 
@@ -264,7 +262,7 @@ public class AlertRulesController : ControllerBase
         if (wasEnabled && !request.IsEnabled)
             await _retirement.CloseAsync([id], tenantId, CancellationToken.None);
 
-        return Ok(await ReadBackAsync(tenantId, id, ct));
+        return Ok(await ReadBackAsync(id, ct));
     }
 
     /// <summary>
@@ -279,7 +277,7 @@ public class AlertRulesController : ControllerBase
     public async Task<ActionResult> DeleteRule(Guid id, CancellationToken ct)
     {
         var tenantId = _tenantAccessor.TenantId;
-        var rule = await _alerts.GetRuleAsync(tenantId, id, ct);
+        var rule = await _alerts.GetRuleAsync(id, ct);
         if (rule is null)
             return NotFound();
 
@@ -331,7 +329,7 @@ public class AlertRulesController : ControllerBase
         if (wasEnabled)
             await _retirement.CloseAsync([id], db.TenantId, CancellationToken.None);
 
-        return Ok(await ReadBackAsync(db.TenantId, id, ct));
+        return Ok(await ReadBackAsync(id, ct));
     }
 
     /// <summary>
@@ -347,7 +345,7 @@ public class AlertRulesController : ControllerBase
     public async Task<IActionResult> TestFire(Guid id, CancellationToken ct)
     {
         var tenantId = _tenantAccessor.TenantId;
-        var rule = await _alerts.GetRuleAsync(tenantId, id, ct);
+        var rule = await _alerts.GetRuleAsync(id, ct);
         if (rule is null) return NotFound();
 
         await _deliveryService.TestFireAsync(id, rule.Channels, BuildTestPayload(rule.Rule, tenantId), ct);
@@ -444,9 +442,9 @@ public class AlertRulesController : ControllerBase
         (await ToResponsesAsync([rule], ct))[0];
 
     /// <summary>The response for a rule this request has just committed.</summary>
-    private async Task<AlertRuleResponse> ReadBackAsync(Guid tenantId, Guid ruleId, CancellationToken ct) =>
+    private async Task<AlertRuleResponse> ReadBackAsync(Guid ruleId, CancellationToken ct) =>
         await ToResponseAsync(
-            await _alerts.GetRuleAsync(tenantId, ruleId, ct)
+            await _alerts.GetRuleAsync(ruleId, ct)
                 ?? throw new InvalidOperationException($"Alert rule {ruleId} was not found after it was saved."),
             ct);
 

@@ -230,7 +230,7 @@ public class StatusServiceTests
             TestPublicAccessCache.Create(),
             new TenantGlucoseUnits(tenantAccessor, appearanceReader.Object, _tenants.Object),
             new GlucoseStatusClassifier(_configuration, NullLogger<GlucoseStatusClassifier>.Instance),
-            new AlertRepository(mockFactory.Object),
+            new AlertRepository(mockFactory.Object.AsNocturneFactory()),
             Mock.Of<ICategoryReadContext>(),
             TimeProvider.System,
             _mockLogger.Object);
@@ -1069,7 +1069,7 @@ public class StatusServiceTests
     {
         var alerts = new Mock<IAlertRepository>();
         alerts
-            .Setup(a => a.GetEnabledRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Setup(a => a.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TestDbException());
         var cache = TestTenantCache.Distributed(new MemoryCache(new MemoryCacheOptions()));
         var flights = new CacheFlights();
@@ -1090,7 +1090,7 @@ public class StatusServiceTests
         await Service().GetSystemStatusAsync();
         await Service().GetSystemStatusAsync();
 
-        alerts.Verify(a => a.GetEnabledRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        alerts.Verify(a => a.GetEnabledRulesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -1107,7 +1107,7 @@ public class StatusServiceTests
     {
         var alerts = new Mock<IAlertRepository>();
         alerts
-            .Setup(a => a.GetEnabledRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Setup(a => a.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(failure);
         return alerts.Object;
     }
@@ -1504,8 +1504,8 @@ public class StatusServiceTests
         alertContexts
             .Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(dbName));
-        alertRepository ??= new AlertRepository(alertContexts.Object);
         tenantAccessor ??= _mockTenantAccessor.Object;
+        alertRepository ??= new AlertRepository(alertContexts.Object.AsNocturneFactory(tenantAccessor.TenantId));
         return new StatusService(
             configuration,
             _mockCacheService.Object,

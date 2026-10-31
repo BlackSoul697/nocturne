@@ -344,7 +344,7 @@ public class TotalIobAgreementTests
 
         var enriched = await enricher.EnrichAsOfAsync(
             new SensorContext { LatestValue = 110m, LatestTimestamp = asOf, TrendRate = 0m, LastReadingAt = asOf },
-            [rule], Guid.NewGuid(), asOf, CancellationToken.None);
+            [rule], asOf, CancellationToken.None);
 
         return enriched.IobUnits;
     }
@@ -361,7 +361,7 @@ public class TotalIobAgreementTests
             entries.Object, Reader(now),
             _aps.Object, trackers.Object, Mock.Of<INotificationV1Service>(),
             Mock.Of<IGlucoseStatusClassifier>(), Mock.Of<IAlertRepository>(),
-            MockTenantAccessor.Create().Object, Mock.Of<ICategoryReadContext>(),
+            Mock.Of<ICategoryReadContext>(),
             TimeProvider.System, NullLogger<WidgetSummaryService>.Instance);
 
         var summary = await service.GetSummaryAsync();

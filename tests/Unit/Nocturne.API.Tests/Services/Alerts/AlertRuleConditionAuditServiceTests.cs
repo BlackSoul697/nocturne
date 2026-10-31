@@ -75,7 +75,7 @@ public class AlertRuleConditionAuditServiceTests
         var services = new ServiceCollection()
             .AddSingleton(factory.Object.AsNocturneFactory())
             .AddTransient<ITenantRepository, TenantRepository>()
-            .AddSingleton(alerts ?? new AlertRepository(factory.Object))
+            .AddSingleton(alerts ?? new AlertRepository(factory.Object.AsNocturneFactory()))
             .AddSingleton(_validator.Object)
             .BuildServiceProvider();
 

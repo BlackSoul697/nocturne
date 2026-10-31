@@ -15,10 +15,9 @@ namespace Nocturne.API.Services.Identity;
 /// <summary>
 /// Cross-tenant caregiver overview. Enumerates the subject's active memberships through the
 /// subject-pinned <see cref="ITenantMembershipRepository.ListMembershipsOfSubjectAsync"/>,
-/// then fans out per tenant: a fresh DI scope pinned via <see cref="ITenantAccessor"/> for the
-/// canonical glucose read, and a context from <see cref="INocturneDbContextFactory.CreateForTenantAsync"/>
-/// for alert rules and active excursions. Never reads as the request's tenant, so the endpoint
-/// works from the apex (tenantless) in multi-tenant deployments.
+/// then fans out per tenant: every read of a tenant runs in a fresh DI scope opened for it with
+/// <see cref="TenantJobScope.OpenFor(IServiceProvider, TenantReader, string)"/>. Never reads as the
+/// request's tenant, so the endpoint works from the apex (tenantless) in multi-tenant deployments.
 /// </summary>
 /// <seealso cref="ITenantOverviewService"/>
 public class TenantOverviewService : ITenantOverviewService
@@ -28,7 +27,6 @@ public class TenantOverviewService : ITenantOverviewService
     private readonly ITenantMembershipRepository _members;
     private readonly IServiceProvider _scope;
     private readonly IGlucoseStatusClassifier _classifier;
-    private readonly IAlertRepository _alertRepository;
     private readonly TimeProvider _time;
     private readonly ILogger<TenantOverviewService> _logger;
 
@@ -36,14 +34,12 @@ public class TenantOverviewService : ITenantOverviewService
         ITenantMembershipRepository members,
         IServiceProvider scope,
         IGlucoseStatusClassifier classifier,
-        IAlertRepository alertRepository,
         TimeProvider timeProvider,
         ILogger<TenantOverviewService> logger)
     {
         _members = members;
         _scope = scope;
         _classifier = classifier;
-        _alertRepository = alertRepository;
         _time = timeProvider;
         _logger = logger;
     }
@@ -140,7 +136,7 @@ public class TenantOverviewService : ITenantOverviewService
         }
 
         var thresholds = _classifier.ResolveThresholds(
-            await _alertRepository.GetEnabledRulesAsync(tenant.Id, ct));
+            await scope.ServiceProvider.GetRequiredService<IAlertRepository>().GetEnabledRulesAsync(ct));
 
         var reading = latest is null
             ? null
