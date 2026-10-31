@@ -344,7 +344,7 @@ public class MemberInviteController : ControllerBase
 
         await _members.ReplaceRolesAsync(tenantId, member.Id, removed, added, DateTime.UtcNow, ct);
 
-        if (IsPublicSubject(member))
+        if (member.IsPublicSubject())
             publicAccessCache.Evict(tenantId);
 
         return NoContent();
@@ -446,7 +446,7 @@ public class MemberInviteController : ControllerBase
         // permissions are the wrong bound: an owner holding "*" would otherwise be able to give an
         // unauthenticated reader everything. ShareLinkService.SetScopesAsync bounds the same rows to
         // PublicShareScopes; both writers have to agree or the narrower one is decorative.
-        var isPublicSubject = IsPublicSubject(member);
+        var isPublicSubject = member.IsPublicSubject();
         if (isPublicSubject)
         {
             var outsideShareVocabulary = (request.DirectPermissions ?? [])
@@ -542,7 +542,7 @@ public class MemberInviteController : ControllerBase
 
         await _members.SetLimitTo24HoursAsync(tenantId, member.Id, request.LimitTo24Hours, DateTime.UtcNow, ct);
 
-        if (IsPublicSubject(member))
+        if (member.IsPublicSubject())
             publicAccessCache.Evict(tenantId);
 
         return NoContent();
@@ -556,9 +556,6 @@ public class MemberInviteController : ControllerBase
         "Cannot remove your own membership; ask another member with members.manage.";
 
     private const string UngrantableRoleRemovalDetail = "Cannot remove a role you cannot grant.";
-
-    private static bool IsPublicSubject(TenantMemberRecord member) =>
-        member is { IsSystemSubject: true, SubjectName: "Public" };
 
     /// <summary>
     /// True when a history-clamped caller's edit would leave a clamped member holding permissions

@@ -3,6 +3,7 @@ using Nocturne.API.Authorization;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Auth;
 
@@ -289,9 +290,7 @@ public class SubjectService : ISubjectService
     /// <inheritdoc />
     public async Task<Subject?> InitializePublicSubjectAsync()
     {
-        const string publicSubjectName = "Public";
-
-        var existing = await _subjects.FindSystemSubjectAsync(publicSubjectName, CancellationToken.None);
+        var existing = await _subjects.FindSystemSubjectAsync(PublicSubjectFilter.PublicSubjectName, CancellationToken.None);
         if (existing != null)
         {
             _logger.LogDebug("Public subject already exists");
@@ -300,7 +299,7 @@ public class SubjectService : ISubjectService
 
         var subjectId = await _subjects.CreateAsync(
             new NewSubject(
-                Name: publicSubjectName,
+                Name: PublicSubjectFilter.PublicSubjectName,
                 Notes: "Represents unauthenticated access. Assign roles to control what the public can see.",
                 IsSystemSubject: true),
             CancellationToken.None);

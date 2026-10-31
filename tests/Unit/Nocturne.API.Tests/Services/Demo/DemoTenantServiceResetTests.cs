@@ -10,6 +10,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 using Nocturne.API.Services.Caching;
@@ -482,7 +483,7 @@ public class DemoTenantServiceResetTests : IDisposable
         }
 
         var publicSubject = await db.Subjects
-            .FirstOrDefaultAsync(s => s.IsSystemSubject && s.Name == "Public");
+            .FirstOrDefaultAsync(s => s.IsSystemSubject && s.Name == PublicSubjectFilter.PublicSubjectName);
 
         if (publicSubject is null)
         {

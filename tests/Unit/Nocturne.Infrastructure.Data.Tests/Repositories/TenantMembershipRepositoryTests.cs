@@ -4,6 +4,7 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Identity;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
@@ -142,6 +143,16 @@ public class TenantMembershipRepositoryTests : IDisposable
 
         await Subjects().UpdateAsync(first.SubjectId, new SubjectEdit(Preferences: "{\"units\":\"mmol\"}"), CancellationToken.None);
         (await Members().GetEarliestOwnerPreferencesAsync(_tenant, CancellationToken.None)).Should().Be("{\"units\":\"mmol\"}");
+    }
+
+    [Fact]
+    public async Task FindPublicMemberIgnoresAPersonNamedPublic()
+    {
+        var person = await JoinAsync(await SubjectAsync(PublicSubjectFilter.PublicSubjectName), _ownerRole);
+        var publicMember = await JoinAsync(await SubjectAsync(PublicSubjectFilter.PublicSubjectName, system: true));
+
+        (await Members().FindPublicMemberAsync(_tenant, CancellationToken.None))!.Id.Should().Be(publicMember.Id)
+            .And.NotBe(person.Id);
     }
 
     [Fact]

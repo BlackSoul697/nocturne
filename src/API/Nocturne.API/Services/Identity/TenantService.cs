@@ -487,7 +487,7 @@ public partial class TenantService : ITenantService
     private async Task CreatePublicSubjectMembershipAsync(
         ITenantMembershipRepository members, Guid tenantId, CancellationToken ct)
     {
-        var publicSubject = await _subjects.FindSystemSubjectAsync("Public", ct);
+        var publicSubject = await _subjects.FindSystemSubjectAsync(PublicSubjectFilter.PublicSubjectName, ct);
 
         if (publicSubject != null)
         {
