@@ -971,6 +971,8 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IAidDetectionStrategy, NoAidStrategy>();
         services.AddScoped<IAidMetricsService, AidMetricsService>();
         services.AddScoped<AidSystemMetricsReader>();
+        services.AddScoped<InsulinDeliveryReader>();
+        services.AddScoped<RangeAnalyticsReader>();
 
         // V4 Decomposers
         services.AddScoped<IEntryDecomposer, EntryDecomposer>();
