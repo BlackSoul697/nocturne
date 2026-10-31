@@ -1,3 +1,4 @@
+using Nocturne.API.Helpers;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
 
@@ -39,7 +40,7 @@ public class OAuthClientService : IOAuthClientService
 
         if (client == null)
         {
-            _logger.LogDebug("OAuth client not found: {ClientId}", SanitizeForLog(clientId));
+            _logger.LogDebug("OAuth client not found: {ClientId}", LogText.Sanitize(clientId));
             return null;
         }
 
@@ -72,7 +73,7 @@ public class OAuthClientService : IOAuthClientService
         {
             _logger.LogWarning(
                 "Redirect URI validation failed: client {ClientId} is not registered. " +
-                "Apps must call POST /oauth/register before authorize.", SanitizeForLog(clientId));
+                "Apps must call POST /oauth/register before authorize.", LogText.Sanitize(clientId));
             return false;
         }
 
@@ -80,7 +81,7 @@ public class OAuthClientService : IOAuthClientService
         if (registered.Count == 0)
         {
             _logger.LogWarning(
-                "Client {ClientId} has no registered redirect URIs", SanitizeForLog(clientId));
+                "Client {ClientId} has no registered redirect URIs", LogText.Sanitize(clientId));
             return false;
         }
 
@@ -125,7 +126,7 @@ public class OAuthClientService : IOAuthClientService
 
         _logger.LogInformation(
             "DCR: registered client {ClientId} software_id={SoftwareId} known={IsKnown}",
-            client.ClientId, SanitizeForLog(softwareId) ?? "(none)", client.IsKnown);
+            client.ClientId, LogText.Sanitize(softwareId), client.IsKnown);
 
         return MapToInfo(client);
     }
@@ -138,29 +139,6 @@ public class OAuthClientService : IOAuthClientService
     /// </summary>
     private bool Covers(IReadOnlyCollection<string> registered, IReadOnlyList<string> submitted) =>
         submitted.All(s => registered.Any(r => _redirectUriValidator.IsValidForAuthorize(r, s)));
-
-    /// <summary>
-    /// Strips control characters (including CR/LF) from a user-supplied value before it reaches a
-    /// log sink. Structured-logging placeholders already prevent message injection, but CodeQL
-    /// cannot prove that — and single-line values are friendlier to downstream log tooling.
-    /// Values are also truncated to keep log lines bounded.
-    /// </summary>
-    /// <param name="value">The raw user-supplied string to sanitise, or <see langword="null"/>.</param>
-    /// <param name="maxLength">Maximum number of characters to retain (default: 200).</param>
-    /// <returns>A sanitised string with control characters replaced by <c>_</c>, or <see langword="null"/>.</returns>
-    private static string? SanitizeForLog(string? value, int maxLength = 200)
-    {
-        if (value is null)
-            return null;
-
-        var buffer = new char[Math.Min(value.Length, maxLength)];
-        for (var i = 0; i < buffer.Length; i++)
-        {
-            var c = value[i];
-            buffer[i] = char.IsControl(c) ? '_' : c;
-        }
-        return new string(buffer);
-    }
 
     private static OAuthClientInfo MapToInfo(OAuthClientRecord client)
     {
