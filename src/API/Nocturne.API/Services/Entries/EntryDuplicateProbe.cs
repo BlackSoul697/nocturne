@@ -1,4 +1,6 @@
-namespace Nocturne.Core.Contracts.Entries;
+using Nocturne.Core.Contracts.Entries;
+
+namespace Nocturne.API.Services.Entries;
 
 /// <summary>
 /// One entry's identity for the upload duplicate check: the fields
@@ -7,4 +9,4 @@ namespace Nocturne.Core.Contracts.Entries;
 /// <param name="Device">Device identifier, or <c>null</c> to match any device.</param>
 /// <param name="Type">Entry type ("sgv", "mbg", "cal"); other types are never duplicates.</param>
 /// <param name="Mills">Entry timestamp in Unix milliseconds.</param>
-public readonly record struct EntryDuplicateProbe(string? Device, string Type, long Mills);
+internal readonly record struct EntryDuplicateProbe(string? Device, string Type, long Mills);

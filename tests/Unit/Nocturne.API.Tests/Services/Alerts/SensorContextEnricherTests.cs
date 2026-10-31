@@ -12,7 +12,7 @@ using Nocturne.API.Configuration;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Glucose;
-using Nocturne.API.Services.Treatments;
+using Nocturne.API.Services.Analytics;
 using Nocturne.API.Tests.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;

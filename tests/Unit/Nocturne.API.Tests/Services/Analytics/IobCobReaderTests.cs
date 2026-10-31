@@ -2,7 +2,7 @@ using Nocturne.Core.Clinical.LoopAnalysis;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Nocturne.API.Services.Treatments;
+using Nocturne.API.Services.Analytics;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
@@ -15,7 +15,7 @@ using Nocturne.Core.Models.V4;
 using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.Treatments;
+namespace Nocturne.API.Tests.Services.Analytics;
 
 public class IobCobReaderTests
 {
