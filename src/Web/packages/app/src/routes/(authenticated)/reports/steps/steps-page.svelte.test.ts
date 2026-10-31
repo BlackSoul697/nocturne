@@ -14,10 +14,6 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("#lib/hooks/actogram-report.svelte.js", () => ({
   useActogramReport: () => ({
-    params: {
-      dateRangeMillis: { from: 0, to: 0 },
-      dayCount: 1,
-    },
     resource: {
       get current() {
         return hoisted.current;
@@ -35,6 +31,7 @@ import StepsPage from "./+page.svelte";
 function respond(timeZoneUnavailableReason?: TimeZoneUnavailableReason) {
   hoisted.days = [utcDay];
   hoisted.current = {
+    range: { from: 0, to: 0 },
     stepCounts: [{ mills: utcDay.startMills + 12 * 3_600_000, metric: 4321 }],
     stepDayTotals: { "2025-01-10": 4321 },
     glucoseData: [],
@@ -100,6 +97,29 @@ describe("steps report", () => {
     await expect.element(page.getByTestId("day-total")).toHaveTextContent(/4,321\s*steps/);
   });
 
+  describe("bar scale", () => {
+    const days = servedDays("2025-01-10", 2, CHATHAM_MINUTES);
+    const [first, second] = days;
+
+    it("scales the bars to the largest sample inside the served range, not the padded window", async () => {
+      hoisted.days = days;
+      hoisted.current = {
+        range: { from: first.startMills, to: first.endMills - 1 },
+        stepCounts: [
+          { mills: first.startMills + 6 * 3_600_000, metric: 2000 },
+          { mills: second.startMills + 6 * 3_600_000, metric: 8000 },
+        ],
+        stepDayTotals: { [first.date]: 2000, [second.date]: 8000 },
+        glucoseData: [],
+      };
+      render(StepsPage);
+
+      await expect.element(page.getByTestId("day-total").first()).toBeInTheDocument();
+      const tallestInRange = rowOf(first.date).querySelector("[data-steps='2000'][data-extended='false']")!;
+      expect(Number(tallestInRange.getAttribute("y"))).toBe(0);
+    });
+  });
+
   describe("with a patient zone far from the browser's", () => {
     const days = servedDays("2025-01-10", 2, CHATHAM_MINUTES);
     const [first, second] = days;
@@ -115,6 +135,7 @@ describe("steps report", () => {
     function respondInChatham() {
       hoisted.days = days;
       hoisted.current = {
+        range: { from: 0, to: 0 },
         stepCounts: samples.map((s) => ({ mills: s.mills, metric: s.metric })),
         stepDayTotals: Object.fromEntries(
           days.map((day) => [
