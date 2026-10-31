@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
@@ -22,18 +23,21 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
     private readonly IMealMatchingService _mealMatchingService;
     private readonly TimeProvider _time;
     private readonly ILogger<ConnectorFoodEntryService> _logger;
+    private readonly ILegacyReadCacheInvalidation? _legacyReads;
 
     public ConnectorFoodEntryService(
         INocturneDbContextFactory contexts,
         IMealMatchingService mealMatchingService,
         TimeProvider timeProvider,
-        ILogger<ConnectorFoodEntryService> logger
+        ILogger<ConnectorFoodEntryService> logger,
+        ILegacyReadCacheInvalidation? legacyReads = null
     )
     {
         _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _mealMatchingService = mealMatchingService ?? throw new ArgumentNullException(nameof(mealMatchingService));
         _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _legacyReads = legacyReads;
     }
 
     public async Task<IReadOnlyList<ConnectorFoodEntry>> ImportAsync(
@@ -230,7 +234,14 @@ public class ConnectorFoodEntryService : IConnectorFoodEntryService
             return Array.Empty<ConnectorFoodEntry>();
         }
 
+        var foodsChanged = db.ChangeTracker.Entries<FoodEntity>().Any(e => e.State == EntityState.Modified);
+
         await db.SaveChangesAsync(cancellationToken);
+
+        if (foodsChanged && _legacyReads is not null)
+        {
+            await _legacyReads.WrittenAsync([typeof(Food)]);
+        }
 
         // Matching raises notifications, which need a subject. The entries and the suggestion list
         // do not, so a tenant with no resolvable owner still gets both.

@@ -1,8 +1,12 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Nocturne.Core.Contracts.Audit;
+using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Connectors;
 using Nocturne.Core.Models.Services;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Repositories;
@@ -27,16 +31,22 @@ public class SourceOwnedDataRepositoryTests : IDisposable
 
     private readonly Guid _tenant = Guid.CreateVersion7();
     private readonly SqliteTestDatabase _db;
+    private readonly List<IReadOnlyCollection<Type>> _reports = [];
+    private readonly Mock<ILegacyReadCacheInvalidation> _legacyReads = new();
 
     public SourceOwnedDataRepositoryTests()
     {
         _db = TestDbContextFactory.CreateSqliteWithTenant(_tenant, SqliteNpgsqlJson.Translate);
+        _legacyReads
+            .Setup(r => r.WrittenAsync(It.IsAny<IReadOnlyCollection<Type>>()))
+            .Callback((IReadOnlyCollection<Type> models) => _reports.Add(models))
+            .Returns(Task.CompletedTask);
     }
 
     public void Dispose() => _db.Dispose();
 
     private SourceOwnedDataRepository Repository() =>
-        new(new TestNocturneDbContextFactory(_db.CreateContext(_tenant)), new UserAuditContext());
+        new(new TestNocturneDbContextFactory(_db.CreateContext(_tenant)), new UserAuditContext(), _legacyReads.Object);
 
     private NocturneDbContext Context() => _db.CreateContext(_tenant);
 
@@ -48,6 +58,32 @@ public class SourceOwnedDataRepositoryTests : IDisposable
             Id = Guid.CreateVersion7(), TenantId = _tenant, LegacyId = legacyId,
             DataSource = dataSource, Device = device, Timestamp = at, Insulin = 1,
         });
+        db.SaveChanges();
+    }
+
+    private void SeedGlucoseTombstones(string source)
+    {
+        using var db = Context();
+        var sensor = new SensorGlucoseEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = _tenant, DataSource = source, Timestamp = Now, Mgdl = 100,
+            DeletedAt = Now,
+        };
+        var meter = new MeterGlucoseEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = _tenant, DataSource = source, Timestamp = Now, Mgdl = 100,
+            DeletedAt = Now,
+        };
+        var calibration = new CalibrationEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = _tenant, DataSource = source, Timestamp = Now,
+            DeletedAt = Now,
+        };
+        db.SensorGlucose.Add(sensor);
+        db.MeterGlucose.Add(meter);
+        db.Calibrations.Add(calibration);
+        foreach (var tombstone in new object[] { sensor, meter, calibration })
+            db.Entry(tombstone).Property("DeletedByUser").CurrentValue = true;
         db.SaveChanges();
     }
 
@@ -205,6 +241,65 @@ public class SourceOwnedDataRepositoryTests : IDisposable
         rows.Single(r => r.LegacyId == "mine").ByUser.Should().BeFalse();
         rows.Single(r => r.LegacyId == "theirs").ByUser.Should().BeTrue();
         (await db.MutationAuditLog.CountAsync(a => a.Action == "allow_reimport")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ThePurgeReportsTheModelOfEveryTableItDeletedFromInOneCall()
+    {
+        SeedBolus(Source, null, Now, "mine");
+        SeedSpan(Source, Now);
+        SeedProfile(Source, "Day");
+        SeedBolus(Other, null, Now, "theirs");
+
+        await Repository().SoftDeleteBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+
+        _reports.Should().ContainSingle().Which.Should()
+            .BeEquivalentTo([typeof(Bolus), typeof(StateSpan), typeof(TherapySettings), typeof(BasalSchedule)]);
+    }
+
+    [Fact]
+    public async Task ThePurgeOfASourceThatOwnsNothingReportsNothing()
+    {
+        SeedBolus(Other, null, Now, "theirs");
+
+        await Repository().SoftDeleteBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+
+        _reports.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheReleaseReportsTheModelOfEveryTableItReleasedInOneCall()
+    {
+        SeedBolus(Source, null, Now, "mine");
+        SeedSpan(Source, Now);
+        var repository = Repository();
+        await repository.SoftDeleteBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+        _reports.Clear();
+
+        await repository.AllowReimportBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+
+        _reports.Should().ContainSingle().Which.Should().BeEquivalentTo([typeof(Bolus), typeof(StateSpan)]);
+    }
+
+    [Fact]
+    public async Task TheReleaseReportsTheGlucoseTablesItReleased()
+    {
+        SeedGlucoseTombstones(Source);
+
+        await Repository().AllowReimportBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+
+        _reports.Should().ContainSingle().Which.Should()
+            .BeEquivalentTo([typeof(SensorGlucose), typeof(MeterGlucose), typeof(Calibration)]);
+    }
+
+    [Fact]
+    public async Task TheReleaseOfASourceWithNoTombstonesReportsNothing()
+    {
+        SeedBolus(Source, null, Now, "mine");
+
+        await Repository().AllowReimportBySourceAsync(Source, $"data_source={Source}", CancellationToken.None);
+
+        _reports.Should().BeEmpty();
     }
 
     private sealed class UserAuditContext : IAuditContext
