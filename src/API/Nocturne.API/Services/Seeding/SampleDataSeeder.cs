@@ -10,9 +10,11 @@ using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles;
+using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Core.Models.Configuration;
@@ -86,6 +88,10 @@ public class SampleDataSeeder
     private readonly ICompressionLowDetectionService _compressionLowDetectionService;
     private readonly ICompressionLowService _compressionLowService;
     private readonly ICompressionLowRepository _compressionLowRepository;
+    private readonly ITreatmentFoodRepository _treatmentFoods;
+    private readonly IStateSpanRepository _stateSpans;
+    private readonly IProfileActivationRepository _profileActivations;
+    private readonly ITempBasalRepository _tempBasals;
     private readonly TimeProvider _time;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<SampleDataSeeder> _logger;
@@ -127,6 +133,10 @@ public class SampleDataSeeder
         ICompressionLowDetectionService compressionLowDetectionService,
         ICompressionLowService compressionLowService,
         ICompressionLowRepository compressionLowRepository,
+        ITreatmentFoodRepository treatmentFoods,
+        IStateSpanRepository stateSpans,
+        IProfileActivationRepository profileActivations,
+        ITempBasalRepository tempBasals,
         TimeProvider time,
         ILoggerFactory loggerFactory,
         ILogger<SampleDataSeeder> logger)
@@ -147,6 +157,10 @@ public class SampleDataSeeder
         _compressionLowDetectionService = compressionLowDetectionService;
         _compressionLowService = compressionLowService;
         _compressionLowRepository = compressionLowRepository;
+        _treatmentFoods = treatmentFoods;
+        _stateSpans = stateSpans;
+        _profileActivations = profileActivations;
+        _tempBasals = tempBasals;
         _time = time;
         _loggerFactory = loggerFactory;
         _logger = logger;
@@ -312,7 +326,7 @@ public class SampleDataSeeder
             await FlushTreatmentsAsync();
             await FlushStatusesAsync();
 
-            await StampTempBasalScheduledRatesAsync(db, clock, dataSource, config.BasalRate, ct);
+            await StampTempBasalScheduledRatesAsync(clock, dataSource, config.BasalRate, ct);
         }
         else
         {
@@ -361,7 +375,7 @@ public class SampleDataSeeder
             await SeedCompressionLowReviewsAsync(clock, days, ct);
 
         var foodCount = await SeedFoodsAsync(db, clock, mealCarbLinks, ownerSubjectId, ct);
-        var stateSpanCount = await SeedStateSpansAsync(db, clock, days, dataSource, ct);
+        var stateSpanCount = await SeedStateSpansAsync(clock, days, dataSource, ct);
         await SeedBodyWeightAsync(db, clock, days, dataSource, ct);
         await SeedTimezoneTimelineAsync(db, clock, days, ct);
         await SeedDndWindowAsync(db, clock, ct);
@@ -709,7 +723,7 @@ public class SampleDataSeeder
                 .Select(c => new { c.Id, c.Timestamp, c.Carbs })
                 .ToListAsync(ct);
             var linkedIntakeIds = intakes.Select(i => i.Id).ToList();
-            await db.TreatmentFoods.PurgeAsync(tf => linkedIntakeIds.Contains(tf.CarbIntakeId), ct);
+            var breakdowns = new List<TreatmentFood>();
 
             foreach (var (time, mealName) in mealCarbLinks)
             {
@@ -728,10 +742,9 @@ public class SampleDataSeeder
                 {
                     if (!foodsByName.TryGetValue(seed.Name, out var food))
                         continue;
-                    db.TreatmentFoods.Add(new TreatmentFoodEntity
+                    breakdowns.Add(new TreatmentFood
                     {
                         Id = Guid.CreateVersion7(),
-                        TenantId = db.TenantId,
                         CarbIntakeId = intake.Id,
                         FoodId = food.Id,
                         Portions = seed.Carbs > 0 ? Math.Round((decimal)(intake.Carbs / seed.Carbs), 2) : 1,
@@ -739,7 +752,7 @@ public class SampleDataSeeder
                     });
                 }
             }
-            await db.SaveChangesAsync(ct);
+            await _treatmentFoods.ReplaceForCarbIntakesAsync(linkedIntakeIds, breakdowns, ct);
         }
 
         return created;
@@ -751,22 +764,11 @@ public class SampleDataSeeder
     /// above or below schedule. The seeder knows the schedule it seeded, so it
     /// stamps it on its own temps after decomposition.
     /// </summary>
-    private async Task StampTempBasalScheduledRatesAsync(
-        NocturneDbContext db,
+    private Task StampTempBasalScheduledRatesAsync(
         SeedingClock clock,
-        string dataSource, double baseRate, CancellationToken ct)
-    {
-        var scheduled = Nocturne.Core.Models.V4.TempBasalOrigin.Scheduled.ToString();
-        var temps = await db.TempBasals
-            .Where(t => t.DataSource == dataSource && t.ScheduledRate == null && t.Origin != scheduled)
-            .ToListAsync(ct);
-        foreach (var temp in temps)
-        {
-            var local = clock.Demo.ToLocal(temp.Timestamp);
-            temp.ScheduledRate = DemoTherapyProfile.ScheduledRateAt(local, baseRate);
-        }
-        await db.SaveChangesAsync(ct);
-    }
+        string dataSource, double baseRate, CancellationToken ct) =>
+        _tempBasals.StampScheduledRatesAsync(
+            dataSource, start => DemoTherapyProfile.ScheduledRateAt(clock.Demo.ToLocal(start), baseRate), ct);
 
     /// <summary>
     /// State spans for the window: pump mode with manual/exercise windows, workout
@@ -775,40 +777,36 @@ public class SampleDataSeeder
     /// data source are wiped and rebuilt (idempotent re-seed).
     /// </summary>
     private async Task<int> SeedStateSpansAsync(
-        NocturneDbContext db,
         SeedingClock clock, int days, string dataSource, CancellationToken ct)
     {
         var localToday = clock.LocalToday;
-        await db.StateSpans.PurgeAsync(s => s.Source == dataSource, ct);
-        await db.ProfileActivations.PurgeAsync(a => a.DataSource == dataSource, ct);
-
-        db.ProfileActivations.Add(new ProfileActivationEntity
-        {
-            Id = Guid.CreateVersion7(),
-            TenantId = db.TenantId,
-            Timestamp = clock.ToUtc(localToday.AddDays(-days)),
-            Phase = nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Requested),
-            Origin = nameof(Nocturne.Core.Models.V4.ProfileActivationOrigin.User),
-            BaseProfileName = DemoTherapyProfile.ProfileName,
-            DataSource = dataSource,
-        });
+        await _profileActivations.ReplaceByDataSourceAsync(
+            dataSource,
+            [
+                new Nocturne.Core.Models.V4.ProfileActivation
+                {
+                    Timestamp = clock.ToUtc(localToday.AddDays(-days)),
+                    Phase = Nocturne.Core.Models.V4.ProfileActivationPhase.Requested,
+                    Origin = Nocturne.Core.Models.V4.ProfileActivationOrigin.User,
+                    BaseProfileName = DemoTherapyProfile.ProfileName,
+                    DataSource = dataSource,
+                },
+            ],
+            ct);
 
         var spans = DemoLifestyleSeeds.BuildSpans(localToday, days, clock.LocalNow);
-        foreach (var seed in spans)
-        {
-            db.StateSpans.Add(new StateSpanEntity
+        await _stateSpans.ReplaceBySourceAsync(
+            dataSource,
+            spans.Select(seed => new StateSpan
             {
-                Id = Guid.CreateVersion7(),
-                TenantId = db.TenantId,
-                Category = seed.Category.ToString(),
+                Category = seed.Category,
                 State = seed.State,
                 StartTimestamp = clock.ToUtc(seed.StartLocal),
                 EndTimestamp = seed.EndLocal is { } end ? clock.ToUtc(end) : null,
                 Source = dataSource,
-                MetadataJson = seed.Metadata is null ? null : JsonSerializer.Serialize(seed.Metadata),
-            });
-        }
-        await db.SaveChangesAsync(ct);
+                Metadata = seed.Metadata?.ToDictionary(pair => pair.Key, pair => pair.Value),
+            }).ToList(),
+            ct);
 
         return spans.Count;
     }

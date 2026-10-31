@@ -5,6 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Seeding;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.DeviceStatuses;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
@@ -19,6 +20,8 @@ using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Repositories;
+using Nocturne.Infrastructure.Data.Repositories.V4;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Core.Models.V4;
 using Nocturne.Services.Demo.Services;
 using Nocturne.Tests.Shared.Infrastructure;
@@ -107,6 +110,15 @@ public class SampleDataSeederMixedZoneTests : IDisposable
             Mock.Of<ICompressionLowDetectionService>(),
             Mock.Of<ICompressionLowService>(),
             Mock.Of<ICompressionLowRepository>(),
+            new TreatmentFoodRepository(_db.ContextFactory.AsNocturneFactory()),
+            new StateSpanRepository(
+                _db.ContextFactory.AsNocturneFactory(), Mock.Of<IDeduplicationService>(), new SystemAuditContext(),
+                NullLogger<StateSpanRepository>.Instance),
+            new ProfileActivationRepository(
+                _db.ContextFactory.AsNocturneFactory(), new SystemAuditContext(), NullLogger<ProfileActivationRepository>.Instance),
+            new TempBasalRepository(
+                _db.ContextFactory.AsNocturneFactory(), Mock.Of<IDeduplicationService>(), new SystemAuditContext(),
+                NullLogger<TempBasalRepository>.Instance),
             _time,
             NullLoggerFactory.Instance,
             NullLogger<SampleDataSeeder>.Instance);
