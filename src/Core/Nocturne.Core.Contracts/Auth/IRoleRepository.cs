@@ -25,8 +25,8 @@ public interface IRoleRepository
     /// <summary>Stores a role and returns it.</summary>
     Task<Role> CreateAsync(NewRole role, CancellationToken ct);
 
-    /// <summary>Replaces the role's name, description and permissions and stamps it updated at <paramref name="now"/>; null when there is none.</summary>
-    Task<Role?> UpdateAsync(Guid roleId, string name, string? description, IReadOnlyList<string> permissions, DateTime now, CancellationToken ct);
+    /// <summary>Replaces the role's name, description and permissions; null when there is none.</summary>
+    Task<Role?> UpdateAsync(Guid roleId, string name, string? description, IReadOnlyList<string> permissions, CancellationToken ct);
 
     /// <summary>
     /// Deletes the role together with every subject's assignment of it, in one save, and returns

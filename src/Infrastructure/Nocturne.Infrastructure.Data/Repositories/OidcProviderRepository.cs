@@ -101,7 +101,7 @@ public class OidcProviderRepository : IOidcProviderRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<OidcProviderRecord?> UpdateAsync(Guid providerId, OidcProviderEdit edit, DateTime now, CancellationToken ct)
+    public virtual async Task<OidcProviderRecord?> UpdateAsync(Guid providerId, OidcProviderEdit edit, CancellationToken ct)
     {
         await using var lease = await OpenAsync(ct);
         var entity = await lease.Context.OidcProviders.FirstOrDefaultAsync(p => p.Id == providerId, ct);
@@ -120,7 +120,6 @@ public class OidcProviderRepository : IOidcProviderRepository
         entity.DefaultRoles = [.. edit.DefaultRoles];
         entity.IsEnabled = edit.IsEnabled;
         entity.DisplayOrder = edit.DisplayOrder;
-        entity.UpdatedAt = now;
 
         await SaveAsync(lease.Context, ct);
         return ToRecord(entity);
@@ -140,7 +139,7 @@ public class OidcProviderRepository : IOidcProviderRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<bool> SetEnabledAsync(Guid providerId, bool enabled, DateTime now, CancellationToken ct)
+    public virtual async Task<bool> SetEnabledAsync(Guid providerId, bool enabled, CancellationToken ct)
     {
         await using var lease = await OpenAsync(ct);
         var entity = await lease.Context.OidcProviders.FirstOrDefaultAsync(p => p.Id == providerId, ct);
@@ -148,7 +147,6 @@ public class OidcProviderRepository : IOidcProviderRepository
             return false;
 
         entity.IsEnabled = enabled;
-        entity.UpdatedAt = now;
         await SaveAsync(lease.Context, ct);
         return true;
     }
@@ -205,7 +203,6 @@ public class OidcProviderRepository : IOidcProviderRepository
         foreach (var stale in existing.Where(p => !configuredIds.Contains(p.Id) && p.IsEnabled))
         {
             stale.IsEnabled = false;
-            stale.UpdatedAt = now;
         }
 
         await SaveAsync(db, ct);

@@ -232,7 +232,6 @@ public class SubjectRepository : ISubjectRepository
             entity.Preferences = edit.Preferences;
         if (edit.LastLoginAt is { } lastLogin)
             entity.LastLoginAt = lastLogin;
-        entity.UpdatedAt = Now;
 
         await SaveAsync(db, ct);
         return true;
@@ -253,7 +252,6 @@ public class SubjectRepository : ISubjectRepository
         entity.Email = profile.Email;
         entity.Notes = profile.Notes;
         entity.IsActive = profile.IsActive;
-        entity.UpdatedAt = Now;
 
         await SaveAsync(db, ct);
         return ToRecord(entity);

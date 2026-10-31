@@ -167,7 +167,6 @@ public class EfFirstPartyTokenRepository : IFirstPartyTokenRepository
         entity.RevokedAt = DateTime.UtcNow;
         entity.RevokedReason = reason;
         entity.ReplacedByTokenId = replacedByTokenId;
-        entity.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
     }
@@ -229,7 +228,6 @@ public class EfFirstPartyTokenRepository : IFirstPartyTokenRepository
         {
             token.RevokedAt = now;
             token.RevokedReason = reason;
-            token.UpdatedAt = now;
         }
 
         await db.SaveChangesAsync(ct);
@@ -253,7 +251,6 @@ public class EfFirstPartyTokenRepository : IFirstPartyTokenRepository
         {
             token.RevokedAt = now;
             token.RevokedReason = reason;
-            token.UpdatedAt = now;
         }
 
         await db.SaveChangesAsync(ct);
@@ -280,7 +277,6 @@ public class EfFirstPartyTokenRepository : IFirstPartyTokenRepository
         {
             token.RevokedAt = now;
             token.RevokedReason = reason;
-            token.UpdatedAt = now;
         }
 
         await db.SaveChangesAsync(ct);
@@ -311,7 +307,6 @@ public class EfFirstPartyTokenRepository : IFirstPartyTokenRepository
 
             token.RevokedAt = now;
             token.RevokedReason = reason;
-            token.UpdatedAt = now;
             count++;
         }
 

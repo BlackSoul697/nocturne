@@ -11,7 +11,7 @@ namespace Nocturne.Infrastructure.Data.Tests.Repositories;
 /// <summary><see cref="RoleRepository"/> over SQLite: the global role catalogue and its subject assignments.</summary>
 public class RoleRepositoryTests : IDisposable
 {
-    private static readonly DateTime Now = new(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Past = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly Guid _tenant = Guid.CreateVersion7();
     private readonly SqliteTestDatabase _db;
@@ -42,15 +42,18 @@ public class RoleRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUpdateReplacesTheRoleAndStampsIt()
+    public async Task AnUpdateReplacesTheRoleAndTheSaveStampsIt()
     {
         var role = await Roles().CreateAsync(new NewRole("careportal", null, ["careportal:*"], IsSystemRole: false), CancellationToken.None);
+        await using (var seed = _db.CreateContext())
+            await seed.Roles.Where(r => r.Id == role.Id).ExecuteUpdateAsync(s => s.SetProperty(r => r.UpdatedAt, Past));
 
-        var updated = await Roles().UpdateAsync(role.Id, "care", "renamed", ["careportal:*", "api:treatments:*"], Now, CancellationToken.None);
+        var updated = await Roles().UpdateAsync(role.Id, "care", "renamed", ["careportal:*", "api:treatments:*"], CancellationToken.None);
 
         updated.Should().BeEquivalentTo(new { Name = "care", Description = "renamed" });
         updated!.Permissions.Should().Equal("careportal:*", "api:treatments:*");
-        (await Roles().UpdateAsync(Guid.CreateVersion7(), "x", null, [], Now, CancellationToken.None)).Should().BeNull();
+        updated.UpdatedAt.Should().BeAfter(Past);
+        (await Roles().UpdateAsync(Guid.CreateVersion7(), "x", null, [], CancellationToken.None)).Should().BeNull();
     }
 
     [Fact]

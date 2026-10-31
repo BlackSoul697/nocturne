@@ -474,7 +474,6 @@ public class StateSpanRepository : IStateSpanRepository
 
             open.EndTimestamp = entity.StartTimestamp;
             open.SupersededById = entity.Id;
-            open.UpdatedAt = DateTime.UtcNow;
             superseded++;
         }
 
@@ -553,7 +552,6 @@ public class StateSpanRepository : IStateSpanRepository
 
             earlier.EndTimestamp = entity.StartTimestamp;
             earlier.SupersededById = entity.Id;
-            earlier.UpdatedAt = DateTime.UtcNow;
         }
     }
 

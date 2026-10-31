@@ -57,7 +57,7 @@ public class RoleRepository(INocturneDbContextFactory contexts) : IRoleRepositor
 
     /// <inheritdoc/>
     public virtual async Task<Role?> UpdateAsync(
-        Guid roleId, string name, string? description, IReadOnlyList<string> permissions, DateTime now, CancellationToken ct)
+        Guid roleId, string name, string? description, IReadOnlyList<string> permissions, CancellationToken ct)
     {
         await using var db = await _contexts.CreateAsync(ct);
         var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == roleId, ct);
@@ -67,7 +67,6 @@ public class RoleRepository(INocturneDbContextFactory contexts) : IRoleRepositor
         entity.Name = name;
         entity.Description = description;
         entity.Permissions = [.. permissions];
-        entity.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         return ToRole(entity);
     }
