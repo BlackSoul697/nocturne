@@ -21,8 +21,6 @@ namespace Nocturne.Infrastructure.Data.Repositories;
 /// </remarks>
 public class TenantMembershipRepository : ITenantMembershipRepository
 {
-    private const string PublicSubjectName = "Public";
-
     private readonly INocturneDbContextFactory? _contexts;
     private readonly DbUnitOfWork? _unit;
 
@@ -148,8 +146,9 @@ public class TenantMembershipRepository : ITenantMembershipRepository
     {
         await using var lease = await OpenForTenantAsync(tenantId, ct);
         return ToMember(await MembersWithDetails(lease.Context)
-            .FirstOrDefaultAsync(m => m.TenantId == tenantId
-                && m.Subject!.IsSystemSubject && m.Subject.Name == PublicSubjectName, ct));
+            .Where(m => m.TenantId == tenantId)
+            .OfPublicSubject()
+            .FirstOrDefaultAsync(ct));
     }
 
     /// <inheritdoc/>
