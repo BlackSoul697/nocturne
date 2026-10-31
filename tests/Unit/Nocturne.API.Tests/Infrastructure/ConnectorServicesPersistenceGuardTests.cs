@@ -27,16 +27,8 @@ public class ConnectorServicesPersistenceGuardTests
 
     private static readonly Exemption[] Exemptions =
     [
-        new("src/API/Nocturne.API/Services/Connectors/ConnectorConfigurationService.cs",
-            "looks up the tenant's device subject (DeviceSubjectFilter) to own an adopted Nightscout secret; the subjects module has no device-subject read yet"),
         new("src/API/Nocturne.API/Services/Connectors/ConnectorFoodEntryService.cs",
             "upserts foods (reviving deleted ones) and connector food entries in one save; neither IFoodRepository nor IConnectorFoodEntryRepository offers that atomic write"),
-        new("src/API/Nocturne.API/Services/Connectors/MyFitnessPalMatchingSettingsService.cs",
-            "reads and writes a connectors: settings row, which ISettingsRepository refuses as a reserved key"),
-        new("src/API/Nocturne.API/Services/ConnectorPublishing/MetadataPublisher.cs",
-            "reads the held original ids of the activity tables (SoftDeleteDedupExtensions) before publishing"),
-        new("src/API/Nocturne.API/Services/ConnectorPublishing/TreatmentPublisher.cs",
-            "opens UpstreamFingerprintScope, the ambient fingerprint the treatment repositories stamp, declared in the entity namespace"),
     ];
 
     [Fact]

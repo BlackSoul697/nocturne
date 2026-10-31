@@ -79,7 +79,7 @@ public class MetadataPublisherTests
             Mock.Of<IHeartRateService>(),
             _mockTenantOwnerResolver.Object,
             _mockTenantAccessor.Object,
-            contexts,
+            new ActivityDedupRepository(contexts),
             new ConnectorConfigurationRepository(contexts),
             Mock.Of<IProfileActivationRepository>(),
             new ProfileActivationWriter(Mock.Of<IProfileActivationRepository>(), Mock.Of<ITenantCache>(), TempBasalTestDeps.NoReresolution()),

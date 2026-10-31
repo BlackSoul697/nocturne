@@ -8,8 +8,6 @@ using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
-using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Extensions;
 using AuthRole = Nocturne.Core.Models.Authorization.Role;
 using AuthSubject = Nocturne.Core.Models.Authorization.Subject;
 using DirectGrantLookup = Nocturne.Core.Models.Authorization.DirectGrantLookup;
@@ -18,7 +16,6 @@ using OAuthGrantRecord = Nocturne.Core.Models.Authorization.OAuthGrantRecord;
 using OAuthGrantTypes = Nocturne.Core.Models.Authorization.OAuthGrantTypes;
 using Scope = Nocturne.Core.Models.Authorization.Scope;
 using ScopeTranslator = Nocturne.Core.Models.Authorization.ScopeTranslator;
-using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Identity;
 
@@ -38,7 +35,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     private readonly IDirectGrantService _directGrantService;
     private readonly IOAuthGrantRepository _grants;
     private readonly IJwtService _jwtService;
-    private readonly INocturneDbContextFactory _contexts;
+    private readonly ISubjectRepository _subjects;
     private readonly ICategoryReadContext _categoryReadContext;
     private readonly TimeProvider _time;
     private readonly PermissionTrie _permissionTrie;
@@ -61,7 +58,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         IDirectGrantService directGrantService,
         IOAuthGrantRepository grants,
         IJwtService jwtService,
-        INocturneDbContextFactory contexts,
+        ISubjectRepository subjects,
         ICategoryReadContext categoryReadContext,
         TimeProvider timeProvider
     )
@@ -73,7 +70,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         _directGrantService = directGrantService;
         _grants = grants ?? throw new ArgumentNullException(nameof(grants));
         _jwtService = jwtService;
-        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        _subjects = subjects ?? throw new ArgumentNullException(nameof(subjects));
         _categoryReadContext = categoryReadContext;
         _time = timeProvider;
         _permissionTrie = new PermissionTrie();
@@ -309,13 +306,12 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>List of all subjects</returns>
     public async Task<List<Subject>> GetAllSubjectsAsync()
     {
-        await using var db = await _contexts.CreateAsync();
         try
         {
             _logger.LogDebug("Getting all subjects");
 
             // A tenant that has never issued a token holds none, and asking must not create one.
-            if (await db.FindDeviceSubjectOf(db.TenantId) is not { } deviceSubjectId)
+            if (await _subjects.FindDeviceSubjectAsync(CancellationToken.None) is not { } deviceSubjectId)
             {
                 return [];
             }
@@ -338,7 +334,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>Subject or null if not found</returns>
     public async Task<Subject?> GetSubjectByIdAsync(string id)
     {
-        await using var db = await _contexts.CreateAsync();
         try
         {
             _logger.LogDebug("Getting subject by ID: {Id}", id);
@@ -349,7 +344,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return null;
             }
 
-            if (await db.FindDeviceSubjectOf(db.TenantId) is not { } deviceSubjectId)
+            if (await _subjects.FindDeviceSubjectAsync(CancellationToken.None) is not { } deviceSubjectId)
             {
                 return null;
             }
@@ -371,13 +366,12 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>Created subject, carrying the plaintext token this one time</returns>
     public async Task<Subject> CreateSubjectAsync(Subject subject)
     {
-        await using var db = await _contexts.CreateAsync();
         try
         {
             var label = subject.Name ?? "Unknown";
             _logger.LogDebug("Creating new subject: {Name}", label);
 
-            var deviceSubjectId = await db.DeviceSubjectOf(db.TenantId);
+            var deviceSubjectId = await _subjects.EnsureDeviceSubjectAsync(CancellationToken.None);
             var scopes = await ResolveScopesAsync(subject.Roles);
 
             // Nightscout will create a subject that holds nothing; a grant needs at least one
@@ -435,7 +429,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>Updated subject or null if not found</returns>
     public async Task<Subject?> UpdateSubjectAsync(Subject subject)
     {
-        await using var db = await _contexts.CreateAsync();
         try
         {
             _logger.LogDebug("Updating subject: {Id}", subject.Id);
@@ -446,7 +439,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return null;
             }
 
-            if (await db.FindDeviceSubjectOf(db.TenantId) is not { } deviceSubjectId)
+            if (await _subjects.FindDeviceSubjectAsync(CancellationToken.None) is not { } deviceSubjectId)
             {
                 return null;
             }
@@ -501,7 +494,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// <returns>True if deleted, false if not found</returns>
     public async Task<bool> DeleteSubjectAsync(string id)
     {
-        await using var db = await _contexts.CreateAsync();
         try
         {
             _logger.LogDebug("Deleting subject: {Id}", id);
@@ -512,7 +504,7 @@ public class AuthorizationService : IAuthorizationService, IDisposable
                 return false;
             }
 
-            return await db.FindDeviceSubjectOf(db.TenantId) is { } deviceSubjectId
+            return await _subjects.FindDeviceSubjectAsync(CancellationToken.None) is { } deviceSubjectId
                 && await _directGrantService.RevokeAsync(
                     pinnedTenantId: null, guid, deviceSubjectId, ipAddress: null, userAgent: null);
         }

@@ -1,8 +1,8 @@
-namespace Nocturne.Infrastructure.Data.Entities;
+namespace Nocturne.Infrastructure.Data.Services;
 
 /// <summary>
 /// The upstream fingerprints the writes under way belong to, keyed by data source and legacy id.
-/// While a scope is open, every save of an <see cref="IUpstreamFingerprinted"/> row whose source and
+/// While a scope is open, every save of an <see cref="Entities.IUpstreamFingerprinted"/> row whose source and
 /// legacy id it names writes that fingerprint in the same statement, null included. A row the scope
 /// does not name keeps its fingerprint.
 /// </summary>

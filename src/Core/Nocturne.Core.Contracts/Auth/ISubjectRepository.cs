@@ -54,6 +54,25 @@ public interface ISubjectRepository
     /// </remarks>
     Task<SubjectRecord?> FindSetupOwnerCandidateAsync(Guid tenantId, CancellationToken ct);
 
+    /// <summary>
+    /// The system subject the scope's tenant issues its API tokens to, or null when it has never
+    /// issued one.
+    /// </summary>
+    /// <remarks>
+    /// A device token belongs to the site, not to a person, so the holder is a system subject with a
+    /// membership of the tenant that no sign-in reaches. Reading the token list must not write rows
+    /// into a tenant that has never had a token; <see cref="EnsureDeviceSubjectAsync"/> is for a
+    /// caller about to issue one.
+    /// </remarks>
+    Task<Guid?> FindDeviceSubjectAsync(CancellationToken ct);
+
+    /// <summary>
+    /// The subject <see cref="FindDeviceSubjectAsync"/> names, created with its full-access
+    /// membership of the scope's tenant when there is none. Saves on a context of its own, so it
+    /// cannot run on a repository over a unit of work.
+    /// </summary>
+    Task<Guid> EnsureDeviceSubjectAsync(CancellationToken ct);
+
     /// <summary>The pending access requests, newest first, roles not read. A system subject is never one.</summary>
     Task<IReadOnlyList<SubjectRecord>> ListPendingAccessRequestsAsync(CancellationToken ct);
 

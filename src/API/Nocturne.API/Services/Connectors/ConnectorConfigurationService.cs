@@ -15,9 +15,7 @@ using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Core.Models.Connectors;
-using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.API.Services.Realtime;
-using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Connectors;
 
@@ -29,7 +27,6 @@ namespace Nocturne.API.Services.Connectors;
 /// <seealso cref="IConnectorConfigurationService"/>
 public class ConnectorConfigurationService : IConnectorConfigurationService
 {
-    private readonly INocturneDbContextFactory _contexts;
     private readonly IConnectorConfigurationRepository _configurations;
     private readonly ISubjectRepository _subjects;
     private readonly IOAuthGrantRepository _grants;
@@ -48,7 +45,6 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
 
     /// <param name="grants">The stored grants, which a saved Nightscout secret is adopted into.</param>
     public ConnectorConfigurationService(
-        INocturneDbContextFactory contexts,
         IConnectorConfigurationRepository configurations,
         ISubjectRepository subjects,
         IOAuthGrantRepository grants,
@@ -60,7 +56,6 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         IEnumerable<IConnectorCacheInvalidator> cacheInvalidators,
         ILogger<ConnectorConfigurationService> logger)
     {
-        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _configurations = configurations ?? throw new ArgumentNullException(nameof(configurations));
         _subjects = subjects ?? throw new ArgumentNullException(nameof(subjects));
         _grants = grants ?? throw new ArgumentNullException(nameof(grants));
@@ -267,19 +262,16 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             return;
         }
 
-        // A site's secret, not the saver's: see DeviceSubjectFilter.
-        await using var db = await _contexts.CreateAsync(ct);
+        // A site's secret, not the saver's: see ISubjectRepository.FindDeviceSubjectAsync.
         var grantId = await _grants.AdoptLegacyCredentialAsync(
             new AdoptedLegacyCredential(
-                await db.DeviceSubjectOf(db.TenantId, ct),
+                await _subjects.EnsureDeviceSubjectAsync(ct),
                 "Nightscout (migrated)",
                 [Scope.HealthReadWrite],
                 LegacySecretHash: sha1Hash),
             ct);
 
-        _logger.LogInformation(
-            "Created legacy DirectGrant {GrantId} for Nightscout migration (tenant {TenantId})",
-            grantId, db.TenantId);
+        _logger.LogInformation("Created legacy DirectGrant {GrantId} for Nightscout migration", grantId);
     }
 
     /// <inheritdoc />

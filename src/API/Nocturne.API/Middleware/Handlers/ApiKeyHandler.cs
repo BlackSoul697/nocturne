@@ -8,7 +8,6 @@ using Nocturne.Core.Contracts.Notifications;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data.Services;
-using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.API.Extensions;
 
 namespace Nocturne.API.Middleware.Handlers;
@@ -26,20 +25,16 @@ public class ApiKeyHandler : IAuthHandler
     public string Name => "ApiKeyHandler";
 
     private readonly IOAuthGrantRepository _grants;
-    private readonly INocturneDbContextFactory _dbContextFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ApiKeyHandler> _logger;
 
     /// <param name="grants">The stored grants, pinned per read to the request's tenant.</param>
-    /// <param name="dbContextFactory">For the device-subject read of the rotation nudge.</param>
     public ApiKeyHandler(
         IOAuthGrantRepository grants,
-        INocturneDbContextFactory dbContextFactory,
         TimeProvider timeProvider,
         ILogger<ApiKeyHandler> logger)
     {
         _grants = grants;
-        _dbContextFactory = dbContextFactory;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -145,13 +140,11 @@ public class ApiKeyHandler : IAuthHandler
             var notificationService = scope.ServiceProvider.GetRequiredService<IInAppNotificationService>();
 
             string? recipient = grant.SubjectId.ToString();
-            await using (var db = await _dbContextFactory.CreateForTenantAsync(tenant.TenantId))
+            if (await scope.ServiceProvider.GetRequiredService<ISubjectRepository>()
+                    .FindDeviceSubjectAsync(CancellationToken.None) == grant.SubjectId)
             {
-                if (await db.FindDeviceSubjectOf(tenant.TenantId) == grant.SubjectId)
-                {
-                    recipient = await scope.ServiceProvider.GetRequiredService<ITenantOwnerResolver>()
-                        .GetOwnerSubjectIdAsync(tenant.TenantId);
-                }
+                recipient = await scope.ServiceProvider.GetRequiredService<ITenantOwnerResolver>()
+                    .GetOwnerSubjectIdAsync(tenant.TenantId);
             }
 
             if (recipient is null)

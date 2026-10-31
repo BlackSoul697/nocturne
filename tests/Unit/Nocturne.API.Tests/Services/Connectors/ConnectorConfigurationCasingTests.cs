@@ -51,7 +51,6 @@ public class ConnectorConfigurationCasingTests : IDisposable
             .Returns<Dictionary<string, string>>(d => d);
 
         _service = new ConnectorConfigurationService(
-            _dbContext.AsFactory(),
             new ConnectorConfigurationRepository(_dbContext.AsFactory()),
             new SubjectRepository(_dbContext.AsFactory()),
             new OAuthGrantRepository(_dbContext.AsFactory()),
