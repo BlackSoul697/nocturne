@@ -61,7 +61,8 @@ public class MemberInviteEntity : ITenantScoped
     public string? Label { get; set; }
 
     /// <summary>
-    /// Whether the invite validity should be limited to 24 hours
+    /// Whether the membership the invite creates reads only the last 24 hours of every time-series
+    /// category.
     /// </summary>
     [Column("limit_to_24_hours")]
     public bool LimitTo24Hours { get; set; } = false;
