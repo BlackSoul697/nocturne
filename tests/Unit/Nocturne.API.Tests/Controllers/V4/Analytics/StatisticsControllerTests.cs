@@ -9,6 +9,7 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Analytics;
+using Nocturne.API.Services.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Caching;
@@ -50,6 +51,8 @@ public partial class StatisticsControllerTests
     private readonly Mock<IDeviceEventRepository> _deviceEventRepoMock = new();
     private readonly Mock<IAidMetricsService> _aidMetricsServiceMock = new();
     private readonly Mock<IStateSpanRepository> _stateSpanRepoMock = new();
+    private readonly Mock<ITenantAppearanceReader> _appearanceReaderMock = new();
+    private readonly Mock<ITenantAccessor> _tenantAccessorMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
     private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
     private static readonly DateTimeOffset DefaultNow = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -122,6 +125,8 @@ public partial class StatisticsControllerTests
                 _therapySettingsResolverMock.Object,
                 categoryReadContext ?? new CategoryReadContext(),
                 _clockLoggerMock.Object),
+            _appearanceReaderMock.Object,
+            _tenantAccessorMock.Object,
             timeProvider ?? new FakeTimeProvider(DefaultNow),
             _loggerMock.Object);
 

@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { getRequestEvent, query } from "$app/server";
-import { ClusterConfidence, SleepSource } from "#lib/api/index.js";
+import { ClusterConfidence, GlucoseUnit, SleepSource } from "#lib/api/index.js";
 import { fetchAllGlucose } from "./glucose-pagination";
 import { DateRangeSchema, resolvePatientToday, resolveReportRange } from "./report-range";
 import { readable } from "#lib/server/patient-timezone.js";
@@ -124,7 +124,7 @@ export const getReadingCount = query(
 
 /**
  * Server-side extended analytics and averaged stats for a date range: the overview, executive
- * summary, AGP, comparison and glucose distribution reports render these computed metrics.
+ * summary, AGP and glucose distribution reports render these computed metrics.
  */
 export const getReportsAnalysis = query(
   DateRangeSchema.optional(),
@@ -159,15 +159,21 @@ export const getReportsAnalysis = query(
 );
 
 /**
- * Insulin and carbohydrate delivery over a date range, with the per-day figures the API takes
- * over the window's calendar days.
+ * Two periods' glucose and insulin figures with each metric's change from the first to the second,
+ * which the comparison report renders as served. Glucose is served in `units`.
  */
-export const getReportsInsulinDelivery = query(
-  DateRangeSchema.optional(),
-  async (input) => {
+export const getReportsComparison = query(
+  z.object({ a: DateRangeSchema, b: DateRangeSchema, units: z.enum(GlucoseUnit) }),
+  async ({ a, b, units }) => {
     const { apiClient } = getRequestEvent().locals;
-    const { startDate, endDate } = await resolveReportRange(input);
-    return apiClient.statistics.getInsulinDeliveryStatistics(startDate, endDate);
+    const [rangeA, rangeB] = await Promise.all([resolveReportRange(a), resolveReportRange(b)]);
+    return apiClient.statistics.getPeriodComparison(
+      rangeA.startDate,
+      rangeA.endDate,
+      rangeB.startDate,
+      rangeB.endDate,
+      units
+    );
   }
 );
 
