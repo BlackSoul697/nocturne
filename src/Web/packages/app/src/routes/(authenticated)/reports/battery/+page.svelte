@@ -37,8 +37,8 @@
   const batteryResource = contextResource(
     () => getBatteryReportData({
       device: selectedDevice,
-      from: reportsParams.dateRangeMillis.from,
-      to: reportsParams.dateRangeMillis.to,
+      from: reportsParams.fromDay,
+      to: reportsParams.toDay,
       cycleLimit: 50,
     }),
     { errorTitle: "Error loading battery report" }
@@ -47,8 +47,6 @@
   const statistics = $derived<BatteryStatistics[]>(batteryResource.current?.statistics ?? []);
   const cycles = $derived<ChargeCycle[]>(batteryResource.current?.cycles ?? []);
   const readings = $derived<BatteryReading[]>(batteryResource.current?.readings ?? []);
-
-  const dateRange = $derived(reportsParams.dateRangeMillis);
 
   function fetchData() {
     batteryResource.refresh();
@@ -123,9 +121,7 @@
   <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground print:hidden">
     <Calendar class="h-4 w-4" />
     <span>
-      {formatNumericDate(new Date(dateRange.from))} – {formatNumericDate(new Date(
-        dateRange.to
-      ))}
+      {formatNumericDate(reportsParams.startDate)} – {formatNumericDate(reportsParams.endDate)}
     </span>
     <span class="text-muted-foreground/50">•</span>
     <span>{readings.length} readings</span>

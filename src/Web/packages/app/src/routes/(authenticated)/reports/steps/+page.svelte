@@ -22,7 +22,7 @@
   const VISIBLE_DAYS = 14;
 
   const report = useActogramReport("Error loading step count report");
-  const { params: reportsParams, resource: actogramResource } = report;
+  const { resource: actogramResource } = report;
 
   const dayTotals = $derived(actogramResource.current?.stepDayTotals ?? {});
   const noZoneReason = $derived(actogramResource.current?.timeZoneUnavailableReason);
@@ -39,19 +39,12 @@
 
   const stepSummary = $derived(actogramResource.current?.stepSummary);
   // Bar heights scale to the selected range's largest sample, not the padded fetch window
-  const barScale = $derived(
-    Math.max(
-      extentOf(
-        pointsInRange(
-          actogramResource.current?.stepCounts ?? [],
-          reportsParams.dateRangeMillis.from,
-          reportsParams.dateRangeMillis.to
-        ),
-        (s) => s.metric
-      )?.max ?? 0,
-      1000
-    )
-  );
+  const barScale = $derived.by(() => {
+    const range = actogramResource.current?.range;
+    const stepCounts = actogramResource.current?.stepCounts ?? [];
+    const inRange = range ? pointsInRange(stepCounts, range.from, range.to) : [];
+    return Math.max(extentOf(inRange, (s) => s.metric)?.max ?? 0, 1000);
+  });
 </script>
 
 <div class="@container space-y-6">
