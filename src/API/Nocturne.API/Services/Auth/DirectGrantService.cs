@@ -2,9 +2,9 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Nocturne.API.Middleware.Handlers;
 using Nocturne.Connectors.Core.Utilities;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Infrastructure.Data.Services;
 

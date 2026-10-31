@@ -2,7 +2,6 @@ using System.Text.Json;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
-using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Auth;

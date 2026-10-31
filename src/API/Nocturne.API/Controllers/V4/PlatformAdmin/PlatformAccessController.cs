@@ -8,7 +8,6 @@ using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Entities;
 
 namespace Nocturne.API.Controllers.V4.PlatformAdmin;
 

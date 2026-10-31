@@ -9,10 +9,10 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Configuration;
-using Nocturne.Infrastructure.Data.Entities;
 using SameSiteMode = Nocturne.Core.Models.Configuration.SameSiteMode;
 
 namespace Nocturne.API.Controllers.Authentication;

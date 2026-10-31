@@ -15,7 +15,6 @@ using Nocturne.Core.Models.Configuration;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models;
-using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Extensions;
 

@@ -12,7 +12,6 @@ using Nocturne.API.Services.Auth;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Configuration;
-using Nocturne.Infrastructure.Data.Entities;
 
 namespace Nocturne.API.Controllers.Authentication;
 
