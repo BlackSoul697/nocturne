@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Nocturne.API.Authorization;
+using Nocturne.API.Helpers;
 using Nocturne.API.Models.DevOnly;
 using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Connectors;
@@ -1026,10 +1027,7 @@ public class DevAdminController : ControllerBase
     {
         await using var db = await _contexts.CreateAsync(ct);
         var slug = request.Slug ?? string.Empty;
-        var sanitizedSlugForLog = slug
-            .Replace("\r", string.Empty)
-            .Replace("\n", string.Empty);
-        _logger.LogInformation("Dev seed-tenant: slug={Slug}", sanitizedSlugForLog);
+        _logger.LogInformation("Dev seed-tenant: slug={Slug}", LogText.Sanitize(slug));
 
         // `dev` (the AppHost's auto-seeded tenant) and `test` are reserved for production subdomains.
         var validation = await _tenantService.ValidateSlugAsync(slug, allowReserved: true, ct);
