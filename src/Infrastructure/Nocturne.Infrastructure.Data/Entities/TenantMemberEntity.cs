@@ -61,7 +61,8 @@ public class TenantMemberEntity : ISystemTimestamped
     public string? Username { get; set; }
 
     /// <summary>
-    /// Whether this membership was limited to 24 hours (e.g. temporary guest access)
+    /// Whether this member reads only the last 24 hours of every time-series category. An owner or a
+    /// holder of <c>tenant.settings</c> is never clamped, whatever this says.
     /// </summary>
     [Column("limit_to_24_hours")]
     public bool LimitTo24Hours { get; set; } = false;
