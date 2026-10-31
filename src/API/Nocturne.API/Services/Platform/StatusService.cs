@@ -11,6 +11,7 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Glucose;
+using Nocturne.API.Services.Identity;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Platform;
@@ -54,8 +55,7 @@ public class StatusService : IStatusService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly PublicAccessCacheService _publicAccessCacheService;
-    private readonly ITenantService _tenants;
-    private readonly ITenantAppearanceReader _appearanceReader;
+    private readonly ITenantGlucoseUnits _glucoseUnits;
     private readonly IGlucoseStatusClassifier _thresholdClassifier;
     private readonly IAlertRepository _alertRepository;
     private readonly ICategoryReadContext _categoryReadContext;
@@ -89,8 +89,7 @@ public class StatusService : IStatusService
         IHttpContextAccessor httpContextAccessor,
         ITenantAccessor tenantAccessor,
         PublicAccessCacheService publicAccessCacheService,
-        ITenantService tenants,
-        ITenantAppearanceReader appearanceReader,
+        ITenantGlucoseUnits glucoseUnits,
         IGlucoseStatusClassifier thresholdClassifier,
         IAlertRepository alertRepository,
         ICategoryReadContext categoryReadContext,
@@ -110,8 +109,7 @@ public class StatusService : IStatusService
         _httpContextAccessor = httpContextAccessor;
         _tenantAccessor = tenantAccessor;
         _publicAccessCacheService = publicAccessCacheService;
-        _tenants = tenants;
-        _appearanceReader = appearanceReader;
+        _glucoseUnits = glucoseUnits;
         _thresholdClassifier = thresholdClassifier;
         _alertRepository = alertRepository;
         _categoryReadContext = categoryReadContext;
@@ -405,14 +403,8 @@ public class StatusService : IStatusService
     {
         var settings = new Dictionary<string, object>();
 
-        // Core display settings. Units are the owner's own choice, else the tenant default chosen in
-        // onboarding, which is what a Nightscout client reads as DISPLAY_UNITS.
-        var appearance = await _appearanceReader.GetTenantAppearanceAsync(_tenantAccessor.TenantId);
-        var tenantUnits = appearance.GlucoseUnits
-            ?? (_tenantAccessor.Context is { } tenant
-                ? await _tenants.GetDefaultGlucoseUnitsAsync(tenant.TenantId)
-                : null);
-        settings["units"] = tenantUnits ?? GlucoseUnitDefaults.MgDl;
+        // Core display settings. Units are what a Nightscout client reads as DISPLAY_UNITS.
+        settings["units"] = await _glucoseUnits.ResolveAsync();
         settings["timeFormat"] = _configuration.GetValue<int>("Display:TimeFormat", 12);
         settings["dayStart"] = _configuration.GetValue<int>("Display:DayStart", 7);
         settings["dayEnd"] = _configuration.GetValue<int>("Display:DayEnd", 21);

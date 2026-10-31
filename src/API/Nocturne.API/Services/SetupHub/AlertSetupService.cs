@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Alerts.Conditions;
+using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Migration;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Alerts;
@@ -36,6 +37,7 @@ namespace Nocturne.API.Services.SetupHub;
 public class AlertSetupService(
     INocturneDbContextFactory contexts,
     ITenantRepository tenants,
+    ITenantGlucoseUnits tenantUnits,
     ITenantMembershipRepository members,
     ISubjectRepository subjects,
     IAlertRuleRepository rules,
@@ -70,7 +72,7 @@ public class AlertSetupService(
     {
         await using var db = await contexts.CreateAsync(ct);
         var routing = await RoutingAsync(db, ct);
-        var units = await UnitsAsync(db, callerId, ct);
+        var units = await UnitsAsync(callerId, ct);
         var starters = await rules.GetStarterRulesAsync(ct);
 
         var startingPoints = StartingPoints(starters.Count == 0 ? await MigratedAlarmSettingsAsync(db, ct) : null);
@@ -156,7 +158,7 @@ public class AlertSetupService(
             channelRequests, AlertRuleChannelWriter.NoStoredRecipients, db, members, callerId, ct) is { } badChannel)
             throw new ArgumentException(badChannel);
 
-        var units = await UnitsAsync(db, callerId, ct);
+        var units = await UnitsAsync(callerId, ct);
         var writer = new AlertRuleRepository(unit, time);
         var starters = await writer.GetStarterRulesAsync(ct);
         var tenantId = db.TenantId;
@@ -410,11 +412,10 @@ public class AlertSetupService(
                 _ => AlertRouting.ToYou,
             };
 
-    private async Task<string> UnitsAsync(NocturneDbContext db, Guid callerId, CancellationToken ct)
+    private async Task<string> UnitsAsync(Guid callerId, CancellationToken ct)
     {
         var preferences = (await subjects.GetAsync(callerId, ct))?.Preferences;
-        var tenantUnits = (await tenants.GetAsync(db.TenantId, ct))?.DefaultGlucoseUnits;
-        return UserDisplayPreferences.Deserialize(preferences).GlucoseUnits ?? tenantUnits ?? GlucoseUnitDefaults.MgDl;
+        return UserDisplayPreferences.Deserialize(preferences).GlucoseUnits ?? await tenantUnits.ResolveAsync(ct);
     }
 
     private async Task<List<AlertSetupMember>> MembersAsync(

@@ -14,6 +14,7 @@ using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Platform;
@@ -216,6 +217,7 @@ public class StatusServiceTests
             .Setup(r => r.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UserDisplayPreferences());
 
+        var tenantAccessor = MockTenantAccessor.Create(tenantId: tenantId, slug: "t", isDemo: isDemo).Object;
         var service = new StatusService(
             _configuration,
             _mockCacheService.Object,
@@ -224,10 +226,9 @@ public class StatusServiceTests
             tenantFactory.Object,
             new TenantRepository(tenantFactory.Object), new SubjectRepository(tenantFactory.Object), new RoleRepository(tenantFactory.Object), new OidcProviderRepository(tenantFactory.Object),
             _httpContextAccessor,
-            MockTenantAccessor.Create(tenantId: tenantId, slug: "t", isDemo: isDemo).Object,
+            tenantAccessor,
             TestPublicAccessCache.Create(),
-            _tenants.Object,
-            appearanceReader.Object,
+            new TenantGlucoseUnits(tenantAccessor, appearanceReader.Object, _tenants.Object),
             new GlucoseStatusClassifier(_configuration, NullLogger<GlucoseStatusClassifier>.Instance),
             new AlertRepository(mockFactory.Object),
             Mock.Of<ICategoryReadContext>(),
@@ -1076,10 +1077,13 @@ public class StatusServiceTests
             _configuration, cache, flights, _mockDemoModeService.Object, Mock.Of<INocturneDbContextFactory>(),
             new TenantRepository(Mock.Of<INocturneDbContextFactory>()), new SubjectRepository(Mock.Of<INocturneDbContextFactory>()),
             new RoleRepository(Mock.Of<INocturneDbContextFactory>()), new OidcProviderRepository(Mock.Of<INocturneDbContextFactory>()),
-            _httpContextAccessor, _mockTenantAccessor.Object, TestPublicAccessCache.Create(), _tenants.Object,
-            Mock.Of<ITenantAppearanceReader>(r =>
-                r.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())
-                    == Task.FromResult(new UserDisplayPreferences())),
+            _httpContextAccessor, _mockTenantAccessor.Object, TestPublicAccessCache.Create(),
+            new TenantGlucoseUnits(
+                _mockTenantAccessor.Object,
+                Mock.Of<ITenantAppearanceReader>(r =>
+                    r.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())
+                        == Task.FromResult(new UserDisplayPreferences())),
+                _tenants.Object),
             new GlucoseStatusClassifier(_configuration, NullLogger<GlucoseStatusClassifier>.Instance),
             alerts.Object, Mock.Of<ICategoryReadContext>(), TimeProvider.System, _mockLogger.Object);
 
@@ -1501,6 +1505,7 @@ public class StatusServiceTests
             .Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(dbName));
         alertRepository ??= new AlertRepository(alertContexts.Object);
+        tenantAccessor ??= _mockTenantAccessor.Object;
         return new StatusService(
             configuration,
             _mockCacheService.Object,
@@ -1509,10 +1514,9 @@ public class StatusServiceTests
             mockTenantDbContextFactory.Object,
             new TenantRepository(mockTenantDbContextFactory.Object), new SubjectRepository(mockTenantDbContextFactory.Object), new RoleRepository(mockTenantDbContextFactory.Object), new OidcProviderRepository(mockTenantDbContextFactory.Object),
             httpContextAccessor ?? _httpContextAccessor,
-            tenantAccessor ?? _mockTenantAccessor.Object,
+            tenantAccessor,
             TestPublicAccessCache.Create(),
-            _tenants.Object,
-            appearanceReader,
+            new TenantGlucoseUnits(tenantAccessor, appearanceReader, _tenants.Object),
             new GlucoseStatusClassifier(configuration, NullLogger<GlucoseStatusClassifier>.Instance),
             alertRepository,
             categoryReadContext ?? Mock.Of<ICategoryReadContext>(),
