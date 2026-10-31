@@ -716,6 +716,25 @@ public class StateSpanRepository : IStateSpanRepository
     }
 
     /// <inheritdoc />
+    public async Task ReplaceBySourceAsync(
+        string source,
+        IReadOnlyCollection<StateSpan> stateSpans,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await using var db = await _contexts.CreateAsync(cancellationToken);
+        var purged = await db.ExecuteInTransactionAsync(async ct =>
+        {
+            var count = await db.StateSpans.PurgeAsync(s => s.Source == source, ct);
+            db.StateSpans.AddRange(stateSpans.Select(StateSpanMapper.ToEntity));
+            await db.SaveChangesAsync(ct);
+            return count;
+        }, ct: cancellationToken);
+        if (purged > 0 || stateSpans.Count > 0)
+            await ReportWrittenAsync();
+    }
+
+    /// <inheritdoc />
     public async Task<PumpModeState?> GetCurrentPumpModeAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _contexts.CreateAsync(cancellationToken);
