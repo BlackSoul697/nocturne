@@ -1,3 +1,4 @@
+using Nocturne.API.Services.Identity;
 using Microsoft.Extensions.Time.Testing;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -51,8 +52,7 @@ public partial class StatisticsControllerTests
     private readonly Mock<IDeviceEventRepository> _deviceEventRepoMock = new();
     private readonly Mock<IAidMetricsService> _aidMetricsServiceMock = new();
     private readonly Mock<IStateSpanRepository> _stateSpanRepoMock = new();
-    private readonly Mock<ITenantAppearanceReader> _appearanceReaderMock = new();
-    private readonly Mock<ITenantAccessor> _tenantAccessorMock = new();
+    private readonly Mock<ITenantGlucoseUnits> _tenantUnitsMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
     private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
     private static readonly DateTimeOffset DefaultNow = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -125,8 +125,7 @@ public partial class StatisticsControllerTests
                 _therapySettingsResolverMock.Object,
                 categoryReadContext ?? new CategoryReadContext(),
                 _clockLoggerMock.Object),
-            _appearanceReaderMock.Object,
-            _tenantAccessorMock.Object,
+            _tenantUnitsMock.Object,
             timeProvider ?? new FakeTimeProvider(DefaultNow),
             _loggerMock.Object);
 
