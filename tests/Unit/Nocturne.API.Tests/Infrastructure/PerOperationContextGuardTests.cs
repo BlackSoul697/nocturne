@@ -10,7 +10,7 @@ namespace Nocturne.API.Tests.Infrastructure;
 /// Outside Infrastructure every <c>NocturneDbContext</c> is opened from
 /// <see cref="INocturneDbContextFactory"/> in the method that uses it, or handed to it by a caller
 /// that opened one; none is injected, resolved from a scope, constructed or registered, and the raw
-/// EF factory is not used.
+/// EF factory is not used. No Infrastructure repository uses the raw factory either.
 /// <see cref="ICategoryReadContext.IsHistoryClamped"/> is read only where a caller's history ceiling
 /// is decided or carried, never to gate a cache.
 /// </summary>
@@ -72,6 +72,15 @@ public class PerOperationContextGuardTests
     {
         OutsideInfrastructure().Where(s => UsesRawFactory(s.Tree)).Select(s => s.Path)
             .Should().BeEmpty("the raw factory's contexts read no scope; use INocturneDbContextFactory");
+    }
+
+    [Fact]
+    public void NoRepositoryUsesTheRawContextFactory()
+    {
+        Sources
+            .Where(s => s.Path.StartsWith("src/Infrastructure/Nocturne.Infrastructure.Data/Repositories/", StringComparison.Ordinal))
+            .Where(s => UsesRawFactory(s.Tree)).Select(s => s.Path)
+            .Should().BeEmpty("a repository reads as its scope's reader, or pins a tenant, through INocturneDbContextFactory");
     }
 
     [Fact]

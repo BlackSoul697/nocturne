@@ -504,7 +504,7 @@ public class StatusService : IStatusService
         var ct = _httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None;
         try
         {
-            var rules = await _alertRepository.GetEnabledRulesAsync(_tenantAccessor.TenantId, ct);
+            var rules = await _alertRepository.GetEnabledRulesAsync(ct);
             return (_thresholdClassifier.ResolveThresholds(rules), false);
         }
         catch (DbException ex)

@@ -228,7 +228,7 @@ public class ServiceCacheTests
     private static IAlertRepository NoAlertRules()
     {
         var alerts = new Mock<IAlertRepository>();
-        alerts.Setup(a => a.GetEnabledRulesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        alerts.Setup(a => a.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         return alerts.Object;
     }

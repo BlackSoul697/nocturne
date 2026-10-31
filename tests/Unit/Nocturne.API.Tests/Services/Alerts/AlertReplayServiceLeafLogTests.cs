@@ -55,7 +55,7 @@ public class AlertReplayServiceLeafLogTests
 
         // The repo never returns null; default the DND-window fetch to empty (no DND).
         _alertRepository
-            .Setup(r => r.GetDndWindowsAsOfAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetDndWindowsAsOfAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<DndWindowSnapshot>());
 
         var enricherDeps = new SensorContextEnricherDependencies(
@@ -144,7 +144,7 @@ public class AlertReplayServiceLeafLogTests
             readings.Add(Reading(dayStart.AddMinutes(minute), mgdl));
         }
 
-        _alertRepository.Setup(r => r.GetEnabledRulesAsync(_tenantId, It.IsAny<CancellationToken>()))
+        _alertRepository.Setup(r => r.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { rule });
         _glucoseRepository.Setup(g => g.GetAsync(
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, null,
@@ -186,7 +186,7 @@ public class AlertReplayServiceLeafLogTests
             readings.Add(Reading(dayStart.AddMinutes(minute), 120));
         }
 
-        _alertRepository.Setup(r => r.GetEnabledRulesAsync(_tenantId, It.IsAny<CancellationToken>()))
+        _alertRepository.Setup(r => r.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { rule });
         _glucoseRepository.Setup(g => g.GetAsync(
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, null,
@@ -225,7 +225,7 @@ public class AlertReplayServiceLeafLogTests
             readings.Add(Reading(dayStart.AddMinutes(minute), mgdl));
         }
 
-        _alertRepository.Setup(r => r.GetEnabledRulesAsync(_tenantId, It.IsAny<CancellationToken>()))
+        _alertRepository.Setup(r => r.GetEnabledRulesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { rule });
         _glucoseRepository.Setup(g => g.GetAsync(
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, null,

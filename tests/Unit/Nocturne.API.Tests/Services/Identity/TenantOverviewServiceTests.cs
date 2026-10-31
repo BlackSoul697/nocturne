@@ -9,6 +9,7 @@ using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Identity;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
@@ -459,6 +460,7 @@ public class TenantOverviewServiceTests
             contextClampSeen));
         services.AddScoped<ICategoryReadContext>(_ => new Nocturne.Infrastructure.Data.Services.CategoryReadContext());
         services.AddScoped<ITenantAccessor>(_ => new RecordingTenantAccessor());
+        services.AddScoped<IAlertRepository>(sp => new AlertRepository(sp.GetRequiredService<INocturneDbContextFactory>()));
         services.AddScoped(sp =>
         {
             var category = sp.GetRequiredService<ICategoryReadContext>();
@@ -479,7 +481,6 @@ public class TenantOverviewServiceTests
             provider.CreateScope().ServiceProvider,
             new GlucoseStatusClassifier(
                 new ConfigurationBuilder().Build(), NullLogger<GlucoseStatusClassifier>.Instance),
-            new AlertRepository(new InMemoryContextFactory(options)),
             TimeProvider.System,
             NullLogger<TenantOverviewService>.Instance);
         return (service, clampSeen, contextClampSeen);
@@ -605,6 +606,7 @@ public class TenantOverviewServiceTests
         services.AddScoped(_ => accessor.Object);
         services.AddScoped<ICategoryReadContext>(_ => new Nocturne.Infrastructure.Data.Services.CategoryReadContext());
         services.AddScoped<INocturneDbContextFactory>(_ => new ScopeContextFactory(options, () => current!.TenantId));
+        services.AddScoped<IAlertRepository>(sp => new AlertRepository(sp.GetRequiredService<INocturneDbContextFactory>()));
         var provider = services.BuildServiceProvider();
 
         return new TenantOverviewService(
@@ -612,7 +614,6 @@ public class TenantOverviewServiceTests
             provider.CreateScope().ServiceProvider,
             new GlucoseStatusClassifier(
                 new ConfigurationBuilder().Build(), NullLogger<GlucoseStatusClassifier>.Instance),
-            new AlertRepository(new InMemoryContextFactory(options)),
             TimeProvider.System,
             NullLogger<TenantOverviewService>.Instance);
     }
