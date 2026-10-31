@@ -268,7 +268,7 @@ public class TotpController : ControllerBase
         var result = await _totpService.VerifyStepUpAsync(request.StepUpToken, request.Code);
         if (result == null)
         {
-            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, subjectId: null, success: false,
+            await _auditService.LogAsync(AuthAuditEventType.FailedAuth, targetSubjectId: null, success: false,
                 ipAddress: ip, userAgent: ua,
                 detailsJson: JsonSerializer.Serialize(new { method = "totp" }));
             return Problem(detail: CodeNotAccepted, statusCode: 400, title: "Bad Request");

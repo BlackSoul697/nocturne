@@ -82,10 +82,14 @@ public interface ISubjectRepository
     Task<bool> SetAccessRequestMessageAsync(Guid subjectId, string? message, CancellationToken ct);
 
     /// <summary>
-    /// Deletes the subject, and in the same transaction clears its personal data from the auth
-    /// audit trail, leaving the ids that make it a pseudonymous record. The client address and
-    /// user agent are the actor's, so another subject's on a row about this one are kept. Rows
-    /// that reference the subject go with it by cascade. False when there is no such subject.
+    /// Deletes the subject, and in the same transaction clears its personal data from the three
+    /// audit trails, leaving the ids that make them a pseudonymous record. In <c>auth_audit_log</c>
+    /// the details go from every row the subject is party to. In all three, the client address, and
+    /// the user agent where the table keeps one, go from every row it acted on, in every tenant.
+    /// They are the actor's, so another subject's on a row about this one are kept.
+    /// <c>actor_name</c> stays on <c>mutation_audit_log</c> and <c>read_access_log</c>, so a
+    /// tenant's owner can still see who changed or read their data. Rows that reference the subject
+    /// go with it by cascade. False when there is no such subject.
     /// </summary>
     Task<bool> DeleteAsync(Guid subjectId, CancellationToken ct);
 

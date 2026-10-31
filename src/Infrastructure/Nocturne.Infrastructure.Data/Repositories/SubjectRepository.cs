@@ -299,10 +299,47 @@ public class SubjectRepository : ISubjectRepository
             db.Subjects.Remove(entity);
             await db.SaveChangesAsync(ct);
 
+            await ScrubTenantAuditTrailsAsync(db, subjectId, ct);
+
             await tx.CommitAsync(ct);
         });
 
         return true;
+    }
+
+    /// <summary>
+    /// Clears the subject's client address and user agent from the audit trail of every tenant, not
+    /// only those it still belongs to: a member removed earlier, or a platform admin who never
+    /// joined, has rows there too.
+    /// </summary>
+    /// <remarks>
+    /// Both tables force row level security, so each tenant's statements run with its id set local
+    /// to the transaction, which the commit discards. The tenant query filter reads the context's
+    /// tenant, so it is lifted and the tenant named in the predicate. Runs after the subject delete,
+    /// so the last tenant set governs no other statement.
+    /// </remarks>
+    private static async Task ScrubTenantAuditTrailsAsync(NocturneDbContext db, Guid subjectId, CancellationToken ct)
+    {
+        var tenantIds = await db.Tenants.AsNoTracking().Select(t => t.Id).ToListAsync(ct);
+        foreach (var tenantId in tenantIds)
+        {
+            if (db.Database.IsNpgsql())
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
+            }
+
+            await db.MutationAuditLog
+                .IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])
+                .Where(a => a.TenantId == tenantId && a.ActorSubjectId == subjectId)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.IpAddress, (string?)null), ct);
+            await db.ReadAccessLog
+                .IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])
+                .Where(a => a.TenantId == tenantId && a.ActorSubjectId == subjectId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(a => a.IpAddress, (string?)null)
+                    .SetProperty(a => a.UserAgent, (string?)null), ct);
+        }
     }
 
     /// <inheritdoc/>
