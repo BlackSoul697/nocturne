@@ -38455,3 +38455,7 @@ msgstr ""
 #: src/routes/(authenticated)/reports/+page.svelte
 msgid "Try again to load the analysis"
 msgstr ""
+
+#: src/routes/(authenticated)/reports/readings/+page.svelte
+msgid "Error Loading Readings"
+msgstr ""
