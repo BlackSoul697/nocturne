@@ -90,7 +90,7 @@ public partial class StatisticsControllerTests
     public async Task GetPeriodComparison_WithoutRequestedUnits_ServesTheTenantsUnits(string? tenantUnits, GlucoseUnit expected)
     {
         SetupGlucoseByPeriod(100, 154);
-        _tenantUnitsMock
+        _glucoseUnitsMock
             .Setup(u => u.UsesMmolAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(tenantUnits == "mmol");
 
@@ -103,7 +103,7 @@ public partial class StatisticsControllerTests
     public async Task GetPeriodComparison_RequestedUnitsWinOverTheTenants()
     {
         SetupGlucoseByPeriod(100, 154);
-        _tenantUnitsMock
+        _glucoseUnitsMock
             .Setup(u => u.UsesMmolAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
@@ -140,6 +140,25 @@ public partial class StatisticsControllerTests
         hypo.ValueB.Should().Be(0);
         hypo.Delta.Should().Be(0);
         hypo.PercentChange.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetPeriodComparison_ReadsEachPeriodsCarbsAndManualBolusesOnce(bool firstPeriod)
+    {
+        SetupGlucoseByPeriod(100, 154);
+        var start = firstPeriod ? PeriodAStart : PeriodBStart;
+        var end = start.AddDays(7);
+
+        await Compare(GlucoseUnit.MgDl);
+
+        _carbIntakeRepoMock.Verify(r => r.GetAsync(
+            start, end, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _bolusRepoMock.Verify(r => r.GetAsync(
+            start, end, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+            BolusKind.Manual, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]
