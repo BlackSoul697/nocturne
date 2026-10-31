@@ -11,8 +11,9 @@ namespace Nocturne.API.Tests.Infrastructure;
 /// A legacy concept's store, cache and decomposer are collaborators of its module
 /// (<c>Services/Entries</c>, <c>Services/Treatments</c>, <c>Services/DeviceStatuses</c>, and the
 /// concept's decomposer in <c>Services/V4</c>): outside the module, its own tests and
-/// <see cref="ServiceRegistrationExtensions"/>, no code names one. Consumers use the module's service
-/// and their tests mock it. <c>internal</c> cannot say this inside one assembly.
+/// <see cref="ServiceRegistrationExtensions"/>, no code names one, nor the module's concrete service or
+/// decomposer, whose static members are as reachable as the ports. Consumers use the module's service
+/// port and their tests mock it. <c>internal</c> cannot say this inside one assembly.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,7 +26,7 @@ namespace Nocturne.API.Tests.Infrastructure;
 [Trait("Category", "Unit")]
 public class LegacyModulePortGuardTests
 {
-    private sealed record Module(string Folder, string Concept, string[] Ports)
+    private sealed record Module(string Folder, string Concept, string[] Ports, string[] Classes)
     {
         public bool Owns(string path) =>
             path.StartsWith($"src/API/Nocturne.API/Services/{Folder}/", StringComparison.Ordinal)
@@ -36,9 +37,9 @@ public class LegacyModulePortGuardTests
 
     private static readonly Module[] Modules =
     [
-        new("Entries", "Entry", ["IEntryStore", "IEntryCache", "IEntryDecomposer"]),
-        new("Treatments", "Treatment", ["ITreatmentStore", "ITreatmentCache", "ITreatmentDecomposer"]),
-        new("DeviceStatuses", "DeviceStatus", ["IDeviceStatusStore", "IDeviceStatusDecomposer"]),
+        new("Entries", "Entry", ["IEntryStore", "IEntryCache", "IEntryDecomposer"], ["EntryService", "EntryDecomposer"]),
+        new("Treatments", "Treatment", ["ITreatmentStore", "ITreatmentCache", "ITreatmentDecomposer"], ["TreatmentService", "TreatmentDecomposer"]),
+        new("DeviceStatuses", "DeviceStatus", ["IDeviceStatusStore", "IDeviceStatusDecomposer"], ["DeviceStatusService", "DeviceStatusDecomposer"]),
     ];
 
     private const string Registration = "src/API/Nocturne.API/Extensions/ServiceRegistrationExtensions.cs";
@@ -47,6 +48,45 @@ public class LegacyModulePortGuardTests
 
     private static readonly IReadOnlyDictionary<string, Module> ModuleOfPort =
         Modules.SelectMany(m => m.Ports.Select(p => (p, m))).ToDictionary(x => x.p, x => x.m);
+
+    private static readonly IReadOnlyDictionary<string, Module> ModuleOfName =
+        Modules.SelectMany(m => m.Ports.Concat(m.Classes).Select(n => (n, m))).ToDictionary(x => x.n, x => x.m);
+
+    /// <summary>
+    /// A file outside a module that names one of its concrete classes, with the reason. Each is a
+    /// consumer reaching into the module and is to leave this list by going through the module's
+    /// service, not to be joined by another.
+    /// </summary>
+    private sealed record Exemption(string Path, string Name, string Reason);
+
+    private const string BuildsDecomposer = "builds the decomposer over fake repositories to test its writes";
+
+    private const string CallsStaticMapper = "calls a pure static mapper of the decomposer";
+
+    private static readonly Exemption[] Exemptions =
+    [
+        new("src/API/Nocturne.API/Services/ConnectorPublishing/TreatmentPublisher.cs", "TreatmentDecomposer", "calls the decomposer's static upstream fingerprint"),
+        new("tests/Integration/Nocturne.API.Tests/TreatmentBatchFailureIntegrationTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Controllers/V1/TreatmentsPostUpsertTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/ClientIdRekeyTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/RecentTreatmentRepublishTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/ConnectorPublishing/RecentGlucoseAndDeviceStatusPublishTests.cs", "DeviceStatusDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/TestDoubles/DeviceStatusDecomposerDoubles.cs", "DeviceStatusDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/BatchResendMatchesSingleTests.cs", "EntryDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/BatchResendMatchesSingleTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/BatchResendMatchesSingleTests.cs", "DeviceStatusDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/ResendKeepsCorrelationIdTests.cs", "EntryDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/ResendKeepsCorrelationIdTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/PreBolusWriteBackPullBackTests.cs", "TreatmentDecomposer", BuildsDecomposer),
+        new("tests/Unit/Nocturne.API.Tests/Services/V4/TreatmentRequiredColumnsTests.cs", "TreatmentDecomposer", CallsStaticMapper),
+        new("tests/Unit/Nocturne.API.Tests/Services/Analytics/ChartDataServiceTests.cs", "TreatmentDecomposer", CallsStaticMapper),
+        new("tests/Unit/Nocturne.API.Tests/Services/Analytics/LoopAnalysisTempBasalCancelTests.cs", "TreatmentDecomposer", CallsStaticMapper),
+        new("tests/Unit/Nocturne.API.Tests/Services/Seeding/DemoLoopAnalysisTests.cs", "TreatmentDecomposer", CallsStaticMapper),
+        new("tests/Unit/Nocturne.API.Tests/Services/Seeding/DemoLoopHealthTests.cs", "TreatmentDecomposer", CallsStaticMapper),
+    ];
+
+    private static bool IsExempt(string path, string name) =>
+        Exemptions.Any(e => e.Path == path && e.Name == name);
 
     private static readonly Assembly Api = typeof(ServiceRegistrationExtensions).Assembly;
 
@@ -61,28 +101,43 @@ public class LegacyModulePortGuardTests
     }
 
     [Fact]
-    public void NothingNamesAPortInSourceOutsideItsModule()
+    public void NothingNamesAModuleInternalInSourceOutsideItsModule()
     {
         var namers = Sources("src")
             .Where(s => s.Path != Registration)
-            .SelectMany(s => NamedPorts(s.Tree)
-                .Where(hit => !ModuleOfPort[hit.Port].Owns(s.Path))
-                .Select(hit => $"{s.Path}: {hit.Member}({hit.Port})"))
+            .SelectMany(s => NamedModuleTypes(s.Tree)
+                .Where(hit => !ModuleOfName[hit.Name].Owns(s.Path) && !IsExempt(s.Path, hit.Name))
+                .Select(hit => $"{s.Path}: {hit.Member}({hit.Name})"))
             .Distinct();
 
-        namers.Should().BeEmpty("use the module's service, not its store, cache or decomposer");
+        namers.Should().BeEmpty("use the module's service, not its store, cache, decomposer or concrete classes");
     }
 
     [Fact]
-    public void NothingNamesAPortInATestOutsideItsModule()
+    public void NothingNamesAModuleInternalInATestOutsideItsModule()
     {
         var namers = Sources("tests")
-            .SelectMany(s => NamedPorts(s.Tree)
-                .Where(hit => !ModuleOfPort[hit.Port].Owns(s.Path))
-                .Select(hit => $"{s.Path}({hit.Port})"))
+            .SelectMany(s => NamedModuleTypes(s.Tree)
+                .Where(hit => !ModuleOfName[hit.Name].Owns(s.Path) && !IsExempt(s.Path, hit.Name))
+                .Select(hit => $"{s.Path}({hit.Name})"))
             .Distinct();
 
         namers.Should().BeEmpty("a consumer's test mocks the module's service");
+    }
+
+    [Fact]
+    public void EveryExemptionStillNamesItsClass()
+    {
+        var sources = Sources("src").Concat(Sources("tests")).ToDictionary(s => s.Path);
+
+        var stale = Exemptions
+            .Where(e => !sources.TryGetValue(e.Path, out var source)
+                || !NamedModuleTypes(source.Tree).Any(hit => hit.Name == e.Name))
+            .Select(e => $"{e.Path}({e.Name})");
+
+        stale.Should().BeEmpty("an exemption outlives the reference it excuses");
+        Exemptions.Should().OnlyContain(e => Modules.Any(m => m.Classes.Contains(e.Name)), "only a concrete class is excusable");
+        Exemptions.Should().OnlyContain(e => !ModuleOfName[e.Name].Owns(e.Path), "a file inside its module needs no exemption");
     }
 
     [Fact]
@@ -130,8 +185,14 @@ public class LegacyModulePortGuardTests
     [InlineData("class C { string N = nameof(IEntryStore); }", "C.N(IEntryStore)")]
     [InlineData("/// <see cref=\"IEntryStore\"/>\nclass C { string S = \"IEntryStore\"; } // IEntryStore", "")]
     [InlineData("class C { readonly Mock<IEntryService> _entries = new(); }", "")]
-    public void DetectsANamedPort(string source, string expected) =>
-        string.Join(",", NamedPorts(CSharpSyntaxTree.ParseText(source)).Select(h => $"{h.Member}({h.Port})"))
+    [InlineData("class C { double M(Entry e) => EntryDecomposer.WrittenMgdl(e); }", "C.M(EntryDecomposer)")]
+    [InlineData("class C { void M(JsonElement p) => JsonMergePatch.ApplyInPlace(e, p, EntryService.CarrySgvAndMgdl); }", "C.M(EntryService)")]
+    [InlineData("class C { object M() => new TreatmentService(null); }", "C.M(TreatmentService)")]
+    [InlineData("class C { ILogger<DeviceStatusDecomposer> L; }", "C.L(DeviceStatusDecomposer)")]
+    [InlineData("using Service = Nocturne.API.Services.DeviceStatuses.DeviceStatusService; class C { }", "(file)(DeviceStatusService)")]
+    [InlineData("class C { readonly Mock<ITreatmentService> _t = new(); string S = \"EntryService\"; } // TreatmentDecomposer", "")]
+    public void DetectsANamedModuleType(string source, string expected) =>
+        string.Join(",", NamedModuleTypes(CSharpSyntaxTree.ParseText(source)).Select(h => $"{h.Member}({h.Name})"))
             .Should().Be(expected);
 
     /// <summary>
@@ -165,12 +226,12 @@ public class LegacyModulePortGuardTests
     }
 
     /// <summary>
-    /// Every identifier in code naming a port, with the member it sits in. Doc comments and comments are
-    /// trivia and a string literal is one token, so neither holds an identifier.
+    /// Every identifier in code naming a port or a module's concrete class, with the member it sits in. Doc
+    /// comments and comments are trivia and a string literal is one token, so neither holds an identifier.
     /// </summary>
-    private static IEnumerable<(string Member, string Port)> NamedPorts(SyntaxTree tree) =>
+    private static IEnumerable<(string Member, string Name)> NamedModuleTypes(SyntaxTree tree) =>
         tree.GetRoot().DescendantNodes().OfType<IdentifierNameSyntax>()
-            .Where(name => ModuleOfPort.ContainsKey(name.Identifier.ValueText))
+            .Where(name => ModuleOfName.ContainsKey(name.Identifier.ValueText))
             .Select(name => (MemberOf(name), name.Identifier.ValueText))
             .Distinct();
 
@@ -220,5 +281,5 @@ public class LegacyModulePortGuardTests
     }
 
     private static IEnumerable<SourceFile> Sources(string tree) =>
-        RepoSources.Under(tree).Where(s => ModuleOfPort.Keys.Any(port => s.Text.Contains(port, StringComparison.Ordinal)));
+        RepoSources.Under(tree).Where(s => ModuleOfName.Keys.Any(name => s.Text.Contains(name, StringComparison.Ordinal)));
 }
