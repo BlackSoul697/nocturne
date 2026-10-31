@@ -66,7 +66,7 @@ public interface IAuthAuditService
     /// <summary>
     /// Log an authentication or authorization event.
     /// </summary>
-    /// <param name="eventType">One of the <c>AuthAuditEventType</c> constants.</param>
+    /// <param name="eventType">One of the <see cref="AuthAuditEventType"/> constants.</param>
     /// <param name="targetSubjectId">The subject the event happened to, if known.</param>
     /// <param name="success">Whether the event succeeded.</param>
     /// <param name="ipAddress">Client IP address.</param>
