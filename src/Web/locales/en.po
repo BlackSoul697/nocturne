@@ -38444,3 +38444,11 @@ msgstr "The hourly glucose figures place each reading at the local time its devi
 #: src/routes/(authenticated)/reports/idp/+page.svelte
 msgid "This chart cannot show boluses by hour of day."
 msgstr "This chart cannot show boluses by hour of day."
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Try again to load the reading count"
+msgstr "Try again to load the reading count"
+
+#: src/routes/(authenticated)/reports/+page.svelte
+msgid "Try again to load the analysis"
+msgstr "Try again to load the analysis"
