@@ -8,11 +8,13 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
+using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Caching;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Clinical.Treatments;
@@ -32,8 +34,8 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 /// </summary>
 /// <remarks>
 /// <c>GET /periods</c> caches for five minutes through <see cref="ITenantCache"/>;
-/// <c>GET /range-analytics</c>, <c>GET /weekday-averages</c> and <c>GET /hourly-patterns</c>
-/// carry a 60-second client-only <see cref="ResponseCacheAttribute"/>. No other action caches.
+/// <c>GET /range-analytics</c>, <c>GET /period-comparison</c>, <c>GET /weekday-averages</c> and
+/// <c>GET /hourly-patterns</c> carry a 60-second client-only <see cref="ResponseCacheAttribute"/>. No other action caches.
 ///
 /// Repositories create their own DbContext per call from <c>INocturneDbContextFactory</c>, so
 /// independent reads within one request are issued together under <c>Task.WhenAll</c>.
@@ -77,6 +79,8 @@ public class StatisticsController : ControllerBase
     private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly ICanonicalGlucoseService _canonicalGlucose;
     private readonly TenantClockResolver _tenantClock;
+    private readonly ITenantAppearanceReader _appearanceReader;
+    private readonly ITenantAccessor _tenantAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StatisticsController> _logger;
 
@@ -99,6 +103,8 @@ public class StatisticsController : ControllerBase
         IActiveProfileResolver activeProfileResolver,
         ICanonicalGlucoseService canonicalGlucose,
         TenantClockResolver tenantClock,
+        ITenantAppearanceReader appearanceReader,
+        ITenantAccessor tenantAccessor,
         TimeProvider timeProvider,
         ILogger<StatisticsController> logger
     )
@@ -122,6 +128,8 @@ public class StatisticsController : ControllerBase
         _canonicalGlucose = canonicalGlucose;
         _timeProvider = timeProvider;
         _tenantClock = tenantClock;
+        _appearanceReader = appearanceReader;
+        _tenantAccessor = tenantAccessor;
         _logger = logger;
     }
 
@@ -469,6 +477,16 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
+        return Ok(await ReadRangeAnalyticsAsync(startDate, endDate, population, patientDeviceId, cancellationToken));
+    }
+
+    private async Task<ReportAnalysisResult> ReadRangeAnalyticsAsync(
+        DateTime startDate,
+        DateTime endDate,
+        DiabetesPopulation population,
+        Guid? patientDeviceId,
+        CancellationToken cancellationToken)
+    {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
@@ -514,8 +532,60 @@ public class StatisticsController : ControllerBase
             PersonalRange = await CalculatePersonalRangeAsync(entries, clock.Zone, cancellationToken),
             TimeZoneUnavailableReason = clock.Reason,
         };
-        return Ok(result);
+        return result;
     }
+
+    /// <summary>
+    /// Two periods' glucose and insulin figures side by side, with each metric's change from the
+    /// first period to the second. Runs <see cref="ReadRangeAnalyticsAsync"/> and the insulin
+    /// delivery read of <see cref="GetInsulinDeliveryStatistics"/> for each period, and states the
+    /// change per <see cref="PeriodComparisonCalculator"/>.
+    /// </summary>
+    /// <param name="startDateA">Start of the first period (inclusive, UTC).</param>
+    /// <param name="endDateA">End of the first period (exclusive, UTC).</param>
+    /// <param name="startDateB">Start of the second period (inclusive, UTC).</param>
+    /// <param name="endDateB">End of the second period (exclusive, UTC).</param>
+    /// <param name="units">The units glucose metrics are served in. Defaults to the tenant's.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Each period's data flag and time in range, and every metric's values, change and percent change.</returns>
+    [HttpGet("period-comparison")]
+    [RequireScope(Scope.ReportsRead)]
+    [RemoteQuery]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    public async Task<ActionResult<PeriodComparison>> GetPeriodComparison(
+        [FromQuery] DateTime startDateA,
+        [FromQuery] DateTime endDateA,
+        [FromQuery] DateTime startDateB,
+        [FromQuery] DateTime endDateB,
+        [FromQuery] GlucoseUnit? units = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (this.RejectDateSpan(startDateA, endDateA) is { } overlongA)
+            return overlongA;
+        if (this.RejectDateSpan(startDateB, endDateB) is { } overlongB)
+            return overlongB;
+
+        var analysisA = ReadRangeAnalyticsAsync(startDateA, endDateA, DiabetesPopulation.Type1Adult, null, cancellationToken);
+        var analysisB = ReadRangeAnalyticsAsync(startDateB, endDateB, DiabetesPopulation.Type1Adult, null, cancellationToken);
+        var insulinA = ReadInsulinDeliveryAsync(startDateA, endDateA, cancellationToken);
+        var insulinB = ReadInsulinDeliveryAsync(startDateB, endDateB, cancellationToken);
+        var resolvedUnits = units is { } requested
+            ? Task.FromResult(requested)
+            : TenantGlucoseUnitAsync(cancellationToken);
+
+        await Task.WhenAll(analysisA, analysisB, insulinA, insulinB, resolvedUnits);
+
+        return Ok(PeriodComparisonCalculator.Build(
+            new(await analysisA, (await insulinA).Statistics),
+            new(await analysisB, (await insulinB).Statistics),
+            await resolvedUnits));
+    }
+
+    private async Task<GlucoseUnit> TenantGlucoseUnitAsync(CancellationToken cancellationToken) =>
+        await GlucoseUnits.UsesMmolAsync(_appearanceReader, _tenantAccessor, cancellationToken)
+            ? GlucoseUnit.Mmol
+            : GlucoseUnit.MgDl;
 
     /// <summary>
     /// Mean glucose per weekday in each five-minute slot of the day for a date range, bucketed on
@@ -1043,6 +1113,15 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
+        var (result, boluses) = await ReadInsulinDeliveryAsync(startDate, endDate, cancellationToken);
+        if (includeBoluses && AnalyticsReadScopes.Allows(HttpContext.GetGrantedScopes(), Scope.TreatmentsRead))
+            result.ManualBoluses = StatisticsService.CountedBoluses(boluses).ToList();
+        return Ok(result);
+    }
+
+    private async Task<(InsulinDeliveryStatistics Statistics, List<Bolus> ManualBoluses)> ReadInsulinDeliveryAsync(
+        DateTime startDate, DateTime endDate, CancellationToken cancellationToken)
+    {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
@@ -1063,9 +1142,7 @@ public class StatisticsController : ControllerBase
             UntilMills(endDt),
             basalInjections
         );
-        if (includeBoluses && AnalyticsReadScopes.Allows(HttpContext.GetGrantedScopes(), Scope.TreatmentsRead))
-            result.ManualBoluses = StatisticsService.CountedBoluses(boluses).ToList();
-        return Ok(result);
+        return (result, boluses);
     }
 
     /// <summary>
