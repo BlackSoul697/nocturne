@@ -798,8 +798,8 @@ public class StatusServiceTests
     public async Task GetSystemStatusAsync_IgnoresTheLegacyFeaturesUnitsUntilTheOwnerChooses()
     {
         _dbContext.TenantId = MockTenantAccessor.DefaultTenantId;
-        await new UISettingsService(new TestNocturneDbContextFactory(_dbContext), TimeProvider.System, Mock.Of<ILogger<UISettingsService>>()).SaveSectionAsync(
-            "features", new FeatureSettings { Display = new DisplaySettings { Units = "mmol" } });
+        await new UISettingsService(new TestNocturneDbContextFactory(_dbContext), TimeProvider.System, Mock.Of<ILogger<UISettingsService>>()).PatchSectionAsync<FeatureSettings>(
+            "features", JsonDocument.Parse("""{"display":{"units":"mmol"}}""").RootElement);
         var configuration = new ConfigurationBuilder().Build();
 
         var result = await CreateStatusService(configuration, _dbContext).GetSystemStatusAsync();
