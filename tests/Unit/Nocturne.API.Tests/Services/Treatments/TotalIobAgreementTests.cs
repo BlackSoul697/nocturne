@@ -13,6 +13,7 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.ChartData.Stages;
 using Nocturne.API.Services.Devices;
@@ -377,7 +378,7 @@ public class TotalIobAgreementTests
             .ReturnsAsync([]);
         var controller = new PebbleController(
             entries.Object, Reader(now), Mock.Of<IUploaderSnapshotRepository>(),
-            Mock.Of<ITenantAppearanceReader>(), Mock.Of<ITenantAccessor>(), NullLogger<PebbleController>.Instance)
+            Mock.Of<ITenantGlucoseUnits>(), NullLogger<PebbleController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

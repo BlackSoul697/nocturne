@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Platform;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -102,8 +103,7 @@ public class ServiceCacheTests
             httpContextAccessor,
             _mockTenantAccessor.Object,
             TestPublicAccessCache.Create(),
-            _tenants.Object,
-            appearanceReader.Object,
+            new TenantGlucoseUnits(_mockTenantAccessor.Object, appearanceReader.Object, _tenants.Object),
             new GlucoseStatusClassifier(mockConfiguration, NullLogger<GlucoseStatusClassifier>.Instance),
             NoAlertRules(),
             Mock.Of<ICategoryReadContext>(),
@@ -197,8 +197,7 @@ public class ServiceCacheTests
             httpContextAccessor,
             _mockTenantAccessor.Object,
             TestPublicAccessCache.Create(),
-            _tenants.Object,
-            appearanceReader.Object,
+            new TenantGlucoseUnits(_mockTenantAccessor.Object, appearanceReader.Object, _tenants.Object),
             new GlucoseStatusClassifier(mockConfiguration, NullLogger<GlucoseStatusClassifier>.Instance),
             NoAlertRules(),
             Mock.Of<ICategoryReadContext>(),
