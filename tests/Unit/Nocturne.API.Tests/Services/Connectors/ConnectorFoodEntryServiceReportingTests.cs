@@ -8,6 +8,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
@@ -32,11 +33,11 @@ public class ConnectorFoodEntryServiceReportingTests : IDisposable
     public void Dispose() => _db.Dispose();
 
     private ConnectorFoodEntryService Service() => new(
-        _db.AsFactory(),
+        new ConnectorFoodEntryRepository(
+            _db.AsFactory(), NullLogger<ConnectorFoodEntryRepository>.Instance, _legacyReads),
         Mock.Of<IMealMatchingService>(),
         TimeProvider.System,
-        NullLogger<ConnectorFoodEntryService>.Instance,
-        _legacyReads);
+        NullLogger<ConnectorFoodEntryService>.Instance);
 
     private static ConnectorFoodEntryImport Import(string foodName) => new()
     {
