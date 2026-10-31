@@ -1,7 +1,7 @@
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Services.Treatments;
+namespace Nocturne.API.Services.BolusWizard;
 
 /// <summary>
 /// Bolus Wizard Preview calculation result with exact 1:1 legacy JavaScript compatibility.

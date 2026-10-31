@@ -17,6 +17,7 @@ using Nocturne.API.Services.Alerts.Webhooks;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.BackgroundServices;
+using Nocturne.API.Services.BolusWizard;
 using Nocturne.API.Services.CoachMarks;
 using Nocturne.API.Services.SetupHub;
 using Nocturne.API.Services.SetupHub.Items;

@@ -1544,7 +1544,7 @@ internal class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer
             metadata[ProfileSpanMetadata.OriginalDurationKey] = originalDuration;
 
         if (treatment.Duration is { } duration)
-            metadata[LegacyTreatmentTables.UploadedDurationKey] = duration;
+            metadata[StateSpanMetadataExtensions.UploadedDurationKey] = duration;
 
         if (treatment.DurationInMilliseconds is { } durationMs)
             metadata[ProfileSpanMetadata.DurationInMillisecondsKey] = durationMs;
@@ -1622,7 +1622,7 @@ internal class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer
             metadata["durationType"] = treatment.DurationType;
 
         if (treatment.Duration is { } duration)
-            metadata[LegacyTreatmentTables.UploadedDurationKey] = duration;
+            metadata[StateSpanMetadataExtensions.UploadedDurationKey] = duration;
 
         var uploaded = LegacyTreatmentTables.UploadedOverrideFields
             .Select(key => (Key: key, Value: treatment.AdditionalProperties?.GetValueOrDefault(key)))
@@ -1645,7 +1645,7 @@ internal class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer
             metadata[LegacyTreatmentTables.UploadedEventTypeKey] = eventType;
 
         if (treatment.Duration is { } duration)
-            metadata[LegacyTreatmentTables.UploadedDurationKey] = duration;
+            metadata[StateSpanMetadataExtensions.UploadedDurationKey] = duration;
 
         if (treatment.TargetTop.HasValue)
             metadata["targetTop"] = treatment.TargetTop.Value;

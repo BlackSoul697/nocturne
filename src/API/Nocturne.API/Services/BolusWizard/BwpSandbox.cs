@@ -1,7 +1,7 @@
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
-namespace Nocturne.API.Services.Treatments;
+namespace Nocturne.API.Services.BolusWizard;
 
 /// <summary>
 /// Profile values already resolved at the sandbox's time, so <see cref="BwpSandbox"/> can answer

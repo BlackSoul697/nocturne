@@ -13,6 +13,7 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.BolusWizard;
 using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.ChartData.Stages;
@@ -48,7 +49,7 @@ using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.Treatments;
+namespace Nocturne.API.Tests.Services.Analytics;
 
 /// <summary>
 /// Every reader of IOB reports the one total, bolus plus net basal, for the same treatments on the

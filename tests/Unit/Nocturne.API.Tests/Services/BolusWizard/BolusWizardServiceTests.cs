@@ -1,11 +1,11 @@
 using Moq;
-using Nocturne.API.Services.Treatments;
+using Nocturne.API.Services.BolusWizard;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
-namespace Nocturne.API.Tests.Services.Treatments;
+namespace Nocturne.API.Tests.Services.BolusWizard;
 
 /// <summary>
 /// Unit tests for BolusWizardService with exact 1:1 legacy JavaScript compatibility

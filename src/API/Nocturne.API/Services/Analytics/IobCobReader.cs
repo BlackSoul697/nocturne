@@ -1,4 +1,3 @@
-using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Caching;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
@@ -6,7 +5,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 
-namespace Nocturne.API.Services.Treatments;
+namespace Nocturne.API.Services.Analytics;
 
 /// <inheritdoc cref="IIobCobReader"/>
 /// <remarks>
