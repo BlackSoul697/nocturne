@@ -10,6 +10,7 @@ using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Caching;
+using Nocturne.API.Services.Identity;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
@@ -79,8 +80,7 @@ public class StatisticsController : ControllerBase
     private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly ICanonicalGlucoseService _canonicalGlucose;
     private readonly TenantClockResolver _tenantClock;
-    private readonly ITenantAppearanceReader _appearanceReader;
-    private readonly ITenantAccessor _tenantAccessor;
+    private readonly ITenantGlucoseUnits _tenantGlucoseUnits;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StatisticsController> _logger;
 
@@ -103,8 +103,7 @@ public class StatisticsController : ControllerBase
         IActiveProfileResolver activeProfileResolver,
         ICanonicalGlucoseService canonicalGlucose,
         TenantClockResolver tenantClock,
-        ITenantAppearanceReader appearanceReader,
-        ITenantAccessor tenantAccessor,
+        ITenantGlucoseUnits tenantGlucoseUnits,
         TimeProvider timeProvider,
         ILogger<StatisticsController> logger
     )
@@ -128,8 +127,7 @@ public class StatisticsController : ControllerBase
         _canonicalGlucose = canonicalGlucose;
         _timeProvider = timeProvider;
         _tenantClock = tenantClock;
-        _appearanceReader = appearanceReader;
-        _tenantAccessor = tenantAccessor;
+        _tenantGlucoseUnits = tenantGlucoseUnits;
         _logger = logger;
     }
 
@@ -583,7 +581,7 @@ public class StatisticsController : ControllerBase
     }
 
     private async Task<GlucoseUnit> TenantGlucoseUnitAsync(CancellationToken cancellationToken) =>
-        await GlucoseUnits.UsesMmolAsync(_appearanceReader, _tenantAccessor, cancellationToken)
+        await _tenantGlucoseUnits.UsesMmolAsync(cancellationToken)
             ? GlucoseUnit.Mmol
             : GlucoseUnit.MgDl;
 

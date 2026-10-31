@@ -14,6 +14,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Caching;
 using Nocturne.API.Services.Devices;
+using Nocturne.API.Services.Identity;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.API.Tests.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Analytics;
@@ -51,8 +52,7 @@ public partial class StatisticsControllerTests
     private readonly Mock<IDeviceEventRepository> _deviceEventRepoMock = new();
     private readonly Mock<IAidMetricsService> _aidMetricsServiceMock = new();
     private readonly Mock<IStateSpanRepository> _stateSpanRepoMock = new();
-    private readonly Mock<ITenantAppearanceReader> _appearanceReaderMock = new();
-    private readonly Mock<ITenantAccessor> _tenantAccessorMock = new();
+    private readonly Mock<ITenantGlucoseUnits> _tenantGlucoseUnitsMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
     private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
     private static readonly DateTimeOffset DefaultNow = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -125,8 +125,7 @@ public partial class StatisticsControllerTests
                 _therapySettingsResolverMock.Object,
                 categoryReadContext ?? new CategoryReadContext(),
                 _clockLoggerMock.Object),
-            _appearanceReaderMock.Object,
-            _tenantAccessorMock.Object,
+            _tenantGlucoseUnitsMock.Object,
             timeProvider ?? new FakeTimeProvider(DefaultNow),
             _loggerMock.Object);
 
