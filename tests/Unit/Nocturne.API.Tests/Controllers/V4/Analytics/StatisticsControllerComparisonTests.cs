@@ -90,9 +90,9 @@ public partial class StatisticsControllerTests
     public async Task GetPeriodComparison_WithoutRequestedUnits_ServesTheTenantsUnits(string? tenantUnits, GlucoseUnit expected)
     {
         SetupGlucoseByPeriod(100, 154);
-        _appearanceReaderMock
-            .Setup(r => r.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UserDisplayPreferences { GlucoseUnits = tenantUnits });
+        _tenantUnitsMock
+            .Setup(u => u.UsesMmolAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tenantUnits == "mmol");
 
         var comparison = await Compare();
 
@@ -103,9 +103,9 @@ public partial class StatisticsControllerTests
     public async Task GetPeriodComparison_RequestedUnitsWinOverTheTenants()
     {
         SetupGlucoseByPeriod(100, 154);
-        _appearanceReaderMock
-            .Setup(r => r.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        _tenantUnitsMock
+            .Setup(u => u.UsesMmolAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var comparison = await Compare(GlucoseUnit.MgDl);
 
